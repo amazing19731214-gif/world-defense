@@ -1,0 +1,30 @@
+{
+  "sprites": {
+    "arrow": "sprites/arrow.png",
+    "cannon": "sprites/cannon.png",
+    "magic": "sprites/magic.png",
+    "ice": "sprites/ice.png",
+    "castle": "sprites/castle.png",
+    "goblin": "sprites/goblin.png",
+    "tree": "sprites/tree.png",
+    "pine": "sprites/pine.png",
+    "rocks": "sprites/rocks.png"
+  },
+  "heroes": {
+    "archer": {
+      "icon": "heroes/archer_icon.png",
+      "portrait": "heroes/archer_portrait.png",
+      "skill": "heroes/archer_skill.png"
+    },
+    "gunner": {
+      "icon": "heroes/gunner_icon.png",
+      "portrait": "heroes/gunner_portrait.png",
+      "skill": "heroes/gunner_skill.png"
+    },
+    "strategist": {
+      "icon": "heroes/strategist_icon.png",
+      "portrait": "heroes/strategist_portrait.png",
+      "skill": "heroes/strategist_skill.png"
+    }
+  }
+}
