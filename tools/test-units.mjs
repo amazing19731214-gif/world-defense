@@ -160,6 +160,10 @@ console.log("■ 選択・パネル");
 await tapMap(page, 650, 300 + 12 - 44); // 頭のあたり
 st = await S(page);
 check("兵士の頭をタップしても選択できる", st.selectedUnit === 1);
+await page.tap("#upClose");
+await tapMap(page, 650 + 30, 300 + 20); // 画像の外側（足元の右下）でも広めの選択範囲で拾う
+st = await S(page);
+check("画像の少し外をタップしても選択できる（選択範囲は戦闘判定と別）", st.selectedUnit === 1);
 check(
   "兵士パネルにHPと撤退",
   (await page.isVisible("#unitPanel")) &&
@@ -356,7 +360,14 @@ await page.evaluate(() => {
 });
 await step(page, 0.1);
 st = await S(page);
-check("ウェーブクリアで再配置待ちを解除（設定）", !st.playing && st.redeploy.archer === 0);
+check(
+  "ウェーブクリア後も再配置待ちは残る（解除で回避できない）",
+  !st.playing && near(st.redeploy.archer, 5, 0.2),
+  String(st.redeploy.archer),
+);
+await page.waitForTimeout(1200);
+await step(page, 3); // ウェーブ間は tick が進まない
+check("ウェーブ間は再配置待ちが進まない", near((await S(page)).redeploy.archer, st.redeploy.archer, 0.001));
 check("兵士はウェーブをまたいで残る（倒れた1人を除く3人）", st.units.length === 3, String(st.units.length));
 await page.tap("#reset");
 st = await S(page);

@@ -512,7 +512,7 @@
           noDeployFromEntry: 170, // 入口からこの距離までは配置不可
           noDeployBeforeCastle: 150, // 城の手前この距離は配置不可
           retreatRefund: 0.5, // 撤退時の返金率（× 費用 × 残りHPの割合）
-          clearRedeployOnWaveEnd: true, // ウェーブクリアで再配置待ちを解除
+          clearRedeployOnWaveEnd: false, // true にするとウェーブクリアで再配置待ちを解除（既定はウェーブ間も止めたまま）
           blockRadius: 26, // 足止めが始まる距離（接地点どうし）
           enemyReach: 30, // 敵が兵士を攻撃できる距離
         };
@@ -1962,14 +1962,11 @@
         }
         const UNIT_FOOT = 12; // 道の中心線から足元までのずれ（見た目のみ）
         // 選択判定は画像の範囲（旗や頭を含む）、戦闘判定は接地点（u.x, u.y）で別に扱う
+        // 小さい兵士も押しやすいよう、選択範囲は画像より広く取る（幅は最低64）
         const unitHitBox = (u) => {
-          const [w, h] = UNIT_CONFIG[u.type].displayBox;
-          return {
-            l: u.x - w / 2 - 6,
-            r: u.x + w / 2 + 6,
-            t: u.y + UNIT_FOOT - h - 6,
-            b: u.y + UNIT_FOOT + 8,
-          };
+          const [w, h] = UNIT_CONFIG[u.type].displayBox,
+            half = Math.max(32, w / 2 + 10);
+          return { l: u.x - half, r: u.x + half, t: u.y + UNIT_FOOT - h - 14, b: u.y + UNIT_FOOT + 14 };
         };
         function unitAt(x, y) {
           let best = null,
