@@ -521,18 +521,20 @@ check("塔パネルの文字 14px 以上", layout.minPanelFont >= 14, String(lay
 check("塔パネルがマップに重ならない", !layout.overlap);
 await page.tap("#assign");
 const sheet = await page.evaluate(() => {
-  const r = document.querySelector(".sheet").getBoundingClientRect();
+  const r = document.querySelector("#heroSheet .sheet").getBoundingClientRect();
   return {
     h: r.height / innerHeight,
     minBtn: Math.min(
-      ...[...document.querySelectorAll(".sheet button")].map((b) => b.getBoundingClientRect().height),
+      ...[...document.querySelectorAll("#heroSheet .sheet button")].map(
+        (b) => b.getBoundingClientRect().height,
+      ),
     ),
   };
 });
 check("配属画面は画面の72%以下", sheet.h <= 0.73, sheet.h.toFixed(2));
 check("配属画面のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
 if (shots) await page.screenshot({ path: path.join(shots, "4-sheet.png") });
-await page.tap(".sheet-back", { position: { x: 20, y: 20 } });
+await page.tap("#heroSheet", { position: { x: 20, y: 20 } });
 check("背景タップで配属画面を閉じる", !(await page.isVisible("#heroSheet")));
 check("モバイル表示でエラーなし", errors.length === 0, errors.join(" / "));
 

@@ -228,8 +228,10 @@
         gap: 5px;
         align-items: stretch;
       }
-      .panel button,
-      .sheet button {
+      .panel,
+      .panel *,
+      .sheet,
+      .sheet * {
         -webkit-tap-highlight-color: transparent;
       }
       .skill:disabled {
@@ -303,6 +305,63 @@
         height: 30px;
         object-fit: contain;
         transform: scaleX(-1);
+      }
+      .panel-actions.two {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .members {
+        display: flex;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .chip {
+        flex: 1;
+        min-width: 0;
+        min-height: 44px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 14px;
+      }
+      .chip.sel {
+        border-color: #ffe5a6;
+        background: linear-gradient(#5d7c62, #2d5452);
+      }
+      .chip .bar {
+        width: 100%;
+        height: 6px;
+      }
+      .soldier-info {
+        line-height: 1.45;
+        margin: 4px 0 8px;
+      }
+      .soldier-info .title {
+        color: #ffe3a0;
+      }
+      .squad-card {
+        padding: 10px 0;
+        border-top: 1px solid #719b8f55;
+      }
+      .squad-card h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+      .soldier-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 0;
+        line-height: 1.35;
+      }
+      .soldier-row button,
+      .squad-card .card-actions button {
+        font-size: 15px;
+        padding: 8px 12px;
+      }
+      .muted {
+        color: #b9d4c6;
       }
       .hp-line {
         display: flex;
@@ -399,19 +458,20 @@
         <button data-t="arrow">🏹 弓 100G</button><button data-t="cannon">💣 大砲 180G</button
         ><button data-t="magic">🔮 魔法 220G</button><button data-t="ice">❄️ 氷 150G</button>
       </div>
-      <div class="tools unit-tools" id="unitTools" aria-label="兵士（道に配置）">
-        <span class="row-label" id="unitCount">兵士 0/4</span>
+      <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
+        <span class="row-label" id="unitCount">部隊 0/4</span><button id="organize">📋 編成</button>
       </div>
-      <section id="unitPanel" class="panel" hidden aria-label="選択中の兵士">
+      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
         <div class="panel-head">
-          <strong id="upTitle"></strong
-          ><button id="upClose" class="icon-btn" aria-label="兵士の選択を解除">✕</button>
+          <strong id="sqTitle"></strong
+          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
         </div>
-        <div class="hp-line">
-          <span id="upHpText"></span><span class="bar hp"><i id="upHpBar"></i></span>
+        <div id="sqSummary" class="tp-stats"></div>
+        <div id="sqMembers" class="members"></div>
+        <div id="soldierInfo" class="soldier-info"></div>
+        <div class="panel-actions two">
+          <button id="retreat">↩ 撤退</button><button id="sqOrganize">📋 編成</button>
         </div>
-        <div id="upStats" class="tp-stats"></div>
-        <button id="retreat" class="retreat">↩ 撤退</button>
       </section>
       <div class="tools">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
@@ -419,8 +479,18 @@
         ><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v7（武将配属・路上兵士）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v8（武将配属・兵士部隊）</small>
     </main>
+    <div id="squadSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
+        <div class="panel-head">
+          <strong id="squadTitle">部隊編成</strong
+          ><button id="squadClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <p id="squadHint" style="margin: 6px 0"></p>
+        <div id="squadList"></div>
+      </div>
+    </div>
     <div id="heroSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
         <div class="panel-head">
@@ -498,69 +568,107 @@
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
         const SAVE_KEY = "worldDefense.heroes.v1";
 
-        // ===== 路上配置の兵士：調整用設定 =====
-        // 塔に配属する「武将」とは別のシステム。数値はすべてここで調整する。
-        //   hp / damage / rate（攻撃間隔・秒）/ range（攻撃が届く距離）/ cost（配置費用）
-        //   block … 同時に足止めできる敵の数（0なら足止めしない）
-        //   redeploy.retreat / redeploy.defeated … 撤退・戦闘不能の後、同じ兵種を再配置できるまでの秒数
-        //   （戦闘の時間で進み、停止中は止まる。x2では2倍速）
-        //   enabled:false の兵種は選択画面に出さない（画像は assets/units/ に保持）
-        const UNIT_RULES = {
-          maxUnits: 4, // 同時に配置できる人数（全兵種合計）
+        // ===== 兵士部隊：調整用設定 =====
+        // 塔に配属する「武将」とは別のシステム。兵士は1人ずつ個別に管理し、HPが0になると永久に死亡する。
+        // 能力・経験値・称号の数値はすべてここで調整する。
+        const SQUAD_RULES = {
+          squadSize: 5, // 1部隊の上限人数（新規雇用時の人数）
+          maxDeployed: 4, // 道に同時に出せる部隊数
+          maxSquads: 8, // 保有できる部隊数（配置中＋待機中）
           snapDistance: 46, // タップ位置から道の中心線までの許容距離
-          minSpacing: 46, // 兵士どうしの最小間隔
+          minSpacing: 60, // 部隊どうしの最小間隔
           noDeployFromEntry: 170, // 入口からこの距離までは配置不可
           noDeployBeforeCastle: 150, // 城の手前この距離は配置不可
-          retreatRefund: 0.5, // 撤退時の返金率（× 費用 × 残りHPの割合）
-          clearRedeployOnWaveEnd: false, // true にするとウェーブクリアで再配置待ちを解除（既定はウェーブ間も止めたまま）
-          blockRadius: 26, // 足止めが始まる距離（接地点どうし）
-          enemyReach: 30, // 敵が兵士を攻撃できる距離
+          blockRadius: 30, // 部隊の中心から足止めが始まる距離
+          maxBlockTime: 6, // 1体の敵を足止めできる最長時間（秒）。超えると突破される
+          breakthroughTime: 3, // 突破した敵がしばらく足止めされない時間（秒）
+          enemyReach: 34, // 近接の敵が部隊を攻撃できる距離
+          retreatTime: 3, // 戦闘中の撤退にかかる時間。この間も攻撃を受け、足止め・攻撃はしない
+          waveEndHeal: 0.2, // ウェーブ終了時に生存兵が回復する割合（最大HPに対して）。全回復はしない
+          defenseScale: 30, // 被ダメージ = 攻撃 × scale / (scale + 防御)
+          xpPerHit: 1, // 攻撃1回
+          xpPerKill: 6, // 撃破（＋敵の報酬の半分）
+          xpPerWave: 8, // 出撃してウェーブを生き延びた
+          xpToLevel: (lv) => 15 + lv * 15, // 次のレベルまでに必要な経験値
+          maxLevel: 10,
+          lastSurvivor: { atk: 0.08, def: 0.08 }, // 「最後の生存者」の士気ボーナス
         };
-        const UNIT_CONFIG = {
+        // grow … レベルが1上がるごとの上昇量（最大HPは上がるが、現在HPは回復しない）
+        const SOLDIER_TYPES = {
           ashigaru: {
             enabled: true,
             name: "足軽",
-            icon: "🛡",
+            squadName: "足軽隊",
+            icon: "🗡",
             mark: "足",
             color: "#3d63a8",
-            cost: 60,
-            hp: 260,
-            damage: 16,
-            rate: 0.8,
-            range: 38,
-            block: 1,
-            redeploy: { retreat: 8, defeated: 15 },
+            cost: 15, // 1人あたりの雇用費用
+            hp: 70,
+            atk: 7,
+            def: 4,
+            rate: 0.9,
+            range: 40,
+            block: 2, // 部隊として同時に足止めできる敵の数（生存者数が上限）
+            grow: { hp: 8, atk: 1.2, def: 1 },
             displayBox: [44, 52],
-            text: "近くの敵1体を足止めして近接攻撃",
+            text: "安価な近接部隊。敵2体まで足止め",
+          },
+          spearman: {
+            enabled: true,
+            name: "槍兵",
+            squadName: "槍兵隊",
+            icon: "🔱",
+            mark: "槍",
+            color: "#b8352e",
+            cost: 24,
+            hp: 95,
+            atk: 8,
+            def: 12,
+            rate: 1.1,
+            range: 48,
+            block: 3,
+            grow: { hp: 11, atk: 1.2, def: 2 },
+            displayBox: [48, 60],
+            text: "防御が高く、敵3体まで足止め",
           },
           archer: {
             enabled: true,
             name: "弓兵",
+            squadName: "弓兵隊",
             icon: "🏹",
             mark: "弓",
             color: "#4f7f35",
-            cost: 80,
-            hp: 120,
-            damage: 13,
-            rate: 0.9,
+            cost: 18,
+            hp: 45,
+            atk: 9,
+            def: 1,
+            rate: 1.2,
             range: 150,
             block: 0,
-            redeploy: { retreat: 8, defeated: 15 },
+            grow: { hp: 5, atk: 1.6, def: 0.5 },
             displayBox: [48, 52],
-            text: "射程内の敵へ矢を放つ（足止めはしない）",
+            text: "後方から射撃。近接戦に弱く足止めしない",
           },
-          // 以下は素材のみ用意済み・未実装
-          spearman: { enabled: false, name: "槍兵", mark: "槍", color: "#b8352e", displayBox: [48, 60] },
+          // 以下は画像のみ用意済み・未実装（選択画面に出さない）
           gunner: { enabled: false, name: "鉄砲隊", mark: "鉄", color: "#27375f", displayBox: [56, 52] },
           cavalry: { enabled: false, name: "騎馬兵", mark: "騎", color: "#2f5ca8", displayBox: [68, 64] },
         };
-        // 敵が兵士に与える攻撃。unblockable の敵は足止めできない（通過する）
+        // 称号：上から順に条件を満たした最も高いものになる。atk / def は能力への倍率ボーナス
+        const TITLES = [
+          { id: "recruit", name: "新兵", waves: 0, kills: 0, atk: 0, def: 0 },
+          { id: "skilled", name: "熟練兵", waves: 3, kills: 0, atk: 0.04, def: 0.04 },
+          { id: "veteran", name: "歴戦の兵", waves: 7, kills: 0, atk: 0.08, def: 0.08 },
+          { id: "seasoned", name: "百戦錬磨", waves: 15, kills: 0, atk: 0.12, def: 0.12 },
+          { id: "hero", name: "英雄", waves: 20, kills: 30, atk: 0.2, def: 0.15 },
+        ];
+        // 敵が兵士に与える攻撃。ranged は遠距離攻撃の射程（兵士と塔を狙う。塔は破壊されず一時停止）
+        // unblockable の敵は足止めできない
         const ENEMY_VS_UNIT = {
-          goblin: { damage: 8, rate: 1.0 },
-          wolf: { damage: 7, rate: 0.8 },
-          knight: { damage: 16, rate: 1.2 },
-          slime: { damage: 9, rate: 1.0 },
-          dragon: { damage: 20, rate: 1.2, unblockable: true },
+          goblin: { damage: 9, rate: 1.0 },
+          wolf: { damage: 8, rate: 0.8 },
+          knight: { damage: 18, rate: 1.2 },
+          slime: { damage: 10, rate: 1.0 },
+          dragon: { damage: 16, rate: 1.4, ranged: 120, towerStun: 1.2, unblockable: true },
           boss: { damage: 45, rate: 1.5 },
         };
         const UNIT_ASSETS = /*@@UNIT_ASSETS@@*/ {};
@@ -599,10 +707,14 @@
           last = 0,
           over = false,
           towerSeq = 0,
-          units = [],
-          unitSeq = 0,
-          selectedUnit = null,
-          selectedUnitType = null; // null なら塔の建設モード
+          squads = [],
+          soldiers = [], // 雇用したすべての兵士（戦死者も記録として残る）
+          squadSeq = 0,
+          soldierSeq = 0,
+          selectedSquad = null,
+          selectedSoldierId = null,
+          selectedUnitType = null, // 雇用する兵種（null なら塔の建設モード）
+          placeSquadId = null; // 配置する待機中の部隊
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         function updateUI() {
@@ -617,7 +729,7 @@
             .querySelectorAll("[data-t]")
             .forEach((b) => b.classList.toggle("active", b.dataset.t === selectedType));
           renderTowerPanel();
-          renderUnitUI();
+          renderSquadUI();
         }
         const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
         const towerLabel = (t) =>
@@ -760,6 +872,7 @@
             if (e.gone || e.hp <= 0 || dist(t, e) >= st.range) continue;
             e.hp -= dmg;
             e.hit = 0.18;
+            e.lastHitBy = null;
             if (n++ < 10) burst(e.x, e.y, "#ffd273", "cannon");
           }
           t.recoil = 0.22;
@@ -845,9 +958,106 @@
             slow: 0,
           });
         }
-        // ===== 路上配置の兵士：配置・戦闘 =====
-        const unitRedeploy = {}; // 兵種ごとの再配置待ち（秒）。撤退・戦闘不能で設定され、配置し直しても消えない
-        const enabledUnitTypes = () => Object.keys(UNIT_CONFIG).filter((k) => UNIT_CONFIG[k].enabled);
+        // ===== 兵士部隊：兵士・部隊・称号 =====
+        // 所属は兵士側の squadId だけで管理する（部隊は兵士リストを持たない）ので、
+        // 同じ兵士が複数の部隊に入ることはない。戦死した兵士は alive=false のまま記録として残り、復活しない。
+        const enabledUnitTypes = () => Object.keys(SOLDIER_TYPES).filter((k) => SOLDIER_TYPES[k].enabled);
+        const soldierById = (id) => soldiers.find((s) => s.id === id) || null;
+        const squadById = (id) => squads.find((q) => q.id === id) || null;
+        const members = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
+        const onField = (q) => q.state === "deployed" || q.state === "retreating";
+        const fieldSquads = () => squads.filter(onField);
+        const squadName = (q) => SOLDIER_TYPES[q.type].squadName + " #" + q.id;
+        const soldierName = (s) => SOLDIER_TYPES[s.type].name + " #" + s.id;
+        const unitGhosts = []; // 戦死・撤退の退場演出（見た目のみ）
+        function rankTitle(s) {
+          let t = TITLES[0];
+          for (const x of TITLES) if (s.wavesSurvived >= x.waves && s.kills >= (x.kills || 0)) t = x;
+          return t;
+        }
+        const titleText = (s) => rankTitle(s).name + (s.lastSurvivor ? "・最後の生存者" : "");
+        // 能力は兵種の基本値＋レベル成長＋称号ボーナスから毎回計算する（積み上がらない）
+        function soldierStats(s) {
+          const c = SOLDIER_TYPES[s.type],
+            lv = s.level - 1,
+            t = rankTitle(s),
+            ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 };
+          return {
+            maxHp: Math.round(c.hp + c.grow.hp * lv),
+            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk),
+            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def),
+            rate: c.rate,
+            range: c.range,
+          };
+        }
+        function logHistory(s, text) {
+          s.history.push("W" + wave + " " + text);
+          if (s.history.length > 10) s.history.shift();
+        }
+        function newSoldier(type, squadId) {
+          const s = {
+            id: ++soldierSeq,
+            type,
+            squadId,
+            alive: true,
+            hp: 0,
+            level: 1,
+            xp: 0,
+            battles: 0,
+            kills: 0,
+            wavesSurvived: 0,
+            lastSurvivor: false,
+            inWave: false,
+            history: [],
+            cd: 0,
+            atk: 0,
+            hit: 0,
+          };
+          s.hp = soldierStats(s).maxHp;
+          logHistory(s, "新兵として雇用");
+          soldiers.push(s);
+          return s;
+        }
+        function newSquad(type) {
+          // heroId は将来「武将の直属部隊」にするための予約（今回は塔にのみ配属）
+          const q = {
+            id: ++squadSeq,
+            type,
+            state: "reserve",
+            x: 0,
+            y: 0,
+            face: -1,
+            retreatLeft: 0,
+            locked: false,
+            fallen: 0,
+            heroId: null,
+          };
+          squads.push(q);
+          return q;
+        }
+        function gainXp(s, n) {
+          if (!s.alive) return;
+          s.xp += n;
+          while (s.level < SQUAD_RULES.maxLevel && s.xp >= SQUAD_RULES.xpToLevel(s.level)) {
+            s.xp -= SQUAD_RULES.xpToLevel(s.level);
+            s.level++;
+            // 最大HPだけ上がり、現在HPは回復しない（成長を回復手段にしない）
+            logHistory(s, "Lv" + s.level + " に上がった");
+            s.lvUp = 1;
+          }
+          if (s.level >= SQUAD_RULES.maxLevel) s.xp = 0;
+        }
+        // 兵士が部隊としてウェーブに参加した時点で戦闘数を数える
+        function joinWave(q) {
+          if (!playing || q.state !== "deployed") return;
+          for (const s of members(q))
+            if (!s.inWave) {
+              s.inWave = true;
+              s.battles++;
+            }
+        }
+
+        // ===== 兵士部隊：配置 =====
         const pathLength = (path) =>
           path.slice(1).reduce((s, b, i) => s + Math.hypot(b[0] - path[i][0], b[1] - path[i][1]), 0);
         // タップ位置を道の中心線へ投影する（上下どちらの道でも最も近い点）
@@ -872,150 +1082,332 @@
           }
           return best;
         }
-        function deployCheck(type, x, y) {
-          const c = UNIT_CONFIG[type];
-          if (!c || !c.enabled) return { error: "その兵種はまだ使えません。" };
+        function placeCheck(x, y) {
           if (x < 0 || x > W || y < 0 || y > H) return { error: "マップの外には配置できません。" };
           const p = projectToRoad(x, y);
-          if (!p || p.off > UNIT_RULES.snapDistance) return { error: "兵士は道の上をタップして配置します。" };
-          if (p.d < UNIT_RULES.noDeployFromEntry) return { error: "入口の近くには配置できません。" };
-          if (p.total - p.d < UNIT_RULES.noDeployBeforeCastle)
+          if (!p || p.off > SQUAD_RULES.snapDistance)
+            return { error: "部隊は道の上をタップして配置します。" };
+          if (p.d < SQUAD_RULES.noDeployFromEntry) return { error: "入口の近くには配置できません。" };
+          if (p.total - p.d < SQUAD_RULES.noDeployBeforeCastle)
             return { error: "城の直前には配置できません。" };
-          if (units.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < UNIT_RULES.minSpacing))
-            return { error: "ほかの兵士に近すぎます。少し離して配置してください。" };
-          if (units.length >= UNIT_RULES.maxUnits)
-            return { error: "配置できるのは " + UNIT_RULES.maxUnits + " 人までです。" };
-          if ((unitRedeploy[type] || 0) > 0)
-            return { error: c.name + " は再配置まで " + Math.ceil(unitRedeploy[type]) + " 秒です。" };
-          if (gold < c.cost) return { error: "資金が足りません（" + c.name + " " + c.cost + "G）。" };
+          if (fieldSquads().some((q) => Math.hypot(q.x - p.x, q.y - p.y) < SQUAD_RULES.minSpacing))
+            return { error: "ほかの部隊に近すぎます。少し離して配置してください。" };
+          if (fieldSquads().length >= SQUAD_RULES.maxDeployed)
+            return { error: "道に出せる部隊は " + SQUAD_RULES.maxDeployed + " 部隊までです。" };
           return { point: p };
         }
-        function deployUnit(type, x, y) {
-          const r = deployCheck(type, x, y);
-          if (r.error) {
-            msg(r.error);
-            return null;
-          }
-          const c = UNIT_CONFIG[type];
-          gold -= c.cost;
-          const u = {
-            id: ++unitSeq,
-            type,
-            x: r.point.x,
-            y: r.point.y,
-            hp: c.hp,
-            max: c.hp,
-            cd: 0,
-            atk: 0,
-            hit: 0,
-          };
-          units.push(u);
-          msg(c.name + " を配置した（" + units.length + "/" + UNIT_RULES.maxUnits + "）。");
-          return u;
+        function putOnRoad(q, p) {
+          q.state = "deployed";
+          q.x = p.x;
+          q.y = p.y;
+          q.face = -1;
+          joinWave(q);
         }
-        // 足止めの解除。兵士が倒れる・撤退する・リセットのときに必ず呼ぶ
-        function releaseBlocks(u) {
-          for (const e of enemies) if (e.blockedBy === u) e.blockedBy = null;
+        // 新しい部隊を雇用して配置（squadSize 人 × 費用）
+        function hireSquad(type, x, y) {
+          const c = SOLDIER_TYPES[type];
+          if (!c || !c.enabled) return (msg("その兵種はまだ使えません。"), null);
+          const cost = c.cost * SQUAD_RULES.squadSize;
+          const r = placeCheck(x, y);
+          if (r.error) return (msg(r.error), null);
+          if (squads.length >= SQUAD_RULES.maxSquads)
+            return (msg("保有できる部隊は " + SQUAD_RULES.maxSquads + " 部隊までです。"), null);
+          if (gold < cost) return (msg("資金が足りません（" + c.squadName + " " + cost + "G）。"), null);
+          gold -= cost;
+          const q = newSquad(type);
+          for (let i = 0; i < SQUAD_RULES.squadSize; i++) newSoldier(type, q.id);
+          putOnRoad(q, r.point);
+          msg(squadName(q) + "（" + SQUAD_RULES.squadSize + "人）を雇用して配置した。");
+          return q;
         }
-        function removeUnit(u, reason) {
-          if (!units.includes(u)) return;
-          releaseBlocks(u);
-          units = units.filter((v) => v !== u);
-          if (selectedUnit === u) selectedUnit = null;
-          const c = UNIT_CONFIG[u.type];
-          unitRedeploy[u.type] = Math.max(unitRedeploy[u.type] || 0, c.redeploy[reason]);
-          unitGhosts.push({ type: u.type, x: u.x, y: u.y, age: 0, duration: 0.7, reason });
-          if (unitGhosts.length > 12) unitGhosts.shift();
+        // 待機中の部隊を再配置（費用なし。戦闘中に撤退した部隊はそのウェーブ中は出せない）
+        function deployReserve(q, x, y) {
+          if (!q || !squads.includes(q) || q.state !== "reserve")
+            return (msg("その部隊は配置できません。"), false);
+          if (q.locked)
+            return (msg(squadName(q) + " は撤退したばかりです。次のウェーブから配置できます。"), false);
+          if (!members(q).length) return (msg("その部隊には兵士がいません。"), false);
+          const r = placeCheck(x, y);
+          if (r.error) return (msg(r.error), false);
+          putOnRoad(q, r.point);
+          msg(squadName(q) + " を配置した。");
+          return true;
         }
-        function retreatUnit(u) {
-          if (!units.includes(u)) return;
-          const c = UNIT_CONFIG[u.type],
-            refund = Math.floor(c.cost * UNIT_RULES.retreatRefund * (u.hp / u.max));
-          gold += refund;
-          removeUnit(u, "retreat");
-          msg(c.name + " が撤退した（" + refund + "G 返金・再配置まで " + c.redeploy.retreat + " 秒）。");
+
+        // ===== 兵士部隊：足止め =====
+        const blockCap = (q) =>
+          q.state === "deployed" ? Math.min(SOLDIER_TYPES[q.type].block, members(q).length) : 0;
+        const blockCount = (q) => enemies.reduce((n, e) => n + (e.blockedBy === q ? 1 : 0), 0);
+        // 足止めの解除。撤退・全滅・リセットのときに必ず呼ぶ
+        function releaseBlocks(q) {
+          for (const e of enemies)
+            if (e.blockedBy === q) {
+              e.blockedBy = null;
+              e.blockTime = 0;
+            }
         }
-        const blockCount = (u) => enemies.reduce((n, e) => n + (e.blockedBy === u ? 1 : 0), 0);
-        // 足止めできる兵士に触れた敵を止める（足止め数の上限を超えた敵・止められない敵は通過）
         function assignBlocks() {
           for (const e of enemies) {
-            if (e.gone || e.blockedBy || e.hp <= 0) continue;
+            if (e.gone || e.blockedBy || e.hp <= 0 || e.breakthrough > 0) continue;
             if ((ENEMY_VS_UNIT[e.kind] || {}).unblockable) continue;
-            const ground = { x: e.x, y: e.y };
-            for (const u of units) {
-              const c = UNIT_CONFIG[u.type];
-              if (!c.block || u.hp <= 0) continue;
-              if (dist(u, ground) > UNIT_RULES.blockRadius || blockCount(u) >= c.block) continue;
-              e.blockedBy = u;
+            for (const q of squads) {
+              if (blockCount(q) >= blockCap(q) || dist(q, e) > SQUAD_RULES.blockRadius) continue;
+              e.blockedBy = q;
+              e.blockTime = 0;
               break;
             }
           }
         }
-        function tickUnits(dt) {
-          for (const k in unitRedeploy) unitRedeploy[k] = Math.max(0, unitRedeploy[k] - dt);
-          // 兵士の攻撃
-          for (const u of units) {
-            const c = UNIT_CONFIG[u.type];
-            u.cd -= dt;
-            if (u.cd > 0) continue;
-            const alive = enemies.filter((e) => !e.gone && e.hp > 0);
-            let target = alive.find((e) => e.blockedBy === u);
-            if (!target) target = alive.filter((e) => dist(u, e) <= c.range).sort((a, b) => b.d - a.d)[0];
-            if (!target) continue;
-            u.cd = c.rate;
-            u.atk = 0.18;
-            u.face = target.x < u.x ? -1 : 1;
-            target.hp -= c.damage;
-            target.hit = 0.18;
-            if (c.block) burst(target.x, target.y, "#fff1c4", "slash");
-            else {
-              if (shots.length >= 160) shots.shift();
-              shots.push({
-                x: u.x,
-                y: u.y - 30,
-                tx: target.x,
-                ty: target.y,
-                type: "arrow",
-                age: 0,
-                duration: 0.22,
-                col: "#a56b35",
-              });
+        // 足止めの整理：上限時間を超えた敵は突破、人数が減って上限を超えた分・存在しない部隊の分は解除
+        function updateBlocks(dt) {
+          const held = new Map();
+          for (const e of enemies) {
+            e.breakthrough = Math.max(0, (e.breakthrough || 0) - dt);
+            const q = e.blockedBy;
+            if (!q) continue;
+            e.blockTime = (e.blockTime || 0) + dt;
+            const n = (held.get(q) || 0) + 1;
+            if (!squads.includes(q) || n > blockCap(q)) {
+              e.blockedBy = null;
+              e.blockTime = 0;
+            } else if (e.blockTime >= SQUAD_RULES.maxBlockTime) {
+              e.blockedBy = null;
+              e.blockTime = 0;
+              e.breakthrough = SQUAD_RULES.breakthroughTime;
+            } else held.set(q, n);
+          }
+        }
+
+        // ===== 兵士部隊：被弾・戦死・撤退 =====
+        function damageSquad(q, raw) {
+          const front = members(q)[0];
+          if (!front) return;
+          const st = soldierStats(front);
+          front.hp -= (raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def);
+          front.hit = 0.2;
+          if (front.hp <= 0) killSoldier(front, q);
+        }
+        function killSoldier(s, q) {
+          if (!s.alive) return;
+          s.alive = false; // 永久死亡：以後どの処理でも復活・編成・配置の対象にならない
+          s.hp = 0;
+          s.diedWave = wave;
+          s.diedIn = squadName(q);
+          logHistory(s, squadName(q) + " で戦死");
+          q.fallen++;
+          const off = formationOffset(q, 0);
+          unitGhosts.push({
+            type: s.type,
+            x: q.x + off[0],
+            y: q.y + off[1],
+            age: 0,
+            duration: 0.8,
+            scale: SQUAD_SCALE,
+          });
+          if (unitGhosts.length > 16) unitGhosts.shift();
+          const alive = members(q);
+          if (alive.length === 1 && q.fallen >= SQUAD_RULES.squadSize - 1 && !alive[0].lastSurvivor) {
+            alive[0].lastSurvivor = true;
+            logHistory(alive[0], squadName(q) + " でただ一人生き残った（最後の生存者）");
+            msg(soldierName(alive[0]) + " が " + squadName(q) + " 最後の生存者となった。");
+          }
+          if (!alive.length) wipeSquad(q);
+        }
+        function wipeSquad(q) {
+          releaseBlocks(q);
+          squads = squads.filter((v) => v !== q);
+          if (selectedSquad === q) selectedSquad = null;
+          if (placeSquadId === q.id) placeSquadId = null;
+          // 将来：武将が直属していた場合、武将は死亡せず一時撤退する（必殺技の再使用待ちは武将側に残る）
+          if (q.heroId && heroState[q.heroId]) endSkill(heroState[q.heroId]);
+          q.heroId = null;
+          msg(squadName(q) + " が全滅した…（戦死者は復活しません。新しい兵士は雇用してください）");
+        }
+        function orderRetreat(q) {
+          if (!q || q.state !== "deployed") return;
+          releaseBlocks(q);
+          if (!playing) {
+            q.state = "reserve";
+            msg(squadName(q) + " を待機させた。");
+            return;
+          }
+          // 戦闘中は撤退に時間がかかり、その間も攻撃を受ける（瞬間移動・無敵化しない）
+          q.state = "retreating";
+          q.retreatLeft = SQUAD_RULES.retreatTime;
+          q.locked = true;
+          msg(squadName(q) + " が撤退を開始（" + SQUAD_RULES.retreatTime + "秒）。");
+        }
+
+        // ===== 兵士部隊：戦闘（共通のゲーム時間で進む） =====
+        function tickSquads(dt) {
+          for (const q of squads.slice()) {
+            if (q.state === "retreating" && (q.retreatLeft -= dt) <= 0) {
+              q.state = "reserve";
+              q.retreatLeft = 0;
+              msg(squadName(q) + " の撤退が完了した。");
             }
           }
-          // 敵の反撃：足止めしている兵士、なければ近くの兵士を攻撃（移動しながらでも攻撃する）
+          // 兵士の攻撃（1人ずつ。攻撃間隔は余りを持ち越すのでフレームレートに左右されない）
+          for (const q of squads) {
+            if (q.state !== "deployed") continue;
+            for (const s of members(q)) {
+              s.cd -= dt;
+              if (s.cd > 0) continue;
+              const st = soldierStats(s),
+                alive = enemies.filter((e) => !e.gone && e.hp > 0);
+              const target =
+                alive.find((e) => e.blockedBy === q) ||
+                alive.filter((e) => dist(q, e) <= st.range).sort((a, b) => b.d - a.d)[0];
+              if (!target) {
+                s.cd = 0;
+                continue;
+              }
+              s.cd += st.rate;
+              s.atk = 0.18;
+              q.face = target.x < q.x ? -1 : 1;
+              target.hp -= st.atk;
+              target.hit = 0.18;
+              target.lastHitBy = s.id; // 撃破した兵士の記録用（塔の攻撃で上書きされる）
+              gainXp(s, SQUAD_RULES.xpPerHit);
+              if (SOLDIER_TYPES[q.type].block) burst(target.x, target.y, "#fff1c4", "slash");
+              else {
+                if (shots.length >= 160) shots.shift();
+                shots.push({
+                  x: q.x,
+                  y: q.y - 22,
+                  tx: target.x,
+                  ty: target.y,
+                  type: "arrow",
+                  age: 0,
+                  duration: 0.22,
+                  col: "#a56b35",
+                });
+              }
+            }
+          }
+          // 敵の攻撃：足止めしている部隊、なければ届く範囲の部隊。遠距離の敵は塔も狙う
           for (const e of enemies) {
             if (e.gone || e.hp <= 0) continue;
             const a = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin;
             e.unitCd = (e.unitCd || 0) - dt;
             if (e.unitCd > 0) continue;
-            let target = e.blockedBy && units.includes(e.blockedBy) ? e.blockedBy : null;
+            const reach = a.ranged || SQUAD_RULES.enemyReach;
+            let target = e.blockedBy && squads.includes(e.blockedBy) ? e.blockedBy : null,
+              tower = null;
             if (!target) {
-              let best = UNIT_RULES.enemyReach;
-              for (const u of units) {
-                const dd = dist(u, e);
-                if (dd <= best) {
+              let best = reach;
+              for (const q of fieldSquads()) {
+                const dd = dist(q, e);
+                if (dd <= best && members(q).length) {
                   best = dd;
-                  target = u;
+                  target = q;
                 }
               }
             }
-            if (!target) continue;
-            e.unitCd = a.rate;
-            target.hp -= a.damage * (1 + (wave - 1) * 0.05);
-            target.hit = 0.2;
-          }
-          for (const u of units.slice()) {
-            if (u.hp > 0) continue;
-            removeUnit(u, "defeated");
-            msg(
-              UNIT_CONFIG[u.type].name +
-                " が倒れた（再配置まで " +
-                UNIT_CONFIG[u.type].redeploy.defeated +
-                " 秒）。",
-            );
+            if (!target && a.ranged) {
+              let best = reach;
+              for (const t of towers) {
+                const dd = dist(t, e);
+                if (dd <= best) {
+                  best = dd;
+                  tower = t;
+                }
+              }
+            }
+            if (!target && !tower) {
+              e.unitCd = 0;
+              continue;
+            }
+            e.unitCd += a.rate;
+            if (a.ranged) {
+              const tx = target ? target.x : tower.x,
+                ty = target ? target.y - 16 : tower.y - 40;
+              if (shots.length >= 160) shots.shift();
+              shots.push({
+                x: e.x,
+                y: e.y - 6,
+                tx,
+                ty,
+                type: "magic",
+                age: 0,
+                duration: 0.3,
+                col: "#ff9b54",
+              });
+            }
+            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05));
+            else {
+              // 塔は破壊されず、攻撃が一時的に止まる
+              tower.cd = Math.max(tower.cd, 0) + a.towerStun;
+              tower.stun = a.towerStun;
+            }
           }
         }
-        const unitGhosts = []; // 撤退・戦闘不能の退場演出（見た目のみ）
+        function creditKill(e) {
+          const s = e.lastHitBy ? soldierById(e.lastHitBy) : null;
+          if (!s || !s.alive) return;
+          s.kills++;
+          gainXp(s, SQUAD_RULES.xpPerKill + Math.round(e.reward / 2));
+        }
+        function squadsWaveStart() {
+          for (const q of squads) joinWave(q);
+        }
+        // ウェーブ終了：生存者だけが成長する。戦死者は復活しない。HPは一部だけ回復
+        function squadsWaveEnd() {
+          for (const s of soldiers) {
+            if (!s.alive) continue;
+            if (s.inWave) {
+              const before = rankTitle(s);
+              s.wavesSurvived++;
+              gainXp(s, SQUAD_RULES.xpPerWave);
+              const after = rankTitle(s);
+              if (after !== before) logHistory(s, "称号「" + after.name + "」を得た");
+              s.inWave = false;
+            }
+            const max = soldierStats(s).maxHp;
+            s.hp = Math.min(max, s.hp + max * SQUAD_RULES.waveEndHeal);
+          }
+          for (const q of squads) {
+            q.locked = false;
+            if (q.state === "retreating") {
+              q.state = "reserve";
+              q.retreatLeft = 0;
+            }
+          }
+        }
+
+        // ===== 兵士部隊：再編成（ウェーブ間のみ） =====
+        function transferSoldier(soldierId, target) {
+          if (playing) return "ウェーブ中は編成できません。";
+          const s = soldierById(soldierId);
+          if (!s || !s.alive) return "戦死した兵士は編成できません。";
+          const from = squadById(s.squadId);
+          let to = target === "new" ? null : squadById(target);
+          if (target !== "new") {
+            if (!to) return "編入先の部隊が見つかりません。";
+            if (to === from) return null;
+            if (to.type !== s.type) return "同じ兵種の部隊にだけ編入できます。";
+            if (members(to).length >= SQUAD_RULES.squadSize) return squadName(to) + " は満員です。";
+          } else if (squads.length >= SQUAD_RULES.maxSquads) return "これ以上部隊を作れません。";
+          if (!to) to = newSquad(s.type);
+          s.squadId = to.id;
+          logHistory(s, squadName(to) + " に編入");
+          if (from && !members(from).length) {
+            releaseBlocks(from);
+            squads = squads.filter((q) => q !== from);
+            if (selectedSquad === from) selectedSquad = null;
+          }
+          return null;
+        }
+        function recruitInto(q) {
+          if (playing) return "ウェーブ中は補充できません。";
+          if (!q || !squads.includes(q)) return "部隊が見つかりません。";
+          const c = SOLDIER_TYPES[q.type];
+          if (members(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
+          if (gold < c.cost) return "資金が足りません（" + c.name + " " + c.cost + "G）。";
+          gold -= c.cost;
+          newSoldier(q.type, q.id);
+          return null;
+        }
         function fire(t, e) {
           const p = types[t.type];
           const duration = t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : 0.34;
@@ -1030,11 +1422,13 @@
               if (dist(a, e) < st.splash) {
                 a.hp -= damage;
                 a.hit = 0.18;
+                a.lastHitBy = null;
               }
             });
           } else {
             e.hp -= damage;
             e.hit = 0.18;
+            e.lastHitBy = null;
             if (t.type === "ice") e.slow = 1.7;
           }
         }
@@ -1050,9 +1444,10 @@
             spawnClock += Math.max(0.35, 0.95 - wave * 0.015);
           }
           assignBlocks();
+          updateBlocks(dt);
           for (const e of enemies) {
             e.slow = Math.max(0, e.slow - dt);
-            if (e.blockedBy) continue; // 足止め中は移動しない（解除は releaseBlocks で必ず行う）
+            if (e.blockedBy) continue; // 足止め中は移動しない（上限時間・解除は updateBlocks / releaseBlocks）
             e.d += e.speed * (e.slow > 0 ? 0.48 : 1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
@@ -1062,7 +1457,7 @@
             }
           }
           tickHeroes(dt);
-          tickUnits(dt);
+          tickSquads(dt);
           for (const t of towers) {
             t.cd -= dt;
             if (t.cd <= 0) {
@@ -1070,10 +1465,11 @@
               const targets = enemies
                 .filter((e) => !e.gone && e.hp > 0 && dist(t, e) < st.range)
                 .sort((a, b) => b.d - a.d);
+              // 攻撃間隔の余りを持ち越し、フレームレートで攻撃回数が変わらないようにする
               if (targets.length) {
                 fire(t, targets[0]);
-                t.cd = st.rate;
-              }
+                t.cd += st.rate;
+              } else t.cd = 0;
             }
           }
           // 撃破処理は e.gone で一度だけ（塔・兵士・必殺技が同時に倒しても報酬は1回）
@@ -1081,11 +1477,12 @@
             if (!e.gone && e.hp <= 0) {
               e.gone = true;
               gold += e.reward;
+              creditKill(e);
               burst(e.x, e.y, e.color, e.kind === "goblin" ? "death" : "vanish");
             }
           }
           enemies = enemies.filter((e) => !e.gone);
-          for (const e of enemies) if (e.blockedBy && !units.includes(e.blockedBy)) e.blockedBy = null;
+          for (const e of enemies) if (e.blockedBy && !squads.includes(e.blockedBy)) e.blockedBy = null;
           if (hp <= 0) {
             hp = 0;
             over = true;
@@ -1093,7 +1490,7 @@
             msg("ゲームオーバー！ 最初から挑戦しよう。");
           } else if (spawned >= spawnTotal && enemies.length === 0) {
             playing = false;
-            if (UNIT_RULES.clearRedeployOnWaveEnd) for (const k in unitRedeploy) unitRedeploy[k] = 0;
+            squadsWaveEnd();
             gold += 50 + wave * 8;
             msg(
               wave === 20
@@ -1960,31 +2357,52 @@
           im.onerror = () => console.warn("Unit image unavailable: " + id);
           im.src = src;
         }
-        const UNIT_FOOT = 12; // 道の中心線から足元までのずれ（見た目のみ）
-        // 選択判定は画像の範囲（旗や頭を含む）、戦闘判定は接地点（u.x, u.y）で別に扱う
-        // 小さい兵士も押しやすいよう、選択範囲は画像より広く取る（幅は最低64）
-        const unitHitBox = (u) => {
-          const [w, h] = UNIT_CONFIG[u.type].displayBox,
-            half = Math.max(32, w / 2 + 10);
-          return { l: u.x - half, r: u.x + half, t: u.y + UNIT_FOOT - h - 14, b: u.y + UNIT_FOOT + 14 };
-        };
-        function unitAt(x, y) {
+        const UNIT_FOOT = 10; // 道の中心線から足元までのずれ（見た目のみ）
+        const SQUAD_SCALE = 0.72; // 部隊の1人あたりの表示倍率（displayBox に対して）
+        // 隊形：先頭（index 0）が敵の来る側。face=-1 で左向き
+        const FORMATION = [
+          [-14, 0],
+          [0, -11],
+          [0, 11],
+          [14, -5],
+          [14, 9],
+        ];
+        function formationOffset(q, i) {
+          const f = FORMATION[i % FORMATION.length];
+          return [f[0] * -(q.face || -1), f[1]];
+        }
+        // 選択範囲（隊形全体＋余白）と戦闘判定（部隊の中心）は別に扱う
+        function squadAt(x, y) {
           let best = null,
             bestD = 1e9;
-          for (const u of units) {
-            const b = unitHitBox(u);
-            if (x < b.l || x > b.r || y < b.t || y > b.b) continue;
-            const d = Math.hypot(u.x - x, u.y - 20 - y);
+          for (const q of fieldSquads()) {
+            if (x < q.x - 40 || x > q.x + 40 || y < q.y - 56 || y > q.y + 30) continue;
+            const d = Math.hypot(q.x - x, q.y - 12 - y);
             if (d < bestD) {
               bestD = d;
-              best = u;
+              best = q;
             }
           }
           return best;
         }
+        function soldierNear(q, x, y) {
+          let best = null,
+            bestD = 1e9;
+          members(q).forEach((s, i) => {
+            const o = formationOffset(q, i),
+              d = Math.hypot(q.x + o[0] - x, q.y + o[1] - 14 - y);
+            if (d < bestD) {
+              bestD = d;
+              best = s;
+            }
+          });
+          return best;
+        }
         function unitFigure(type, x, ground, o = {}) {
-          const c = UNIT_CONFIG[type],
-            [bw, bh] = c.displayBox,
+          const c = SOLDIER_TYPES[type],
+            k0 = o.scale || 1,
+            bw = c.displayBox[0] * k0,
+            bh = c.displayBox[1] * k0,
             im = unitSprites[type],
             face = o.face || -1;
           ctx.save();
@@ -2004,29 +2422,31 @@
               ctx.fillRect(-w / 2, -h, w, h);
             }
           } else {
-            ellipse(0, -18, 15, 17, o.flash ? "#ffffff" : c.color);
+            const r = 12 * k0 + 3;
+            ellipse(0, -r - 2, r, r * 1.1, o.flash ? "#ffffff" : c.color);
             ctx.strokeStyle = "#ffe0a0";
             ctx.lineWidth = 2;
             ctx.stroke();
             ctx.fillStyle = "#fff";
-            ctx.font = "bold 16px system-ui";
+            ctx.font = "bold " + Math.round(r * 1.1) + "px system-ui";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText(c.mark, 0, -17);
+            ctx.fillText(c.mark, 0, -r - 1);
           }
           ctx.restore();
         }
-        function drawUnit(u) {
-          const ground = u.y + UNIT_FOOT,
-            c = UNIT_CONFIG[u.type];
-          if (u === selectedUnit) {
+        function drawSquad(q) {
+          const c = SOLDIER_TYPES[q.type],
+            list = members(q),
+            retreating = q.state === "retreating";
+          if (q === selectedSquad) {
             if (c.range > 60) {
               ctx.save();
               ctx.fillStyle = "#fff0b40f";
               ctx.strokeStyle = "#fff0b499";
               ctx.lineWidth = 2;
               ctx.beginPath();
-              ctx.arc(u.x, u.y, c.range, 0, Math.PI * 2);
+              ctx.arc(q.x, q.y, c.range, 0, Math.PI * 2);
               ctx.fill();
               ctx.stroke();
               ctx.restore();
@@ -2034,36 +2454,75 @@
             ctx.strokeStyle = "#ffe7a0";
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.ellipse(u.x, ground, 22, 8, 0, 0, Math.PI * 2);
+            ctx.ellipse(q.x, q.y + UNIT_FOOT, 34, 16, 0, 0, Math.PI * 2);
             ctx.stroke();
           }
-          ellipse(u.x + 2, ground, 16, 5, "#2e523866");
-          const face = u.face || -1,
-            bob = reduced ? 0 : Math.sin(visualTime * 4 + u.id) * 1.2,
-            lunge = u.atk > 0 && !reduced ? u.atk / 0.18 : 0;
-          unitFigure(u.type, u.x, ground, {
-            face,
-            dy: -Math.abs(bob),
-            dx: lunge * 5 * face,
-            tilt: lunge * 0.14 * face,
-            flash: u.hit > 0 && Math.floor(u.hit * 30) % 2 === 0,
-          });
-          const blocking = blockCount(u);
-          if (u.hp < u.max || u === selectedUnit || blocking) {
-            const top = ground - c.displayBox[1] - 10;
-            ctx.fillStyle = "#3a463b";
-            ctx.fillRect(u.x - 18, top, 36, 5);
-            ctx.fillStyle = "#7fe08a";
-            ctx.fillRect(u.x - 18, top, 36 * Math.max(0, u.hp / u.max), 5);
+          // 奥（y が小さい）から順に描く
+          const order = list.map((s, i) => ({ s, o: formationOffset(q, i) })).sort((a, b) => a.o[1] - b.o[1]);
+          for (const { s, o } of order) {
+            const ground = q.y + o[1] + UNIT_FOOT,
+              bob = reduced ? 0 : Math.sin(visualTime * 4 + s.id) * 1,
+              lunge = s.atk > 0 && !reduced ? s.atk / 0.18 : 0,
+              face = q.face || -1;
+            ellipse(q.x + o[0] + 1, ground, 10, 3.5, "#2e523866");
+            unitFigure(s.type, q.x + o[0], ground, {
+              scale: SQUAD_SCALE,
+              face,
+              alpha: retreating ? 0.55 : 1,
+              dy: -Math.abs(bob),
+              dx: lunge * 4 * face,
+              tilt: lunge * 0.14 * face,
+              flash: s.hit > 0 && Math.floor(s.hit * 30) % 2 === 0,
+            });
+            if (s.lvUp > 0) {
+              ctx.save();
+              ctx.globalAlpha = Math.min(1, s.lvUp * 2);
+              ctx.fillStyle = "#ffe27a";
+              ctx.font = "bold 13px system-ui";
+              ctx.textAlign = "center";
+              ctx.fillText("Lv UP", q.x + o[0], ground - 44 - (1 - s.lvUp) * 14);
+              ctx.restore();
+            }
+            if (s.id === selectedSoldierId) {
+              poly(
+                [
+                  [q.x + o[0] - 5, ground - 48],
+                  [q.x + o[0] + 5, ground - 48],
+                  [q.x + o[0], ground - 41],
+                ],
+                "#ffe7a0",
+                "#5b4a24",
+                1,
+              );
+            }
           }
-          if (blocking) {
+          // 人数の表示：生存（HPの割合で明るさ）と戦死を小さな丸で
+          const pips = Math.min(SQUAD_RULES.squadSize, list.length + q.fallen),
+            top = q.y - 50,
+            left = q.x - ((pips - 1) * 9) / 2;
+          for (let i = 0; i < pips; i++) {
+            const s = list[i];
+            if (s) {
+              const r = Math.max(0, s.hp / soldierStats(s).maxHp);
+              ellipse(left + i * 9, top, 4, 4, "#1f2f24");
+              ellipse(left + i * 9, top, 3, 3, r > 0.5 ? "#7fe08a" : r > 0.25 ? "#ffd77d" : "#ef6a58");
+            } else ellipse(left + i * 9, top, 3, 3, "#3a3a3acc");
+          }
+          if (retreating) {
+            ctx.save();
+            ctx.fillStyle = "#fff1d0";
+            ctx.font = "bold 13px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillText("撤退 " + Math.ceil(q.retreatLeft) + "秒", q.x, top - 9);
+            ctx.restore();
+          } else if (blockCount(q)) {
             // 足止め中の印
             ctx.save();
             ctx.strokeStyle = "#ffd77d";
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(u.x - 30, u.y - 14);
-            ctx.lineTo(u.x - 30, u.y + 10);
+            ctx.moveTo(q.x + 32 * (q.face || -1), q.y - 16);
+            ctx.lineTo(q.x + 32 * (q.face || -1), q.y + 14);
             ctx.stroke();
             ctx.restore();
           }
@@ -2071,21 +2530,22 @@
         function drawUnitGhost(g) {
           const p = g.age / g.duration;
           unitFigure(g.type, g.x, g.y + UNIT_FOOT, {
+            scale: g.scale,
             alpha: 1 - p,
-            tilt: reduced ? 0 : g.reason === "defeated" ? -1.2 * p : 0.2 * p,
-            dx: g.reason === "retreat" && !reduced ? 26 * p : 0,
-            dy: g.reason === "defeated" ? 4 * p : 0,
+            tilt: reduced ? 0 : -1.2 * p,
+            dy: 4 * p,
           });
         }
         // 兵士を選んでいるときは配置できない区間（入口・城の手前）を薄い赤で示す
         function noDeployZones() {
-          if (!selectedUnitType) return;
+          if (!selectedUnitType && !placeSquadId) return;
           ctx.save();
           ctx.fillStyle = "#e0484855";
           for (const path of [upper, lower]) {
             const total = pathLength(path);
             for (let d = 0; d <= total; d += 10) {
-              if (d >= UNIT_RULES.noDeployFromEntry && total - d >= UNIT_RULES.noDeployBeforeCastle) continue;
+              if (d >= SQUAD_RULES.noDeployFromEntry && total - d >= SQUAD_RULES.noDeployBeforeCastle)
+                continue;
               const q = pathAt(path, d);
               ctx.beginPath();
               ctx.arc(q.x, q.y, 14, 0, Math.PI * 2);
@@ -2175,9 +2635,12 @@
           visualTime += dt;
           if (cutin && (cutin.age += dt) >= cutin.duration) cutin = null;
           for (const t of towers) t.recoil = Math.max(0, (t.recoil || 0) - dt);
-          for (const u of units) {
-            u.atk = Math.max(0, (u.atk || 0) - dt);
-            u.hit = Math.max(0, (u.hit || 0) - dt);
+          for (const t of towers) t.stun = Math.max(0, (t.stun || 0) - dt);
+          for (const s of soldiers) {
+            if (!s.alive) continue;
+            s.atk = Math.max(0, (s.atk || 0) - dt);
+            s.hit = Math.max(0, (s.hit || 0) - dt);
+            s.lvUp = Math.max(0, (s.lvUp || 0) - dt);
           }
           for (let i = unitGhosts.length - 1; i >= 0; i--)
             if ((unitGhosts[i].age += dt) >= unitGhosts[i].duration) unitGhosts.splice(i, 1);
@@ -2396,7 +2859,7 @@
           auraRings();
           noDeployZones();
           const actors = [
-            ...units.map((u) => ({ y: u.y + UNIT_FOOT, draw: () => drawUnit(u) })),
+            ...fieldSquads().map((q) => ({ y: q.y + UNIT_FOOT, draw: () => drawSquad(q) })),
             ...unitGhosts.map((g) => ({ y: g.y + UNIT_FOOT, draw: () => drawUnitGhost(g) })),
             ...towers.map((t) => ({
               y: t.y,
@@ -2404,6 +2867,20 @@
                 tower(t);
                 towerDetails(t);
                 heroOverlay(t);
+                if (t.stun > 0) {
+                  // 遠距離の敵に撃たれて一時停止中の塔：煙
+                  ctx.save();
+                  ctx.globalAlpha = Math.min(1, t.stun);
+                  for (let i = 0; i < 3; i++)
+                    ellipse(
+                      t.x - 10 + i * 10,
+                      t.y - 70 - ((visualTime * 20 + i * 7) % 14),
+                      8,
+                      6,
+                      "#7b8383aa",
+                    );
+                  ctx.restore();
+                }
                 if (t.recoil > 0) {
                   const a = t.aim || 0;
                   bloom(t.x + Math.cos(a) * 23, t.y - 42 + Math.sin(a) * 23, 16, "#ffecab99");
@@ -2464,37 +2941,44 @@
           const r = C.getBoundingClientRect(),
             x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
             y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
-          // 優先順：兵士（画像の範囲）→ 塔 → 選択解除 → 配置／建設
-          const hitUnit = unitAt(x, y);
-          if (hitUnit) {
-            selectedUnit = hitUnit;
+          // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
+          const hitSquad = squadAt(x, y);
+          if (hitSquad) {
+            selectedSquad = hitSquad;
+            const near = soldierNear(hitSquad, x, y);
+            selectedSoldierId = near ? near.id : null;
             selectedTower = null;
-            msg(UNIT_CONFIG[hitUnit.type].name + " #" + hitUnit.id + "：HPの確認と撤退ができます。");
+            msg(squadName(hitSquad) + "：兵士の戦歴・撤退・編成ができます。");
             updateUI();
             return;
           }
           const old = towers.find((t) => Math.hypot(t.x - x, t.y - y) < 38);
           if (old) {
             selectedTower = old;
-            selectedUnit = null;
+            selectedSquad = null;
             msg(towerLabel(old) + "：強化・売却・武将配属ができます。");
             updateUI();
             return;
           }
-          if (selectedTower || selectedUnit) {
+          if (selectedTower || selectedSquad) {
             // 選択中に空いている場所をタップしたときは、誤操作を防ぐため選択解除だけ行う
             selectedTower = null;
-            selectedUnit = null;
+            selectedSquad = null;
             msg(
               "選択を解除した。もう一度タップすると" +
-                (selectedUnitType ? "兵士を配置" : "建設") +
+                (selectedUnitType || placeSquadId ? "部隊を配置" : "建設") +
                 "します。",
             );
             updateUI();
             return;
           }
+          if (placeSquadId) {
+            if (deployReserve(squadById(placeSquadId), x, y)) placeSquadId = null;
+            updateUI();
+            return;
+          }
           if (selectedUnitType) {
-            deployUnit(selectedUnitType, x, y);
+            hireSquad(selectedUnitType, x, y);
             updateUI();
             return;
           }
@@ -2523,8 +3007,9 @@
             (b.onclick = () => {
               selectedType = b.dataset.t;
               selectedUnitType = null;
+              placeSquadId = null;
               selectedTower = null;
-              selectedUnit = null;
+              selectedSquad = null;
               msg(types[selectedType].icon + " を選択。草地をタップして建設しよう。");
               updateUI();
             }),
@@ -2537,6 +3022,7 @@
           spawnClock = 0.5;
           playing = true;
           paused = false;
+          squadsWaveStart();
           msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
           updateUI();
         };
@@ -2583,12 +3069,18 @@
           shots = [];
           effects.length = 0;
           towerSeq = 0;
-          for (const u of units) releaseBlocks(u);
-          units = [];
-          unitSeq = 0;
+          // 兵士・部隊・経験値・戦歴をすべて初期化（武将の所持情報の保存には触れない）
+          for (const q of squads) releaseBlocks(q);
+          squads = [];
+          soldiers = [];
+          squadSeq = 0;
+          soldierSeq = 0;
           unitGhosts.length = 0;
-          selectedUnit = null;
-          for (const k in unitRedeploy) unitRedeploy[k] = 0;
+          selectedSquad = null;
+          selectedSoldierId = null;
+          selectedUnitType = null;
+          placeSquadId = null;
+          closeSquadSheet();
           resetHeroes();
           cutin = null;
           closeSheet();
@@ -2599,75 +3091,298 @@
           msg("新しいゲームを開始。塔を建てよう！");
           updateUI();
         };
-        // ===== 兵士の選択ボタン・兵士パネル =====
+        // ===== 兵士部隊：雇用ボタン・部隊パネル・編成画面 =====
         // 有効な兵種だけボタンを作る（未実装の兵種は表示しない）
         for (const type of enabledUnitTypes()) {
-          const c = UNIT_CONFIG[type],
+          const c = SOLDIER_TYPES[type],
             b = document.createElement("button");
           b.dataset.u = type;
           b.innerHTML =
             (UNIT_ASSETS[type] ? '<img alt="" src="' + UNIT_ASSETS[type] + '">' : c.icon + " ") +
-            '<span class="u-label"></span>';
+            '<span class="u-label">' +
+            c.name +
+            " " +
+            c.cost * SQUAD_RULES.squadSize +
+            "G</span>";
           b.onclick = () => {
             selectedUnitType = type;
+            placeSquadId = null;
             selectedTower = null;
-            selectedUnit = null;
-            msg(c.name + "（" + c.cost + "G）：" + c.text + "。道をタップして配置しよう。");
+            selectedSquad = null;
+            msg(
+              c.squadName +
+                "（" +
+                SQUAD_RULES.squadSize +
+                "人・" +
+                c.cost * SQUAD_RULES.squadSize +
+                "G）：" +
+                c.text +
+                "。道をタップして配置しよう。",
+            );
             updateUI();
           };
-          $("unitTools").appendChild(b);
+          $("unitTools").insertBefore(b, $("organize"));
         }
-        function renderUnitUI() {
-          $("unitCount").textContent = "兵士 " + units.length + "/" + UNIT_RULES.maxUnits;
-          document.querySelectorAll("[data-u]").forEach((b) => {
-            const c = UNIT_CONFIG[b.dataset.u],
-              wait = unitRedeploy[b.dataset.u] || 0;
-            b.classList.toggle("active", b.dataset.u === selectedUnitType);
-            b.querySelector(".u-label").textContent =
-              c.name + " " + (wait > 0 ? "⌛" + Math.ceil(wait) + "秒" : c.cost + "G");
-          });
+        function renderSquadUI() {
+          $("unitCount").textContent = "部隊 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
+          document
+            .querySelectorAll("[data-u]")
+            .forEach((b) => b.classList.toggle("active", b.dataset.u === selectedUnitType));
           document
             .querySelectorAll("[data-t]")
-            .forEach((b) => b.classList.toggle("active", !selectedUnitType && b.dataset.t === selectedType));
-          const u = selectedUnit,
-            panel = $("unitPanel");
-          if (!u || !units.includes(u)) {
-            selectedUnit = null;
+            .forEach((b) =>
+              b.classList.toggle(
+                "active",
+                !selectedUnitType && !placeSquadId && b.dataset.t === selectedType,
+              ),
+            );
+          const q = selectedSquad,
+            panel = $("squadPanel");
+          if (!q || !squads.includes(q) || !onField(q)) {
+            selectedSquad = null;
             panel.hidden = true;
             return;
           }
           panel.hidden = false;
-          const c = UNIT_CONFIG[u.type];
-          $("upTitle").textContent = c.icon + " " + c.name + " #" + u.id;
-          $("upHpText").textContent = "HP " + Math.ceil(u.hp) + " / " + u.max;
-          $("upHpBar").style.width = Math.round((100 * Math.max(0, u.hp)) / u.max) + "%";
-          const blocking = blockCount(u);
+          const list = members(q);
+          if (!list.some((s) => s.id === selectedSoldierId)) selectedSoldierId = list[0] ? list[0].id : null;
+          const avg = list.reduce((n, s) => n + s.level, 0) / Math.max(1, list.length);
+          $("sqTitle").textContent =
+            SOLDIER_TYPES[q.type].icon + " " + squadName(q) + (q.state === "retreating" ? "（撤退中）" : "");
           setHtml(
-            $("upStats"),
-            "<span>攻撃 <b>" +
-              c.damage +
-              "</b></span><span>間隔 <b>" +
-              fmt(c.rate) +
-              "秒</b></span>" +
-              "<span>射程 <b>" +
-              c.range +
+            $("sqSummary"),
+            "<span>生存 <b>" +
+              list.length +
+              "</b>人</span><span>戦死 <b>" +
+              q.fallen +
+              "</b>人</span><span>平均 <b>Lv" +
+              fmt(avg) +
               "</b></span>" +
-              (c.block
-                ? "<span>足止め <b>" + blocking + "/" + c.block + "</b></span>"
+              (SOLDIER_TYPES[q.type].block
+                ? "<span>足止め <b>" + blockCount(q) + "/" + blockCap(q) + "</b></span>"
                 : "<span>足止めなし</span>"),
           );
-          const refund = Math.floor(c.cost * UNIT_RULES.retreatRefund * (u.hp / u.max));
-          $("retreat").textContent =
-            "↩ 撤退（" + refund + "G 返金・再配置まで " + c.redeploy.retreat + "秒）";
+          setHtml(
+            $("sqMembers"),
+            list
+              .map((s) => {
+                const r = Math.max(0, s.hp / soldierStats(s).maxHp);
+                return (
+                  '<button class="chip' +
+                  (s.id === selectedSoldierId ? " sel" : "") +
+                  '" data-soldier="' +
+                  s.id +
+                  '" aria-label="' +
+                  soldierName(s) +
+                  '"><span>Lv' +
+                  s.level +
+                  (s.lastSurvivor ? "★" : "") +
+                  '</span><span class="bar hp"><i style="width:' +
+                  Math.round(r * 100) +
+                  '%"></i></span></button>'
+                );
+              })
+              .join(""),
+          );
+          const s = soldierById(selectedSoldierId);
+          if (s) {
+            const st = soldierStats(s),
+              need = SQUAD_RULES.xpToLevel(s.level);
+            setHtml(
+              $("soldierInfo"),
+              "<b>" +
+                soldierName(s) +
+                "</b> Lv" +
+                s.level +
+                (s.level < SQUAD_RULES.maxLevel
+                  ? "（経験 " + Math.floor(s.xp) + "/" + need + "）"
+                  : "（最大）") +
+                ' <span class="title">' +
+                titleText(s) +
+                "</span><br>HP " +
+                Math.ceil(s.hp) +
+                "/" +
+                st.maxHp +
+                "・攻" +
+                fmt(st.atk) +
+                "・防" +
+                fmt(st.def) +
+                "・撃破 " +
+                s.kills +
+                "・生存 " +
+                s.wavesSurvived +
+                "W・戦闘 " +
+                s.battles +
+                "<br><small>所属 " +
+                squadName(q) +
+                (s.history.length ? "／" + esc(s.history[s.history.length - 1]) : "") +
+                "</small>",
+            );
+          }
+          $("retreat").disabled = q.state !== "deployed";
+          $("retreat").textContent = playing ? "↩ 撤退（" + SQUAD_RULES.retreatTime + "秒）" : "↩ 待機へ";
         }
-        $("upClose").onclick = () => {
-          selectedUnit = null;
+        $("sqMembers").addEventListener("click", (ev) => {
+          const b = ev.target.closest("[data-soldier]");
+          if (!b) return;
+          selectedSoldierId = +b.dataset.soldier;
+          updateUI();
+        });
+        $("sqClose").onclick = () => {
+          selectedSquad = null;
           updateUI();
         };
         $("retreat").onclick = () => {
-          if (selectedUnit) retreatUnit(selectedUnit);
+          if (selectedSquad) orderRetreat(selectedSquad);
+          if (selectedSquad && selectedSquad.state === "reserve") selectedSquad = null;
           updateUI();
         };
+        // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
+        let movingSoldierId = null;
+        function squadStateText(q) {
+          return q.state === "deployed"
+            ? "配置中"
+            : q.state === "retreating"
+              ? "撤退中"
+              : q.locked
+                ? "待機中（次のウェーブから配置可）"
+                : "待機中";
+        }
+        function renderSquadSheet() {
+          const moving = soldierById(movingSoldierId);
+          if (moving && !moving.alive) movingSoldierId = null;
+          $("squadHint").textContent = movingSoldierId
+            ? soldierName(moving) + " の編入先を選んでください。"
+            : playing
+              ? "ウェーブ中は配置・撤退のみ。補充と移籍はウェーブの合間にできます。"
+              : "補充（雇用）と移籍ができます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
+          let html = "";
+          if (movingSoldierId)
+            html +=
+              '<div class="card-actions"><button data-move-to="new">新しい部隊へ</button><button data-cancel-move>取消</button></div>';
+          if (!squads.length)
+            html += '<p class="muted">部隊がありません。兵種を選んで道をタップすると雇用できます。</p>';
+          for (const q of squads) {
+            const list = members(q),
+              c = SOLDIER_TYPES[q.type];
+            let acts = "";
+            if (moving) {
+              if (q.type === moving.type && q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
+                acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
+            } else {
+              if (q.state === "reserve" && !q.locked)
+                acts += '<button data-place="' + q.id + '">配置する</button>';
+              if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
+              if (!playing && list.length < SQUAD_RULES.squadSize)
+                acts += '<button data-recruit="' + q.id + '">新兵補充 ' + c.cost + "G</button>";
+            }
+            html +=
+              '<div class="squad-card"><h3>' +
+              c.icon +
+              " " +
+              squadName(q) +
+              " <small>" +
+              squadStateText(q) +
+              "・生存" +
+              list.length +
+              "・戦死" +
+              q.fallen +
+              "</small></h3>" +
+              list
+                .map(
+                  (s) =>
+                    '<div class="soldier-row"><span>' +
+                    soldierName(s) +
+                    " Lv" +
+                    s.level +
+                    " " +
+                    titleText(s) +
+                    "<br><small>HP " +
+                    Math.ceil(s.hp) +
+                    "/" +
+                    soldierStats(s).maxHp +
+                    "・撃破" +
+                    s.kills +
+                    "・生存" +
+                    s.wavesSurvived +
+                    "W</small></span>" +
+                    (!playing && !moving ? '<button data-move="' + s.id + '">移籍</button>' : "") +
+                    "</div>",
+                )
+                .join("") +
+              (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
+              "</div>";
+          }
+          const fallen = soldiers.filter((s) => !s.alive);
+          if (fallen.length)
+            html +=
+              '<div class="squad-card"><h3>戦没者 ' +
+              fallen.length +
+              "名 <small>（復活しません）</small></h3>" +
+              fallen
+                .slice(-8)
+                .reverse()
+                .map(
+                  (s) =>
+                    '<div class="soldier-row"><small>' +
+                    soldierName(s) +
+                    " Lv" +
+                    s.level +
+                    " " +
+                    titleText(s) +
+                    "・撃破" +
+                    s.kills +
+                    "・W" +
+                    s.diedWave +
+                    " " +
+                    esc(s.diedIn || "") +
+                    "で戦死</small></div>",
+                )
+                .join("") +
+              "</div>";
+          $("squadList").innerHTML = html;
+        }
+        function openSquadSheet() {
+          movingSoldierId = null;
+          renderSquadSheet();
+          $("squadSheet").hidden = false;
+          $("squadClose").focus();
+        }
+        function closeSquadSheet() {
+          movingSoldierId = null;
+          $("squadSheet").hidden = true;
+        }
+        $("organize").onclick = openSquadSheet;
+        $("sqOrganize").onclick = openSquadSheet;
+        $("squadClose").onclick = closeSquadSheet;
+        $("squadSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("squadSheet")) return closeSquadSheet();
+          const b = ev.target.closest("button");
+          if (!b || b.id === "squadClose") return;
+          const d = b.dataset;
+          let err = null;
+          if (d.move) movingSoldierId = +d.move;
+          else if (d.cancelMove !== undefined) movingSoldierId = null;
+          else if (d.moveTo) {
+            err = transferSoldier(movingSoldierId, d.moveTo === "new" ? "new" : +d.moveTo);
+            if (!err) msg(soldierName(soldierById(movingSoldierId)) + " を編入した。");
+            movingSoldierId = null;
+          } else if (d.recruit) {
+            err = recruitInto(squadById(+d.recruit));
+            if (!err) msg("新兵を補充した。");
+          } else if (d.retreat) orderRetreat(squadById(+d.retreat));
+          else if (d.place) {
+            placeSquadId = +d.place;
+            selectedUnitType = null;
+            selectedTower = null;
+            selectedSquad = null;
+            closeSquadSheet();
+            msg(squadName(squadById(placeSquadId)) + "：道をタップして配置しよう。");
+          }
+          if (err) msg(err);
+          if (!$("squadSheet").hidden) renderSquadSheet();
+          updateUI();
+        });
         // ===== 塔パネル・武将配属画面 =====
         const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
         const esc = (s) =>
@@ -2884,6 +3599,7 @@
         };
         document.addEventListener("keydown", (ev) => {
           if (ev.key === "Escape" && !$("heroSheet").hidden) closeSheet();
+          if (ev.key === "Escape" && !$("squadSheet").hidden) closeSquadSheet();
         });
         document.addEventListener("visibilitychange", () => {
           last = 0;
@@ -2911,11 +3627,26 @@
               enemies,
               heroState,
               selectedTower,
-              units,
-              selectedUnit,
+              squads,
+              soldiers,
+              selectedSquad,
+              selectedSoldierId,
               selectedUnitType,
-              unitRedeploy,
+              placeSquadId,
             }),
+            squadApi: {
+              members,
+              soldierStats,
+              rankTitle,
+              titleText,
+              transferSoldier,
+              recruitInto,
+              deployReserve,
+              orderRetreat,
+              hireSquad,
+              blockCount,
+              gainXp,
+            },
             projectToRoad,
             // 指定した敵を追加（テスト用）。d は道に沿った距離
             addEnemy: (o) => {
@@ -2944,16 +3675,17 @@
             stopSpawning: () => {
               spawned = spawnTotal;
             },
-            unitConfig: { UNIT_CONFIG, UNIT_RULES, ENEMY_VS_UNIT },
+            unitConfig: { SOLDIER_TYPES, SQUAD_RULES, TITLES, ENEMY_VS_UNIT },
             towerStats,
             setGold: (g) => {
               gold = g;
               updateUI();
             },
-            step: (sec) => {
-              for (let i = 0; i < Math.round(sec / 0.05); i++) {
-                tick(0.05);
-                animateVisuals(0.05);
+            // sec 秒ぶんを h 秒刻みで進める（フレームレートの違いの確認用）
+            step: (sec, h = 0.05) => {
+              for (let i = 0; i < Math.round(sec / h); i++) {
+                tick(h);
+                animateVisuals(h);
               }
             },
             config: { HERO_CONFIG, HERO_RULES },
