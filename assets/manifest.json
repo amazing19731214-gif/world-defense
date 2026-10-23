@@ -11,20 +11,62 @@
     "rocks": "sprites/rocks.png"
   },
   "heroes": {
-    "archer": {
-      "icon": "heroes/archer_icon.png",
-      "portrait": "heroes/archer_portrait.png",
-      "skill": "heroes/archer_skill.png"
+    "nobunaga": {
+      "icon": "heroes/nobunaga_icon.png",
+      "portrait": "heroes/nobunaga_portrait.png",
+      "skill": "heroes/nobunaga_skill.png"
     },
-    "gunner": {
-      "icon": "heroes/gunner_icon.png",
-      "portrait": "heroes/gunner_portrait.png",
-      "skill": "heroes/gunner_skill.png"
+    "shingen": {
+      "icon": "heroes/shingen_icon.png",
+      "portrait": "heroes/shingen_portrait.png",
+      "skill": "heroes/shingen_skill.png"
     },
-    "strategist": {
-      "icon": "heroes/strategist_icon.png",
-      "portrait": "heroes/strategist_portrait.png",
-      "skill": "heroes/strategist_skill.png"
+    "kenshin": {
+      "icon": "heroes/kenshin_icon.png",
+      "portrait": "heroes/kenshin_portrait.png",
+      "skill": "heroes/kenshin_skill.png"
+    },
+    "yukimura": {
+      "icon": "heroes/yukimura_icon.png",
+      "portrait": "heroes/yukimura_portrait.png",
+      "skill": "heroes/yukimura_skill.png"
+    },
+    "kanetsugu": {
+      "icon": "heroes/kanetsugu_icon.png",
+      "portrait": "heroes/kanetsugu_portrait.png",
+      "skill": "heroes/kanetsugu_skill.png"
+    },
+    "masamune": {
+      "icon": "heroes/masamune_icon.png",
+      "portrait": "heroes/masamune_portrait.png",
+      "skill": "heroes/masamune_skill.png"
+    },
+    "tadakatsu": {
+      "icon": "heroes/tadakatsu_icon.png",
+      "portrait": "heroes/tadakatsu_portrait.png",
+      "skill": "heroes/tadakatsu_skill.png"
+    },
+    "kanbei": {
+      "icon": "heroes/kanbei_icon.png",
+      "portrait": "heroes/kanbei_portrait.png",
+      "skill": "heroes/kanbei_skill.png"
+    },
+    "motonari": {
+      "icon": "heroes/motonari_icon.png",
+      "portrait": "heroes/motonari_portrait.png",
+      "skill": "heroes/motonari_skill.png"
+    },
+    "keiji": {
+      "icon": "heroes/keiji_icon.png",
+      "portrait": "heroes/keiji_portrait.png",
+      "skill": "heroes/keiji_skill.png"
     }
+  },
+  "units": {
+    "ashigaru": "units/ashigaru.png",
+    "archer": "units/archer.png",
+    "spearman": "units/spearman.png",
+    "gunner": "units/gunner.png",
+    "cavalry": "units/cavalry.png"
   }
 }

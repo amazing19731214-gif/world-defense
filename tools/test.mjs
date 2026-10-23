@@ -31,17 +31,25 @@ const near = (a, b, eps = 0.01) => Math.abs(a - b) <= eps;
 const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
 const browser = await chromium.launch(launch);
 
-async function newPage(storage) {
+// 武将はガチャで獲得するため、テストでは「ガチャで3人獲得済み」の保存データから始める
+// （黒田官兵衛＝射程・攻撃速度、上杉謙信＝攻撃・範囲攻撃、武田信玄＝支援）
+const DEFAULT_SAVE = JSON.stringify({
+  version: 1,
+  owned: { kanbei: 1, kenshin: 1, shingen: 1 },
+  tickets: 0,
+  history: [],
+});
+async function newPage(storage = DEFAULT_SAVE) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
   });
-  if (storage !== undefined)
+  if (storage !== null)
     await context.addInitScript((v) => {
       if (!sessionStorage.getItem("seeded")) {
-        localStorage.setItem("worldDefense.heroes.v1", v);
+        localStorage.setItem("worldDefense.warlords.v1", v);
         sessionStorage.setItem("seeded", "1");
       }
     }, storage);
@@ -111,7 +119,7 @@ console.log("■ 起動・建設・塔パネル");
 let { page, errors } = await newPage();
 let st = await S(page);
 check("初期状態 500G / WAVE 0 / HP20", st.gold === 500 && st.wave === 0 && st.hp === 20);
-check("武将3人を最初から所持", Object.keys(st.heroes).join() === "archer,gunner,strategist");
+check("ガチャで獲得済みの武将3人を所持", Object.keys(st.heroes).sort().join() === "kanbei,kenshin,shingen");
 await page.evaluate(() => WD_DEBUG.setGold(5000));
 for (const [type, xy] of [
   ["arrow", A],
@@ -143,11 +151,11 @@ await page.tap("#assign");
 check("配属画面が開く", await page.isVisible("#heroSheet"));
 const sheetText = await page.textContent("#heroList");
 check("能力と配属先が表示される", sheetText.includes("射程 +20%") && sheetText.includes("未配属"));
-await page.tap('[data-assign="archer"]');
+await page.tap('[data-assign="kanbei"]');
 st = await S(page);
-check("弓の名手を塔#1に配属", st.heroes.archer.tower === 1);
+check("黒田官兵衛を塔#1に配属", st.heroes.kanbei.tower === 1);
 check("射程 155 → 186", near(tid(st, 1).st.range, 186), String(tid(st, 1).st.range));
-check("塔パネルに武将名", (await page.textContent("#tpHero")).includes("弓の名手"));
+check("塔パネルに武将名", (await page.textContent("#tpHero")).includes("黒田官兵衛"));
 await page.tap("#upgrade");
 st = await S(page);
 check(
@@ -156,9 +164,9 @@ check(
 );
 for (let i = 0; i < 4; i++) {
   await deselect(page);
-  await assignVia(page, B, "archer");
+  await assignVia(page, B, "kanbei");
   await deselect(page);
-  await assignVia(page, A, "archer");
+  await assignVia(page, A, "kanbei");
 }
 st = await S(page);
 check(
@@ -166,45 +174,49 @@ check(
   near(tid(st, 1).st.range, 186) && near(tid(st, 2).st.range, 155),
 );
 await deselect(page);
-await assignVia(page, B, "archer");
+await assignVia(page, B, "kanbei");
 st = await S(page);
 check(
   "同じ武将は1か所だけ（移動元は武将なし）",
-  st.heroes.archer.tower === 2 && near(tid(st, 1).st.range, 155),
+  st.heroes.kanbei.tower === 2 && near(tid(st, 1).st.range, 155),
 );
 await deselect(page);
-await assignVia(page, B, "gunner");
+await assignVia(page, B, "kenshin");
 st = await S(page);
 check(
   "1基1人：別の武将を配属すると前の武将は未配属",
-  st.heroes.gunner.tower === 2 && st.heroes.archer.tower === null,
+  st.heroes.kenshin.tower === 2 && st.heroes.kanbei.tower === null,
 );
 await page.tap("#assign");
-await page.tap('[data-unassign="gunner"]');
+await page.tap('[data-unassign="kenshin"]');
 await page.tap("#sheetClose");
 st = await S(page);
-check("解除できる", st.heroes.gunner.tower === null && near(tid(st, 2).st.damage, 18));
+check("解除できる", st.heroes.kenshin.tower === null && near(tid(st, 2).st.damage, 18));
 
-console.log("■ 砲術家・軍師・重複");
+console.log("■ 上杉謙信・武田信玄・重複");
 await deselect(page);
-await assignVia(page, Cc, "gunner");
+await assignVia(page, Cc, "kenshin");
 st = await S(page);
 check(
-  "砲術家：大砲の攻撃 ×1.3・爆発 65→91",
+  "上杉謙信：大砲の攻撃 ×1.3・爆発 65→91",
   near(tid(st, 3).st.damage, 62.4) && near(tid(st, 3).st.splash, 91),
 );
 await deselect(page);
-await assignVia(page, A, "strategist");
-st = await S(page);
-check("軍師：近く(90)の塔#2 間隔 0.45→0.375", near(tid(st, 2).st.rate, 0.375), String(tid(st, 2).st.rate));
-check("軍師：配属先の塔自身は対象外（設定）", near(tid(st, 1).st.rate, 0.45));
-check("軍師：遠い塔#4(魔法)は対象外", near(tid(st, 4).st.rate, 0.8));
-check("軍師：塔#3(距離220)は対象外", near(tid(st, 3).st.rate, 1.6));
-await deselect(page);
-await assignVia(page, B, "archer");
+await assignVia(page, A, "shingen");
 st = await S(page);
 check(
-  "弓の名手＋軍師の支援は別々に1回ずつ適用",
+  "武田信玄：近く(90)の塔#2 間隔 0.45→0.375",
+  near(tid(st, 2).st.rate, 0.375),
+  String(tid(st, 2).st.rate),
+);
+check("武田信玄：配属先の塔自身は対象外（設定）", near(tid(st, 1).st.rate, 0.45));
+check("武田信玄：遠い塔#4(魔法)は対象外", near(tid(st, 4).st.rate, 0.8));
+check("武田信玄：塔#3(距離220)は対象外", near(tid(st, 3).st.rate, 1.6));
+await deselect(page);
+await assignVia(page, B, "kanbei");
+st = await S(page);
+check(
+  "黒田官兵衛＋武田信玄の支援は別々に1回ずつ適用",
   near(tid(st, 2).st.range, 186) && near(tid(st, 2).st.rate, 0.375),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "1-assigned.png"), fullPage: true });
@@ -239,26 +251,26 @@ check("ウェーブ中は使える", !(await page.isDisabled("#skill")));
 await page.tap("#skill");
 st = await S(page);
 check(
-  "弓の名手 必殺技：効果8秒・再使用40秒",
-  near(st.heroes.archer.active, 8, 0.2) && near(st.heroes.archer.cd, 40, 0.2),
+  "黒田官兵衛 必殺技：効果8秒・再使用40秒",
+  near(st.heroes.kanbei.active, 8, 0.2) && near(st.heroes.kanbei.cd, 40, 0.2),
 );
 check(
-  "必殺技 ×1.8 と軍師の支援 ×1.2 は掛け算（×2.16）",
+  "必殺技 ×1.8 と武田信玄の支援 ×1.2 は掛け算（×2.16）",
   near(tid(st, 2).st.speedMul, 2.16),
   String(tid(st, 2).st.speedMul),
 );
 check("必殺技の表示（残り秒数）", (await page.textContent("#skillLabel")).includes("発動中"));
 if (shots) await page.screenshot({ path: path.join(shots, "2-skill.png"), fullPage: true });
 await page.tap("#pause");
-const p0 = (await S(page)).heroes.archer;
+const p0 = (await S(page)).heroes.kanbei;
 await page.waitForTimeout(1200);
-const p1 = (await S(page)).heroes.archer;
+const p1 = (await S(page)).heroes.kanbei;
 check("停止中は効果時間・再使用待ちが止まる", p0.active === p1.active && p0.cd === p1.cd);
 await page.tap("#pause");
 let t0 = Date.now(),
-  a0 = (await S(page)).heroes.archer.active;
+  a0 = (await S(page)).heroes.kanbei.active;
 await page.waitForTimeout(1000);
-let a1 = (await S(page)).heroes.archer.active,
+let a1 = (await S(page)).heroes.kanbei.active,
   real = (Date.now() - t0) / 1000;
 check(
   "x1：実時間とほぼ同じ速さで減る",
@@ -267,9 +279,9 @@ check(
 );
 await page.tap("#speed");
 t0 = Date.now();
-a0 = (await S(page)).heroes.archer.active;
+a0 = (await S(page)).heroes.kanbei.active;
 await page.waitForTimeout(1000);
-a1 = (await S(page)).heroes.archer.active;
+a1 = (await S(page)).heroes.kanbei.active;
 real = (Date.now() - t0) / 1000;
 check(
   "x2：2倍の速さで減る（敵・塔と同じ時間）",
@@ -281,49 +293,52 @@ await page.evaluate(() => WD_DEBUG.step(10));
 st = await S(page);
 check(
   "効果時間が終わると終了・再使用待ちは継続",
-  st.heroes.archer.active === 0 && st.heroes.archer.cd > 0 && st.heroes.archer.cd < 40,
+  st.heroes.kanbei.active === 0 && st.heroes.kanbei.cd > 0 && st.heroes.kanbei.cd < 40,
 );
 check("効果終了後は攻撃速度が支援分だけに戻る", near(tid(st, 2).st.rate, 0.375));
-const cdBefore = st.heroes.archer.cd;
+const cdBefore = st.heroes.kanbei.cd;
 await deselect(page);
-await assignVia(page, E, "archer");
+await assignVia(page, E, "kanbei");
 await deselect(page);
-await assignVia(page, B, "archer");
+await assignVia(page, B, "kanbei");
 st = await S(page);
 check(
   "再配属しても再使用待ちはリセットされない",
-  near(st.heroes.archer.cd, cdBefore, 1.5) && st.heroes.archer.cd > 20,
-  `${cdBefore} → ${st.heroes.archer.cd}`,
+  near(st.heroes.kanbei.cd, cdBefore, 1.5) && st.heroes.kanbei.cd > 20,
+  `${cdBefore} → ${st.heroes.kanbei.cd}`,
 );
 check("再使用待ち中は発動できない", await page.isDisabled("#skill"));
-// 軍師の必殺技
+// 武田信玄の必殺技
 await deselect(page);
 await page.tap('[data-t="magic"]');
-await tapMap(page, 330, 505); // 塔#6：軍師から距離205（通常170の外・強化212.5の内）
+await tapMap(page, 330, 505); // 塔#6：武田信玄から距離205（通常170の外・強化212.5の内）
 st = await S(page);
 check("塔#6 は通常の支援範囲外", near(tid(st, 6).st.rate, 0.8));
 await tapMap(page, ...A);
 await page.tap("#skill");
 st = await S(page);
-check("軍師 必殺技：支援 +45%（塔#2 は上限内で ×1.45）", near(tid(st, 2).st.speedMul, 1.45));
+check("武田信玄 必殺技：支援 +45%（塔#2 は上限内で ×1.45）", near(tid(st, 2).st.speedMul, 1.45));
 check(
-  "軍師 必殺技：範囲 ×1.25 で塔#6(距離205)にも届く",
+  "武田信玄 必殺技：範囲 ×1.25 で塔#6(距離205)にも届く",
   near(tid(st, 6).st.rate, 0.8 / 1.45) && near(tid(st, 3).st.rate, 1.6),
 );
-await page.evaluate(() => (WD_DEBUG.state().heroState.archer.cd = 0)); // テスト用に再使用待ちを省略
+await page.evaluate(() => (WD_DEBUG.state().heroState.kanbei.cd = 0)); // テスト用に再使用待ちを省略
 await deselect(page);
 await tapMap(page, ...B);
 await page.tap("#skill");
 st = await S(page);
 check(
-  "弓の必殺技 ×1.8 ＋ 軍師の必殺技 ×1.45 → 上限 ×2.5 で頭打ち",
+  "弓の必殺技 ×1.8 ＋ 武田信玄の必殺技 ×1.45 → 上限 ×2.5 で頭打ち",
   near(tid(st, 2).st.speedMul, 2.5),
   String(tid(st, 2).st.speedMul),
 );
 await page.evaluate(() => WD_DEBUG.step(10.5));
 st = await S(page);
-check("軍師 必殺技終了で元の支援に戻る", near(tid(st, 2).st.speedMul, 1.2) && near(tid(st, 6).st.rate, 0.8));
-// 砲術家の必殺技（敵を射程内に置いて確認）
+check(
+  "武田信玄 必殺技終了で元の支援に戻る",
+  near(tid(st, 2).st.speedMul, 1.2) && near(tid(st, 6).st.rate, 0.8),
+);
+// 上杉謙信の必殺技（敵を射程内に置いて確認）
 await deselect(page);
 await tapMap(page, ...Cc);
 const hpDrop = await page.evaluate(() => {
@@ -353,13 +368,13 @@ await page.evaluate(() => WD_DEBUG.step(2));
 const enemyHp = await page.evaluate(() => WD_DEBUG.state().enemies.find((e) => e.max === 99999)?.hp);
 st = await S(page);
 check(
-  "砲術家 必殺技：射程内の敵に範囲砲撃（3回分以上の追加ダメージ）",
+  "上杉謙信 必殺技：射程内の敵に範囲砲撃（3回分以上の追加ダメージ）",
   enemyHp !== undefined && 99999 - enemyHp >= 62.4 * 1.5 * 3,
   String(99999 - enemyHp),
 );
 check(
-  "砲術家 必殺技：1.5秒で終了・再使用待ち35秒",
-  st.heroes.gunner.active === 0 && st.heroes.gunner.cd > 32,
+  "上杉謙信 必殺技：1.5秒で終了・再使用待ち35秒",
+  st.heroes.kenshin.active === 0 && st.heroes.kenshin.cd > 32,
 );
 
 console.log("■ 売却・リセット");
@@ -368,9 +383,9 @@ await tapMap(page, ...B);
 const goldBefore = (await S(page)).gold;
 await page.tap("#sell");
 st = await S(page);
-check("武将付きの塔を売却 → 武将は未配属", st.heroes.archer.tower === null && st.towers.length === 5);
+check("武将付きの塔を売却 → 武将は未配属", st.heroes.kanbei.tower === null && st.towers.length === 5);
 check("売却額は従来どおり（投資の70%）", st.gold - goldBefore === Math.floor(100 * 0.7));
-check("売却した塔の支援は消える／再使用待ちは保持", st.heroes.archer.cd > 0);
+check("売却した塔の支援は消える／再使用待ちは保持", st.heroes.kanbei.cd > 0);
 await page.tap("#roster");
 check("武将一覧で配属先を確認", (await page.textContent("#heroList")).includes("配属先："));
 if (shots) await page.screenshot({ path: path.join(shots, "3-roster.png"), fullPage: true });
@@ -388,35 +403,52 @@ check("リセット後はパネル非表示", !(await page.isVisible("#towerPane
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 
 console.log("■ 保存データ");
-let saved = await page.evaluate(() => localStorage.getItem("worldDefense.heroes.v1"));
-check("選択設定（最後に配属した武将）を保存", JSON.parse(saved).lastHero === "archer", saved);
+let saved = await page.evaluate(() => localStorage.getItem("worldDefense.warlords.v1"));
+check("選択設定（最後に配属した武将）を保存", JSON.parse(saved).lastHero === "kanbei", saved);
+check("リセットしても所持武将は残る", Object.keys(JSON.parse(saved).owned).length === 3);
 for (const [label, raw] of [
   ["壊れたJSON", "{{{"],
   ["型違い", '"hello"'],
   ["null", "null"],
-  [
-    "不明な武将・存在しない塔への配属",
-    JSON.stringify({ owned: ["ghost", "archer"], lastHero: "ghost", assignments: { archer: 99 } }),
-  ],
 ]) {
   const r = await newPage(raw);
   const s2 = await S(r.page);
   check(
-    `${label}でも起動し、既定の3人・配属なし`,
-    r.errors.length === 0 &&
-      Object.keys(s2.heroes).sort().join() === "archer,gunner,strategist" &&
-      Object.values(s2.heroes).every((h) => h.tower === null),
+    `${label}でも起動（武将なし・配属なし）`,
+    r.errors.length === 0 && Object.keys(s2.heroes).length === 0,
     r.errors.join(" / "),
   );
   await r.context.close();
 }
 {
   const r = await newPage(
-    JSON.stringify({ version: 1, owned: ["archer", "gunner", "strategist"], lastHero: "strategist" }),
+    JSON.stringify({
+      owned: { ghost: 2, kanbei: 1, kenshin: "x" },
+      tickets: -5,
+      lastHero: "ghost",
+      assignments: { kanbei: 99 },
+    }),
+  );
+  const s2 = await S(r.page);
+  check(
+    "不明な武将・不正な値・存在しない塔への配属は読み込まない",
+    r.errors.length === 0 && Object.keys(s2.heroes).join() === "kanbei" && s2.heroes.kanbei.tower === null,
+    JSON.stringify(s2.heroes),
+  );
+  await r.context.close();
+}
+{
+  const r = await newPage(
+    JSON.stringify({
+      version: 1,
+      owned: { kanbei: 1, kenshin: 1, shingen: 1 },
+      tickets: 0,
+      lastHero: "shingen",
+    }),
   );
   await r.page.tap("#roster");
   const first = await r.page.textContent(".hero-card h3");
-  check("保存した選択設定を復元（一覧の先頭）", first === "軍師", first);
+  check("保存した選択設定を復元（一覧の先頭）", first.includes("武田信玄"), first);
   await r.context.close();
 }
 {
@@ -471,7 +503,7 @@ for (const t of st.towers) {
   }, t.id);
 }
 await deselect(page);
-await assignVia(page, A, "strategist");
+await assignVia(page, A, "shingen");
 const routes = new Set();
 let waveOk = true;
 for (let w = 1; w <= 20; w++) {
@@ -501,7 +533,7 @@ await page.tap('[data-t="arrow"]');
 await tapMap(page, ...A);
 await tapMap(page, ...A);
 await page.tap("#assign");
-await page.tap('[data-assign="archer"]');
+await page.tap('[data-assign="kanbei"]');
 const layout = await page.evaluate(() => {
   const vis = (el) => el.offsetParent !== null;
   const btns = [...document.querySelectorAll("#towerPanel button, .tools button")].filter(vis);
@@ -521,18 +553,20 @@ check("塔パネルの文字 14px 以上", layout.minPanelFont >= 14, String(lay
 check("塔パネルがマップに重ならない", !layout.overlap);
 await page.tap("#assign");
 const sheet = await page.evaluate(() => {
-  const r = document.querySelector(".sheet").getBoundingClientRect();
+  const r = document.querySelector("#heroSheet .sheet").getBoundingClientRect();
   return {
     h: r.height / innerHeight,
     minBtn: Math.min(
-      ...[...document.querySelectorAll(".sheet button")].map((b) => b.getBoundingClientRect().height),
+      ...[...document.querySelectorAll("#heroSheet .sheet button")].map(
+        (b) => b.getBoundingClientRect().height,
+      ),
     ),
   };
 });
 check("配属画面は画面の72%以下", sheet.h <= 0.73, sheet.h.toFixed(2));
 check("配属画面のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
 if (shots) await page.screenshot({ path: path.join(shots, "4-sheet.png") });
-await page.tap(".sheet-back", { position: { x: 20, y: 20 } });
+await page.tap("#heroSheet", { position: { x: 20, y: 20 } });
 check("背景タップで配属画面を閉じる", !(await page.isVisible("#heroSheet")));
 check("モバイル表示でエラーなし", errors.length === 0, errors.join(" / "));
 

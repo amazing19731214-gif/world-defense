@@ -45,10 +45,19 @@ for (const [id, slots] of Object.entries(manifest.heroes)) {
   }
 }
 
+// 路上配置の兵士（武将とは別システム）。画像がない兵種は仮アイコンで描画する。
+const unitAssets = {};
+for (const [id, rel] of Object.entries(manifest.units || {})) {
+  const uri = dataUri(rel, `unit ${id}`);
+  if (uri) unitAssets[id] = uri;
+  else warnings.push(`unit ${id}: ${rel} が見つかりません（仮アイコンで代用）`);
+}
+
 let html = fs.readFileSync(path.join(root, "src", "index.template.html"), "utf8");
 for (const [marker, value] of [
   ["/*@@EMBEDDED_SPRITES@@*/ {}", sprites],
   ["/*@@HERO_ASSETS@@*/ {}", heroAssets],
+  ["/*@@UNIT_ASSETS@@*/ {}", unitAssets],
 ]) {
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => JSON.stringify(value));
