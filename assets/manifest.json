@@ -26,5 +26,12 @@
       "portrait": "heroes/strategist_portrait.png",
       "skill": "heroes/strategist_skill.png"
     }
+  },
+  "units": {
+    "ashigaru": "units/ashigaru.png",
+    "archer": "units/archer.png",
+    "spearman": "units/spearman.png",
+    "gunner": "units/gunner.png",
+    "cavalry": "units/cavalry.png"
   }
 }

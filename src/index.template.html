@@ -141,6 +141,9 @@
           font-size: 12px;
           padding: 9px 5px;
         }
+        .unit-tools button {
+          font-size: 14px;
+        }
         canvas {
           border-width: 3px;
           margin: 10px 0;
@@ -279,6 +282,45 @@
         height: 64px;
         font-size: 28px;
       }
+      .unit-tools {
+        align-items: center;
+      }
+      .unit-tools .row-label {
+        flex: none;
+        font-size: 14px;
+        padding: 0 4px;
+        color: #d8eadf;
+      }
+      .unit-tools button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 14px;
+      }
+      .unit-tools button img {
+        width: 30px;
+        height: 30px;
+        object-fit: contain;
+        transform: scaleX(-1);
+      }
+      .hp-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 6px 0;
+      }
+      .hp-line .bar {
+        flex: 1;
+        height: 12px;
+      }
+      .bar.hp i {
+        background: #ef6a58;
+      }
+      .retreat {
+        width: 100%;
+        font-size: 15px;
+      }
       .sheet-back {
         position: fixed;
         inset: 0;
@@ -357,13 +399,27 @@
         <button data-t="arrow">🏹 弓 100G</button><button data-t="cannon">💣 大砲 180G</button
         ><button data-t="magic">🔮 魔法 220G</button><button data-t="ice">❄️ 氷 150G</button>
       </div>
+      <div class="tools unit-tools" id="unitTools" aria-label="兵士（道に配置）">
+        <span class="row-label" id="unitCount">兵士 0/4</span>
+      </div>
+      <section id="unitPanel" class="panel" hidden aria-label="選択中の兵士">
+        <div class="panel-head">
+          <strong id="upTitle"></strong
+          ><button id="upClose" class="icon-btn" aria-label="兵士の選択を解除">✕</button>
+        </div>
+        <div class="hp-line">
+          <span id="upHpText"></span><span class="bar hp"><i id="upHpBar"></i></span>
+        </div>
+        <div id="upStats" class="tp-stats"></div>
+        <button id="retreat" class="retreat">↩ 撤退</button>
+      </section>
       <div class="tools">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
         ><button id="pause">⏸ 停止</button><button id="roster">👥 武将</button
         ><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v6（武将配属）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v7（武将配属・路上兵士）</small>
     </main>
     <div id="heroSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -441,6 +497,73 @@
         // 画像がない項目は仮アイコン（色付きの円＋一文字）で描画する。
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
         const SAVE_KEY = "worldDefense.heroes.v1";
+
+        // ===== 路上配置の兵士：調整用設定 =====
+        // 塔に配属する「武将」とは別のシステム。数値はすべてここで調整する。
+        //   hp / damage / rate（攻撃間隔・秒）/ range（攻撃が届く距離）/ cost（配置費用）
+        //   block … 同時に足止めできる敵の数（0なら足止めしない）
+        //   redeploy.retreat / redeploy.defeated … 撤退・戦闘不能の後、同じ兵種を再配置できるまでの秒数
+        //   （戦闘の時間で進み、停止中は止まる。x2では2倍速）
+        //   enabled:false の兵種は選択画面に出さない（画像は assets/units/ に保持）
+        const UNIT_RULES = {
+          maxUnits: 4, // 同時に配置できる人数（全兵種合計）
+          snapDistance: 46, // タップ位置から道の中心線までの許容距離
+          minSpacing: 46, // 兵士どうしの最小間隔
+          noDeployFromEntry: 170, // 入口からこの距離までは配置不可
+          noDeployBeforeCastle: 150, // 城の手前この距離は配置不可
+          retreatRefund: 0.5, // 撤退時の返金率（× 費用 × 残りHPの割合）
+          clearRedeployOnWaveEnd: true, // ウェーブクリアで再配置待ちを解除
+          blockRadius: 26, // 足止めが始まる距離（接地点どうし）
+          enemyReach: 30, // 敵が兵士を攻撃できる距離
+        };
+        const UNIT_CONFIG = {
+          ashigaru: {
+            enabled: true,
+            name: "足軽",
+            icon: "🛡",
+            mark: "足",
+            color: "#3d63a8",
+            cost: 60,
+            hp: 260,
+            damage: 16,
+            rate: 0.8,
+            range: 38,
+            block: 1,
+            redeploy: { retreat: 8, defeated: 15 },
+            displayBox: [44, 52],
+            text: "近くの敵1体を足止めして近接攻撃",
+          },
+          archer: {
+            enabled: true,
+            name: "弓兵",
+            icon: "🏹",
+            mark: "弓",
+            color: "#4f7f35",
+            cost: 80,
+            hp: 120,
+            damage: 13,
+            rate: 0.9,
+            range: 150,
+            block: 0,
+            redeploy: { retreat: 8, defeated: 15 },
+            displayBox: [48, 52],
+            text: "射程内の敵へ矢を放つ（足止めはしない）",
+          },
+          // 以下は素材のみ用意済み・未実装
+          spearman: { enabled: false, name: "槍兵", mark: "槍", color: "#b8352e", displayBox: [48, 60] },
+          gunner: { enabled: false, name: "鉄砲隊", mark: "鉄", color: "#27375f", displayBox: [56, 52] },
+          cavalry: { enabled: false, name: "騎馬兵", mark: "騎", color: "#2f5ca8", displayBox: [68, 64] },
+        };
+        // 敵が兵士に与える攻撃。unblockable の敵は足止めできない（通過する）
+        const ENEMY_VS_UNIT = {
+          goblin: { damage: 8, rate: 1.0 },
+          wolf: { damage: 7, rate: 0.8 },
+          knight: { damage: 16, rate: 1.2 },
+          slime: { damage: 9, rate: 1.0 },
+          dragon: { damage: 20, rate: 1.2, unblockable: true },
+          boss: { damage: 45, rate: 1.5 },
+        };
+        const UNIT_ASSETS = /*@@UNIT_ASSETS@@*/ {};
         const upper = [
             [0, 300],
             [140, 300],
@@ -475,7 +598,11 @@
           spawnTotal = 0,
           last = 0,
           over = false,
-          towerSeq = 0;
+          towerSeq = 0,
+          units = [],
+          unitSeq = 0,
+          selectedUnit = null,
+          selectedUnitType = null; // null なら塔の建設モード
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         function updateUI() {
@@ -490,6 +617,7 @@
             .querySelectorAll("[data-t]")
             .forEach((b) => b.classList.toggle("active", b.dataset.t === selectedType));
           renderTowerPanel();
+          renderUnitUI();
         }
         const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
         const towerLabel = (t) =>
@@ -629,7 +757,7 @@
             dmg = st.damage * HERO_CONFIG[h.id].skill.blastDamageMul;
           let n = 0;
           for (const e of enemies) {
-            if (e.hp <= 0 || dist(t, e) >= st.range) continue;
+            if (e.gone || e.hp <= 0 || dist(t, e) >= st.range) continue;
             e.hp -= dmg;
             e.hit = 0.18;
             if (n++ < 10) burst(e.x, e.y, "#ffd273", "cannon");
@@ -717,6 +845,177 @@
             slow: 0,
           });
         }
+        // ===== 路上配置の兵士：配置・戦闘 =====
+        const unitRedeploy = {}; // 兵種ごとの再配置待ち（秒）。撤退・戦闘不能で設定され、配置し直しても消えない
+        const enabledUnitTypes = () => Object.keys(UNIT_CONFIG).filter((k) => UNIT_CONFIG[k].enabled);
+        const pathLength = (path) =>
+          path.slice(1).reduce((s, b, i) => s + Math.hypot(b[0] - path[i][0], b[1] - path[i][1]), 0);
+        // タップ位置を道の中心線へ投影する（上下どちらの道でも最も近い点）
+        function projectToRoad(x, y) {
+          let best = null;
+          for (const path of [upper, lower]) {
+            let along = 0;
+            for (let i = 1; i < path.length; i++) {
+              const [ax, ay] = path[i - 1],
+                [bx, by] = path[i],
+                dx = bx - ax,
+                dy = by - ay,
+                len = Math.hypot(dx, dy),
+                t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (len * len))),
+                px = ax + dx * t,
+                py = ay + dy * t,
+                off = Math.hypot(x - px, y - py);
+              if (!best || off < best.off)
+                best = { x: px, y: py, off, d: along + len * t, total: pathLength(path) };
+              along += len;
+            }
+          }
+          return best;
+        }
+        function deployCheck(type, x, y) {
+          const c = UNIT_CONFIG[type];
+          if (!c || !c.enabled) return { error: "その兵種はまだ使えません。" };
+          if (x < 0 || x > W || y < 0 || y > H) return { error: "マップの外には配置できません。" };
+          const p = projectToRoad(x, y);
+          if (!p || p.off > UNIT_RULES.snapDistance) return { error: "兵士は道の上をタップして配置します。" };
+          if (p.d < UNIT_RULES.noDeployFromEntry) return { error: "入口の近くには配置できません。" };
+          if (p.total - p.d < UNIT_RULES.noDeployBeforeCastle)
+            return { error: "城の直前には配置できません。" };
+          if (units.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < UNIT_RULES.minSpacing))
+            return { error: "ほかの兵士に近すぎます。少し離して配置してください。" };
+          if (units.length >= UNIT_RULES.maxUnits)
+            return { error: "配置できるのは " + UNIT_RULES.maxUnits + " 人までです。" };
+          if ((unitRedeploy[type] || 0) > 0)
+            return { error: c.name + " は再配置まで " + Math.ceil(unitRedeploy[type]) + " 秒です。" };
+          if (gold < c.cost) return { error: "資金が足りません（" + c.name + " " + c.cost + "G）。" };
+          return { point: p };
+        }
+        function deployUnit(type, x, y) {
+          const r = deployCheck(type, x, y);
+          if (r.error) {
+            msg(r.error);
+            return null;
+          }
+          const c = UNIT_CONFIG[type];
+          gold -= c.cost;
+          const u = {
+            id: ++unitSeq,
+            type,
+            x: r.point.x,
+            y: r.point.y,
+            hp: c.hp,
+            max: c.hp,
+            cd: 0,
+            atk: 0,
+            hit: 0,
+          };
+          units.push(u);
+          msg(c.name + " を配置した（" + units.length + "/" + UNIT_RULES.maxUnits + "）。");
+          return u;
+        }
+        // 足止めの解除。兵士が倒れる・撤退する・リセットのときに必ず呼ぶ
+        function releaseBlocks(u) {
+          for (const e of enemies) if (e.blockedBy === u) e.blockedBy = null;
+        }
+        function removeUnit(u, reason) {
+          if (!units.includes(u)) return;
+          releaseBlocks(u);
+          units = units.filter((v) => v !== u);
+          if (selectedUnit === u) selectedUnit = null;
+          const c = UNIT_CONFIG[u.type];
+          unitRedeploy[u.type] = Math.max(unitRedeploy[u.type] || 0, c.redeploy[reason]);
+          unitGhosts.push({ type: u.type, x: u.x, y: u.y, age: 0, duration: 0.7, reason });
+          if (unitGhosts.length > 12) unitGhosts.shift();
+        }
+        function retreatUnit(u) {
+          if (!units.includes(u)) return;
+          const c = UNIT_CONFIG[u.type],
+            refund = Math.floor(c.cost * UNIT_RULES.retreatRefund * (u.hp / u.max));
+          gold += refund;
+          removeUnit(u, "retreat");
+          msg(c.name + " が撤退した（" + refund + "G 返金・再配置まで " + c.redeploy.retreat + " 秒）。");
+        }
+        const blockCount = (u) => enemies.reduce((n, e) => n + (e.blockedBy === u ? 1 : 0), 0);
+        // 足止めできる兵士に触れた敵を止める（足止め数の上限を超えた敵・止められない敵は通過）
+        function assignBlocks() {
+          for (const e of enemies) {
+            if (e.gone || e.blockedBy || e.hp <= 0) continue;
+            if ((ENEMY_VS_UNIT[e.kind] || {}).unblockable) continue;
+            const ground = { x: e.x, y: e.y };
+            for (const u of units) {
+              const c = UNIT_CONFIG[u.type];
+              if (!c.block || u.hp <= 0) continue;
+              if (dist(u, ground) > UNIT_RULES.blockRadius || blockCount(u) >= c.block) continue;
+              e.blockedBy = u;
+              break;
+            }
+          }
+        }
+        function tickUnits(dt) {
+          for (const k in unitRedeploy) unitRedeploy[k] = Math.max(0, unitRedeploy[k] - dt);
+          // 兵士の攻撃
+          for (const u of units) {
+            const c = UNIT_CONFIG[u.type];
+            u.cd -= dt;
+            if (u.cd > 0) continue;
+            const alive = enemies.filter((e) => !e.gone && e.hp > 0);
+            let target = alive.find((e) => e.blockedBy === u);
+            if (!target) target = alive.filter((e) => dist(u, e) <= c.range).sort((a, b) => b.d - a.d)[0];
+            if (!target) continue;
+            u.cd = c.rate;
+            u.atk = 0.18;
+            u.face = target.x < u.x ? -1 : 1;
+            target.hp -= c.damage;
+            target.hit = 0.18;
+            if (c.block) burst(target.x, target.y, "#fff1c4", "slash");
+            else {
+              if (shots.length >= 160) shots.shift();
+              shots.push({
+                x: u.x,
+                y: u.y - 30,
+                tx: target.x,
+                ty: target.y,
+                type: "arrow",
+                age: 0,
+                duration: 0.22,
+                col: "#a56b35",
+              });
+            }
+          }
+          // 敵の反撃：足止めしている兵士、なければ近くの兵士を攻撃（移動しながらでも攻撃する）
+          for (const e of enemies) {
+            if (e.gone || e.hp <= 0) continue;
+            const a = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin;
+            e.unitCd = (e.unitCd || 0) - dt;
+            if (e.unitCd > 0) continue;
+            let target = e.blockedBy && units.includes(e.blockedBy) ? e.blockedBy : null;
+            if (!target) {
+              let best = UNIT_RULES.enemyReach;
+              for (const u of units) {
+                const dd = dist(u, e);
+                if (dd <= best) {
+                  best = dd;
+                  target = u;
+                }
+              }
+            }
+            if (!target) continue;
+            e.unitCd = a.rate;
+            target.hp -= a.damage * (1 + (wave - 1) * 0.05);
+            target.hit = 0.2;
+          }
+          for (const u of units.slice()) {
+            if (u.hp > 0) continue;
+            removeUnit(u, "defeated");
+            msg(
+              UNIT_CONFIG[u.type].name +
+                " が倒れた（再配置まで " +
+                UNIT_CONFIG[u.type].redeploy.defeated +
+                " 秒）。",
+            );
+          }
+        }
+        const unitGhosts = []; // 撤退・戦闘不能の退場演出（見た目のみ）
         function fire(t, e) {
           const p = types[t.type];
           const duration = t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : 0.34;
@@ -750,22 +1049,26 @@
             spawned++;
             spawnClock += Math.max(0.35, 0.95 - wave * 0.015);
           }
+          assignBlocks();
           for (const e of enemies) {
             e.slow = Math.max(0, e.slow - dt);
+            if (e.blockedBy) continue; // 足止め中は移動しない（解除は releaseBlocks で必ず行う）
             e.d += e.speed * (e.slow > 0 ? 0.48 : 1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
-            if (e.x >= 960) {
+            if (e.x >= 960 && !e.gone) {
               hp--;
+              e.gone = true;
               e.hp = -999;
             }
           }
           tickHeroes(dt);
+          tickUnits(dt);
           for (const t of towers) {
             t.cd -= dt;
             if (t.cd <= 0) {
               const st = towerStats(t);
               const targets = enemies
-                .filter((e) => e.hp > 0 && dist(t, e) < st.range)
+                .filter((e) => !e.gone && e.hp > 0 && dist(t, e) < st.range)
                 .sort((a, b) => b.d - a.d);
               if (targets.length) {
                 fire(t, targets[0]);
@@ -773,14 +1076,16 @@
               }
             }
           }
+          // 撃破処理は e.gone で一度だけ（塔・兵士・必殺技が同時に倒しても報酬は1回）
           for (const e of enemies) {
-            if (e.hp <= 0 && e.hp !== -999) {
+            if (!e.gone && e.hp <= 0) {
+              e.gone = true;
               gold += e.reward;
               burst(e.x, e.y, e.color, e.kind === "goblin" ? "death" : "vanish");
-              e.hp = -999;
             }
           }
-          enemies = enemies.filter((e) => e.hp !== -999);
+          enemies = enemies.filter((e) => !e.gone);
+          for (const e of enemies) if (e.blockedBy && !units.includes(e.blockedBy)) e.blockedBy = null;
           if (hp <= 0) {
             hp = 0;
             over = true;
@@ -788,6 +1093,7 @@
             msg("ゲームオーバー！ 最初から挑戦しよう。");
           } else if (spawned >= spawnTotal && enemies.length === 0) {
             playing = false;
+            if (UNIT_RULES.clearRedeployOnWaveEnd) for (const k in unitRedeploy) unitRedeploy[k] = 0;
             gold += 50 + wave * 8;
             msg(
               wave === 20
@@ -1644,6 +1950,153 @@
           }
           heroBadge(h.id, bx, by, 14);
         }
+        // 兵士の画像は一度だけ読み込んで使い回す。失敗・未収録なら仮アイコン
+        const unitSprites = Object.create(null);
+        for (const [id, src] of Object.entries(UNIT_ASSETS)) {
+          const im = new Image();
+          im.onload = () => {
+            unitSprites[id] = im;
+          };
+          im.onerror = () => console.warn("Unit image unavailable: " + id);
+          im.src = src;
+        }
+        const UNIT_FOOT = 12; // 道の中心線から足元までのずれ（見た目のみ）
+        // 選択判定は画像の範囲（旗や頭を含む）、戦闘判定は接地点（u.x, u.y）で別に扱う
+        const unitHitBox = (u) => {
+          const [w, h] = UNIT_CONFIG[u.type].displayBox;
+          return {
+            l: u.x - w / 2 - 6,
+            r: u.x + w / 2 + 6,
+            t: u.y + UNIT_FOOT - h - 6,
+            b: u.y + UNIT_FOOT + 8,
+          };
+        };
+        function unitAt(x, y) {
+          let best = null,
+            bestD = 1e9;
+          for (const u of units) {
+            const b = unitHitBox(u);
+            if (x < b.l || x > b.r || y < b.t || y > b.b) continue;
+            const d = Math.hypot(u.x - x, u.y - 20 - y);
+            if (d < bestD) {
+              bestD = d;
+              best = u;
+            }
+          }
+          return best;
+        }
+        function unitFigure(type, x, ground, o = {}) {
+          const c = UNIT_CONFIG[type],
+            [bw, bh] = c.displayBox,
+            im = unitSprites[type],
+            face = o.face || -1;
+          ctx.save();
+          ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
+          ctx.translate(x + (o.dx || 0), ground + (o.dy || 0));
+          ctx.rotate(o.tilt || 0);
+          if (im) {
+            const k = Math.min(bw / im.width, bh / im.height),
+              w = im.width * k,
+              h = im.height * k;
+            ctx.scale(face < 0 ? -1 : 1, 1); // 素材は右向き。敵の来る左を向かせる
+            ctx.drawImage(im, -w / 2, -h, w, h);
+            if (o.flash) {
+              ctx.globalCompositeOperation = "source-atop";
+              ctx.globalAlpha = 0.5 * (o.alpha == null ? 1 : o.alpha);
+              ctx.fillStyle = "#fff";
+              ctx.fillRect(-w / 2, -h, w, h);
+            }
+          } else {
+            ellipse(0, -18, 15, 17, o.flash ? "#ffffff" : c.color);
+            ctx.strokeStyle = "#ffe0a0";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 16px system-ui";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(c.mark, 0, -17);
+          }
+          ctx.restore();
+        }
+        function drawUnit(u) {
+          const ground = u.y + UNIT_FOOT,
+            c = UNIT_CONFIG[u.type];
+          if (u === selectedUnit) {
+            if (c.range > 60) {
+              ctx.save();
+              ctx.fillStyle = "#fff0b40f";
+              ctx.strokeStyle = "#fff0b499";
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(u.x, u.y, c.range, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+              ctx.restore();
+            }
+            ctx.strokeStyle = "#ffe7a0";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(u.x, ground, 22, 8, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ellipse(u.x + 2, ground, 16, 5, "#2e523866");
+          const face = u.face || -1,
+            bob = reduced ? 0 : Math.sin(visualTime * 4 + u.id) * 1.2,
+            lunge = u.atk > 0 && !reduced ? u.atk / 0.18 : 0;
+          unitFigure(u.type, u.x, ground, {
+            face,
+            dy: -Math.abs(bob),
+            dx: lunge * 5 * face,
+            tilt: lunge * 0.14 * face,
+            flash: u.hit > 0 && Math.floor(u.hit * 30) % 2 === 0,
+          });
+          const blocking = blockCount(u);
+          if (u.hp < u.max || u === selectedUnit || blocking) {
+            const top = ground - c.displayBox[1] - 10;
+            ctx.fillStyle = "#3a463b";
+            ctx.fillRect(u.x - 18, top, 36, 5);
+            ctx.fillStyle = "#7fe08a";
+            ctx.fillRect(u.x - 18, top, 36 * Math.max(0, u.hp / u.max), 5);
+          }
+          if (blocking) {
+            // 足止め中の印
+            ctx.save();
+            ctx.strokeStyle = "#ffd77d";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(u.x - 30, u.y - 14);
+            ctx.lineTo(u.x - 30, u.y + 10);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+        function drawUnitGhost(g) {
+          const p = g.age / g.duration;
+          unitFigure(g.type, g.x, g.y + UNIT_FOOT, {
+            alpha: 1 - p,
+            tilt: reduced ? 0 : g.reason === "defeated" ? -1.2 * p : 0.2 * p,
+            dx: g.reason === "retreat" && !reduced ? 26 * p : 0,
+            dy: g.reason === "defeated" ? 4 * p : 0,
+          });
+        }
+        // 兵士を選んでいるときは配置できない区間（入口・城の手前）を薄い赤で示す
+        function noDeployZones() {
+          if (!selectedUnitType) return;
+          ctx.save();
+          ctx.fillStyle = "#e0484855";
+          for (const path of [upper, lower]) {
+            const total = pathLength(path);
+            for (let d = 0; d <= total; d += 10) {
+              if (d >= UNIT_RULES.noDeployFromEntry && total - d >= UNIT_RULES.noDeployBeforeCastle) continue;
+              const q = pathAt(path, d);
+              ctx.beginPath();
+              ctx.arc(q.x, q.y, 14, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        }
         function auraRings() {
           for (const h of ownedHeroes()) {
             const a = auraFrom(h);
@@ -1725,6 +2178,12 @@
           visualTime += dt;
           if (cutin && (cutin.age += dt) >= cutin.duration) cutin = null;
           for (const t of towers) t.recoil = Math.max(0, (t.recoil || 0) - dt);
+          for (const u of units) {
+            u.atk = Math.max(0, (u.atk || 0) - dt);
+            u.hit = Math.max(0, (u.hit || 0) - dt);
+          }
+          for (let i = unitGhosts.length - 1; i >= 0; i--)
+            if ((unitGhosts[i].age += dt) >= unitGhosts[i].duration) unitGhosts.splice(i, 1);
           for (const e of enemies) e.hit = Math.max(0, (e.hit || 0) - dt);
           for (const s of shots) {
             s.age += dt;
@@ -1854,6 +2313,18 @@
         }
         function effect(e) {
           const p = e.age / e.duration;
+          if (e.kind === "slash") {
+            // 足軽の突き：Canvasで描く斬撃の弧
+            ctx.save();
+            ctx.globalAlpha = 1 - p;
+            ctx.strokeStyle = "#fff4cf";
+            ctx.lineWidth = 4 * (1 - p) + 1;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, 10 + 14 * p, -2.4, -0.6);
+            ctx.stroke();
+            ctx.restore();
+            return;
+          }
           ctx.save();
           ctx.globalAlpha = 1 - p;
           if (e.kind === "death" && sprites.goblin) {
@@ -1926,7 +2397,10 @@
           ctx.clearRect(0, 0, W, H);
           ctx.drawImage(scenery, 0, 0);
           auraRings();
+          noDeployZones();
           const actors = [
+            ...units.map((u) => ({ y: u.y + UNIT_FOOT, draw: () => drawUnit(u) })),
+            ...unitGhosts.map((g) => ({ y: g.y + UNIT_FOOT, draw: () => drawUnitGhost(g) })),
             ...towers.map((t) => ({
               y: t.y,
               draw: () => {
@@ -1993,17 +2467,37 @@
           const r = C.getBoundingClientRect(),
             x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
             y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
+          // 優先順：兵士（画像の範囲）→ 塔 → 選択解除 → 配置／建設
+          const hitUnit = unitAt(x, y);
+          if (hitUnit) {
+            selectedUnit = hitUnit;
+            selectedTower = null;
+            msg(UNIT_CONFIG[hitUnit.type].name + " #" + hitUnit.id + "：HPの確認と撤退ができます。");
+            updateUI();
+            return;
+          }
           const old = towers.find((t) => Math.hypot(t.x - x, t.y - y) < 38);
           if (old) {
             selectedTower = old;
+            selectedUnit = null;
             msg(towerLabel(old) + "：強化・売却・武将配属ができます。");
             updateUI();
             return;
           }
-          if (selectedTower) {
-            // 塔を選択中に草地をタップしたときは、誤建設を防ぐため選択解除だけ行う
+          if (selectedTower || selectedUnit) {
+            // 選択中に空いている場所をタップしたときは、誤操作を防ぐため選択解除だけ行う
             selectedTower = null;
-            msg("塔の選択を解除した。もう一度草地をタップすると建設します。");
+            selectedUnit = null;
+            msg(
+              "選択を解除した。もう一度タップすると" +
+                (selectedUnitType ? "兵士を配置" : "建設") +
+                "します。",
+            );
+            updateUI();
+            return;
+          }
+          if (selectedUnitType) {
+            deployUnit(selectedUnitType, x, y);
             updateUI();
             return;
           }
@@ -2031,7 +2525,9 @@
           (b) =>
             (b.onclick = () => {
               selectedType = b.dataset.t;
+              selectedUnitType = null;
               selectedTower = null;
+              selectedUnit = null;
               msg(types[selectedType].icon + " を選択。草地をタップして建設しよう。");
               updateUI();
             }),
@@ -2090,6 +2586,12 @@
           shots = [];
           effects.length = 0;
           towerSeq = 0;
+          for (const u of units) releaseBlocks(u);
+          units = [];
+          unitSeq = 0;
+          unitGhosts.length = 0;
+          selectedUnit = null;
+          for (const k in unitRedeploy) unitRedeploy[k] = 0;
           resetHeroes();
           cutin = null;
           closeSheet();
@@ -2098,6 +2600,75 @@
           over = false;
           $("pause").textContent = "⏸ 停止";
           msg("新しいゲームを開始。塔を建てよう！");
+          updateUI();
+        };
+        // ===== 兵士の選択ボタン・兵士パネル =====
+        // 有効な兵種だけボタンを作る（未実装の兵種は表示しない）
+        for (const type of enabledUnitTypes()) {
+          const c = UNIT_CONFIG[type],
+            b = document.createElement("button");
+          b.dataset.u = type;
+          b.innerHTML =
+            (UNIT_ASSETS[type] ? '<img alt="" src="' + UNIT_ASSETS[type] + '">' : c.icon + " ") +
+            '<span class="u-label"></span>';
+          b.onclick = () => {
+            selectedUnitType = type;
+            selectedTower = null;
+            selectedUnit = null;
+            msg(c.name + "（" + c.cost + "G）：" + c.text + "。道をタップして配置しよう。");
+            updateUI();
+          };
+          $("unitTools").appendChild(b);
+        }
+        function renderUnitUI() {
+          $("unitCount").textContent = "兵士 " + units.length + "/" + UNIT_RULES.maxUnits;
+          document.querySelectorAll("[data-u]").forEach((b) => {
+            const c = UNIT_CONFIG[b.dataset.u],
+              wait = unitRedeploy[b.dataset.u] || 0;
+            b.classList.toggle("active", b.dataset.u === selectedUnitType);
+            b.querySelector(".u-label").textContent =
+              c.name + " " + (wait > 0 ? "⌛" + Math.ceil(wait) + "秒" : c.cost + "G");
+          });
+          document
+            .querySelectorAll("[data-t]")
+            .forEach((b) => b.classList.toggle("active", !selectedUnitType && b.dataset.t === selectedType));
+          const u = selectedUnit,
+            panel = $("unitPanel");
+          if (!u || !units.includes(u)) {
+            selectedUnit = null;
+            panel.hidden = true;
+            return;
+          }
+          panel.hidden = false;
+          const c = UNIT_CONFIG[u.type];
+          $("upTitle").textContent = c.icon + " " + c.name + " #" + u.id;
+          $("upHpText").textContent = "HP " + Math.ceil(u.hp) + " / " + u.max;
+          $("upHpBar").style.width = Math.round((100 * Math.max(0, u.hp)) / u.max) + "%";
+          const blocking = blockCount(u);
+          setHtml(
+            $("upStats"),
+            "<span>攻撃 <b>" +
+              c.damage +
+              "</b></span><span>間隔 <b>" +
+              fmt(c.rate) +
+              "秒</b></span>" +
+              "<span>射程 <b>" +
+              c.range +
+              "</b></span>" +
+              (c.block
+                ? "<span>足止め <b>" + blocking + "/" + c.block + "</b></span>"
+                : "<span>足止めなし</span>"),
+          );
+          const refund = Math.floor(c.cost * UNIT_RULES.retreatRefund * (u.hp / u.max));
+          $("retreat").textContent =
+            "↩ 撤退（" + refund + "G 返金・再配置まで " + c.redeploy.retreat + "秒）";
+        }
+        $("upClose").onclick = () => {
+          selectedUnit = null;
+          updateUI();
+        };
+        $("retreat").onclick = () => {
+          if (selectedUnit) retreatUnit(selectedUnit);
           updateUI();
         };
         // ===== 塔パネル・武将配属画面 =====
@@ -2343,7 +2914,40 @@
               enemies,
               heroState,
               selectedTower,
+              units,
+              selectedUnit,
+              selectedUnitType,
+              unitRedeploy,
             }),
+            projectToRoad,
+            // 指定した敵を追加（テスト用）。d は道に沿った距離
+            addEnemy: (o) => {
+              const e = Object.assign(
+                {
+                  path: upper,
+                  d: 0,
+                  kind: "goblin",
+                  hp: 50,
+                  max: 50,
+                  speed: 60,
+                  reward: 10,
+                  color: "#b65e3e",
+                  r: 12,
+                  slow: 0,
+                },
+                o,
+              );
+              if (o.path === "lower") e.path = lower;
+              if (o.path === "upper" || !o.path) e.path = upper;
+              e.max = Math.max(e.max, e.hp);
+              Object.assign(e, pathAt(e.path, e.d));
+              enemies.push(e);
+              return e;
+            },
+            stopSpawning: () => {
+              spawned = spawnTotal;
+            },
+            unitConfig: { UNIT_CONFIG, UNIT_RULES, ENEMY_VS_UNIT },
             towerStats,
             setGold: (g) => {
               gold = g;
