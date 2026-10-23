@@ -12,54 +12,54 @@
   },
   "heroes": {
     "nobunaga": {
-      "icon": "heroes/nobunaga_icon.png",
-      "portrait": "heroes/nobunaga_portrait.png",
-      "skill": "heroes/nobunaga_skill.png"
+      "icon": "heroes/nobunaga_icon.webp",
+      "portrait": "heroes/nobunaga_portrait.webp",
+      "skill": "heroes/nobunaga_skill.webp"
     },
     "shingen": {
-      "icon": "heroes/shingen_icon.png",
-      "portrait": "heroes/shingen_portrait.png",
-      "skill": "heroes/shingen_skill.png"
+      "icon": "heroes/shingen_icon.webp",
+      "portrait": "heroes/shingen_portrait.webp",
+      "skill": "heroes/shingen_skill.webp"
     },
     "kenshin": {
-      "icon": "heroes/kenshin_icon.png",
-      "portrait": "heroes/kenshin_portrait.png",
-      "skill": "heroes/kenshin_skill.png"
+      "icon": "heroes/kenshin_icon.webp",
+      "portrait": "heroes/kenshin_portrait.webp",
+      "skill": "heroes/kenshin_skill.webp"
     },
     "yukimura": {
-      "icon": "heroes/yukimura_icon.png",
-      "portrait": "heroes/yukimura_portrait.png",
-      "skill": "heroes/yukimura_skill.png"
+      "icon": "heroes/yukimura_icon.webp",
+      "portrait": "heroes/yukimura_portrait.webp",
+      "skill": "heroes/yukimura_skill.webp"
     },
     "kanetsugu": {
-      "icon": "heroes/kanetsugu_icon.png",
-      "portrait": "heroes/kanetsugu_portrait.png",
-      "skill": "heroes/kanetsugu_skill.png"
+      "icon": "heroes/kanetsugu_icon.webp",
+      "portrait": "heroes/kanetsugu_portrait.webp",
+      "skill": "heroes/kanetsugu_skill.webp"
     },
     "masamune": {
-      "icon": "heroes/masamune_icon.png",
-      "portrait": "heroes/masamune_portrait.png",
-      "skill": "heroes/masamune_skill.png"
+      "icon": "heroes/masamune_icon.webp",
+      "portrait": "heroes/masamune_portrait.webp",
+      "skill": "heroes/masamune_skill.webp"
     },
     "tadakatsu": {
-      "icon": "heroes/tadakatsu_icon.png",
-      "portrait": "heroes/tadakatsu_portrait.png",
-      "skill": "heroes/tadakatsu_skill.png"
+      "icon": "heroes/tadakatsu_icon.webp",
+      "portrait": "heroes/tadakatsu_portrait.webp",
+      "skill": "heroes/tadakatsu_skill.webp"
     },
     "kanbei": {
-      "icon": "heroes/kanbei_icon.png",
-      "portrait": "heroes/kanbei_portrait.png",
-      "skill": "heroes/kanbei_skill.png"
+      "icon": "heroes/kanbei_icon.webp",
+      "portrait": "heroes/kanbei_portrait.webp",
+      "skill": "heroes/kanbei_skill.webp"
     },
     "motonari": {
-      "icon": "heroes/motonari_icon.png",
-      "portrait": "heroes/motonari_portrait.png",
-      "skill": "heroes/motonari_skill.png"
+      "icon": "heroes/motonari_icon.webp",
+      "portrait": "heroes/motonari_portrait.webp",
+      "skill": "heroes/motonari_skill.webp"
     },
     "keiji": {
-      "icon": "heroes/keiji_icon.png",
-      "portrait": "heroes/keiji_portrait.png",
-      "skill": "heroes/keiji_skill.png"
+      "icon": "heroes/keiji_icon.webp",
+      "portrait": "heroes/keiji_portrait.webp",
+      "skill": "heroes/keiji_skill.webp"
     }
   },
   "units": {
