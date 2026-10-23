@@ -363,6 +363,51 @@
       .muted {
         color: #b9d4c6;
       }
+      .rarity {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .stars {
+        color: #ffd77d;
+        font-size: 14px;
+      }
+      .hero-line {
+        line-height: 1.45;
+        margin: 2px 0 8px;
+      }
+      .tickets {
+        font-size: 18px;
+        font-weight: 800;
+        color: #ffe3a0;
+        margin: 6px 0;
+      }
+      .gacha-pull {
+        width: 100%;
+        font-size: 17px;
+        margin: 6px 0 10px;
+      }
+      .pull-result {
+        display: flex;
+        gap: 12px;
+        padding: 10px;
+        border: 2px solid;
+        border-radius: 12px;
+        margin-bottom: 8px;
+      }
+      .pull-result h3 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      .pull-result p {
+        margin: 2px 0;
+        line-height: 1.45;
+      }
+      .warn {
+        color: #ffb3a7;
+      }
       .hp-line {
         display: flex;
         align-items: center;
@@ -467,19 +512,24 @@
           ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
         </div>
         <div id="sqSummary" class="tp-stats"></div>
+        <div id="sqHeroLine" class="hero-line"></div>
         <div id="sqMembers" class="members"></div>
         <div id="soldierInfo" class="soldier-info"></div>
-        <div class="panel-actions two">
-          <button id="retreat">↩ 撤退</button><button id="sqOrganize">📋 編成</button>
+        <div class="panel-actions">
+          <button id="retreat">↩ 撤退</button><button id="sqHero">👤 武将</button
+          ><button id="sqOrganize">📋 編成</button>
         </div>
+        <button id="sqSkill" class="skill" hidden>
+          <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
+        </button>
       </section>
       <div class="tools">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button><button id="roster">👥 武将</button
-        ><button id="reset">↻ 最初から</button>
+        ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
+        ><button id="roster">👥 武将</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v8（武将配属・兵士部隊）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v9（戦国武将ガチャ・兵士部隊）</small>
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -489,6 +539,18 @@
         </div>
         <p id="squadHint" style="margin: 6px 0"></p>
         <div id="squadList"></div>
+      </div>
+    </div>
+    <div id="gachaSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gachaTitle">
+        <div class="panel-head">
+          <strong id="gachaTitle">戦国武将ガチャ（無料）</strong
+          ><button id="gachaClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <p id="gachaTickets" class="tickets"></p>
+        <p id="gachaRates" class="muted"></p>
+        <button id="gachaPull" class="gacha-pull">🎴 1回引く（ガチャ券1枚）</button>
+        <div id="gachaResult" aria-live="polite"></div>
       </div>
     </div>
     <div id="heroSheet" class="sheet-back" hidden>
@@ -518,55 +580,156 @@
         const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "魔法の塔", ice: "氷の塔" };
         const CANNON_SPLASH = 65;
 
-        // ===== 武将の調整用設定 =====
-        // 数値はすべてここで調整する。能力は毎回「元の塔の数値」から計算するため、
-        // 配属・解除・強化を繰り返しても効果が積み上がることはない。
-        //   rangeMul / damageMul / cannonSplashMul … 配属した塔への倍率
-        //   aura: 配属した塔の周囲の塔の攻撃速度を上げる（attackSpeed 0.2 = +20%）
-        //   skill.duration … 効果時間（秒・戦闘中のみ進行） skill.cooldown … 発動からの再使用待ち（秒）
+        // ===== 戦国武将（ガチャで獲得）：調整用設定 =====
+        // 武将はガチャでのみ獲得する特別なキャラクター（ゴールドで雇う一般兵士とは別）。
+        // 防衛塔または道の兵士部隊に配属でき、能力は毎回「元の数値」から計算するので積み上がらない。
+        //   passive … 配属先への常時効果
+        //     damageMul（攻撃）/ rangeMul（射程）/ cannonSplashMul（大砲の爆発範囲）/ defMul（部隊の防御）
+        //     aura: 配属先の周囲の塔の攻撃速度を上げる（attackSpeed 0.2 = +20%）
+        //   skill … 必殺技。duration は効果時間、cooldown は発動からの再使用待ち（秒・戦闘中のみ進行）
+        //     attackSpeedMul / defMul（部隊）/ volleys＋blastDamageMul（範囲攻撃）/ aura（支援の強化）/ heal（部隊の生存兵を回復）
         const HERO_RULES = {
           maxAttackSpeedMul: 2.5, // 攻撃速度アップの合計上限（倍）
-          auraIncludesSelf: false, // 軍師の支援を配属先の塔自身にも掛けるか
+          auraIncludesSelf: false, // 支援を配属先の塔自身にも掛けるか
+          squadVolleyRange: 110, // 部隊に配属した武将の範囲攻撃の半径（兵種の射程がこれより長ければそちら）
         };
-        const HERO_CONFIG = {
-          archer: {
-            name: "弓の名手",
-            short: "弓",
-            color: "#c8743c",
-            passive: { rangeMul: 1.2 },
-            passiveText: "配属した塔の射程 +20%",
-            skill: { name: "疾風連射", duration: 8, cooldown: 40, attackSpeedMul: 1.8 },
-            skillText: "8秒間、配属した塔の攻撃速度 ×1.8",
+        const GACHA = {
+          rates: { SSR: 0.06, SR: 0.3, R: 0.64 }, // 排出率（合計1）
+          startTickets: 3, // 初めて遊ぶときに一度だけ配るガチャ券
+          ticketWaveInterval: 2, // このウェーブ数ごとのクリアで券を配る（2 = 2・4・6…ウェーブ）
+          ticketsPerWaveClear: 1,
+          ticketsPerBoss: 1, // ボス撃破1体あたり
+          maxStars: 5, // 同じ武将を重ねて引いたときの★の上限
+          starBonus: 0.04, // ★1つごとの攻撃ボーナス（★1は0）
+          historySize: 20,
+        };
+        const RARITY = {
+          SSR: { color: "#e8b64a", text: "#3a2a08" },
+          SR: { color: "#b07ad8", text: "#1f1030" },
+          R: { color: "#5f9fc4", text: "#0d2230" },
+        };
+        const WARLORDS = {
+          nobunaga: {
+            name: "織田信長",
+            rarity: "SSR",
+            short: "信",
+            color: "#9c2f2a",
+            passive: { damageMul: 1.25 },
+            passiveText: "攻撃力 +25%",
+            skill: { name: "三段撃ち", duration: 8, cooldown: 45, attackSpeedMul: 2 },
+            skillText: "8秒間、攻撃速度 ×2",
           },
-          gunner: {
-            name: "砲術家",
-            short: "砲",
-            color: "#5d6878",
-            passive: { damageMul: 1.3, cannonSplashMul: 1.4 },
-            passiveText: "配属した塔の攻撃力 +30%（大砲なら爆発範囲 +40%）",
-            skill: { name: "一斉砲撃", duration: 1.5, cooldown: 35, volleys: 3, blastDamageMul: 1.5 },
-            skillText: "射程内の敵全員に3回の範囲砲撃（1回 = 攻撃力×1.5）",
-          },
-          strategist: {
-            name: "軍師",
-            short: "軍",
-            color: "#3f8a6d",
-            passive: { aura: { radius: 170, attackSpeed: 0.2 } },
-            passiveText: "近く（半径170）の他の塔の攻撃速度 +20%",
+          shingen: {
+            name: "武田信玄",
+            rarity: "SSR",
+            short: "玄",
+            color: "#a8432f",
+            passive: { aura: { radius: 170, attackSpeed: 0.2 }, defMul: 1.15 },
+            passiveText: "半径170の他の塔の攻撃速度 +20%（部隊なら防御 +15%）",
             skill: {
-              name: "天啓の采配",
+              name: "風林火山",
               duration: 10,
               cooldown: 45,
               aura: { radiusMul: 1.25, attackSpeed: 0.45 },
             },
             skillText: "10秒間、支援が +45%・範囲 ×1.25 に強化",
           },
+          kenshin: {
+            name: "上杉謙信",
+            rarity: "SSR",
+            short: "謙",
+            color: "#3c5f9e",
+            passive: { damageMul: 1.3, cannonSplashMul: 1.4 },
+            passiveText: "攻撃力 +30%（大砲なら爆発範囲 +40%）",
+            skill: { name: "車懸りの陣", duration: 1.5, cooldown: 35, volleys: 3, blastDamageMul: 1.5 },
+            skillText: "範囲内の敵全員に3回の範囲攻撃（1回 = 攻撃力×1.5）",
+          },
+          yukimura: {
+            name: "真田幸村",
+            rarity: "SR",
+            short: "幸",
+            color: "#c0392b",
+            passive: { damageMul: 1.15, defMul: 1.3 },
+            passiveText: "攻撃力 +15%（部隊なら防御 +30%）",
+            skill: { name: "日本一の兵", duration: 10, cooldown: 40, attackSpeedMul: 1.6, defMul: 1.5 },
+            skillText: "10秒間、攻撃速度 ×1.6（部隊なら防御 ×1.5）",
+          },
+          kanetsugu: {
+            name: "直江兼続",
+            rarity: "SR",
+            short: "兼",
+            color: "#4a7d5c",
+            passive: { aura: { radius: 150, attackSpeed: 0.15 } },
+            passiveText: "半径150の他の塔の攻撃速度 +15%",
+            skill: {
+              name: "愛の兜",
+              duration: 6,
+              cooldown: 50,
+              heal: 0.3,
+              aura: { radiusMul: 1, attackSpeed: 0.3 },
+            },
+            skillText: "範囲内の部隊の生存兵のHPを30%回復（戦死者は復活しない）・6秒間支援 +30%",
+          },
+          masamune: {
+            name: "伊達政宗",
+            rarity: "SR",
+            short: "政",
+            color: "#2f4a6e",
+            passive: { rangeMul: 1.15, damageMul: 1.1 },
+            passiveText: "射程 +15%・攻撃力 +10%",
+            skill: { name: "独眼竜", duration: 1, cooldown: 30, volleys: 2, blastDamageMul: 1.4 },
+            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.4）",
+          },
+          tadakatsu: {
+            name: "本多忠勝",
+            rarity: "SR",
+            short: "忠",
+            color: "#5a4a3a",
+            passive: { damageMul: 1.1, defMul: 1.4 },
+            passiveText: "攻撃力 +10%（部隊なら防御 +40%）",
+            skill: { name: "蜻蛉切", duration: 8, cooldown: 40, attackSpeedMul: 1.3, defMul: 2 },
+            skillText: "8秒間、攻撃速度 ×1.3（部隊なら防御 ×2）",
+          },
+          kanbei: {
+            name: "黒田官兵衛",
+            rarity: "R",
+            short: "官",
+            color: "#55606e",
+            passive: { rangeMul: 1.2 },
+            passiveText: "射程 +20%",
+            skill: { name: "軍略・疾風", duration: 8, cooldown: 40, attackSpeedMul: 1.8 },
+            skillText: "8秒間、攻撃速度 ×1.8",
+          },
+          motonari: {
+            name: "毛利元就",
+            rarity: "R",
+            short: "元",
+            color: "#3f7a6d",
+            passive: { aura: { radius: 150, attackSpeed: 0.12 } },
+            passiveText: "半径150の他の塔の攻撃速度 +12%",
+            skill: {
+              name: "三本の矢",
+              duration: 8,
+              cooldown: 45,
+              aura: { radiusMul: 1.2, attackSpeed: 0.3 },
+            },
+            skillText: "8秒間、支援が +30%・範囲 ×1.2 に強化",
+          },
+          keiji: {
+            name: "前田慶次",
+            rarity: "R",
+            short: "慶",
+            color: "#8a5a2b",
+            passive: { damageMul: 1.15 },
+            passiveText: "攻撃力 +15%",
+            skill: { name: "傾奇者", duration: 6, cooldown: 35, attackSpeedMul: 1.5 },
+            skillText: "6秒間、攻撃速度 ×1.5",
+          },
         };
-        const STARTER_HEROES = ["archer", "gunner", "strategist"];
         // 武将画像は tools/build.mjs が assets/manifest.json をもとに埋め込む。
-        // 画像がない項目は仮アイコン（色付きの円＋一文字）で描画する。
+        // 画像がない武将は仮アイコン（レア度の色の円＋一文字）で描画する。
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
-        const SAVE_KEY = "worldDefense.heroes.v1";
+        const SAVE_KEY = "worldDefense.warlords.v1";
 
         // ===== 兵士部隊：調整用設定 =====
         // 塔に配属する「武将」とは別のシステム。兵士は1人ずつ個別に管理し、HPが0になると永久に死亡する。
@@ -728,6 +891,7 @@
           document
             .querySelectorAll("[data-t]")
             .forEach((b) => b.classList.toggle("active", b.dataset.t === selectedType));
+          $("gacha").textContent = "🎴 ガチャ" + (heroSave.tickets ? "(" + heroSave.tickets + ")" : "");
           renderTowerPanel();
           renderSquadUI();
         }
@@ -736,58 +900,145 @@
           types[t.type].icon + " " + TOWER_NAMES[t.type] + " #" + t.id + " Lv" + t.level;
 
         // ===== 武将：状態・保存 =====
-        // 配属先は heroState[id].tower だけで管理する（塔側には持たせない）ので、二重配属が起きない。
+        // 配属先は heroState[id] の tower / squad のどちらか一方だけで管理する（塔・部隊側には持たせない）ので、
+        // 同じ武将が複数の場所に配属されることはない。
         // cd（再使用待ち）と active（効果残り）は武将に属するため、再配属してもリセットされない。
         const heroState = {};
         let cutin = null; // 必殺技発動時の小さなカットイン（見た目のみ）
         function newHeroState(id) {
-          return { id, tower: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0 };
+          return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0 };
         }
-        function loadHeroSave() {
-          const fallback = { owned: STARTER_HEROES.slice(), lastHero: null };
+        // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将」だけ。戦闘は保存しない。
+        function loadWarlordSave() {
+          const fresh = () => ({ owned: {}, tickets: GACHA.startTickets, history: [], lastHero: null });
+          let raw = null;
           try {
-            const raw = localStorage.getItem(SAVE_KEY);
-            if (!raw) return fallback;
-            const data = JSON.parse(raw);
-            if (!data || typeof data !== "object") return fallback;
-            const owned = Array.isArray(data.owned) ? data.owned.filter((id) => HERO_CONFIG[id]) : [];
-            for (const id of STARTER_HEROES) if (!owned.includes(id)) owned.push(id);
-            // 戦闘は保存しないため、配属情報（存在しない塔への参照）は読み込まない。
-            return {
-              owned: [...new Set(owned)],
-              lastHero: HERO_CONFIG[data.lastHero] ? data.lastHero : null,
-            };
+            raw = localStorage.getItem(SAVE_KEY);
           } catch (err) {
+            return fresh();
+          }
+          if (!raw) return fresh();
+          try {
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== "object") throw new Error("not an object");
+            const owned = {};
+            if (data.owned && typeof data.owned === "object")
+              for (const [id, n] of Object.entries(data.owned))
+                if (WARLORDS[id] && Number.isFinite(n) && n >= 1) owned[id] = Math.min(99, Math.floor(n));
+            const tickets = Number.isFinite(data.tickets)
+              ? Math.max(0, Math.min(999, Math.floor(data.tickets)))
+              : 0;
+            const history = Array.isArray(data.history)
+              ? data.history.filter((h) => h && WARLORDS[h.id]).slice(0, GACHA.historySize)
+              : [];
+            return { owned, tickets, history, lastHero: WARLORDS[data.lastHero] ? data.lastHero : null };
+          } catch (err) {
+            // 壊れた保存データ：所持はなしで開始（初回配布の券は二重に配らない）
             console.warn("武将の保存データを読み込めないため初期化します", err);
-            return fallback;
+            return { owned: {}, tickets: 0, history: [], lastHero: null, broken: true };
           }
         }
-        const heroSave = loadHeroSave();
+        const heroSave = loadWarlordSave();
+        let saveOk = true;
         function persistHeroes() {
           try {
             localStorage.setItem(
               SAVE_KEY,
-              JSON.stringify({ version: 1, owned: heroSave.owned, lastHero: heroSave.lastHero }),
+              JSON.stringify({
+                version: 1,
+                owned: heroSave.owned,
+                tickets: heroSave.tickets,
+                history: heroSave.history,
+                lastHero: heroSave.lastHero,
+              }),
             );
+            saveOk = true;
           } catch (err) {
-            // プライベートブラウズ等で保存できなくても遊べるようにする
+            saveOk = false; // プライベートブラウズ等で保存できなくても遊べるようにする
           }
+          return saveOk;
         }
+        const ownedIds = () => Object.keys(WARLORDS).filter((id) => heroSave.owned[id]);
+        const stars = (id) => Math.min(GACHA.maxStars, heroSave.owned[id] || 0);
+        const starMul = (id) => 1 + GACHA.starBonus * Math.max(0, stars(id) - 1);
         function resetHeroes() {
-          for (const id of heroSave.owned) heroState[id] = newHeroState(id);
+          for (const k in heroState) delete heroState[k];
+          for (const id of ownedIds()) heroState[id] = newHeroState(id);
         }
         resetHeroes();
         persistHeroes();
         const heroOn = (t) => Object.values(heroState).find((h) => h.tower === t) || null;
-        const ownedHeroes = () => heroSave.owned.map((id) => heroState[id]);
+        const heroOnSquad = (q) => Object.values(heroState).find((h) => h.squad === q) || null;
+        const ownedHeroes = () => ownedIds().map((id) => heroState[id]);
+        // 武将が戦場で効果を出せる位置（塔、または道に出ている部隊）。待機中の部隊なら null
+        function heroPos(h) {
+          if (h.tower) return h.tower;
+          if (h.squad && h.squad.state === "deployed") return h.squad;
+          return null;
+        }
+        const postLabel = (h) => (h.tower ? towerLabel(h.tower) : h.squad ? squadName(h.squad) : "");
+
+        // ===== 武将ガチャ（無料・ガチャ券のみ） =====
+        function rollWarlord(rng) {
+          const rates = GACHA.rates,
+            keys = Object.keys(rates),
+            total = keys.reduce((n, k) => n + rates[k], 0);
+          let r = rng() * total,
+            rarity = keys[keys.length - 1];
+          for (const k of keys) {
+            if (r < rates[k]) {
+              rarity = k;
+              break;
+            }
+            r -= rates[k];
+          }
+          let pool = Object.keys(WARLORDS).filter((id) => WARLORDS[id].rarity === rarity);
+          if (!pool.length) pool = Object.keys(WARLORDS);
+          return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+        }
+        const secureRandom = () => {
+          try {
+            const a = new Uint32Array(1);
+            crypto.getRandomValues(a);
+            return a[0] / 4294967296;
+          } catch (err) {
+            return Math.random();
+          }
+        };
+        // 結果を確定 → 券を減らして所持に加える → 保存、の順で行い、表示はその後。
+        // 再読み込みしても保存済みの結果と券の枚数が残るので、引き直しにはならない。
+        function pullGacha(rng = secureRandom) {
+          if (heroSave.tickets < 1)
+            return { error: "ガチャ券がありません。ウェーブクリアやボス撃破で手に入ります。" };
+          const id = rollWarlord(rng),
+            isNew = !heroSave.owned[id];
+          heroSave.tickets--;
+          heroSave.owned[id] = Math.min(99, (heroSave.owned[id] || 0) + 1);
+          heroSave.history.unshift({ id, isNew });
+          heroSave.history.length = Math.min(heroSave.history.length, GACHA.historySize);
+          const saved = persistHeroes();
+          if (!heroState[id]) heroState[id] = newHeroState(id);
+          return { id, isNew, stars: stars(id), saved };
+        }
+        // ガチャ券の付与はその場で保存する（同じウェーブ・ボスで二重には配らない）
+        function grantTickets(n, reason, append) {
+          if (n <= 0) return;
+          heroSave.tickets = Math.min(999, heroSave.tickets + n);
+          persistHeroes();
+          const text = "🎴 ガチャ券 +" + n + "（" + reason + "）";
+          if (append) $("msg").textContent += " " + text;
+          else msg(text);
+        }
 
         // ===== 武将：能力計算 =====
-        // 毎回 types（元の数値）とレベルから計算し、塔のデータは書き換えない。
+        // 毎回 types（元の数値）とレベルから計算し、塔や兵士のデータは書き換えない。
         function auraFrom(h) {
-          const a = HERO_CONFIG[h.id].passive.aura;
-          if (!a || !h.tower) return null;
-          const boost = h.active > 0 ? HERO_CONFIG[h.id].skill.aura : null;
+          const a = WARLORDS[h.id].passive.aura,
+            pos = heroPos(h);
+          if (!a || !pos) return null;
+          const boost = h.active > 0 ? WARLORDS[h.id].skill.aura : null;
           return {
+            pos,
             radius: a.radius * (boost ? boost.radiusMul : 1),
             attackSpeed: boost ? boost.attackSpeed : a.attackSpeed,
           };
@@ -801,20 +1052,36 @@
             aura = 0;
           const h = heroOn(t);
           if (h) {
-            const c = HERO_CONFIG[h.id];
+            const c = WARLORDS[h.id];
             range *= c.passive.rangeMul || 1;
-            damage *= c.passive.damageMul || 1;
+            damage *= (c.passive.damageMul || 1) * starMul(h.id);
             if (t.type === "cannon") splash *= c.passive.cannonSplashMul || 1;
             if (h.active > 0 && c.skill.attackSpeedMul) speedMul *= c.skill.attackSpeedMul;
           }
-          // 支援は武将ごとに1回だけ適用（同じ武将は1人しか配属できないので重複しない）
+          // 支援は武将ごとに1回だけ適用（同じ武将は1か所にしか配属できないので重複しない）
           for (const other of ownedHeroes()) {
             const a = auraFrom(other);
             if (!a || (other.tower === t && !HERO_RULES.auraIncludesSelf)) continue;
-            if (dist(other.tower, t) <= a.radius) aura += a.attackSpeed;
+            if (dist(a.pos, t) <= a.radius) aura += a.attackSpeed;
           }
           speedMul = Math.min(HERO_RULES.maxAttackSpeedMul, speedMul * (1 + aura));
           return { range, damage, splash, rate: p.rate / speedMul, speedMul, aura };
+        }
+        // 部隊に配属された武将の効果（兵士の能力計算 soldierStats から使う）
+        function squadHeroMods(q) {
+          const h = q && heroOnSquad(q);
+          if (!h) return null;
+          const c = WARLORDS[h.id],
+            on = h.active > 0;
+          return {
+            atk: (c.passive.damageMul || 1) * starMul(h.id),
+            def: (c.passive.defMul || 1) * (on && c.skill.defMul ? c.skill.defMul : 1),
+            range: c.passive.rangeMul || 1,
+            speed: Math.min(
+              HERO_RULES.maxAttackSpeedMul,
+              on && c.skill.attackSpeedMul ? c.skill.attackSpeedMul : 1,
+            ),
+          };
         }
 
         // ===== 武将：配属・解除・必殺技 =====
@@ -822,67 +1089,100 @@
           h.active = 0;
           h.volleysLeft = 0;
         }
-        function assignHero(id, t) {
+        // 配属先は塔または部隊。前の配属先からは外れ、配属先にいた別の武将は未配属に戻る
+        function assignHero(id, target) {
           const h = heroState[id];
-          if (!h || !towers.includes(t)) return;
-          if (h.tower === t) return;
-          const prev = heroOn(t);
+          const isTower = towers.includes(target),
+            isSquad = squads.includes(target);
+          if (!h || (!isTower && !isSquad)) return;
+          if (h.tower === target || h.squad === target) return;
+          const prev = isTower ? heroOn(target) : heroOnSquad(target);
           if (prev) {
             endSkill(prev);
-            prev.tower = null;
+            prev.tower = prev.squad = null;
           }
           endSkill(h); // 移動すると発動中の効果は終わる（再使用待ちはそのまま）
-          h.tower = t;
+          h.tower = isTower ? target : null;
+          h.squad = isSquad ? target : null;
           heroSave.lastHero = id;
           persistHeroes();
           msg(
-            HERO_CONFIG[id].name +
+            WARLORDS[id].name +
               " を " +
-              towerLabel(t) +
+              (isTower ? towerLabel(target) : squadName(target)) +
               " に配属した。" +
-              (prev ? "（" + HERO_CONFIG[prev.id].name + " は未配属に戻りました）" : ""),
+              (prev ? "（" + WARLORDS[prev.id].name + " は未配属に戻りました）" : ""),
           );
         }
         function unassignHero(id) {
           const h = heroState[id];
-          if (!h || !h.tower) return;
+          if (!h || (!h.tower && !h.squad)) return;
           endSkill(h);
-          h.tower = null;
-          msg(HERO_CONFIG[id].name + " の配属を解除した。");
+          h.tower = h.squad = null;
+          msg(WARLORDS[id].name + " の配属を解除した。");
         }
-        const canUseSkill = (h) => h && h.tower && h.cd <= 0 && h.active <= 0 && playing && !paused && !over;
+        // 部隊が全滅・解散したとき：武将は死亡せず未配属に戻る（再使用待ちは残る）
+        function releaseHeroFromSquad(q) {
+          const h = heroOnSquad(q);
+          if (!h) return null;
+          endSkill(h);
+          h.squad = null;
+          return h;
+        }
+        const canUseSkill = (h) =>
+          h && heroPos(h) && h.cd <= 0 && h.active <= 0 && playing && !paused && !over;
         function useSkill(h) {
           if (!canUseSkill(h)) return;
-          const s = HERO_CONFIG[h.id].skill;
+          const s = WARLORDS[h.id].skill;
           h.active = s.duration;
           h.cd = s.cooldown;
           if (s.volleys) {
             h.volleysLeft = s.volleys;
             h.volleyClock = 0;
           }
+          if (s.heal) {
+            // 範囲内の部隊の生存兵だけ回復（戦死者は対象外＝復活しない）
+            const pos = heroPos(h),
+              r = (WARLORDS[h.id].passive.aura || { radius: 120 }).radius;
+            for (const q of squads) {
+              if (q.state !== "deployed" || (q !== h.squad && dist(q, pos) > r)) continue;
+              for (const m of members(q)) {
+                const max = soldierStats(m).maxHp;
+                m.hp = Math.min(max, m.hp + max * s.heal);
+              }
+            }
+          }
           cutin = { id: h.id, age: 0, duration: 1.3 };
-          msg("必殺技「" + s.name + "」発動！ " + HERO_CONFIG[h.id].skillText);
+          msg("必殺技「" + s.name + "」発動！ " + WARLORDS[h.id].skillText);
         }
         function heroVolley(h) {
-          const t = h.tower,
-            st = towerStats(t),
-            dmg = st.damage * HERO_CONFIG[h.id].skill.blastDamageMul;
+          const pos = heroPos(h);
+          let range, dmg;
+          if (h.tower) {
+            const st = towerStats(h.tower);
+            range = st.range;
+            dmg = st.damage * WARLORDS[h.id].skill.blastDamageMul;
+            h.tower.recoil = 0.22;
+          } else {
+            const list = members(h.squad);
+            range = Math.max(HERO_RULES.squadVolleyRange, SOLDIER_TYPES[h.squad.type].range);
+            dmg = list.reduce((n, m) => n + soldierStats(m).atk, 0) * WARLORDS[h.id].skill.blastDamageMul;
+          }
           let n = 0;
           for (const e of enemies) {
-            if (e.gone || e.hp <= 0 || dist(t, e) >= st.range) continue;
+            if (e.gone || e.hp <= 0 || dist(pos, e) >= range) continue;
             e.hp -= dmg;
             e.hit = 0.18;
             e.lastHitBy = null;
             if (n++ < 10) burst(e.x, e.y, "#ffd273", "cannon");
           }
-          t.recoil = 0.22;
         }
         // 戦闘の時間で進める（停止中・ウェーブ間は進まない。速度切替は dt に反映済み）
         function tickHeroes(dt) {
           for (const h of ownedHeroes()) {
             if (h.cd > 0) h.cd = Math.max(0, h.cd - dt);
             if (h.active <= 0) continue;
-            if (!h.tower) {
+            if (!heroPos(h)) {
               endSkill(h);
               continue;
             }
@@ -891,13 +1191,13 @@
               while (h.volleysLeft > 0 && h.volleyClock <= 0) {
                 heroVolley(h);
                 h.volleysLeft--;
-                h.volleyClock += HERO_CONFIG[h.id].skill.duration / HERO_CONFIG[h.id].skill.volleys;
+                h.volleyClock += WARLORDS[h.id].skill.duration / WARLORDS[h.id].skill.volleys;
               }
             }
             h.active = Math.max(0, h.active - dt);
             if (h.active <= 0) {
               endSkill(h);
-              msg("「" + HERO_CONFIG[h.id].skill.name + "」の効果が終わった。");
+              msg("「" + WARLORDS[h.id].skill.name + "」の効果が終わった。");
             }
           }
         }
@@ -982,12 +1282,14 @@
             lv = s.level - 1,
             t = rankTitle(s),
             ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 };
+          // 部隊に配属された武将の効果（武将は1か所だけなので重複しない）
+          const hm = squadHeroMods(squadById(s.squadId)) || { atk: 1, def: 1, range: 1, speed: 1 };
           return {
             maxHp: Math.round(c.hp + c.grow.hp * lv),
-            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk),
-            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def),
-            rate: c.rate,
-            range: c.range,
+            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk) * hm.atk,
+            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def) * hm.def,
+            rate: c.rate / hm.speed,
+            range: c.range * hm.range,
           };
         }
         function logHistory(s, text) {
@@ -1019,7 +1321,6 @@
           return s;
         }
         function newSquad(type) {
-          // heroId は将来「武将の直属部隊」にするための予約（今回は塔にのみ配属）
           const q = {
             id: ++squadSeq,
             type,
@@ -1030,7 +1331,6 @@
             retreatLeft: 0,
             locked: false,
             fallen: 0,
-            heroId: null,
           };
           squads.push(q);
           return q;
@@ -1218,10 +1518,13 @@
           squads = squads.filter((v) => v !== q);
           if (selectedSquad === q) selectedSquad = null;
           if (placeSquadId === q.id) placeSquadId = null;
-          // 将来：武将が直属していた場合、武将は死亡せず一時撤退する（必殺技の再使用待ちは武将側に残る）
-          if (q.heroId && heroState[q.heroId]) endSkill(heroState[q.heroId]);
-          q.heroId = null;
-          msg(squadName(q) + " が全滅した…（戦死者は復活しません。新しい兵士は雇用してください）");
+          // 配属されていた武将は死亡せず未配属に戻る（必殺技の再使用待ちは武将側に残る）
+          const h = releaseHeroFromSquad(q);
+          msg(
+            squadName(q) +
+              " が全滅した…（戦死者は復活しません。新しい兵士は雇用してください）" +
+              (h ? " 武将 " + WARLORDS[h.id].name + " は無事に帰還し、未配属に戻りました。" : ""),
+          );
         }
         function orderRetreat(q) {
           if (!q || q.state !== "deployed") return;
@@ -1393,6 +1696,7 @@
           logHistory(s, squadName(to) + " に編入");
           if (from && !members(from).length) {
             releaseBlocks(from);
+            releaseHeroFromSquad(from);
             squads = squads.filter((q) => q !== from);
             if (selectedSquad === from) selectedSquad = null;
           }
@@ -1478,6 +1782,7 @@
               e.gone = true;
               gold += e.reward;
               creditKill(e);
+              if (e.kind === "boss") grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
               burst(e.x, e.y, e.color, e.kind === "goblin" ? "death" : "vanish");
             }
           }
@@ -1498,6 +1803,8 @@
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (wave === 20) over = true;
+            if (wave % GACHA.ticketWaveInterval === 0)
+              grantTickets(GACHA.ticketsPerWaveClear, "ウェーブ" + wave + "クリア", true);
           }
           updateUI();
         }
@@ -2296,11 +2603,11 @@
           return null;
         };
         function heroBadge(id, x, y, r) {
-          const c = HERO_CONFIG[id],
+          const c = WARLORDS[id],
             im = heroImage(id, "icon", "portrait");
           ctx.save();
           ellipse(x + 1, y + 2, r + 2, r + 2, "#0006");
-          ellipse(x, y, r + 2, r + 2, "#ffe0a0");
+          ellipse(x, y, r + 2, r + 2, RARITY[c.rarity].color);
           ctx.beginPath();
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.clip();
@@ -2508,6 +2815,19 @@
               ellipse(left + i * 9, top, 3, 3, r > 0.5 ? "#7fe08a" : r > 0.25 ? "#ffd77d" : "#ef6a58");
             } else ellipse(left + i * 9, top, 3, 3, "#3a3a3acc");
           }
+          const hh = heroOnSquad(q);
+          if (hh) {
+            const bx = q.x + 36,
+              by = q.y - 40;
+            if (hh.active > 0) {
+              ctx.strokeStyle = "#fff3a8";
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.arc(bx, by, 16 + (reduced ? 0 : Math.sin(visualTime * 8) * 2), 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            heroBadge(hh.id, bx, by, 12);
+          }
           if (retreating) {
             ctx.save();
             ctx.fillStyle = "#fff1d0";
@@ -2557,14 +2877,15 @@
         function auraRings() {
           for (const h of ownedHeroes()) {
             const a = auraFrom(h);
-            if (!a || (h.tower !== selectedTower && h.active <= 0)) continue;
+            const sel = (h.tower && h.tower === selectedTower) || (h.squad && h.squad === selectedSquad);
+            if (!a || (!sel && h.active <= 0)) continue;
             ctx.save();
             ctx.setLineDash([10, 8]);
             ctx.strokeStyle = h.active > 0 ? "#b6ffc6dd" : "#8ff0a899";
             ctx.fillStyle = h.active > 0 ? "#8ff0a822" : "#8ff0a812";
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.arc(h.tower.x, h.tower.y, a.radius, 0, Math.PI * 2);
+            ctx.arc(a.pos.x, a.pos.y, a.radius, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
             ctx.restore();
@@ -2572,7 +2893,7 @@
         }
         function drawCutin() {
           if (!cutin) return;
-          const c = HERO_CONFIG[cutin.id],
+          const c = WARLORDS[cutin.id],
             p = cutin.age / cutin.duration,
             slide = reduced ? 0 : Math.min(1, p * 6),
             x = -330 + 340 * slide,
@@ -3055,7 +3376,7 @@
           }
           towers = towers.filter((t) => t !== selectedTower);
           selectedTower = null;
-          msg("塔を売却した。" + (h ? HERO_CONFIG[h.id].name + " は未配属に戻りました。" : ""));
+          msg("塔を売却した。" + (h ? WARLORDS[h.id].name + " は未配属に戻りました。" : ""));
           updateUI();
         };
         $("reset").onclick = () => {
@@ -3081,9 +3402,10 @@
           selectedUnitType = null;
           placeSquadId = null;
           closeSquadSheet();
-          resetHeroes();
+          resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
           cutin = null;
           closeSheet();
+          closeGacha();
           playing = false;
           paused = false;
           over = false;
@@ -3221,6 +3543,23 @@
           }
           $("retreat").disabled = q.state !== "deployed";
           $("retreat").textContent = playing ? "↩ 撤退（" + SQUAD_RULES.retreatTime + "秒）" : "↩ 待機へ";
+          const hh = heroOnSquad(q);
+          setHtml(
+            $("sqHeroLine"),
+            hh
+              ? "武将 " +
+                  rarityTag(hh.id) +
+                  " <b>" +
+                  WARLORDS[hh.id].name +
+                  "</b>" +
+                  starText(hh.id) +
+                  "<br><small>" +
+                  WARLORDS[hh.id].passiveText +
+                  "</small>"
+              : "<small>武将なし（「武将」から配属できます）</small>",
+          );
+          $("sqHero").textContent = hh ? "👤 武将変更" : "👤 武将";
+          renderSkillButton($("sqSkill"), $("sqSkillLabel"), $("sqSkillBar"), hh);
         }
         $("sqMembers").addEventListener("click", (ev) => {
           const b = ev.target.closest("[data-soldier]");
@@ -3388,7 +3727,7 @@
         const esc = (s) =>
           String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
         function avatarHtml(id, big) {
-          const c = HERO_CONFIG[id],
+          const c = WARLORDS[id],
             src = heroImageSrc(id, big ? "portrait" : "icon", big ? "icon" : "portrait");
           return src
             ? '<span class="avatar' +
@@ -3448,16 +3787,20 @@
                   Math.round(st.splash) +
                   "</b></span>"
                 : "") +
-              (st.aura > 0 ? '<span class="buff">軍師の支援 +' + Math.round(st.aura * 100) + "%</span>" : ""),
+              (st.aura > 0 ? '<span class="buff">武将の支援 +' + Math.round(st.aura * 100) + "%</span>" : ""),
           );
           setHtml(
             $("tpHero"),
             h
               ? avatarHtml(h.id) +
-                  "<p><b>" +
-                  HERO_CONFIG[h.id].name +
-                  "</b> 配属中<br><small>" +
-                  HERO_CONFIG[h.id].passiveText +
+                  "<p>" +
+                  rarityTag(h.id) +
+                  " <b>" +
+                  WARLORDS[h.id].name +
+                  "</b>" +
+                  starText(h.id) +
+                  " 配属中<br><small>" +
+                  WARLORDS[h.id].passiveText +
                   "</small></p>"
               : "<p><small>武将なし（「武将配属」から配属できます）</small></p>",
           );
@@ -3465,10 +3808,13 @@
           $("upgrade").textContent = maxed ? "⬆ 最大Lv" : "⬆ 強化 " + upgradePrice(t) + "G";
           $("sell").textContent = "🪙 売却 " + Math.floor(t.spent * 0.7) + "G";
           $("assign").textContent = h ? "👤 武将変更" : "👤 武将配属";
-          const btn = $("skill");
+          renderSkillButton($("skill"), $("skillLabel"), $("skillBar"), h);
+        }
+        // 必殺技ボタン（塔パネル・部隊パネル共通）
+        function renderSkillButton(btn, labelEl, barEl, h) {
           btn.hidden = !h;
           if (!h) return;
-          const s = HERO_CONFIG[h.id].skill;
+          const s = WARLORDS[h.id].skill;
           let label, ratio, state;
           if (h.active > 0) {
             label = "✨ " + s.name + " 発動中 残り" + fmt(h.active) + "秒";
@@ -3489,30 +3835,67 @@
               "⚡ 必殺技「" +
               s.name +
               "」" +
-              (playing && !over ? (paused ? "（停止中）" : "") : "（ウェーブ中に使用可）");
+              (!heroPos(h)
+                ? "（部隊が道にいるときに使用可）"
+                : playing && !over
+                  ? paused
+                    ? "（停止中）"
+                    : ""
+                  : "（ウェーブ中に使用可）");
             ratio = 1;
             state = canUseSkill(h) ? "ready" : "";
           }
-          $("skillLabel").textContent = label;
-          $("skillBar").style.width = Math.round(ratio * 100) + "%";
+          labelEl.textContent = label;
+          barEl.style.width = Math.round(ratio * 100) + "%";
           btn.className = "skill " + state;
           btn.disabled = !canUseSkill(h);
-          btn.setAttribute("aria-label", label + "。" + HERO_CONFIG[h.id].skillText);
+          btn.setAttribute("aria-label", label + "。" + WARLORDS[h.id].skillText);
         }
-        let sheetTower = null;
+        const rarityTag = (id) =>
+          '<span class="rarity" style="background:' +
+          RARITY[WARLORDS[id].rarity].color +
+          ";color:" +
+          RARITY[WARLORDS[id].rarity].text +
+          '">' +
+          WARLORDS[id].rarity +
+          "</span>";
+        const starText = (id) => "★".repeat(stars(id));
+        function useSkillFrom(h) {
+          if (!h) return;
+          if (!canUseSkill(h)) {
+            msg(playing ? "必殺技はまだ使えません。" : "必殺技はウェーブ中に使えます。");
+            return;
+          }
+          useSkill(h);
+          updateUI();
+        }
+
+        // ===== 武将一覧・配属画面（配属先は塔または部隊） =====
+        let sheetTarget = null;
+        const targetValid = (t) => t && (towers.includes(t) || squads.includes(t));
+        const targetLabel = (t) => (towers.includes(t) ? towerLabel(t) : squadName(t));
         function renderSheet() {
-          const t = sheetTower && towers.includes(sheetTower) ? sheetTower : null;
-          $("sheetTitle").textContent = t ? "武将配属：" + towerLabel(t) : "武将一覧";
-          $("sheetHint").textContent = t
-            ? "配属する武将を選んでください。1基に1人、同じ武将は1か所だけです。"
-            : "配属先の確認と解除ができます。配属は塔をタップして「武将配属」から。";
-          const ids = heroSave.owned.slice();
+          const t = targetValid(sheetTarget) ? sheetTarget : null,
+            isTower = t && towers.includes(t),
+            word = isTower ? "この塔" : "この部隊";
+          $("sheetTitle").textContent = t ? "武将配属：" + targetLabel(t) : "武将一覧";
+          const ids = ownedIds();
+          $("sheetHint").textContent = !ids.length
+            ? "まだ武将がいません。ガチャ券で武将ガチャを引いてください。"
+            : t
+              ? "配属する武将を選んでください。1か所に1人、同じ武将は1か所だけです。"
+              : "所持 " +
+                ids.length +
+                "/" +
+                Object.keys(WARLORDS).length +
+                " 人。配属は塔または部隊のパネルから。";
           if (heroSave.lastHero) ids.sort((a, b) => (b === heroSave.lastHero) - (a === heroSave.lastHero));
-          $("heroList").innerHTML = ids
+          let html = ids
             .map((id) => {
               const h = heroState[id],
-                c = HERO_CONFIG[id];
-              const where = h.tower ? "配属先：" + esc(towerLabel(h.tower)) : "未配属";
+                c = WARLORDS[id],
+                here = h.tower === t || h.squad === t;
+              const where = h.tower || h.squad ? "配属先：" + esc(postLabel(h)) : "未配属";
               const timer =
                 h.active > 0
                   ? "（必殺技 発動中）"
@@ -3520,22 +3903,25 @@
                     ? "（必殺技 再使用まで" + Math.ceil(h.cd) + "秒）"
                     : "";
               let actions = "";
-              if (t && h.tower === t) actions += "<button disabled>この塔に配属中</button>";
+              if (t && here) actions += "<button disabled>" + word + "に配属中</button>";
               else if (t)
                 actions +=
                   '<button data-assign="' +
                   id +
                   '">' +
-                  (h.tower ? "この塔へ移動" : "この塔に配属") +
+                  (h.tower || h.squad ? word + "へ移動" : word + "に配属") +
                   "</button>";
-              if (h.tower) actions += '<button data-unassign="' + id + '">解除</button>';
+              if (h.tower || h.squad) actions += '<button data-unassign="' + id + '">解除</button>';
               return (
                 '<div class="hero-card">' +
                 avatarHtml(id, true) +
                 "<div><h3>" +
+                rarityTag(id) +
+                " " +
                 c.name +
-                "</h3>" +
-                "<p>常時：" +
+                ' <span class="stars">' +
+                starText(id) +
+                "</span></h3><p>常時：" +
                 c.passiveText +
                 "</p><p>必殺技「" +
                 c.skill.name +
@@ -3554,22 +3940,27 @@
               );
             })
             .join("");
+          if (!ids.length)
+            html = '<div class="card-actions"><button data-open-gacha>🎴 武将ガチャへ</button></div>';
+          $("heroList").innerHTML = html;
         }
-        function openSheet(t) {
-          sheetTower = t;
+        function openSheet(target) {
+          closeGacha();
+          sheetTarget = target;
           renderSheet();
           $("heroSheet").hidden = false;
           $("sheetClose").focus();
         }
         function closeSheet() {
-          sheetTower = null;
+          sheetTarget = null;
           $("heroSheet").hidden = true;
         }
         $("heroList").addEventListener("click", (ev) => {
           const b = ev.target.closest("button");
           if (!b) return;
-          if (b.dataset.assign && sheetTower) {
-            assignHero(b.dataset.assign, sheetTower);
+          if (b.dataset.openGacha !== undefined) return openGacha();
+          if (b.dataset.assign && targetValid(sheetTarget)) {
+            assignHero(b.dataset.assign, sheetTarget);
             closeSheet();
           } else if (b.dataset.unassign) {
             unassignHero(b.dataset.unassign);
@@ -3582,24 +3973,99 @@
         });
         $("sheetClose").onclick = closeSheet;
         $("assign").onclick = () => selectedTower && openSheet(selectedTower);
+        $("sqHero").onclick = () => selectedSquad && openSheet(selectedSquad);
         $("roster").onclick = () => openSheet(null);
         $("tpClose").onclick = () => {
           selectedTower = null;
           updateUI();
         };
-        $("skill").onclick = () => {
-          const h = selectedTower && heroOn(selectedTower);
-          if (!h) return;
-          if (!canUseSkill(h)) {
-            msg(playing ? "必殺技はまだ使えません。" : "必殺技はウェーブ中に使えます。");
-            return;
+        $("skill").onclick = () => useSkillFrom(selectedTower && heroOn(selectedTower));
+        $("sqSkill").onclick = () => useSkillFrom(selectedSquad && heroOnSquad(selectedSquad));
+
+        // ===== 武将ガチャ画面 =====
+        let lastPull = null;
+        function renderGacha() {
+          $("gachaTickets").textContent = "ガチャ券 " + heroSave.tickets + " 枚";
+          $("gachaRates").textContent =
+            "排出率：" +
+            Object.entries(GACHA.rates)
+              .map(([k, v]) => k + " " + Math.round(v * 1000) / 10 + "%")
+              .join("・") +
+            "。券はウェーブクリア（" +
+            GACHA.ticketWaveInterval +
+            "ウェーブごと）とボス撃破で手に入ります。";
+          $("gachaPull").disabled = heroSave.tickets < 1;
+          let html = "";
+          if (lastPull) {
+            const c = WARLORDS[lastPull.id];
+            html +=
+              '<div class="pull-result" style="border-color:' +
+              RARITY[c.rarity].color +
+              '">' +
+              avatarHtml(lastPull.id, true) +
+              "<div><h3>" +
+              rarityTag(lastPull.id) +
+              " " +
+              c.name +
+              ' <span class="stars">' +
+              (lastPull.isNew ? "NEW!" : "★" + lastPull.stars) +
+              "</span></h3><p>常時：" +
+              c.passiveText +
+              "</p><p>必殺技「" +
+              c.skill.name +
+              "」：" +
+              c.skillText +
+              "</p>" +
+              (lastPull.saved
+                ? ""
+                : '<p class="warn">この環境では保存できませんでした（再読み込みで失われます）</p>') +
+              "</div></div>";
           }
-          useSkill(h);
+          if (heroSave.history.length)
+            html +=
+              '<p class="muted">最近の結果：' +
+              heroSave.history
+                .slice(0, 10)
+                .map((r) => WARLORDS[r.id].rarity + " " + WARLORDS[r.id].name)
+                .join("、") +
+              "</p>";
+          $("gachaResult").innerHTML = html;
+        }
+        function openGacha() {
+          closeSheet();
+          lastPull = null;
+          renderGacha();
+          $("gachaSheet").hidden = false;
+          $("gachaClose").focus();
+        }
+        function closeGacha() {
+          $("gachaSheet").hidden = true;
+        }
+        $("gacha").onclick = openGacha;
+        $("gachaClose").onclick = closeGacha;
+        $("gachaSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("gachaSheet")) closeGacha();
+        });
+        $("gachaPull").onclick = () => {
+          const r = pullGacha();
+          if (r.error) msg(r.error);
+          else {
+            lastPull = r;
+            msg(
+              "武将ガチャ：" +
+                WARLORDS[r.id].rarity +
+                " " +
+                WARLORDS[r.id].name +
+                (r.isNew ? " を獲得！" : "（★" + r.stars + "）"),
+            );
+          }
+          renderGacha();
           updateUI();
         };
         document.addEventListener("keydown", (ev) => {
           if (ev.key === "Escape" && !$("heroSheet").hidden) closeSheet();
           if (ev.key === "Escape" && !$("squadSheet").hidden) closeSquadSheet();
+          if (ev.key === "Escape" && !$("gachaSheet").hidden) closeGacha();
         });
         document.addEventListener("visibilitychange", () => {
           last = 0;
@@ -3688,7 +4154,21 @@
                 animateVisuals(h);
               }
             },
-            config: { HERO_CONFIG, HERO_RULES },
+            config: { WARLORDS, HERO_RULES, GACHA },
+            heroApi: {
+              save: () => heroSave,
+              heroState: () => heroState,
+              pullGacha,
+              rollWarlord,
+              grantTickets,
+              assignHero,
+              unassignHero,
+              heroOn,
+              heroOnSquad,
+              useSkill,
+              canUseSkill,
+              squadHeroMods,
+            },
           };
         }
         updateUI();
