@@ -1,0 +1,2366 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>WORLD DEFENSE</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #12251f;
+        color: #f8edcc;
+        font-family: system-ui, sans-serif;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: auto;
+        padding: 12px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: clamp(21px, 5vw, 32px);
+        margin: 8px 0;
+      }
+      button {
+        border: 2px solid #b99c60;
+        background: #254338;
+        color: #fff0c9;
+        border-radius: 12px;
+        padding: 10px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.active {
+        background: #9b682b;
+      }
+      button:disabled {
+        opacity: 0.4;
+      }
+      .stats,
+      .tools {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin: 9px 0;
+      }
+      .stats span {
+        padding: 8px;
+        background: #244034;
+        border: 1px solid #b99c60;
+        border-radius: 10px;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 10;
+        border: 5px solid #9e8551;
+        border-radius: 15px;
+        touch-action: manipulation;
+        background: #81a85c;
+      }
+      .tools button {
+        flex: 1;
+        min-width: 75px;
+      }
+      #msg {
+        min-height: 48px;
+        line-height: 1.5;
+      }
+      small {
+        color: #d5c6a4;
+      }
+      body {
+        background: radial-gradient(ellipse at top, #285c59, #102e36);
+        color: #fff1d0;
+      }
+      .wrap {
+        max-width: 1080px;
+        padding: 16px;
+      }
+      header {
+        border-bottom: 1px solid #b8d6b533;
+        padding-bottom: 10px;
+      }
+      h1 {
+        letter-spacing: 0.08em;
+        text-shadow: 0 3px 0 #102f37;
+      }
+      .stats span {
+        background: #153e44;
+        border-color: #719b8f;
+        box-shadow: inset 0 1px #ffffff18;
+      }
+      canvas {
+        border-color: #e1bc77;
+        box-shadow: 0 14px 36px #051f3766;
+        margin: 16px 0;
+      }
+      button {
+        background: linear-gradient(#3b6664, #21494e);
+        border-color: #91ac92;
+        min-height: 46px;
+        box-shadow: 0 3px 0 #102f37;
+        touch-action: manipulation;
+      }
+      button.active {
+        background: linear-gradient(#e4b861, #ab7736);
+        border-color: #ffe5a6;
+        color: #233b3a;
+      }
+      button:focus-visible {
+        outline: 3px solid #ffe7a0;
+        outline-offset: 3px;
+      }
+      #msg {
+        background: #143c45;
+        border-left: 3px solid #dfbb75;
+        padding: 12px;
+        border-radius: 4px;
+      }
+      small {
+        color: #b9d4c6;
+      }
+      @media (max-width: 600px) {
+        .wrap {
+          padding: 8px;
+        }
+        .tools {
+          gap: 6px;
+        }
+        .tools button {
+          font-size: 12px;
+          padding: 9px 5px;
+        }
+        canvas {
+          border-width: 3px;
+          margin: 10px 0;
+        }
+        .stats span {
+          font-size: 12px;
+          padding: 6px;
+        }
+        h1 {
+          font-size: 21px;
+        }
+      }
+      /* ---- 塔パネル・武将配属 ---- */
+      [hidden] {
+        display: none !important;
+      }
+      .panel {
+        background: #143c45;
+        border: 1px solid #719b8f;
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin: -6px 0 10px;
+        font-size: 15px;
+      }
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .panel-head strong {
+        font-size: 16px;
+      }
+      .icon-btn {
+        font-size: 16px;
+        min-width: 46px;
+        padding: 6px 10px;
+      }
+      .tp-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin: 6px 0;
+        color: #d8eadf;
+      }
+      .tp-stats b {
+        color: #ffe3a0;
+      }
+      .buff {
+        color: #9df0b0;
+      }
+      .tp-hero {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 4px 0 8px;
+        min-height: 40px;
+      }
+      .tp-hero p {
+        margin: 0;
+        line-height: 1.4;
+      }
+      .panel small,
+      .sheet small {
+        font-size: 14px;
+      }
+      .panel-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .panel-actions button,
+      .skill {
+        font-size: 15px;
+        padding: 8px 6px;
+      }
+      .skill {
+        width: 100%;
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: stretch;
+      }
+      .panel button,
+      .sheet button {
+        -webkit-tap-highlight-color: transparent;
+      }
+      .skill:disabled {
+        opacity: 0.8;
+      }
+      .skill.running:disabled {
+        opacity: 1;
+      }
+      .skill.ready {
+        background: linear-gradient(#e4b861, #ab7736);
+        border-color: #ffe5a6;
+        color: #233b3a;
+      }
+      .skill.running {
+        border-color: #9df0b0;
+      }
+      .bar {
+        display: block;
+        height: 8px;
+        border-radius: 4px;
+        background: #0b262c;
+        overflow: hidden;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: #ffd77d;
+      }
+      .skill.running .bar i {
+        background: #9df0b0;
+      }
+      .avatar {
+        flex: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #ffe0a0;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 19px;
+        color: #fff;
+        text-shadow: 0 1px 2px #0008;
+        background-size: cover;
+        background-position: center;
+      }
+      .avatar.big {
+        width: 64px;
+        height: 64px;
+        font-size: 28px;
+      }
+      .sheet-back {
+        position: fixed;
+        inset: 0;
+        background: #0610147a;
+        z-index: 10;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .sheet {
+        width: min(560px, 100%);
+        max-height: 72vh;
+        overflow-y: auto;
+        background: #12343c;
+        border: 1px solid #e1bc77;
+        border-bottom: 0;
+        border-radius: 16px 16px 0 0;
+        padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+        font-size: 15px;
+      }
+      .hero-card {
+        display: flex;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid #719b8f55;
+      }
+      .hero-card h3 {
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      .hero-card p {
+        margin: 2px 0;
+        line-height: 1.45;
+      }
+      .hero-card .where {
+        color: #ffe3a0;
+      }
+      .hero-card .card-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+      .hero-card .card-actions button {
+        font-size: 15px;
+        padding: 8px 12px;
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>⚔️ WORLD DEFENSE</h1>
+        <div class="stats">
+          <span id="hp">❤️ 20</span><span id="gold">🪙 500G</span><span id="wave">WAVE 0/20</span>
+        </div>
+      </header>
+      <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
+      <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
+        <div class="panel-head">
+          <strong id="tpTitle"></strong
+          ><button id="tpClose" class="icon-btn" aria-label="塔の選択を解除">✕</button>
+        </div>
+        <div id="tpStats" class="tp-stats"></div>
+        <div id="tpHero" class="tp-hero"></div>
+        <div class="panel-actions">
+          <button id="upgrade">⬆ 強化</button><button id="sell">🪙 売却</button
+          ><button id="assign">👤 武将配属</button>
+        </div>
+        <button id="skill" class="skill" hidden>
+          <span id="skillLabel"></span><span class="bar"><i id="skillBar"></i></span>
+        </button>
+      </section>
+      <div class="tools">
+        <button data-t="arrow">🏹 弓 100G</button><button data-t="cannon">💣 大砲 180G</button
+        ><button data-t="magic">🔮 魔法 220G</button><button data-t="ice">❄️ 氷 150G</button>
+      </div>
+      <div class="tools">
+        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
+        ><button id="pause">⏸ 停止</button><button id="roster">👥 武将</button
+        ><button id="reset">↻ 最初から</button>
+      </div>
+      <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v6（武将配属）</small>
+    </main>
+    <div id="heroSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+        <div class="panel-head">
+          <strong id="sheetTitle">武将配属</strong
+          ><button id="sheetClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <p id="sheetHint" style="margin: 6px 0"></p>
+        <div id="heroList"></div>
+      </div>
+    </div>
+    <script>
+      (() => {
+        "use strict";
+        const C = document.getElementById("game"),
+          ctx = C.getContext("2d");
+        const $ = (id) => document.getElementById(id);
+        const W = 960,
+          H = 600;
+        const types = {
+          arrow: { cost: 100, range: 155, damage: 18, rate: 0.45, col: "#a56b35", icon: "🏹" },
+          cannon: { cost: 180, range: 130, damage: 48, rate: 1.6, col: "#56616d", icon: "💣" },
+          magic: { cost: 220, range: 170, damage: 32, rate: 0.8, col: "#8a57b5", icon: "🔮" },
+          ice: { cost: 150, range: 145, damage: 9, rate: 0.95, col: "#65b9d6", icon: "❄️" },
+        };
+        const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "魔法の塔", ice: "氷の塔" };
+        const CANNON_SPLASH = 65;
+
+        // ===== 武将の調整用設定 =====
+        // 数値はすべてここで調整する。能力は毎回「元の塔の数値」から計算するため、
+        // 配属・解除・強化を繰り返しても効果が積み上がることはない。
+        //   rangeMul / damageMul / cannonSplashMul … 配属した塔への倍率
+        //   aura: 配属した塔の周囲の塔の攻撃速度を上げる（attackSpeed 0.2 = +20%）
+        //   skill.duration … 効果時間（秒・戦闘中のみ進行） skill.cooldown … 発動からの再使用待ち（秒）
+        const HERO_RULES = {
+          maxAttackSpeedMul: 2.5, // 攻撃速度アップの合計上限（倍）
+          auraIncludesSelf: false, // 軍師の支援を配属先の塔自身にも掛けるか
+        };
+        const HERO_CONFIG = {
+          archer: {
+            name: "弓の名手",
+            short: "弓",
+            color: "#c8743c",
+            passive: { rangeMul: 1.2 },
+            passiveText: "配属した塔の射程 +20%",
+            skill: { name: "疾風連射", duration: 8, cooldown: 40, attackSpeedMul: 1.8 },
+            skillText: "8秒間、配属した塔の攻撃速度 ×1.8",
+          },
+          gunner: {
+            name: "砲術家",
+            short: "砲",
+            color: "#5d6878",
+            passive: { damageMul: 1.3, cannonSplashMul: 1.4 },
+            passiveText: "配属した塔の攻撃力 +30%（大砲なら爆発範囲 +40%）",
+            skill: { name: "一斉砲撃", duration: 1.5, cooldown: 35, volleys: 3, blastDamageMul: 1.5 },
+            skillText: "射程内の敵全員に3回の範囲砲撃（1回 = 攻撃力×1.5）",
+          },
+          strategist: {
+            name: "軍師",
+            short: "軍",
+            color: "#3f8a6d",
+            passive: { aura: { radius: 170, attackSpeed: 0.2 } },
+            passiveText: "近く（半径170）の他の塔の攻撃速度 +20%",
+            skill: {
+              name: "天啓の采配",
+              duration: 10,
+              cooldown: 45,
+              aura: { radiusMul: 1.25, attackSpeed: 0.45 },
+            },
+            skillText: "10秒間、支援が +45%・範囲 ×1.25 に強化",
+          },
+        };
+        const STARTER_HEROES = ["archer", "gunner", "strategist"];
+        // 武将画像は tools/build.mjs が assets/manifest.json をもとに埋め込む。
+        // 画像がない項目は仮アイコン（色付きの円＋一文字）で描画する。
+        const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
+        const SAVE_KEY = "worldDefense.heroes.v1";
+        const upper = [
+            [0, 300],
+            [140, 300],
+            [235, 165],
+            [450, 165],
+            [560, 300],
+            [760, 300],
+            [960, 300],
+          ],
+          lower = [
+            [0, 300],
+            [140, 300],
+            [235, 440],
+            [450, 440],
+            [560, 300],
+            [760, 300],
+            [960, 300],
+          ];
+        let gold = 500,
+          hp = 20,
+          wave = 0,
+          selectedType = "arrow",
+          selectedTower = null,
+          towers = [],
+          enemies = [],
+          shots = [],
+          playing = false,
+          paused = false,
+          speed = 1,
+          spawned = 0,
+          spawnClock = 0,
+          spawnTotal = 0,
+          last = 0,
+          over = false,
+          towerSeq = 0;
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        function updateUI() {
+          $("hp").textContent = "❤️ " + hp;
+          $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
+          $("wave").textContent = "WAVE " + wave + "/20";
+          $("start").disabled = playing || over;
+          $("upgrade").disabled =
+            !selectedTower || gold < upgradePrice(selectedTower) || selectedTower.level >= 5;
+          $("sell").disabled = !selectedTower;
+          document
+            .querySelectorAll("[data-t]")
+            .forEach((b) => b.classList.toggle("active", b.dataset.t === selectedType));
+          renderTowerPanel();
+        }
+        const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
+        const towerLabel = (t) =>
+          types[t.type].icon + " " + TOWER_NAMES[t.type] + " #" + t.id + " Lv" + t.level;
+
+        // ===== 武将：状態・保存 =====
+        // 配属先は heroState[id].tower だけで管理する（塔側には持たせない）ので、二重配属が起きない。
+        // cd（再使用待ち）と active（効果残り）は武将に属するため、再配属してもリセットされない。
+        const heroState = {};
+        let cutin = null; // 必殺技発動時の小さなカットイン（見た目のみ）
+        function newHeroState(id) {
+          return { id, tower: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0 };
+        }
+        function loadHeroSave() {
+          const fallback = { owned: STARTER_HEROES.slice(), lastHero: null };
+          try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return fallback;
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== "object") return fallback;
+            const owned = Array.isArray(data.owned) ? data.owned.filter((id) => HERO_CONFIG[id]) : [];
+            for (const id of STARTER_HEROES) if (!owned.includes(id)) owned.push(id);
+            // 戦闘は保存しないため、配属情報（存在しない塔への参照）は読み込まない。
+            return {
+              owned: [...new Set(owned)],
+              lastHero: HERO_CONFIG[data.lastHero] ? data.lastHero : null,
+            };
+          } catch (err) {
+            console.warn("武将の保存データを読み込めないため初期化します", err);
+            return fallback;
+          }
+        }
+        const heroSave = loadHeroSave();
+        function persistHeroes() {
+          try {
+            localStorage.setItem(
+              SAVE_KEY,
+              JSON.stringify({ version: 1, owned: heroSave.owned, lastHero: heroSave.lastHero }),
+            );
+          } catch (err) {
+            // プライベートブラウズ等で保存できなくても遊べるようにする
+          }
+        }
+        function resetHeroes() {
+          for (const id of heroSave.owned) heroState[id] = newHeroState(id);
+        }
+        resetHeroes();
+        persistHeroes();
+        const heroOn = (t) => Object.values(heroState).find((h) => h.tower === t) || null;
+        const ownedHeroes = () => heroSave.owned.map((id) => heroState[id]);
+
+        // ===== 武将：能力計算 =====
+        // 毎回 types（元の数値）とレベルから計算し、塔のデータは書き換えない。
+        function auraFrom(h) {
+          const a = HERO_CONFIG[h.id].passive.aura;
+          if (!a || !h.tower) return null;
+          const boost = h.active > 0 ? HERO_CONFIG[h.id].skill.aura : null;
+          return {
+            radius: a.radius * (boost ? boost.radiusMul : 1),
+            attackSpeed: boost ? boost.attackSpeed : a.attackSpeed,
+          };
+        }
+        function towerStats(t) {
+          const p = types[t.type];
+          let range = p.range,
+            damage = p.damage * (1 + 0.55 * (t.level - 1)),
+            splash = CANNON_SPLASH,
+            speedMul = 1,
+            aura = 0;
+          const h = heroOn(t);
+          if (h) {
+            const c = HERO_CONFIG[h.id];
+            range *= c.passive.rangeMul || 1;
+            damage *= c.passive.damageMul || 1;
+            if (t.type === "cannon") splash *= c.passive.cannonSplashMul || 1;
+            if (h.active > 0 && c.skill.attackSpeedMul) speedMul *= c.skill.attackSpeedMul;
+          }
+          // 支援は武将ごとに1回だけ適用（同じ武将は1人しか配属できないので重複しない）
+          for (const other of ownedHeroes()) {
+            const a = auraFrom(other);
+            if (!a || (other.tower === t && !HERO_RULES.auraIncludesSelf)) continue;
+            if (dist(other.tower, t) <= a.radius) aura += a.attackSpeed;
+          }
+          speedMul = Math.min(HERO_RULES.maxAttackSpeedMul, speedMul * (1 + aura));
+          return { range, damage, splash, rate: p.rate / speedMul, speedMul, aura };
+        }
+
+        // ===== 武将：配属・解除・必殺技 =====
+        function endSkill(h) {
+          h.active = 0;
+          h.volleysLeft = 0;
+        }
+        function assignHero(id, t) {
+          const h = heroState[id];
+          if (!h || !towers.includes(t)) return;
+          if (h.tower === t) return;
+          const prev = heroOn(t);
+          if (prev) {
+            endSkill(prev);
+            prev.tower = null;
+          }
+          endSkill(h); // 移動すると発動中の効果は終わる（再使用待ちはそのまま）
+          h.tower = t;
+          heroSave.lastHero = id;
+          persistHeroes();
+          msg(
+            HERO_CONFIG[id].name +
+              " を " +
+              towerLabel(t) +
+              " に配属した。" +
+              (prev ? "（" + HERO_CONFIG[prev.id].name + " は未配属に戻りました）" : ""),
+          );
+        }
+        function unassignHero(id) {
+          const h = heroState[id];
+          if (!h || !h.tower) return;
+          endSkill(h);
+          h.tower = null;
+          msg(HERO_CONFIG[id].name + " の配属を解除した。");
+        }
+        const canUseSkill = (h) => h && h.tower && h.cd <= 0 && h.active <= 0 && playing && !paused && !over;
+        function useSkill(h) {
+          if (!canUseSkill(h)) return;
+          const s = HERO_CONFIG[h.id].skill;
+          h.active = s.duration;
+          h.cd = s.cooldown;
+          if (s.volleys) {
+            h.volleysLeft = s.volleys;
+            h.volleyClock = 0;
+          }
+          cutin = { id: h.id, age: 0, duration: 1.3 };
+          msg("必殺技「" + s.name + "」発動！ " + HERO_CONFIG[h.id].skillText);
+        }
+        function heroVolley(h) {
+          const t = h.tower,
+            st = towerStats(t),
+            dmg = st.damage * HERO_CONFIG[h.id].skill.blastDamageMul;
+          let n = 0;
+          for (const e of enemies) {
+            if (e.hp <= 0 || dist(t, e) >= st.range) continue;
+            e.hp -= dmg;
+            e.hit = 0.18;
+            if (n++ < 10) burst(e.x, e.y, "#ffd273", "cannon");
+          }
+          t.recoil = 0.22;
+        }
+        // 戦闘の時間で進める（停止中・ウェーブ間は進まない。速度切替は dt に反映済み）
+        function tickHeroes(dt) {
+          for (const h of ownedHeroes()) {
+            if (h.cd > 0) h.cd = Math.max(0, h.cd - dt);
+            if (h.active <= 0) continue;
+            if (!h.tower) {
+              endSkill(h);
+              continue;
+            }
+            if (h.volleysLeft > 0) {
+              h.volleyClock -= dt;
+              while (h.volleysLeft > 0 && h.volleyClock <= 0) {
+                heroVolley(h);
+                h.volleysLeft--;
+                h.volleyClock += HERO_CONFIG[h.id].skill.duration / HERO_CONFIG[h.id].skill.volleys;
+              }
+            }
+            h.active = Math.max(0, h.active - dt);
+            if (h.active <= 0) {
+              endSkill(h);
+              msg("「" + HERO_CONFIG[h.id].skill.name + "」の効果が終わった。");
+            }
+          }
+        }
+        function msg(s) {
+          $("msg").textContent = s;
+        }
+        function pathAt(path, d) {
+          for (let i = 1; i < path.length; i++) {
+            const a = path[i - 1],
+              b = path[i],
+              l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (d <= l) return { x: a[0] + ((b[0] - a[0]) * d) / l, y: a[1] + ((b[1] - a[1]) * d) / l };
+            d -= l;
+          }
+          return { x: 960, y: 300, done: true };
+        }
+        function roadDistance(x, y, path) {
+          let best = 1e9;
+          for (let i = 1; i < path.length; i++) {
+            let [ax, ay] = path[i - 1],
+              [bx, by] = path[i],
+              dx = bx - ax,
+              dy = by - ay,
+              t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy)));
+            best = Math.min(best, Math.hypot(x - (ax + dx * t), y - (ay + dy * t)));
+          }
+          return best;
+        }
+        function createEnemy() {
+          const branch = Math.random() < 0.3 + (0.4 * (wave % 3)) / 2 ? upper : lower;
+          let kind = "goblin";
+          if (wave > 3 && Math.random() < 0.22) kind = "wolf";
+          if (wave > 6 && Math.random() < 0.18) kind = "knight";
+          if (wave > 9 && Math.random() < 0.12) kind = "slime";
+          if (wave > 12 && Math.random() < 0.1) kind = "dragon";
+          if (wave % 5 === 0 && spawned === spawnTotal - 1) kind = "boss";
+          const conf = {
+            goblin: [45, 65, 10, "#b65e3e", 12],
+            wolf: [35, 110, 12, "#9c8466", 10],
+            knight: [145, 42, 22, "#677b9b", 15],
+            slime: [65, 50, 16, "#82c869", 13],
+            dragon: [135, 85, 27, "#a95b9b", 16],
+            boss: [650, 32, 150, "#754359", 27],
+          }[kind];
+          const max = conf[0] * (1 + (wave - 1) * 0.19);
+          enemies.push({
+            path: branch,
+            d: 0,
+            x: 0,
+            y: 300,
+            kind,
+            hp: max,
+            max,
+            speed: conf[1],
+            reward: conf[2],
+            color: conf[3],
+            r: conf[4],
+            slow: 0,
+          });
+        }
+        function fire(t, e) {
+          const p = types[t.type];
+          const duration = t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : 0.34;
+          t.aim = Math.atan2(e.y - (t.y - 42), e.x - t.x);
+          t.recoil = 0.22;
+          if (shots.length >= 160) shots.shift();
+          shots.push({ x: t.x, y: t.y - 42, tx: e.x, ty: e.y, type: t.type, age: 0, duration, col: p.col });
+          const st = towerStats(t);
+          let damage = st.damage;
+          if (t.type === "cannon") {
+            enemies.forEach((a) => {
+              if (dist(a, e) < st.splash) {
+                a.hp -= damage;
+                a.hit = 0.18;
+              }
+            });
+          } else {
+            e.hp -= damage;
+            e.hit = 0.18;
+            if (t.type === "ice") e.slow = 1.7;
+          }
+        }
+        // 戦闘・演出・武将の時間は必ずこの関数で進める（速度切替を一か所で反映）
+        const gameStep = (dt) => Math.min(dt, 0.05) * speed;
+        function tick(dt) {
+          if (!playing || paused || over) return;
+          dt = gameStep(dt);
+          spawnClock -= dt;
+          while (spawned < spawnTotal && spawnClock <= 0) {
+            createEnemy();
+            spawned++;
+            spawnClock += Math.max(0.35, 0.95 - wave * 0.015);
+          }
+          for (const e of enemies) {
+            e.slow = Math.max(0, e.slow - dt);
+            e.d += e.speed * (e.slow > 0 ? 0.48 : 1) * dt;
+            Object.assign(e, pathAt(e.path, e.d));
+            if (e.x >= 960) {
+              hp--;
+              e.hp = -999;
+            }
+          }
+          tickHeroes(dt);
+          for (const t of towers) {
+            t.cd -= dt;
+            if (t.cd <= 0) {
+              const st = towerStats(t);
+              const targets = enemies
+                .filter((e) => e.hp > 0 && dist(t, e) < st.range)
+                .sort((a, b) => b.d - a.d);
+              if (targets.length) {
+                fire(t, targets[0]);
+                t.cd = st.rate;
+              }
+            }
+          }
+          for (const e of enemies) {
+            if (e.hp <= 0 && e.hp !== -999) {
+              gold += e.reward;
+              burst(e.x, e.y, e.color, e.kind === "goblin" ? "death" : "vanish");
+              e.hp = -999;
+            }
+          }
+          enemies = enemies.filter((e) => e.hp !== -999);
+          if (hp <= 0) {
+            hp = 0;
+            over = true;
+            playing = false;
+            msg("ゲームオーバー！ 最初から挑戦しよう。");
+          } else if (spawned >= spawnTotal && enemies.length === 0) {
+            playing = false;
+            gold += 50 + wave * 8;
+            msg(
+              wave === 20
+                ? "🎉 20ウェーブクリア！ 勝利！"
+                : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
+            );
+            if (wave === 20) over = true;
+          }
+          updateUI();
+        }
+        function polygon(points, color, width) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          points.forEach((p, i) => (i ? ctx.lineTo(...p) : ctx.moveTo(...p)));
+          ctx.stroke();
+        }
+        function ellipse(x, y, rx, ry, c) {
+          ctx.fillStyle = c;
+          ctx.beginPath();
+          ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        function poly(points, fill, stroke = "#40553c", lw = 3) {
+          ctx.beginPath();
+          points.forEach((p, i) => (i ? ctx.lineTo(...p) : ctx.moveTo(...p)));
+          ctx.closePath();
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (stroke) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = lw;
+            ctx.stroke();
+          }
+        }
+        function tree(x, y, k = 1) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(k, k);
+          ellipse(3, 18, 29, 11, "#54744788");
+          ctx.fillStyle = "#725038";
+          ctx.fillRect(-6, -7, 12, 26);
+          poly(
+            [
+              [-27, 7],
+              [-13, -21],
+              [0, -40],
+              [14, -20],
+              [28, 7],
+            ],
+            "#2c6945",
+            "#24553d",
+            4,
+          );
+          poly(
+            [
+              [-26, -5],
+              [-12, -33],
+              [0, -49],
+              [15, -29],
+              [29, -5],
+            ],
+            "#36865a",
+            "#276c48",
+            3,
+          );
+          poly(
+            [
+              [-21, -19],
+              [-8, -39],
+              [0, -45],
+              [6, -33],
+            ],
+            "#63a66b",
+            null,
+          );
+          ellipse(-8, -15, 4, 2, "#a3c77a");
+          ctx.restore();
+        }
+        function stone(x, y, k = 1) {
+          if (sprite("rocks", x, y + 8, 48 * k, 32 * k)) return;
+          ellipse(x + 3 * k, y + 5 * k, 19 * k, 7 * k, "#426a4a88");
+          poly(
+            [
+              [x - 18 * k, y + 3 * k],
+              [x - 13 * k, y - 11 * k],
+              [x + 6 * k, y - 15 * k],
+              [x + 18 * k, y - 2 * k],
+              [x + 11 * k, y + 6 * k],
+            ],
+            "#a2a99b",
+            "#6b8074",
+            2,
+          );
+          poly(
+            [
+              [x - 13 * k, y - 10 * k],
+              [x + 6 * k, y - 15 * k],
+              [x + 2 * k, y - 5 * k],
+            ],
+            "#d4d2b5",
+            null,
+          );
+        }
+        function castle() {
+          ctx.save();
+          ellipse(898, 365, 72, 21, "#35563d88");
+          ctx.fillStyle = "#4c6572";
+          ctx.fillRect(862, 265, 78, 95);
+          ctx.fillStyle = "#8dabb2";
+          ctx.fillRect(862, 265, 78, 12);
+          ctx.fillStyle = "#708b98";
+          ctx.fillRect(854, 240, 26, 113);
+          ctx.fillRect(924, 240, 26, 113);
+          for (let x of [852, 872, 922, 942]) {
+            ctx.fillStyle = "#a7b9b7";
+            ctx.fillRect(x, 226, 12, 22);
+          }
+          ctx.fillStyle = "#4d6471";
+          ctx.fillRect(886, 230, 29, 37);
+          ctx.fillStyle = "#c0c4b1";
+          ctx.fillRect(881, 214, 38, 18);
+          ctx.fillStyle = "#303b44";
+          ctx.fillRect(894, 312, 20, 48);
+          ctx.fillStyle = "#8b6047";
+          ctx.fillRect(896, 317, 16, 43);
+          ctx.strokeStyle = "#d2b376";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(896, 317, 16, 43);
+          ctx.fillStyle = "#f2d481";
+          ctx.fillRect(869, 283, 9, 17);
+          ctx.fillRect(925, 283, 9, 17);
+          poly(
+            [
+              [900, 214],
+              [900, 183],
+              [934, 194],
+              [900, 201],
+            ],
+            "#d54e45",
+            "#853c38",
+            2,
+          );
+          ctx.fillStyle = "#f6e7a3";
+          ctx.font = "bold 17px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText("王国", 900, 171);
+          ctx.restore();
+        }
+        function tower(t) {
+          const p = types[t.type];
+          if (t === selectedTower) {
+            ctx.fillStyle = p.col + "14";
+            ctx.strokeStyle = "#fff0b4aa";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, towerStats(t).range, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          const k = 1 + (t.level - 1) * 0.045;
+          if (!sprite(t.type, t.x, t.y + 20, 82 * k, 105 * k)) {
+            legacyTower(t);
+          }
+          for (let i = 0; i < t.level; i++)
+            ellipse(t.x - (t.level - 1) * 4 + i * 8, t.y + 26, 2.5, 2.5, "#ffe6a0");
+        }
+        function legacyTower(t) {
+          let x = t.x,
+            y = t.y,
+            p = types[t.type];
+          if (t === selectedTower) {
+            ctx.strokeStyle = "#fbe9a5aa";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x, y, p.range, 0, 7);
+            ctx.stroke();
+          }
+          ellipse(x + 4, y + 20, 34, 12, "#31553a99");
+          ellipse(x, y + 13, 29, 12, "#857450");
+          ellipse(x, y + 9, 25, 9, "#d7bc7b");
+          ctx.fillStyle = "#8c8d7b";
+          ctx.fillRect(x - 19, y - 29, 38, 39);
+          ctx.fillStyle = "#c6b9a1";
+          ctx.fillRect(x - 17, y - 26, 8, 31);
+          let roof =
+            t.type === "arrow"
+              ? "#c85b37"
+              : t.type === "cannon"
+                ? "#596575"
+                : t.type === "magic"
+                  ? "#7e4fbd"
+                  : "#5cb7d4";
+          poly(
+            [
+              [x - 30, y - 27],
+              [x, y - 61],
+              [x + 30, y - 27],
+            ],
+            roof,
+            "#4b4a4a",
+            3,
+          );
+          poly(
+            [
+              [x - 20, y - 33],
+              [x, y - 55],
+              [x + 2, y - 42],
+            ],
+            "#ffffff55",
+            null,
+          );
+          ctx.fillStyle = "#4c4037";
+          ctx.fillRect(x - 8, y - 10, 16, 20);
+          ctx.fillStyle = "#e5dca6";
+          ctx.fillRect(x - 4, y - 7, 8, 12);
+          if (t.type === "arrow") {
+            ctx.strokeStyle = "#f5db94";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(x + 4, y - 42, 12, -1.3, 1.3);
+            ctx.stroke();
+            ctx.strokeStyle = "#f7e5b4";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + 8, y - 54);
+            ctx.lineTo(x + 8, y - 30);
+            ctx.stroke();
+          } else if (t.type === "cannon") {
+            ctx.fillStyle = "#323d4d";
+            ctx.save();
+            ctx.translate(x + 7, y - 39);
+            ctx.rotate(-0.45);
+            ctx.fillRect(-8, -10, 28, 17);
+            ctx.restore();
+            ellipse(x + 23, y - 47, 9, 9, "#242e39");
+          } else {
+            ellipse(x, y - 44, 12, 16, t.type === "magic" ? "#c684fa" : "#9eeaff");
+            ellipse(x - 4, y - 49, 4, 5, "#ffffffbb");
+          }
+          for (let i = 0; i < t.level; i++) ellipse(x - 15 + i * 8, y + 26, 3, 3, "#ffe484");
+        }
+        function creature(e) {
+          if (e.kind === "goblin" && sprites.goblin) {
+            const stride = reduced ? 0 : Math.sin(e.d * 0.19);
+            ellipse(e.x + 2, e.y + 12, 15, 5, "#2e523855");
+            ctx.save();
+            ctx.translate(e.x, e.y + 14);
+            ctx.rotate(stride * 0.045);
+            sprite("goblin", 0, 0, 39, 45);
+            ctx.restore();
+            healthBar(e);
+            return;
+          }
+          let x = e.x,
+            y = e.y,
+            r = e.r,
+            phase = Math.sin(visualTime * 9 + e.d * 0.06) * 3;
+          ellipse(x + 3, y + r * 0.8, r * 1.1, r * 0.36, "#354a3977");
+          ctx.save();
+          ctx.translate(x, y + phase);
+          let col = e.color;
+          if (e.kind === "goblin") {
+            poly(
+              [
+                [-r * 0.85, -r * 0.5],
+                [-r * 1.6, -r],
+                [-r * 0.65, -r * 0.9],
+              ],
+              "#6aab56",
+              "#346c40",
+              2,
+            );
+            poly(
+              [
+                [r * 0.85, -r * 0.5],
+                [r * 1.6, -r],
+                [r * 0.65, -r * 0.9],
+              ],
+              "#6aab56",
+              "#346c40",
+              2,
+            );
+            ellipse(0, 0, r, r * 0.9, "#69aa55");
+            ellipse(-5, -3, 4, 5, "#fff7d4");
+            ellipse(6, -3, 4, 5, "#fff7d4");
+            ellipse(-4, -3, 2, 3, "#2e3734");
+            ellipse(7, -3, 2, 3, "#2e3734");
+            ctx.strokeStyle = "#553c2b";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(1, 6, 5, 0, Math.PI);
+            ctx.stroke();
+          } else if (e.kind === "wolf") {
+            poly(
+              [
+                [-r, -r * 0.2],
+                [-r, -r * 1.6],
+                [-2, -r * 0.8],
+                [r, -r * 1.6],
+                [r, r * 0.3],
+              ],
+              "#a39173",
+              "#5c5a4b",
+              3,
+            );
+            ellipse(0, 2, r, r * 0.75, "#ac9d81");
+            ellipse(-5, -3, 3, 4, "#f8e6bb");
+            ellipse(6, -3, 3, 4, "#f8e6bb");
+            ellipse(1, 6, 4, 3, "#3c3934");
+          } else if (e.kind === "slime") {
+            ellipse(0, 3, r, r * 0.8, "#71d09b");
+            ellipse(-5, -2, 4, 5, "white");
+            ellipse(6, -2, 4, 5, "white");
+            ellipse(-4, -2, 2, 3, "#315c4b");
+            ellipse(7, -2, 2, 3, "#315c4b");
+            ellipse(-5, 7, 6, 2, "#d8ffe6");
+          } else if (e.kind === "dragon") {
+            poly(
+              [
+                [-r, 0],
+                [-r * 1.9, -r * 1.2],
+                [-4, -r * 0.5],
+              ],
+              "#d36c7a",
+              "#813c55",
+              2,
+            );
+            poly(
+              [
+                [r, 0],
+                [r * 1.8, -r * 1.2],
+                [4, -r * 0.5],
+              ],
+              "#d36c7a",
+              "#813c55",
+              2,
+            );
+            ellipse(0, 0, r, r, "#b65777");
+            poly(
+              [
+                [-8, -r * 0.7],
+                [0, -r * 1.6],
+                [9, -r * 0.7],
+              ],
+              "#f0bb7b",
+              "#814c57",
+              2,
+            );
+            ellipse(-5, -2, 3, 4, "#ffea9d");
+            ellipse(6, -2, 3, 4, "#ffea9d");
+          } else {
+            ellipse(0, 0, r, r, "#8193a3");
+            poly(
+              [
+                [-r, -r * 0.35],
+                [-r * 0.8, -r * 1.2],
+                [0, -r * 1.55],
+                [r * 0.8, -r * 1.2],
+                [r, -r * 0.35],
+              ],
+              e.kind === "boss" ? "#713f63" : "#a9b5c3",
+              "#3e4b55",
+              2,
+            );
+            ctx.fillStyle = "#f9e3a7";
+            ctx.fillRect(-7, -5, 5, 5);
+            ctx.fillRect(4, -5, 5, 5);
+            ctx.fillStyle = "#4b4d57";
+            ctx.fillRect(-4, 3, 9, 8);
+          }
+          ctx.restore();
+          ctx.fillStyle = "#333b35";
+          ctx.fillRect(x - r, y - r - 21, r * 2, 5);
+          ctx.fillStyle = "#f36c5d";
+          ctx.fillRect(x - r, y - r - 21, r * 2 * Math.max(0, e.hp / e.max), 5);
+        }
+        function bloom(x, y, r, color) {
+          let g = ctx.createRadialGradient(x, y, 1, x, y, r);
+          g.addColorStop(0, color);
+          g.addColorStop(1, "#ffffff00");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, 7);
+          ctx.fill();
+        }
+        function fancyTree(x, y, k = 1) {
+          if (sprite("tree", x, y + 18, 85 * k, 112 * k)) return;
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(k, k);
+          ellipse(5, 19, 36, 13, "#35573b66");
+          ctx.fillStyle = "#71523d";
+          ctx.fillRect(-7, -17, 14, 37);
+          ctx.fillStyle = "#a47d4c";
+          ctx.fillRect(-5, -14, 4, 31);
+          ctx.strokeStyle = "#4a3b2f";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(0, 12);
+          ctx.lineTo(1, -23);
+          ctx.stroke();
+          for (let [dx, dy, r, c] of [
+            [-22, -23, 24, "#2c694b"],
+            [19, -27, 25, "#317d52"],
+            [0, -45, 30, "#3c8e5b"],
+            [-9, -58, 19, "#66a966"],
+          ]) {
+            ellipse(dx + 2, dy + 5, r, r * 0.75, "#224d3988");
+            let canopy = ctx.createRadialGradient(dx - r * 0.35, dy - r * 0.4, 1, dx, dy, r);
+            canopy.addColorStop(0, "#a3ce77");
+            canopy.addColorStop(0.38, c);
+            canopy.addColorStop(1, "#235c46");
+            ctx.fillStyle = canopy;
+            ctx.beginPath();
+            ctx.ellipse(dx, dy, r, r * 0.78, 0, 0, 7);
+            ctx.fill();
+            for (let j = 0; j < 7; j++) {
+              const a = j * 2.4;
+              ellipse(dx + Math.cos(a) * r * 0.65, dy + Math.sin(a) * r * 0.46, 3, 1.5, "#c5e38b44");
+            }
+          }
+          ellipse(-15, -56, 12, 5, "#a0c87966");
+          ellipse(7, -37, 5, 3, "#b1d77c");
+          ctx.restore();
+        }
+        function cottage(x, y, k = 1) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(k, k);
+          ellipse(3, 18, 48, 15, "#3b613d66");
+          ctx.fillStyle = "#e3c69a";
+          ctx.fillRect(-28, -15, 56, 36);
+          ctx.strokeStyle = "#866648";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(-28, -15, 56, 36);
+          poly(
+            [
+              [-39, -14],
+              [0, -53],
+              [39, -14],
+            ],
+            "#b9523d",
+            "#793d35",
+            4,
+          );
+          poly(
+            [
+              [-26, -17],
+              [0, -43],
+              [9, -35],
+            ],
+            "#e89161",
+            null,
+          );
+          ctx.fillStyle = "#684638";
+          ctx.fillRect(-8, 0, 17, 21);
+          ctx.fillStyle = "#6b9b9b";
+          ctx.fillRect(-23, -5, 10, 12);
+          ctx.fillRect(15, -5, 10, 12);
+          ctx.fillStyle = "#f8e3a2";
+          ctx.fillRect(-21, -3, 6, 8);
+          ctx.fillRect(17, -3, 6, 8);
+          ctx.restore();
+        }
+        function banner(x, y, c) {
+          ctx.strokeStyle = "#654b35";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(x, y + 24);
+          ctx.lineTo(x, y - 27);
+          ctx.stroke();
+          poly(
+            [
+              [x, y - 27],
+              [x + 32, y - 18],
+              [x + 25, y - 7],
+              [x, y - 9],
+            ],
+            c,
+            "#f5db9777",
+            2,
+          );
+          ellipse(x, y - 28, 4, 4, "#ffe3a3");
+        }
+        function decorativeBackground() {
+          ctx.save();
+          let g = ctx.createLinearGradient(0, 0, 0, 600);
+          g.addColorStop(0, "#b5d78a");
+          g.addColorStop(0.55, "#92bd72");
+          g.addColorStop(1, "#679d5b");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, 960, 600);
+          for (let i = 0; i < 22; i++) {
+            let x = i * 53 - 40,
+              y = 20 + (i % 4) * 8;
+            ellipse(x, y, 60, 28, "#d2e6a15c");
+          }
+          for (let i = 0; i < 550; i++) {
+            let x = (i * 149 + 17) % 960,
+              y = (i * 229 + 71) % 600;
+            ellipse(x, y, 1 + (i % 3), 2 + (i % 4), i % 4 === 0 ? "#d4dd9c70" : "#4c8e5370");
+          }
+          for (let i = 0; i < 90; i++) {
+            let x = (i * 197 + 29) % 960,
+              y = (i * 127 + 43) % 600;
+            if (roadDistance(x, y, upper) < 51 || roadDistance(x, y, lower) < 51 || x > 835) continue;
+            ellipse(x, y, 3, 2, i % 3 ? "#f7e3ab" : "#e89bb5");
+            ellipse(x + 3, y - 3, 2, 2, "#fff8d6");
+          }
+          for (let [x, y, k] of [
+            [55, 75, 1.1],
+            [120, 38, 0.8],
+            [217, 32, 0.7],
+            [520, 68, 0.75],
+            [675, 85, 0.85],
+            [784, 65, 1.05],
+            [47, 524, 0.9],
+            [120, 487, 0.85],
+            [335, 550, 1.1],
+            [462, 520, 0.85],
+            [590, 528, 1],
+            [712, 506, 0.85],
+            [805, 551, 0.7],
+          ])
+            fancyTree(x, y, k);
+          for (let [x, y] of [
+            [280, 78],
+            [615, 480],
+            [768, 155],
+            [84, 165],
+          ])
+            stone(x, y, 0.85);
+          cottage(350, 85, 0.65);
+          cottage(660, 538, 0.72);
+          ctx.restore();
+        }
+        function fancyCastle() {
+          if (sprite("castle", 891, 372, 151, 200)) return;
+          ctx.save();
+          ellipse(895, 373, 76, 22, "#24483b88");
+          ctx.fillStyle = "#a2a8a1";
+          ctx.fillRect(852, 248, 88, 111);
+          ctx.fillStyle = "#c9c7b1";
+          ctx.fillRect(860, 254, 70, 98);
+          for (let x of [844, 920]) {
+            ctx.fillStyle = "#6c8490";
+            ctx.fillRect(x, 224, 35, 137);
+            ctx.fillStyle = "#a7bdc2";
+            ctx.fillRect(x + 5, 231, 21, 118);
+            for (let j = 0; j < 3; j++) {
+              ctx.fillStyle = "#cdd4c6";
+              ctx.fillRect(x + j * 12, 213, 10, 21);
+            }
+            poly(
+              [
+                [x - 5, 213],
+                [x + 17, 180],
+                [x + 40, 213],
+              ],
+              "#467c9b",
+              "#355a73",
+              3,
+            );
+            poly(
+              [
+                [x + 4, 205],
+                [x + 17, 186],
+                [x + 20, 203],
+              ],
+              "#9bc6cf",
+              null,
+            );
+          }
+          poly(
+            [
+              [860, 250],
+              [893, 212],
+              [928, 250],
+            ],
+            "#497d97",
+            "#355b70",
+            4,
+          );
+          poly(
+            [
+              [871, 247],
+              [893, 221],
+              [899, 238],
+            ],
+            "#a5d3d3",
+            null,
+          );
+          ctx.strokeStyle = "#607b8955";
+          ctx.lineWidth = 1;
+          for (let yy = 263; yy < 354; yy += 12) {
+            ctx.beginPath();
+            ctx.moveTo(880, yy);
+            ctx.lineTo(920, yy);
+            ctx.moveTo(yy % 24 ? 893 : 908, yy);
+            ctx.lineTo(yy % 24 ? 893 : 908, yy + 12);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#e9e8cc88";
+          ctx.fillRect(860, 254, 5, 98);
+          ctx.fillStyle = "#364951";
+          ctx.fillRect(883, 309, 24, 52);
+          ctx.fillStyle = "#936548";
+          ctx.fillRect(887, 315, 16, 46);
+          ctx.strokeStyle = "#e7c98d";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(887, 315, 16, 46);
+          for (let x of [864, 929]) {
+            ctx.fillStyle = "#324c5c";
+            ctx.fillRect(x, 277, 9, 19);
+            ctx.fillStyle = "#f8d994";
+            ctx.fillRect(x + 2, 279, 5, 14);
+          }
+          banner(897, 194, "#cf4d4d");
+          ctx.fillStyle = "#fff2c8";
+          ctx.textAlign = "center";
+          ctx.font = "bold 19px system-ui";
+          ctx.strokeStyle = "#426548";
+          ctx.lineWidth = 4;
+          ctx.strokeText("王国", 900, 157);
+          ctx.fillText("王国", 900, 157);
+          ctx.restore();
+        }
+        function towerDetails(t) {
+          if (sprites[t.type]) {
+            if (t.type === "magic" || t.type === "ice")
+              bloom(t.x, t.y - 54, 23, t.type === "magic" ? "#d498ff55" : "#a9eeff55");
+            return;
+          }
+          const x = t.x,
+            y = t.y;
+          ctx.save();
+          ctx.strokeStyle = "#786e5c66";
+          ctx.lineWidth = 1;
+          for (let row = 0; row < 4; row++) {
+            const yy = y - 22 + row * 8;
+            ctx.beginPath();
+            ctx.moveTo(x - 17, yy);
+            ctx.lineTo(x + 17, yy);
+            ctx.moveTo(x + (row % 2 ? 5 : -5), yy);
+            ctx.lineTo(x + (row % 2 ? 5 : -5), yy + 8);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#fff4cd66";
+          ctx.fillRect(x - 17, y - 24, 3, 27);
+          ellipse(x, y + 13, 23, 5, "#f7e4ad44");
+          if (t.type === "arrow") {
+            banner(x + 21, y - 60, "#d75d41");
+            ctx.strokeStyle = "#4d3429";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x - 16, y - 35);
+            ctx.lineTo(x - 12, y - 49);
+            ctx.lineTo(x - 3, y - 35);
+            ctx.stroke();
+          }
+          if (t.type === "cannon") {
+            ellipse(x + 25, y - 50, 12, 11, "#2a3543");
+            ellipse(x + 25, y - 50, 6, 6, "#121e2a");
+            ellipse(x - 19, y + 5, 5, 5, "#d3c3a1");
+          }
+          if (t.type === "magic") {
+            bloom(x, y - 54, 42, "#c987ff99");
+            ellipse(x, y - 54, 11, 13, "#e5b8ff");
+            ellipse(x - 4, y - 60, 3, 5, "#ffffff");
+          }
+          if (t.type === "ice") {
+            bloom(x, y - 53, 38, "#92e8ff99");
+            poly(
+              [
+                [x, y - 74],
+                [x + 12, y - 54],
+                [x, y - 31],
+                [x - 12, y - 54],
+              ],
+              "#a5f4ff",
+              "#4e9bb4",
+              2,
+            );
+            poly(
+              [
+                [x, y - 72],
+                [x, y - 33],
+                [x - 10, y - 54],
+              ],
+              "#efffff99",
+              null,
+            );
+          }
+          ctx.restore();
+        }
+        function creatureDetails(e) {
+          if (e.kind === "goblin" && sprites.goblin) return;
+          const x = e.x,
+            y = e.y;
+          ctx.save();
+          if (e.kind === "goblin") {
+            ctx.fillStyle = "#70442e";
+            ctx.fillRect(x - 8, y + 7, 5, 6);
+            ctx.fillRect(x + 4, y + 7, 5, 6);
+            poly(
+              [
+                [x - 11, y - 7],
+                [x, y - 20],
+                [x + 11, y - 7],
+              ],
+              "#b55d39",
+              "#753d2e",
+              2,
+            );
+          }
+          if (e.kind === "wolf") {
+            poly(
+              [
+                [x - 12, y + 1],
+                [x - 24, y - 7],
+                [x - 20, y + 9],
+              ],
+              "#b6a17c",
+              "#67594a",
+              2,
+            );
+          }
+          if (e.kind === "slime") {
+            bloom(x, y, 24, "#abffe044");
+          }
+          if (e.kind === "dragon") {
+            bloom(x, y - 9, 34, "#ffb97744");
+            poly(
+              [
+                [x - 8, y - 13],
+                [x, y - 26],
+                [x + 9, y - 12],
+              ],
+              "#e9a66b",
+              "#7c4358",
+              2,
+            );
+          }
+          if (e.kind === "boss") {
+            poly(
+              [
+                [x - 17, y - 25],
+                [x - 11, y - 48],
+                [x, y - 33],
+                [x + 11, y - 48],
+                [x + 17, y - 25],
+              ],
+              "#e8c36b",
+              "#7b5739",
+              3,
+            );
+          }
+          ctx.restore();
+        }
+        // Static scenery is rasterized once; effects have strict population limits.
+        let scenery = null,
+          visualTime = 0;
+        // Each object is a separately generated, transparent asset. Failed loads retain vector fallbacks.
+        const embeddedSprites = /*@@EMBEDDED_SPRITES@@*/ {};
+        const sprites = Object.create(null);
+        function sprite(name, x, bottom, w, h) {
+          const im = sprites[name];
+          if (!im) return false;
+          const k = Math.min(w / im.width, h / im.height),
+            dw = im.width * k,
+            dh = im.height * k;
+          ctx.drawImage(im, x - dw / 2, bottom - dh, dw, dh);
+          return true;
+        }
+        function healthBar(e) {
+          ctx.fillStyle = "#3a463b";
+          ctx.fillRect(e.x - e.r, e.y - e.r - 21, e.r * 2, 5);
+          ctx.fillStyle = "#ed6654";
+          ctx.fillRect(e.x - e.r, e.y - e.r - 21, e.r * 2 * Math.max(0, e.hp / e.max), 5);
+        }
+        // 武将画像（あれば）。読み込めない・存在しない場合は仮アイコンで描画する。
+        const heroImages = Object.create(null);
+        for (const [id, slots] of Object.entries(HERO_ASSETS)) {
+          for (const [slot, src] of Object.entries(slots || {})) {
+            if (!src) continue;
+            const im = new Image();
+            im.onload = () => {
+              heroImages[id + "." + slot] = im;
+            };
+            im.onerror = () => console.warn("Hero image unavailable: " + id + "." + slot);
+            im.src = src;
+          }
+        }
+        const heroImage = (id, ...slots) => {
+          for (const s of slots) if (heroImages[id + "." + s]) return heroImages[id + "." + s];
+          return null;
+        };
+        const heroImageSrc = (id, ...slots) => {
+          for (const s of slots) if (HERO_ASSETS[id] && HERO_ASSETS[id][s]) return HERO_ASSETS[id][s];
+          return null;
+        };
+        function heroBadge(id, x, y, r) {
+          const c = HERO_CONFIG[id],
+            im = heroImage(id, "icon", "portrait");
+          ctx.save();
+          ellipse(x + 1, y + 2, r + 2, r + 2, "#0006");
+          ellipse(x, y, r + 2, r + 2, "#ffe0a0");
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.clip();
+          if (im) {
+            const k = Math.max((r * 2) / im.width, (r * 2) / im.height);
+            ctx.drawImage(im, x - (im.width * k) / 2, y - (im.height * k) / 2, im.width * k, im.height * k);
+          } else {
+            ctx.fillStyle = c.color;
+            ctx.fillRect(x - r, y - r, r * 2, r * 2);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold " + Math.round(r * 1.15) + "px system-ui";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(c.short, x, y + 1);
+          }
+          ctx.restore();
+        }
+        function heroOverlay(t) {
+          const h = heroOn(t),
+            st = towerStats(t);
+          if (st.aura > 0) {
+            // 軍師の支援を受けている塔：小さな緑の矢印
+            poly(
+              [
+                [t.x - 30, t.y + 22],
+                [t.x - 24, t.y + 12],
+                [t.x - 18, t.y + 22],
+              ],
+              "#8ff0a8",
+              "#25563d",
+              2,
+            );
+          }
+          if (!h) return;
+          const bx = t.x + 26,
+            by = t.y - 60;
+          if (h.active > 0) {
+            const pulse = reduced ? 0 : Math.sin(visualTime * 8) * 2;
+            ctx.strokeStyle = "#fff3a8";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(bx, by, 19 + pulse, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          heroBadge(h.id, bx, by, 14);
+        }
+        function auraRings() {
+          for (const h of ownedHeroes()) {
+            const a = auraFrom(h);
+            if (!a || (h.tower !== selectedTower && h.active <= 0)) continue;
+            ctx.save();
+            ctx.setLineDash([10, 8]);
+            ctx.strokeStyle = h.active > 0 ? "#b6ffc6dd" : "#8ff0a899";
+            ctx.fillStyle = h.active > 0 ? "#8ff0a822" : "#8ff0a812";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(h.tower.x, h.tower.y, a.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+        function drawCutin() {
+          if (!cutin) return;
+          const c = HERO_CONFIG[cutin.id],
+            p = cutin.age / cutin.duration,
+            slide = reduced ? 0 : Math.min(1, p * 6),
+            x = -330 + 340 * slide,
+            y = 14;
+          ctx.save();
+          ctx.globalAlpha = p > 0.8 ? (1 - p) / 0.2 : 1;
+          ctx.fillStyle = "#102e36e6";
+          ctx.strokeStyle = "#e1bc77";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(x, y, 330, 76, 14) : ctx.rect(x, y, 330, 76);
+          ctx.fill();
+          ctx.stroke();
+          const im = heroImage(cutin.id, "skill", "portrait", "icon");
+          if (im) {
+            const k = Math.min(70 / im.width, 70 / im.height);
+            ctx.drawImage(
+              im,
+              x + 42 - (im.width * k) / 2,
+              y + 38 - (im.height * k) / 2,
+              im.width * k,
+              im.height * k,
+            );
+          } else heroBadge(cutin.id, x + 42, y + 38, 28);
+          ctx.fillStyle = "#ffe3a0";
+          ctx.font = "bold 26px system-ui";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(c.skill.name, x + 84, y + 28);
+          ctx.fillStyle = "#fff1d0";
+          ctx.font = "bold 18px system-ui";
+          ctx.fillText(c.name, x + 84, y + 56);
+          ctx.restore();
+        }
+        for (const name of ["arrow", "cannon", "magic", "ice", "castle", "goblin", "tree", "pine", "rocks"]) {
+          const im = new Image();
+          im.onload = () => {
+            sprites[name] = im;
+            scenery = null;
+          };
+          im.onerror = () => console.warn("Sprite unavailable: " + name);
+          im.src = embeddedSprites[name];
+        }
+        const effects = [],
+          reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        function burst(x, y, color, kind) {
+          if (effects.length >= 80) effects.shift();
+          effects.push({
+            x,
+            y,
+            color,
+            kind,
+            age: 0,
+            duration: kind === "cannon" ? 0.8 : kind === "death" ? 0.6 : 0.42,
+          });
+        }
+        function animateVisuals(dt) {
+          if (paused || document.hidden) return;
+          dt = gameStep(dt);
+          visualTime += dt;
+          if (cutin && (cutin.age += dt) >= cutin.duration) cutin = null;
+          for (const t of towers) t.recoil = Math.max(0, (t.recoil || 0) - dt);
+          for (const e of enemies) e.hit = Math.max(0, (e.hit || 0) - dt);
+          for (const s of shots) {
+            s.age += dt;
+            if (s.age >= s.duration) burst(s.tx, s.ty, s.col, s.type);
+          }
+          shots = shots.filter((s) => s.age < s.duration);
+          for (const e of effects) e.age += dt;
+          for (let i = effects.length - 1; i >= 0; i--)
+            if (effects[i].age >= effects[i].duration) effects.splice(i, 1);
+        }
+        function background() {
+          decorativeBackground();
+          for (const path of [upper, lower]) {
+            polygon(path, "#587b4a", 83);
+            polygon(path, "#aa8558", 74);
+            polygon(path, "#d9b879", 65);
+            polygon(path, "#efd29a", 51);
+          }
+          for (let i = 0; i < 90; i++) {
+            for (const path of [upper, lower]) {
+              const p = pathAt(path, i * 15);
+              ellipse(p.x + Math.sin(i * 7) * 17, p.y + Math.cos(i * 3) * 17, 2 + (i % 3), 1.5, "#b28d5b55");
+            }
+          }
+          for (let i = 0; i < 35; i++) {
+            let x = (i * 131 + 25) % 840,
+              y = (i * 197 + 43) % 600;
+            if (roadDistance(x, y, upper) < 65 || roadDistance(x, y, lower) < 65) continue;
+            ctx.strokeStyle = "#4d8d5866";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x - 3, y);
+            ctx.lineTo(x - 5, y - 8);
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + 2, y - 11);
+            ctx.moveTo(x + 3, y);
+            ctx.lineTo(x + 7, y - 6);
+            ctx.stroke();
+          }
+          for (const [x, y, k] of [
+            [170, 70, 0.8],
+            [585, 72, 0.7],
+            [750, 540, 0.8],
+            [40, 420, 0.7],
+          ])
+            sprite("pine", x, y, 58 * k, 92 * k);
+          fancyCastle();
+          ctx.textAlign = "left";
+          ctx.font = "bold 17px system-ui";
+          ctx.strokeStyle = "#53734a";
+          ctx.lineWidth = 4;
+          ctx.fillStyle = "#fff3ce";
+          ctx.strokeText("侵入口", 15, 249);
+          ctx.fillText("侵入口", 15, 249);
+          ctx.font = "bold 13px system-ui";
+          ctx.fillStyle = "#4a704c";
+          ctx.fillText("NORTH • 北の道", 310, 113);
+          ctx.fillText("SOUTH • 南の道", 310, 505);
+        }
+        function projectile(s) {
+          const p = Math.min(1, s.age / s.duration),
+            arc = s.type === "cannon" ? Math.sin(p * Math.PI) * 100 : 0,
+            x = s.x + (s.tx - s.x) * p,
+            y = s.y + (s.ty - s.y) * p - arc;
+          ctx.save();
+          if (s.type === "arrow") {
+            ctx.translate(x, y);
+            ctx.rotate(Math.atan2(s.ty - s.y, s.tx - s.x));
+            ctx.strokeStyle = "#725039";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(-22, 0);
+            ctx.lineTo(5, 0);
+            ctx.stroke();
+            poly(
+              [
+                [9, 0],
+                [1, -4],
+                [1, 4],
+              ],
+              "#fff2cc",
+              null,
+            );
+            poly(
+              [
+                [-17, 0],
+                [-25, -5],
+                [-22, 0],
+                [-25, 5],
+              ],
+              "#f3e1a0",
+              null,
+            );
+          } else if (s.type === "cannon") {
+            ellipse(x, y + arc + 8, 6, 3, "#354f3a44");
+            ellipse(x, y, 7, 7, "#293b4b");
+            ellipse(x - 2, y - 3, 2.5, 2, "#a5b8ba");
+          } else {
+            const color = s.type === "ice" ? "#b4f6ff" : "#eabaff";
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.globalAlpha = 0.45;
+            ctx.beginPath();
+            ctx.moveTo(x - (s.tx - s.x) * 0.12, y - (s.ty - s.y) * 0.12);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            bloom(x, y, 19, color + "88");
+            if (s.type === "ice")
+              poly(
+                [
+                  [x, y - 9],
+                  [x + 6, y],
+                  [x, y + 9],
+                  [x - 6, y],
+                ],
+                "#e5fdff",
+                "#7bcede",
+                1,
+              );
+            else {
+              ellipse(x, y, 6, 6, "#dda5ff");
+              ellipse(x - 2, y - 2, 2.5, 2.5, "#fff8ff");
+            }
+          }
+          ctx.restore();
+        }
+        function effect(e) {
+          const p = e.age / e.duration;
+          ctx.save();
+          ctx.globalAlpha = 1 - p;
+          if (e.kind === "death" && sprites.goblin) {
+            ctx.save();
+            ctx.translate(e.x, e.y + 12);
+            ctx.rotate(p * 1.4);
+            sprite("goblin", 0, 0, 34 * (1 - p * 0.25), 40 * (1 - p * 0.25));
+            ctx.restore();
+          }
+          const n = reduced ? 3 : e.kind === "cannon" ? 12 : 7;
+          let color =
+            e.kind === "ice"
+              ? "#b2f4ff"
+              : e.kind === "magic"
+                ? "#e9bdff"
+                : e.kind === "cannon"
+                  ? "#ffd273"
+                  : e.color;
+          if (e.kind === "cannon") {
+            for (let i = 0; i < 5; i++) {
+              const a = i * 2.4;
+              ellipse(
+                e.x + Math.cos(a) * p * 30,
+                e.y - 20 * p + Math.sin(a) * p * 17,
+                9 + p * 15,
+                8 + p * 12,
+                "#7b83837f",
+              );
+            }
+            ctx.strokeStyle = "#ffe0a0";
+            ctx.lineWidth = 4 * (1 - p);
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y, 65 * p, 30 * p, 0, 0, 7);
+            ctx.stroke();
+          } else if (e.kind === "ice" || e.kind === "magic") {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, 6 + 28 * p, 0, 7);
+            ctx.stroke();
+          }
+          for (let i = 0; i < n; i++) {
+            const a = i * 2.399,
+              r = 8 + 35 * p,
+              px = e.x + Math.cos(a) * r,
+              py = e.y + Math.sin(a) * r - (e.kind === "death" ? p * 15 : 0);
+            if (e.kind === "ice") {
+              poly(
+                [
+                  [px, py - 5],
+                  [px + 3, py],
+                  [px, py + 5],
+                  [px - 3, py],
+                ],
+                color,
+                null,
+              );
+            } else ellipse(px, py, Math.max(1, (1 - p) * 4), Math.max(1, (1 - p) * 4), color);
+          }
+          ctx.restore();
+        }
+        function draw() {
+          if (!scenery) {
+            scenery = document.createElement("canvas");
+            scenery.width = W;
+            scenery.height = H;
+            background();
+            scenery.getContext("2d").drawImage(C, 0, 0);
+          }
+          ctx.clearRect(0, 0, W, H);
+          ctx.drawImage(scenery, 0, 0);
+          auraRings();
+          const actors = [
+            ...towers.map((t) => ({
+              y: t.y,
+              draw: () => {
+                tower(t);
+                towerDetails(t);
+                heroOverlay(t);
+                if (t.recoil > 0) {
+                  const a = t.aim || 0;
+                  bloom(t.x + Math.cos(a) * 23, t.y - 42 + Math.sin(a) * 23, 16, "#ffecab99");
+                }
+              },
+            })),
+            ...enemies.map((e) => ({
+              y: e.y,
+              draw: () => {
+                ctx.save();
+                const stride = reduced ? 0 : Math.sin(e.d * 0.17) * 3;
+                ctx.translate(0, stride);
+                if (e.kind !== "slime" && e.kind !== "dragon") {
+                  ellipse(e.x - 6, e.y + e.r, 4, 3 + Math.abs(stride), "#534c3d");
+                  ellipse(e.x + 6, e.y + e.r, 4, 6 - Math.abs(stride), "#534c3d");
+                }
+                creature(e);
+                creatureDetails(e);
+                if (e.hit > 0) {
+                  ctx.globalAlpha = e.hit * 3;
+                  ellipse(e.x, e.y, e.r + 3, e.r + 3, "#fff6d6");
+                  ctx.globalAlpha = 1;
+                }
+                if (e.slow > 0) {
+                  ellipse(e.x, e.y + e.r, e.r + 7, 5, "#a0eaff88");
+                  for (let i = 0; i < 3; i++) {
+                    let x = e.x + (i - 1) * 12,
+                      y = e.y + 8;
+                    poly(
+                      [
+                        [x, y - 10],
+                        [x + 4, y],
+                        [x, y + 4],
+                        [x - 4, y],
+                      ],
+                      "#b9f3ff99",
+                      "#e4ffff",
+                      1,
+                    );
+                  }
+                  ctx.strokeStyle = "#a7efffcc";
+                  ctx.lineWidth = 2;
+                  ctx.beginPath();
+                  ctx.arc(e.x, e.y, e.r + 4, -2.8, -0.3);
+                  ctx.stroke();
+                }
+                ctx.restore();
+              },
+            })),
+          ];
+          actors.sort((a, b) => a.y - b.y);
+          for (const a of actors) a.draw();
+          for (const s of shots) projectile(s);
+          for (const e of effects) effect(e);
+          drawCutin();
+        }
+        C.addEventListener("click", (ev) => {
+          const r = C.getBoundingClientRect(),
+            x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
+            y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
+          const old = towers.find((t) => Math.hypot(t.x - x, t.y - y) < 38);
+          if (old) {
+            selectedTower = old;
+            msg(towerLabel(old) + "：強化・売却・武将配属ができます。");
+            updateUI();
+            return;
+          }
+          if (selectedTower) {
+            // 塔を選択中に草地をタップしたときは、誤建設を防ぐため選択解除だけ行う
+            selectedTower = null;
+            msg("塔の選択を解除した。もう一度草地をタップすると建設します。");
+            updateUI();
+            return;
+          }
+          const p = types[selectedType];
+          if (gold < p.cost) {
+            msg("資金が足りません。");
+          } else if (
+            x < 38 ||
+            x > 825 ||
+            y < 45 ||
+            y > 555 ||
+            roadDistance(x, y, upper) < 58 ||
+            roadDistance(x, y, lower) < 58 ||
+            towers.some((t) => Math.hypot(t.x - x, t.y - y) < 65)
+          ) {
+            msg("そこには建設できません。草地の広い場所を選んでね。");
+          } else {
+            gold -= p.cost;
+            towers.push({ id: ++towerSeq, x, y, type: selectedType, level: 1, cd: 0, spent: p.cost });
+            msg(p.icon + " 塔を建設した！");
+          }
+          updateUI();
+        });
+        document.querySelectorAll("[data-t]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              selectedType = b.dataset.t;
+              selectedTower = null;
+              msg(types[selectedType].icon + " を選択。草地をタップして建設しよう。");
+              updateUI();
+            }),
+        );
+        $("start").onclick = () => {
+          if (playing || over) return;
+          wave++;
+          spawned = 0;
+          spawnTotal = 8 + wave * 3;
+          spawnClock = 0.5;
+          playing = true;
+          paused = false;
+          msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
+          updateUI();
+        };
+        $("pause").onclick = () => {
+          paused = !paused;
+          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+          updateUI();
+        };
+        $("speed").onclick = () => {
+          speed = speed === 1 ? 2 : 1;
+          $("speed").textContent = "⏩ x" + speed;
+        };
+        $("upgrade").onclick = () => {
+          if (!selectedTower || selectedTower.level >= 5) return;
+          const price = Math.round(types[selectedTower.type].cost * (0.7 + selectedTower.level * 0.55));
+          if (gold < price) return;
+          gold -= price;
+          selectedTower.spent += price;
+          selectedTower.level++;
+          msg("塔をレベル" + selectedTower.level + "に強化！");
+          updateUI();
+        };
+        $("sell").onclick = () => {
+          if (!selectedTower) return;
+          gold += Math.floor(selectedTower.spent * 0.7);
+          const h = heroOn(selectedTower);
+          if (h) {
+            endSkill(h);
+            h.tower = null;
+          }
+          towers = towers.filter((t) => t !== selectedTower);
+          selectedTower = null;
+          msg("塔を売却した。" + (h ? HERO_CONFIG[h.id].name + " は未配属に戻りました。" : ""));
+          updateUI();
+        };
+        $("reset").onclick = () => {
+          if (!confirm("最初からやり直しますか？")) return;
+          gold = 500;
+          hp = 20;
+          wave = 0;
+          selectedTower = null;
+          towers = [];
+          enemies = [];
+          shots = [];
+          effects.length = 0;
+          towerSeq = 0;
+          resetHeroes();
+          cutin = null;
+          closeSheet();
+          playing = false;
+          paused = false;
+          over = false;
+          $("pause").textContent = "⏸ 停止";
+          msg("新しいゲームを開始。塔を建てよう！");
+          updateUI();
+        };
+        // ===== 塔パネル・武将配属画面 =====
+        const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
+        const esc = (s) =>
+          String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+        function avatarHtml(id, big) {
+          const c = HERO_CONFIG[id],
+            src = heroImageSrc(id, big ? "portrait" : "icon", big ? "icon" : "portrait");
+          return src
+            ? '<span class="avatar' +
+                (big ? " big" : "") +
+                '" style="background-image:url(' +
+                src +
+                ')"></span>'
+            : '<span class="avatar' +
+                (big ? " big" : "") +
+                '" style="background:' +
+                c.color +
+                '">' +
+                c.short +
+                "</span>";
+        }
+        function setHtml(el, html) {
+          if (el.dataset.html !== html) {
+            el.innerHTML = html;
+            el.dataset.html = html;
+          }
+        }
+        function renderTowerPanel() {
+          const t = selectedTower,
+            panel = $("towerPanel");
+          if (!t || !towers.includes(t)) {
+            panel.hidden = true;
+            return;
+          }
+          panel.hidden = false;
+          const p = types[t.type],
+            st = towerStats(t),
+            h = heroOn(t);
+          $("tpTitle").textContent = towerLabel(t);
+          const base = p.damage * (1 + 0.55 * (t.level - 1));
+          const mark = (v, b) => (Math.abs(v - b) > 0.01 ? ' class="buff"' : "");
+          setHtml(
+            $("tpStats"),
+            "<span>攻撃 <b" +
+              mark(st.damage, base) +
+              ">" +
+              Math.round(st.damage) +
+              "</b></span>" +
+              "<span>射程 <b" +
+              mark(st.range, p.range) +
+              ">" +
+              Math.round(st.range) +
+              "</b></span>" +
+              "<span>間隔 <b" +
+              mark(st.rate, p.rate) +
+              ">" +
+              fmt(st.rate) +
+              "秒</b></span>" +
+              (t.type === "cannon"
+                ? "<span>爆発 <b" +
+                  mark(st.splash, CANNON_SPLASH) +
+                  ">" +
+                  Math.round(st.splash) +
+                  "</b></span>"
+                : "") +
+              (st.aura > 0 ? '<span class="buff">軍師の支援 +' + Math.round(st.aura * 100) + "%</span>" : ""),
+          );
+          setHtml(
+            $("tpHero"),
+            h
+              ? avatarHtml(h.id) +
+                  "<p><b>" +
+                  HERO_CONFIG[h.id].name +
+                  "</b> 配属中<br><small>" +
+                  HERO_CONFIG[h.id].passiveText +
+                  "</small></p>"
+              : "<p><small>武将なし（「武将配属」から配属できます）</small></p>",
+          );
+          const maxed = t.level >= 5;
+          $("upgrade").textContent = maxed ? "⬆ 最大Lv" : "⬆ 強化 " + upgradePrice(t) + "G";
+          $("sell").textContent = "🪙 売却 " + Math.floor(t.spent * 0.7) + "G";
+          $("assign").textContent = h ? "👤 武将変更" : "👤 武将配属";
+          const btn = $("skill");
+          btn.hidden = !h;
+          if (!h) return;
+          const s = HERO_CONFIG[h.id].skill;
+          let label, ratio, state;
+          if (h.active > 0) {
+            label = "✨ " + s.name + " 発動中 残り" + fmt(h.active) + "秒";
+            ratio = h.active / s.duration;
+            state = "running";
+          } else if (h.cd > 0) {
+            label =
+              "⌛ " +
+              s.name +
+              " 再使用まで" +
+              Math.ceil(h.cd) +
+              "秒" +
+              (playing && !paused ? "" : "（戦闘中に進行）");
+            ratio = 1 - h.cd / s.cooldown;
+            state = "";
+          } else {
+            label =
+              "⚡ 必殺技「" +
+              s.name +
+              "」" +
+              (playing && !over ? (paused ? "（停止中）" : "") : "（ウェーブ中に使用可）");
+            ratio = 1;
+            state = canUseSkill(h) ? "ready" : "";
+          }
+          $("skillLabel").textContent = label;
+          $("skillBar").style.width = Math.round(ratio * 100) + "%";
+          btn.className = "skill " + state;
+          btn.disabled = !canUseSkill(h);
+          btn.setAttribute("aria-label", label + "。" + HERO_CONFIG[h.id].skillText);
+        }
+        let sheetTower = null;
+        function renderSheet() {
+          const t = sheetTower && towers.includes(sheetTower) ? sheetTower : null;
+          $("sheetTitle").textContent = t ? "武将配属：" + towerLabel(t) : "武将一覧";
+          $("sheetHint").textContent = t
+            ? "配属する武将を選んでください。1基に1人、同じ武将は1か所だけです。"
+            : "配属先の確認と解除ができます。配属は塔をタップして「武将配属」から。";
+          const ids = heroSave.owned.slice();
+          if (heroSave.lastHero) ids.sort((a, b) => (b === heroSave.lastHero) - (a === heroSave.lastHero));
+          $("heroList").innerHTML = ids
+            .map((id) => {
+              const h = heroState[id],
+                c = HERO_CONFIG[id];
+              const where = h.tower ? "配属先：" + esc(towerLabel(h.tower)) : "未配属";
+              const timer =
+                h.active > 0
+                  ? "（必殺技 発動中）"
+                  : h.cd > 0
+                    ? "（必殺技 再使用まで" + Math.ceil(h.cd) + "秒）"
+                    : "";
+              let actions = "";
+              if (t && h.tower === t) actions += "<button disabled>この塔に配属中</button>";
+              else if (t)
+                actions +=
+                  '<button data-assign="' +
+                  id +
+                  '">' +
+                  (h.tower ? "この塔へ移動" : "この塔に配属") +
+                  "</button>";
+              if (h.tower) actions += '<button data-unassign="' + id + '">解除</button>';
+              return (
+                '<div class="hero-card">' +
+                avatarHtml(id, true) +
+                "<div><h3>" +
+                c.name +
+                "</h3>" +
+                "<p>常時：" +
+                c.passiveText +
+                "</p><p>必殺技「" +
+                c.skill.name +
+                "」：" +
+                c.skillText +
+                "（再使用 " +
+                c.skill.cooldown +
+                "秒）</p>" +
+                '<p class="where">' +
+                where +
+                timer +
+                "</p>" +
+                '<div class="card-actions">' +
+                actions +
+                "</div></div></div>"
+              );
+            })
+            .join("");
+        }
+        function openSheet(t) {
+          sheetTower = t;
+          renderSheet();
+          $("heroSheet").hidden = false;
+          $("sheetClose").focus();
+        }
+        function closeSheet() {
+          sheetTower = null;
+          $("heroSheet").hidden = true;
+        }
+        $("heroList").addEventListener("click", (ev) => {
+          const b = ev.target.closest("button");
+          if (!b) return;
+          if (b.dataset.assign && sheetTower) {
+            assignHero(b.dataset.assign, sheetTower);
+            closeSheet();
+          } else if (b.dataset.unassign) {
+            unassignHero(b.dataset.unassign);
+            renderSheet();
+          }
+          updateUI();
+        });
+        $("heroSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("heroSheet")) closeSheet();
+        });
+        $("sheetClose").onclick = closeSheet;
+        $("assign").onclick = () => selectedTower && openSheet(selectedTower);
+        $("roster").onclick = () => openSheet(null);
+        $("tpClose").onclick = () => {
+          selectedTower = null;
+          updateUI();
+        };
+        $("skill").onclick = () => {
+          const h = selectedTower && heroOn(selectedTower);
+          if (!h) return;
+          if (!canUseSkill(h)) {
+            msg(playing ? "必殺技はまだ使えません。" : "必殺技はウェーブ中に使えます。");
+            return;
+          }
+          useSkill(h);
+          updateUI();
+        };
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape" && !$("heroSheet").hidden) closeSheet();
+        });
+        document.addEventListener("visibilitychange", () => {
+          last = 0;
+        });
+        function frame(now) {
+          const dt = last ? (now - last) / 1000 : 0;
+          last = now;
+          tick(dt);
+          animateVisuals(dt);
+          draw();
+          requestAnimationFrame(frame);
+        }
+        // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
+        if (/[?&]debug\b/.test(location.search)) {
+          window.WD_DEBUG = {
+            state: () => ({
+              gold,
+              hp,
+              wave,
+              playing,
+              paused,
+              over,
+              speed,
+              towers,
+              enemies,
+              heroState,
+              selectedTower,
+            }),
+            towerStats,
+            setGold: (g) => {
+              gold = g;
+              updateUI();
+            },
+            step: (sec) => {
+              for (let i = 0; i < Math.round(sec / 0.05); i++) {
+                tick(0.05);
+                animateVisuals(0.05);
+              }
+            },
+            config: { HERO_CONFIG, HERO_RULES },
+          };
+        }
+        updateUI();
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
