@@ -350,6 +350,18 @@
         object-fit: contain;
         transform: scaleX(-1);
       }
+      .panel-actions.four {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .panel-actions.four button {
+        padding: 6px 2px;
+        line-height: 1.2;
+      }
+      .panel-actions small {
+        display: block;
+        font-size: 14px;
+        color: #ffe3a0;
+      }
       .panel-actions.two {
         grid-template-columns: repeat(2, 1fr);
       }
@@ -500,6 +512,75 @@
         padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
         font-size: 15px;
       }
+      .tabs {
+        display: flex;
+        gap: 6px;
+        margin: 8px 0 2px;
+      }
+      .tabs button {
+        flex: 1;
+        min-height: 40px;
+        font-size: 15px;
+      }
+      .s-card {
+        padding: 10px 0;
+        border-top: 1px solid #719b8f55;
+        line-height: 1.45;
+      }
+      .s-card h3 {
+        margin: 0 0 2px;
+        font-size: 16px;
+      }
+      .s-card h3 small {
+        font-weight: 400;
+      }
+      .s-card.named h3 {
+        color: #ffd77d;
+      }
+      .s-card.named {
+        background: linear-gradient(90deg, #e1bc7722, transparent 70%);
+      }
+      .s-card p {
+        margin: 2px 0;
+      }
+      .xpbar {
+        height: 6px;
+        background: #0b2329;
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 3px 0;
+      }
+      .xpbar i {
+        display: block;
+        height: 100%;
+        background: #e4b861;
+      }
+      .skill-tag {
+        display: inline-block;
+        padding: 1px 7px;
+        margin: 2px 4px 2px 0;
+        border-radius: 8px;
+        background: #2d5452;
+        border: 1px solid #91ac92;
+        font-size: 13px;
+      }
+      .skill-tag.unique {
+        border-color: #ffd77d;
+        color: #ffe3a0;
+      }
+      .s-card .card-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .s-card .card-actions button {
+        font-size: 15px;
+        padding: 8px 12px;
+        flex: 1;
+      }
+      .injured {
+        color: #ffb3a7;
+      }
       .hero-card {
         display: flex;
         gap: 12px;
@@ -584,9 +665,9 @@
         <div id="sqHeroLine" class="hero-line"></div>
         <div id="sqMembers" class="members"></div>
         <div id="soldierInfo" class="soldier-info"></div>
-        <div class="panel-actions">
-          <button id="retreat">↩ 撤退</button><button id="sqHero">👤 武将</button
-          ><button id="sqOrganize">📋 編成</button>
+        <div class="panel-actions four">
+          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
+          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
         </div>
         <button id="sqSkill" class="skill" hidden>
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
@@ -595,10 +676,13 @@
       <div class="tools">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
         ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
-        ><button id="roster">👥 武将</button><button id="reset">↻ 最初から</button>
+        ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
+        ><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v12（敵兵の攻城・戦国の敵兵・武将30人）</small>
+      <small
+        >GitHub Pages / Safari対応・ペイント調・個別素材版 v13（兵士の育成・命名・スキル・英霊名鑑）</small
+      >
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -608,6 +692,20 @@
         </div>
         <p id="squadHint" style="margin: 6px 0"></p>
         <div id="squadList"></div>
+      </div>
+    </div>
+    <div id="soldierSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="soldierTitle">
+        <div class="panel-head">
+          <strong id="soldierTitle">兵士名簿</strong
+          ><button id="soldierClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <div class="tabs" role="tablist">
+          <button id="tabLive" role="tab">在籍の兵士</button
+          ><button id="tabFallen" role="tab">英霊名鑑</button>
+        </div>
+        <p id="soldierHint" class="muted" style="margin: 6px 0"></p>
+        <div id="soldierList"></div>
       </div>
     </div>
     <div id="gachaSheet" class="sheet-back" hidden>
@@ -662,6 +760,7 @@
           maxAttackSpeedMul: 2.5, // 攻撃速度アップの合計上限（倍）
           auraIncludesSelf: false, // 支援を配属先の塔自身にも掛けるか
           squadVolleyRange: 110, // 部隊に配属した武将の範囲攻撃の半径（兵種の射程がこれより長ければそちら）
+          injuryWaves: 3, // 戦闘不能になった武将が出陣できないウェーブ数（死亡はしない）
         };
         const GACHA = {
           rates: { SSR: 0.06, SR: 0.3, R: 0.64 }, // 排出率（合計1）
@@ -1046,10 +1145,80 @@
           defenseScale: 30, // 被ダメージ = 攻撃 × scale / (scale + 防御)
           xpPerHit: 1, // 攻撃1回
           xpPerKill: 6, // 撃破（＋敵の報酬の半分）
-          xpPerWave: 8, // 出撃してウェーブを生き延びた
-          xpToLevel: (lv) => 15 + lv * 15, // 次のレベルまでに必要な経験値
-          maxLevel: 10,
+          xpPerWave: 20, // 出撃してウェーブを生き延びた（上限の対象外）
+          xpWaveCap: 70, // 1人が1ウェーブの戦闘で得られる経験値の上限（1回の戦闘で急成長しない）
+          xpToLevel: (lv) => 15 + lv * 15 + Math.max(0, lv - 10) * 10, // 次のレベルまでに必要な経験値
+          maxLevel: 30,
+          statTaper: 10, // このレベルを超えた分の能力の伸びは半分（強くなりすぎない）
+          skillLevels: [5, 15], // スキルを習得するレベル（兵種に合うものからランダム）
+          uniqueLevel: 30, // 固有スキルを習得できる可能性があるレベル
+          uniqueChance: 0.3, // 固有スキルの習得確率
+          maxSkills: 3,
+          nameLevel: 10, // 名前を付けられるレベル
+          nameMax: 10, // 名前の最大文字数
+          eliteLevel: 20, // 精鋭兵に昇格するレベル
+          elite: { atk: 0.05, def: 0.05 }, // 精鋭兵の能力ボーナス
+          instinctHp: 0.3, // 生存本能：HPがこの割合を下回ると撤退を試みる
+          instinctChance: 0.6, // 生存本能：撤退の成功率（1ウェーブに1回だけ試す）
+          healRate: 0.6, // 治療費 = 雇用費 × この割合 × 減ったHPの割合（1人あたり。ウェーブの合間だけ）
+          fallenMax: 100, // 英霊名鑑に残す最大人数
           lastSurvivor: { atk: 0.08, def: 0.08 }, // 「最後の生存者」の士気ボーナス
+        };
+        // 階級（レベルで決まる）。称号（TITLES）は戦歴で決まる別のもの
+        const RANKS = [
+          { level: 1, name: "新兵" },
+          { level: 10, name: "古参兵" },
+          { level: 20, name: "精鋭兵" },
+        ];
+        // 兵士のスキル。types … 習得できる兵種、unique … Lv30 の固有スキル、future … 将来の攻城戦用（まだ習得しない）
+        //   atk / guard（被ダメージ軽減）/ rangedGuard（遠距離の被ダメージ軽減）/ combo（追加攻撃の確率）
+        //   vsBoss（大将への攻撃）/ haste（攻撃間隔の短縮）/ range（射程）/ instinct / unyielding / block
+        const ALL_UNITS = ["ashigaru", "spearman", "archer"];
+        const SOLDIER_SKILLS = {
+          spearMaster: { name: "槍の達人", types: ["ashigaru", "spearman"], atk: 0.12, text: "攻撃力 +12%" },
+          ironWall: {
+            name: "鉄壁",
+            types: ["ashigaru", "spearman"],
+            guard: 0.1,
+            text: "受けるダメージ -10%",
+          },
+          combo: { name: "連続攻撃", types: ALL_UNITS, combo: 0.15, text: "15%の確率で追加攻撃" },
+          dodgeArrow: {
+            name: "弓回避",
+            types: ALL_UNITS,
+            rangedGuard: 0.25,
+            text: "遠距離攻撃のダメージ -25%",
+          },
+          instinct: {
+            name: "生存本能",
+            types: ALL_UNITS,
+            instinct: true,
+            text: "HPが3割を切ると撤退を試みる（1ウェーブ1回・成功率60%）",
+          },
+          generalHunter: { name: "敵将狙い", types: ALL_UNITS, vsBoss: 0.3, text: "大将への攻撃力 +30%" },
+          rapidFire: { name: "速射", types: ["archer"], haste: 0.1, text: "攻撃間隔 -10%" },
+          longShot: { name: "遠矢", types: ["archer"], range: 0.12, text: "射程 +12%" },
+          unyielding: {
+            name: "不屈",
+            unique: true,
+            types: ["ashigaru"],
+            unyielding: true,
+            text: "倒れるはずの攻撃を1ウェーブに1回だけHP1で耐える",
+          },
+          spearWall: {
+            name: "槍衾",
+            unique: true,
+            types: ["spearman"],
+            block: 1,
+            text: "部隊が足止めできる敵 +1",
+          },
+          sureShot: { name: "百発百中", unique: true, types: ["archer"], atk: 0.2, text: "攻撃力 +20%" },
+          siegeMaster: {
+            name: "城攻め名人",
+            future: true,
+            types: ALL_UNITS,
+            text: "攻城戦で城門への攻撃力アップ（攻城戦の実装後に習得可能）",
+          },
         };
         // grow … レベルが1上がるごとの上昇量（最大HPは上がるが、現在HPは回復しない）
         const SOLDIER_TYPES = {
@@ -1261,9 +1430,15 @@
         function newHeroState(id) {
           return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0 };
         }
-        // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将」だけ。戦闘は保存しない。
+        // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将・負傷の残りウェーブ」だけ。戦闘は保存しない。
         function loadWarlordSave() {
-          const fresh = () => ({ owned: {}, tickets: GACHA.startTickets, history: [], lastHero: null });
+          const fresh = () => ({
+            owned: {},
+            tickets: GACHA.startTickets,
+            history: [],
+            lastHero: null,
+            injured: {},
+          });
           let raw = null;
           try {
             raw = localStorage.getItem(SAVE_KEY);
@@ -1284,11 +1459,23 @@
             const history = Array.isArray(data.history)
               ? data.history.filter((h) => h && WARLORDS[h.id]).slice(0, GACHA.historySize)
               : [];
-            return { owned, tickets, history, lastHero: WARLORDS[data.lastHero] ? data.lastHero : null };
+            // 負傷：{ 武将ID: 残りウェーブ数 }（以前の保存データには無いので空として扱う）
+            const injured = {};
+            if (data.injured && typeof data.injured === "object")
+              for (const [id, n] of Object.entries(data.injured))
+                if (owned[id] && Number.isFinite(n) && n >= 1)
+                  injured[id] = { left: Math.min(HERO_RULES.injuryWaves, Math.floor(n)), fresh: false };
+            return {
+              owned,
+              tickets,
+              history,
+              lastHero: WARLORDS[data.lastHero] ? data.lastHero : null,
+              injured,
+            };
           } catch (err) {
             // 壊れた保存データ：所持はなしで開始（初回配布の券は二重に配らない）
             console.warn("武将の保存データを読み込めないため初期化します", err);
-            return { owned: {}, tickets: 0, history: [], lastHero: null, broken: true };
+            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, broken: true };
           }
         }
         const heroSave = loadWarlordSave();
@@ -1303,6 +1490,7 @@
                 tickets: heroSave.tickets,
                 history: heroSave.history,
                 lastHero: heroSave.lastHero,
+                injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
               }),
             );
             saveOk = true;
@@ -1330,6 +1518,30 @@
           return null;
         }
         const postLabel = (h) => (h.tower ? towerLabel(h.tower) : h.squad ? squadName(h.squad) : "");
+        // ===== 武将の負傷 =====
+        // 配属先の塔が破壊される・部隊が全滅すると、武将は死なずに負傷する。
+        // 負傷したウェーブの後の injuryWaves ウェーブは出陣できず、その次のウェーブから復帰する。
+        // 残り回数はウェーブをクリアしたときだけ減る（負けた・やり直したウェーブでは減らない）。
+        const injuryOf = (id) => heroSave.injured[id] || null;
+        function injureHero(h) {
+          endSkill(h);
+          h.tower = h.squad = null;
+          heroSave.injured[h.id] = { left: HERO_RULES.injuryWaves, fresh: true };
+          persistHeroes();
+        }
+        function healInjuries() {
+          const back = [];
+          for (const [id, v] of Object.entries(heroSave.injured)) {
+            if (v.fresh)
+              v.fresh = false; // 負傷したウェーブ自体は数えない
+            else if (--v.left <= 0) {
+              delete heroSave.injured[id];
+              back.push(WARLORDS[id].name);
+            }
+          }
+          persistHeroes();
+          return back;
+        }
 
         // ===== 武将ガチャ（無料・ガチャ券のみ） =====
         function rollWarlord(rng) {
@@ -1449,6 +1661,8 @@
             isSquad = squads.includes(target);
           if (!h || (!isTower && !isSquad)) return;
           if (isTower && target.destroyed) return msg("破壊された塔には配属できません。");
+          const inj = injuryOf(id);
+          if (inj) return msg(WARLORDS[id].name + " は負傷中です（あと" + inj.left + "ウェーブで復帰）。");
           if (h.tower === target || h.squad === target) return;
           const prev = isTower ? heroOn(target) : heroOnSquad(target);
           if (prev) {
@@ -1475,7 +1689,7 @@
           h.tower = h.squad = null;
           msg(WARLORDS[id].name + " の配属を解除した。");
         }
-        // 部隊が全滅・解散したとき：武将は死亡せず未配属に戻る（再使用待ちは残る）
+        // 部隊が解散したとき：武将は未配属に戻る（再使用待ちは残る）
         function releaseHeroFromSquad(q) {
           const h = heroOnSquad(q);
           if (!h) return null;
@@ -1617,32 +1831,56 @@
         const enabledUnitTypes = () => Object.keys(SOLDIER_TYPES).filter((k) => SOLDIER_TYPES[k].enabled);
         const soldierById = (id) => soldiers.find((s) => s.id === id) || null;
         const squadById = (id) => squads.find((q) => q.id === id) || null;
-        const members = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
+        // members … 戦場で戦っている兵士（生存本能で離脱した兵士は除く）、roster … 所属している生存兵すべて
+        const members = (q) => soldiers.filter((s) => s.alive && !s.out && s.squadId === q.id);
+        const roster = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
         const onField = (q) => q.state === "deployed" || q.state === "retreating";
         const fieldSquads = () => squads.filter(onField);
         const squadName = (q) => SOLDIER_TYPES[q.type].squadName + " #" + q.id;
-        const soldierName = (s) => SOLDIER_TYPES[s.type].name + " #" + s.id;
+        // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
+        const soldierName = (s) => (s.name ? "🎖" + s.name : SOLDIER_TYPES[s.type].name + " #" + s.id);
         const unitGhosts = []; // 戦死・撤退の退場演出（見た目のみ）
         function rankTitle(s) {
           let t = TITLES[0];
           for (const x of TITLES) if (s.wavesSurvived >= x.waves && s.kills >= (x.kills || 0)) t = x;
           return t;
         }
-        const titleText = (s) => rankTitle(s).name + (s.lastSurvivor ? "・最後の生存者" : "");
-        // 能力は兵種の基本値＋レベル成長＋称号ボーナスから毎回計算する（積み上がらない）
+        function rankOf(s) {
+          let r = RANKS[0];
+          for (const x of RANKS) if (s.level >= x.level) r = x;
+          return r;
+        }
+        // 表示用：階級（レベル）・称号（戦歴）・最後の生存者
+        const titleText = (s) =>
+          rankOf(s).name +
+          (rankTitle(s).id !== "recruit" ? "・" + rankTitle(s).name : "") +
+          (s.lastSurvivor ? "・最後の生存者" : "");
+        // スキル効果の合計（同じスキルは1つしか持てない）
+        function skillSum(s, key) {
+          let n = 0;
+          for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
+          return n;
+        }
+        const hasSkill = (s, id) => (s.skills || []).includes(id);
+        // 能力は兵種の基本値＋レベル成長＋称号・階級・スキルのボーナスから毎回計算する（積み上がらない）
         function soldierStats(s) {
           const c = SOLDIER_TYPES[s.type],
-            lv = s.level - 1,
+            // statTaper を超えたレベルの伸びは半分
+            lv =
+              Math.min(s.level, SQUAD_RULES.statTaper) -
+              1 +
+              Math.max(0, s.level - SQUAD_RULES.statTaper) * 0.5,
             t = rankTitle(s),
-            ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 };
+            ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 },
+            el = s.level >= SQUAD_RULES.eliteLevel ? SQUAD_RULES.elite : { atk: 0, def: 0 };
           // 部隊に配属された武将の効果（武将は1か所だけなので重複しない）
           const hm = squadHeroMods(squadById(s.squadId)) || { atk: 1, def: 1, range: 1, speed: 1 };
           return {
             maxHp: Math.round(c.hp + c.grow.hp * lv),
-            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk) * hm.atk,
-            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def) * hm.def,
-            rate: c.rate / hm.speed,
-            range: c.range * hm.range,
+            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * hm.atk,
+            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def) * hm.def,
+            rate: (c.rate * (1 - skillSum(s, "haste"))) / hm.speed,
+            range: c.range * (1 + skillSum(s, "range")) * hm.range,
           };
         }
         function logHistory(s, text) {
@@ -1664,6 +1902,10 @@
             lastSurvivor: false,
             inWave: false,
             history: [],
+            skills: [],
+            name: null,
+            waveXp: 0, // このウェーブの戦闘で得た経験値（上限 xpWaveCap）
+            xpClaim: null, // ウェーブ終了の経験値を受け取ったウェーブ（二重取得の防止）
             cd: 0,
             atk: 0,
             hit: 0,
@@ -1688,8 +1930,14 @@
           squads.push(q);
           return q;
         }
-        function gainXp(s, n) {
-          if (!s.alive) return;
+        // 経験値。戦闘中に得る分は1ウェーブ xpWaveCap まで（ウェーブ終了の生存ボーナスは別枠）
+        function gainXp(s, n, waveBonus) {
+          if (!s.alive || n <= 0) return;
+          if (!waveBonus) {
+            n = Math.min(n, SQUAD_RULES.xpWaveCap - (s.waveXp || 0));
+            if (n <= 0) return;
+            s.waveXp = (s.waveXp || 0) + n;
+          }
           s.xp += n;
           while (s.level < SQUAD_RULES.maxLevel && s.xp >= SQUAD_RULES.xpToLevel(s.level)) {
             s.xp -= SQUAD_RULES.xpToLevel(s.level);
@@ -1697,8 +1945,62 @@
             // 最大HPだけ上がり、現在HPは回復しない（成長を回復手段にしない）
             logHistory(s, "Lv" + s.level + " に上がった");
             s.lvUp = 1;
+            onLevelUp(s);
           }
           if (s.level >= SQUAD_RULES.maxLevel) s.xp = 0;
+        }
+        let skillRng = Math.random; // スキル習得の乱数（テストで差し替え可能）
+        // 兵種に合うスキルから、まだ持っていないものをランダムに1つ習得する（最大 maxSkills）
+        function learnSkill(s, unique) {
+          if (s.skills.length >= SQUAD_RULES.maxSkills) return null;
+          const pool = Object.keys(SOLDIER_SKILLS).filter((id) => {
+            const k = SOLDIER_SKILLS[id];
+            return !k.future && !!k.unique === !!unique && k.types.includes(s.type) && !hasSkill(s, id);
+          });
+          if (!pool.length) return null;
+          const id = pool[Math.min(pool.length - 1, Math.floor(skillRng() * pool.length))];
+          s.skills.push(id);
+          logHistory(s, (unique ? "固有スキル" : "スキル") + "「" + SOLDIER_SKILLS[id].name + "」を習得");
+          return id;
+        }
+        function onLevelUp(s) {
+          let note = "";
+          if (SQUAD_RULES.skillLevels.includes(s.level)) {
+            const id = learnSkill(s, false);
+            if (id) note = "スキル「" + SOLDIER_SKILLS[id].name + "」を習得！";
+          }
+          if (s.level === SQUAD_RULES.uniqueLevel && skillRng() < SQUAD_RULES.uniqueChance) {
+            const id = learnSkill(s, true);
+            if (id) note = "固有スキル「" + SOLDIER_SKILLS[id].name + "」を習得！";
+          }
+          if (s.level === SQUAD_RULES.eliteLevel) {
+            logHistory(s, "精鋭兵に昇格");
+            note = "精鋭兵に昇格！" + note;
+          }
+          if (s.level === SQUAD_RULES.nameLevel && !s.name)
+            note = "名前を付けられるようになった（兵士名簿から）。" + note;
+          if (note) msg(soldierName(s) + " Lv" + s.level + "：" + note);
+        }
+        // 名前を付ける・変える（Lv nameLevel 以上の生存兵）。空にすると名前を外す
+        function cleanName(v) {
+          const t = Array.from(
+            String(v == null ? "" : v)
+              .replace(/[\u0000-\u001f\u007f<>]/g, "")
+              .trim(),
+          );
+          return t.slice(0, SQUAD_RULES.nameMax).join("");
+        }
+        function nameSoldier(id, value) {
+          const s = soldierById(id);
+          if (!s || !s.alive) return "戦死した兵士には名前を付けられません。";
+          if (s.level < SQUAD_RULES.nameLevel)
+            return "Lv" + SQUAD_RULES.nameLevel + "から名前を付けられます。";
+          const name = cleanName(value);
+          const before = s.name;
+          s.name = name || null;
+          if (s.name !== before) logHistory(s, s.name ? "「" + s.name + "」と名付けられた" : "名前を外した");
+          patchSavedSoldier(s, { name: s.name });
+          return null;
         }
         // 兵士が部隊としてウェーブに参加した時点で戦闘数を数える
         function joinWave(q) {
@@ -1788,8 +2090,12 @@
         }
 
         // ===== 兵士部隊：足止め =====
-        const blockCap = (q) =>
-          q.state === "deployed" ? Math.min(SOLDIER_TYPES[q.type].block, members(q).length) : 0;
+        const blockCap = (q) => {
+          if (q.state !== "deployed") return 0;
+          const list = members(q),
+            extra = list.some((s) => skillSum(s, "block") > 0) ? 1 : 0; // 槍衾（部隊に1回まで）
+          return Math.min(SOLDIER_TYPES[q.type].block + extra, list.length);
+        };
         const blockCount = (q) => enemies.reduce((n, e) => n + (e.blockedBy === q ? 1 : 0), 0);
         // 足止めの解除。撤退・全滅・リセットのときに必ず呼ぶ
         function releaseBlocks(q) {
@@ -1832,13 +2138,55 @@
         }
 
         // ===== 兵士部隊：被弾・戦死・撤退 =====
-        function damageSquad(q, raw) {
+        function damageSquad(q, raw, ranged) {
           const front = members(q)[0];
           if (!front) return;
-          const st = soldierStats(front);
-          front.hp -= (raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def);
+          const st = soldierStats(front),
+            guard = (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1);
+          front.hp -= ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard;
           front.hit = 0.2;
-          if (front.hp <= 0) killSoldier(front, q);
+          // 不屈：倒れるはずの攻撃を1ウェーブに1回だけ HP1 で耐える
+          if (front.hp <= 0 && hasSkill(front, "unyielding") && !front.unyieldUsed) {
+            front.unyieldUsed = true;
+            front.hp = 1;
+            logHistory(front, "不屈で踏みとどまった");
+          }
+          if (front.hp <= 0) return killSoldier(front, q);
+          // 生存本能：HPが減ると撤退を試みる（1ウェーブに1回。失敗すると戦い続ける）
+          if (
+            hasSkill(front, "instinct") &&
+            !front.instinctTried &&
+            front.hp < st.maxHp * SQUAD_RULES.instinctHp
+          ) {
+            front.instinctTried = true;
+            if (Math.random() < SQUAD_RULES.instinctChance) withdrawSoldier(front, q);
+          }
+        }
+        // 生存本能による個人の撤退：このウェーブの間は戦場を離れ（攻撃も被弾もしない）、次の戦闘から復帰する
+        function withdrawSoldier(s, q) {
+          s.out = true;
+          logHistory(s, "生存本能で戦場を離脱");
+          msg(soldierName(s) + " は生存本能で戦場を離脱した（次の戦闘から復帰）。");
+          const off = formationOffset(q, 0);
+          unitGhosts.push({
+            type: s.type,
+            x: q.x + off[0],
+            y: q.y + off[1],
+            age: 0,
+            duration: 0.8,
+            scale: SQUAD_SCALE,
+            retreat: true,
+          });
+          if (unitGhosts.length > 16) unitGhosts.shift();
+          if (!members(q).length) leaveField(q);
+        }
+        // 戦っている兵士がいなくなったが、離脱した生存兵が残っている部隊：全滅ではなく待機に戻る
+        function leaveField(q) {
+          releaseBlocks(q);
+          q.state = "reserve";
+          q.retreatLeft = 0;
+          q.locked = true;
+          if (selectedSquad === q) selectedSquad = null;
         }
         function killSoldier(s, q) {
           if (!s.alive) return;
@@ -1847,6 +2195,7 @@
           s.diedWave = wave;
           s.diedIn = squadName(q);
           logHistory(s, squadName(q) + " で戦死");
+          recordDeath(s); // 保存データからすぐ外す（再読み込みしても復活しない）
           q.fallen++;
           const off = formationOffset(q, 0);
           unitGhosts.push({
@@ -1864,19 +2213,29 @@
             logHistory(alive[0], squadName(q) + " でただ一人生き残った（最後の生存者）");
             msg(soldierName(alive[0]) + " が " + squadName(q) + " 最後の生存者となった。");
           }
-          if (!alive.length) wipeSquad(q);
+          if (!alive.length) {
+            if (roster(q).length) leaveField(q);
+            else wipeSquad(q);
+          }
         }
         function wipeSquad(q) {
           releaseBlocks(q);
           squads = squads.filter((v) => v !== q);
           if (selectedSquad === q) selectedSquad = null;
           if (placeSquadId === q.id) placeSquadId = null;
-          // 配属されていた武将は死亡せず未配属に戻る（必殺技の再使用待ちは武将側に残る）
-          const h = releaseHeroFromSquad(q);
+          // 配属されていた武将は戦死せず負傷する（しばらく出陣できない）
+          const h = heroOnSquad(q);
+          if (h) injureHero(h);
           msg(
             squadName(q) +
               " が全滅した…（戦死者は復活しません。新しい兵士は雇用してください）" +
-              (h ? " 武将 " + WARLORDS[h.id].name + " は無事に帰還し、未配属に戻りました。" : ""),
+              (h
+                ? " 武将 " +
+                  WARLORDS[h.id].name +
+                  " は負傷して退却（" +
+                  HERO_RULES.injuryWaves +
+                  "ウェーブ出陣不可）。"
+                : ""),
           );
         }
         function orderRetreat(q) {
@@ -1921,7 +2280,13 @@
               s.cd += st.rate;
               s.atk = 0.18;
               q.face = target.x < q.x ? -1 : 1;
-              target.hp -= st.atk;
+              // 敵将狙い：大将への攻撃アップ。連続攻撃：一定確率でもう1回
+              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1);
+              target.hp -= hitDmg;
+              if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) {
+                target.hp -= hitDmg;
+                burst(target.x + 6, target.y - 6, "#ffe3a0", "slash");
+              }
               target.hit = 0.18;
               target.lastHitBy = s.id; // 撃破した兵士の記録用（塔の攻撃で上書きされる）
               gainXp(s, SQUAD_RULES.xpPerHit);
@@ -1994,7 +2359,7 @@
               });
             }
             const scale = 1 + (wave - 1) * TOWER_HP.waveScale;
-            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05));
+            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged);
             else {
               damageTower(tower, a.tower.damage * scale);
               // 大将は塔の前で立ち止まって攻撃する（1回の進軍で最長 siegeMax 秒。永久には止まらない）
@@ -2012,17 +2377,24 @@
           for (const q of squads) joinWave(q);
         }
         // ウェーブ終了：生存者だけが成長する。戦死者は復活しない。HPは一部だけ回復
+        // 生存ボーナスはウェーブごとに1回だけ（xpClaim で二重取得を防ぐ）。終了後に兵士を保存する
         function squadsWaveEnd() {
+          const claim = runId + ":" + wave;
           for (const s of soldiers) {
             if (!s.alive) continue;
-            if (s.inWave) {
+            if (s.inWave && s.xpClaim !== claim) {
+              s.xpClaim = claim;
               const before = rankTitle(s);
               s.wavesSurvived++;
-              gainXp(s, SQUAD_RULES.xpPerWave);
+              gainXp(s, SQUAD_RULES.xpPerWave, true);
               const after = rankTitle(s);
               if (after !== before) logHistory(s, "称号「" + after.name + "」を得た");
-              s.inWave = false;
             }
+            s.inWave = false;
+            s.waveXp = 0;
+            s.out = false; // 生存本能で離脱した兵士は次の戦闘から復帰
+            s.instinctTried = false;
+            s.unyieldUsed = false;
             const max = soldierStats(s).maxHp;
             s.hp = Math.min(max, s.hp + max * SQUAD_RULES.waveEndHeal);
           }
@@ -2033,6 +2405,7 @@
               q.retreatLeft = 0;
             }
           }
+          saveRoster();
         }
 
         // ===== 兵士部隊：再編成（ウェーブ間のみ） =====
@@ -2046,12 +2419,12 @@
             if (!to) return "編入先の部隊が見つかりません。";
             if (to === from) return null;
             if (to.type !== s.type) return "同じ兵種の部隊にだけ編入できます。";
-            if (members(to).length >= SQUAD_RULES.squadSize) return squadName(to) + " は満員です。";
+            if (roster(to).length >= SQUAD_RULES.squadSize) return squadName(to) + " は満員です。";
           } else if (squads.length >= SQUAD_RULES.maxSquads) return "これ以上部隊を作れません。";
           if (!to) to = newSquad(s.type);
           s.squadId = to.id;
           logHistory(s, squadName(to) + " に編入");
-          if (from && !members(from).length) {
+          if (from && !roster(from).length) {
             releaseBlocks(from);
             releaseHeroFromSquad(from);
             squads = squads.filter((q) => q !== from);
@@ -2063,12 +2436,230 @@
           if (playing) return "ウェーブ中は補充できません。";
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
           const c = SOLDIER_TYPES[q.type];
-          if (members(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
+          if (roster(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
           if (gold < c.cost) return "資金が足りません（" + c.name + " " + c.cost + "G）。";
           gold -= c.cost;
           newSoldier(q.type, q.id);
           return null;
         }
+        // 治療：ウェーブの合間にゴールドで部隊の生存兵を全回復する（戦死者は対象外＝復活しない）
+        const healCost = (q) =>
+          Math.ceil(
+            roster(q).reduce(
+              (n, s) =>
+                n +
+                SOLDIER_TYPES[s.type].cost *
+                  SQUAD_RULES.healRate *
+                  Math.max(0, 1 - s.hp / soldierStats(s).maxHp),
+              0,
+            ),
+          );
+        function healSquad(q) {
+          if (playing) return "ウェーブ中は治療できません。";
+          if (!q || !squads.includes(q)) return "部隊が見つかりません。";
+          const c = healCost(q);
+          if (!c) return squadName(q) + " は全員元気です。";
+          if (gold < c) return "資金が足りません（治療 " + c + "G）。";
+          gold -= c;
+          for (const s of roster(q)) s.hp = soldierStats(s).maxHp;
+          return null;
+        }
+        // ===== 兵士の保存（個別の成長・名前・英霊名鑑） =====
+        // 兵士はゲームをまたいで残る。保存するのは「ウェーブをクリアした時点の生存兵」と英霊名鑑。
+        //   戦死はその場で保存データから外す（再読み込みしても復活しない）。
+        //   戦闘中に得た経験値は、そのウェーブをクリアしたときに保存される（負け・やり直しでは残らない）。
+        const SOLDIER_SAVE_KEY = "worldDefense.soldiers.v1";
+        const SAVED_FIELDS = [
+          "id",
+          "type",
+          "squadId",
+          "level",
+          "xp",
+          "skills",
+          "name",
+          "battles",
+          "kills",
+          "wavesSurvived",
+          "lastSurvivor",
+          "history",
+        ];
+        let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+        const intIn = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
+        function cleanSkills(list, type) {
+          if (!Array.isArray(list)) return [];
+          const out = [];
+          for (const id of list)
+            if (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id].types.includes(type) && !out.includes(id))
+              out.push(id);
+          return out.slice(0, SQUAD_RULES.maxSkills);
+        }
+        function cleanFallen(f) {
+          if (!f || typeof f !== "object" || !SOLDIER_TYPES[f.type]) return null;
+          const name = cleanName(f.name);
+          if (!name) return null;
+          return {
+            id: intIn(f.id, 0, 1e9, 0),
+            name,
+            type: f.type,
+            level: intIn(f.level, 1, SQUAD_RULES.maxLevel, 1),
+            skills: cleanSkills(f.skills, f.type),
+            battles: intIn(f.battles, 0, 1e6, 0),
+            kills: intIn(f.kills, 0, 1e6, 0),
+            wave: intIn(f.wave, 0, 999, 0),
+          };
+        }
+        function loadSoldierSave() {
+          const fresh = { seq: 0, squadSeq: 0, squads: [], soldiers: [], fallen: [] };
+          let raw = null;
+          try {
+            raw = localStorage.getItem(SOLDIER_SAVE_KEY);
+          } catch (err) {
+            return fresh;
+          }
+          if (!raw) return fresh;
+          try {
+            const d = JSON.parse(raw);
+            if (!d || typeof d !== "object") throw new Error("not an object");
+            const squadsIn = (Array.isArray(d.squads) ? d.squads : [])
+              .filter((q) => q && SOLDIER_TYPES[q.type] && SOLDIER_TYPES[q.type].enabled)
+              .map((q) => ({ id: intIn(q.id, 1, 1e9, 0), type: q.type }))
+              .filter((q, i, a) => q.id && a.findIndex((x) => x.id === q.id) === i)
+              .slice(0, SQUAD_RULES.maxSquads);
+            const ids = new Set(),
+              count = {},
+              list = [];
+            for (const v of Array.isArray(d.soldiers) ? d.soldiers : []) {
+              if (!v || typeof v !== "object") continue;
+              const q = squadsIn.find((x) => x.id === v.squadId);
+              const id = intIn(v.id, 1, 1e9, 0);
+              // 所属部隊が無い・兵種が違う・満員・ID重複の兵士は読み込まない
+              if (!q || q.type !== v.type || !id || ids.has(id)) continue;
+              if ((count[q.id] || 0) >= SQUAD_RULES.squadSize) continue;
+              ids.add(id);
+              count[q.id] = (count[q.id] || 0) + 1;
+              const level = intIn(v.level, 1, SQUAD_RULES.maxLevel, 1);
+              list.push({
+                id,
+                type: v.type,
+                squadId: q.id,
+                level,
+                xp: level >= SQUAD_RULES.maxLevel ? 0 : intIn(v.xp, 0, SQUAD_RULES.xpToLevel(level) - 1, 0),
+                skills: cleanSkills(v.skills, v.type),
+                name: level >= SQUAD_RULES.nameLevel ? cleanName(v.name) || null : null,
+                battles: intIn(v.battles, 0, 1e6, 0),
+                kills: intIn(v.kills, 0, 1e6, 0),
+                wavesSurvived: intIn(v.wavesSurvived, 0, 1e6, 0),
+                lastSurvivor: v.lastSurvivor === true,
+                history: (Array.isArray(v.history) ? v.history : [])
+                  .filter((h) => typeof h === "string")
+                  .map((h) => h.slice(0, 80))
+                  .slice(-10),
+              });
+            }
+            const fallen = (Array.isArray(d.fallen) ? d.fallen : [])
+              .map(cleanFallen)
+              .filter(Boolean)
+              .slice(0, SQUAD_RULES.fallenMax);
+            const maxId = Math.max(0, ...list.map((v) => v.id), ...fallen.map((f) => f.id));
+            return {
+              seq: Math.max(intIn(d.seq, 0, 1e9, 0), maxId),
+              squadSeq: Math.max(intIn(d.squadSeq, 0, 1e9, 0), ...squadsIn.map((q) => q.id), 0),
+              squads: squadsIn.filter((q) => count[q.id]),
+              soldiers: list,
+              fallen,
+            };
+          } catch (err) {
+            console.warn("兵士の保存データを読み込めないため初期化します", err);
+            return fresh;
+          }
+        }
+        const soldierSave = loadSoldierSave();
+        let soldierSaveOk = true;
+        function writeSoldierSave() {
+          try {
+            localStorage.setItem(
+              SOLDIER_SAVE_KEY,
+              JSON.stringify(Object.assign({ version: 1 }, soldierSave)),
+            );
+            soldierSaveOk = true;
+          } catch (err) {
+            soldierSaveOk = false; // 保存できない環境でも遊べるようにする
+          }
+          return soldierSaveOk;
+        }
+        const pickSaved = (s) => {
+          const o = {};
+          for (const k of SAVED_FIELDS) o[k] = Array.isArray(s[k]) ? s[k].slice() : s[k];
+          return o;
+        };
+        // ウェーブクリア時：部隊に所属する生存兵をすべて保存する
+        function saveRoster() {
+          const live = squads.filter((q) => roster(q).length);
+          soldierSave.squads = live.map((q) => ({ id: q.id, type: q.type }));
+          soldierSave.soldiers = soldiers
+            .filter((s) => s.alive && live.some((q) => q.id === s.squadId))
+            .map(pickSaved);
+          soldierSave.seq = Math.max(soldierSave.seq, soldierSeq);
+          soldierSave.squadSeq = Math.max(soldierSave.squadSeq, squadSeq);
+          writeSoldierSave();
+        }
+        // 保存済みの兵士だけを書き換える（名前など。戦闘中の経験値はここでは保存しない）
+        function patchSavedSoldier(s, fields) {
+          const v = soldierSave.soldiers.find((x) => x.id === s.id);
+          if (!v) return;
+          Object.assign(v, fields);
+          writeSoldierSave();
+        }
+        // 戦死：保存データから外し、名前付きの兵士は英霊名鑑に記録する
+        function recordDeath(s) {
+          soldierSave.soldiers = soldierSave.soldiers.filter((x) => x.id !== s.id);
+          if (s.name) {
+            soldierSave.fallen.unshift({
+              id: s.id,
+              name: s.name,
+              type: s.type,
+              level: s.level,
+              skills: s.skills.slice(),
+              battles: s.battles,
+              kills: s.kills,
+              wave: wave,
+            });
+            soldierSave.fallen.length = Math.min(soldierSave.fallen.length, SQUAD_RULES.fallenMax);
+          }
+          writeSoldierSave();
+        }
+        // 保存した兵士で部隊を作り直す（ゲーム開始・最初から）。全員待機中・HP満タンで始まる
+        function restoreRoster() {
+          for (const q of squads) releaseBlocks(q);
+          squads = [];
+          soldiers = [];
+          squadSeq = soldierSave.squadSeq;
+          soldierSeq = soldierSave.seq;
+          for (const sq of soldierSave.squads) {
+            const q = newSquad(sq.type);
+            q.id = sq.id;
+          }
+          squadSeq = Math.max(squadSeq, soldierSave.squadSeq);
+          for (const v of soldierSave.soldiers) {
+            const s = Object.assign(
+              {
+                alive: true,
+                hp: 0,
+                inWave: false,
+                cd: 0,
+                atk: 0,
+                hit: 0,
+                waveXp: 0,
+                xpClaim: null,
+              },
+              pickSaved(v),
+            );
+            s.hp = soldierStats(s).maxHp;
+            soldiers.push(s);
+          }
+          return soldiers.length;
+        }
+        restoreRoster();
         // ===== 防衛塔の耐久 =====
         const towerMaxHp = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
         function towerHp(t) {
@@ -2092,17 +2683,20 @@
           t.destroyed = true;
           t.cd = 0;
           const h = heroOn(t);
-          if (h) {
-            endSkill(h);
-            h.tower = null;
-          }
+          if (h) injureHero(h); // 武将は戦死せず負傷する
           for (const e of enemies) if (e.siege === t) e.siege = null;
           if (effects.length >= 78) effects.splice(0, 2);
           effects.push({ x: t.x, y: t.y, kind: "collapse", color: "#8a7a66", age: 0, duration: 1.4 });
           msg(
             towerLabel(t) +
               " が破壊された…" +
-              (h ? " 武将 " + WARLORDS[h.id].name + " は未配属に戻りました。" : ""),
+              (h
+                ? " 武将 " +
+                  WARLORDS[h.id].name +
+                  " は負傷して退却（" +
+                  HERO_RULES.injuryWaves +
+                  "ウェーブ出陣不可）。"
+                : ""),
           );
         }
         function fire(t, e) {
@@ -2224,6 +2818,8 @@
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (wave === 20) over = true;
+            const back = healInjuries();
+            if (back.length) $("msg").textContent += " 武将 " + back.join("・") + " が負傷から復帰した。";
             if (wave % GACHA.ticketWaveInterval === 0)
               grantTickets(GACHA.ticketsPerWaveClear, "ウェーブ" + wave + "クリア", true);
             const ruined = towers.filter((t) => t.destroyed);
@@ -3228,11 +3824,12 @@
         }
         function drawUnitGhost(g) {
           const p = g.age / g.duration;
-          unitFigure(g.type, g.x, g.y + UNIT_FOOT, {
+          // 戦死は倒れて消え、生存本能の離脱は城の方へ下がって消える
+          unitFigure(g.type, g.x + (g.retreat ? 36 * p : 0), g.y + UNIT_FOOT, {
             scale: g.scale,
             alpha: 1 - p,
-            tilt: reduced ? 0 : -1.2 * p,
-            dy: 4 * p,
+            tilt: reduced || g.retreat ? 0 : -1.2 * p,
+            dy: g.retreat ? 0 : 4 * p,
           });
         }
         // 兵士を選んでいるときは配置できない区間（入口・城の手前）を薄い赤で示す
@@ -3883,18 +4480,19 @@
           shots = [];
           effects.length = 0;
           towerSeq = 0;
-          // 兵士・部隊・経験値・戦歴をすべて初期化（武将の所持情報の保存には触れない）
-          for (const q of squads) releaseBlocks(q);
-          squads = [];
-          soldiers = [];
-          squadSeq = 0;
-          soldierSeq = 0;
+          // 兵士は保存データ（最後にクリアしたウェーブの時点の生存兵）から作り直す。
+          // このゲームで雇ったがウェーブをクリアしていない兵士・戦闘中の経験値は残らない。戦死者は復活しない
+          runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+          const kept = restoreRoster();
+          // 負傷中の武将：負けたウェーブは回復に数えない（残り回数はそのまま）
+          for (const v of Object.values(heroSave.injured)) v.fresh = false;
           unitGhosts.length = 0;
           selectedSquad = null;
           selectedSoldierId = null;
           selectedUnitType = null;
           placeSquadId = null;
           closeSquadSheet();
+          closeSoldierSheet();
           resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
           cutin = null;
           closeSheet();
@@ -3903,7 +4501,10 @@
           paused = false;
           over = false;
           $("pause").textContent = "⏸ 停止";
-          msg("新しいゲームを開始。塔を建てよう！");
+          msg(
+            "新しいゲームを開始。塔を建てよう！" +
+              (kept ? " 育てた兵士 " + kept + " 人が待機中（「編成」から配置）。" : ""),
+          );
           updateUI();
         };
         // ===== 兵士部隊：雇用ボタン・部隊パネル・編成画面 =====
@@ -3988,8 +4589,10 @@
                   '" data-soldier="' +
                   s.id +
                   '" aria-label="' +
-                  soldierName(s) +
-                  '"><span>Lv' +
+                  esc(soldierName(s)) +
+                  '"><span>' +
+                  (s.name ? "🎖" : "") +
+                  "Lv" +
                   s.level +
                   (s.lastSurvivor ? "★" : "") +
                   '</span><span class="bar hp"><i style="width:' +
@@ -4013,7 +4616,7 @@
             setHtml(
               $("soldierInfo"),
               "<b>" +
-                soldierName(s) +
+                esc(soldierName(s)) +
                 "</b> Lv" +
                 s.level +
                 (s.level < SQUAD_RULES.maxLevel
@@ -4035,14 +4638,20 @@
                 s.wavesSurvived +
                 "W・戦闘 " +
                 s.battles +
-                "<br><small>所属 " +
-                squadName(q) +
+                "<br><small>スキル " +
+                (s.skills.length ? s.skills.map((id) => SOLDIER_SKILLS[id].name).join("・") : "なし") +
                 (s.history.length ? "／" + esc(s.history[s.history.length - 1]) : "") +
                 "</small>",
             );
           }
           $("retreat").disabled = q.state !== "deployed";
-          $("retreat").textContent = playing ? "↩ 撤退（" + SQUAD_RULES.retreatTime + "秒）" : "↩ 待機へ";
+          $("retreat").textContent = playing ? "↩ 撤退" : "↩ 待機へ";
+          const hc = healCost(q);
+          setHtml(
+            $("sqHeal"),
+            "🩹 治療<small>" + (playing ? "戦闘後" : hc ? hc + "G" : "満タン") + "</small>",
+          );
+          $("sqHeal").disabled = playing || !hc || gold < hc;
           const hh = heroOnSquad(q);
           setHtml(
             $("sqHeroLine"),
@@ -4077,6 +4686,13 @@
           selectedSquad = null;
           updateUI();
         };
+        $("sqHeal").onclick = () => {
+          const q = selectedSquad,
+            c = q ? healCost(q) : 0,
+            err = healSquad(q);
+          msg(err || squadName(q) + " の兵士を治療した（" + c + "G）。");
+          updateUI();
+        };
         $("retreat").onclick = () => {
           if (selectedSquad) orderRetreat(selectedSquad);
           if (selectedSquad && selectedSquad.state === "reserve") selectedSquad = null;
@@ -4108,7 +4724,7 @@
           if (!squads.length)
             html += '<p class="muted">部隊がありません。兵種を選んで道をタップすると雇用できます。</p>';
           for (const q of squads) {
-            const list = members(q),
+            const list = roster(q),
               c = SOLDIER_TYPES[q.type];
             let acts = "";
             if (moving) {
@@ -4120,6 +4736,8 @@
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
               if (!playing && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-recruit="' + q.id + '">新兵補充 ' + c.cost + "G</button>";
+              if (!playing && healCost(q))
+                acts += '<button data-heal="' + q.id + '">🩹 治療 ' + healCost(q) + "G</button>";
             }
             html +=
               '<div class="squad-card"><h3>' +
@@ -4137,7 +4755,8 @@
                 .map(
                   (s) =>
                     '<div class="soldier-row"><span>' +
-                    soldierName(s) +
+                    esc(soldierName(s)) +
+                    (s.out ? "（離脱中）" : "") +
                     " Lv" +
                     s.level +
                     " " +
@@ -4170,7 +4789,7 @@
                 .map(
                   (s) =>
                     '<div class="soldier-row"><small>' +
-                    soldierName(s) +
+                    esc(soldierName(s)) +
                     " Lv" +
                     s.level +
                     " " +
@@ -4215,6 +4834,11 @@
           } else if (d.recruit) {
             err = recruitInto(squadById(+d.recruit));
             if (!err) msg("新兵を補充した。");
+          } else if (d.heal) {
+            const q = squadById(+d.heal),
+              c = q ? healCost(q) : 0;
+            err = healSquad(q);
+            if (!err) msg(squadName(q) + " の兵士を治療した（" + c + "G）。");
           } else if (d.retreat) orderRetreat(squadById(+d.retreat));
           else if (d.place) {
             placeSquadId = +d.place;
@@ -4226,6 +4850,164 @@
           }
           if (err) msg(err);
           if (!$("squadSheet").hidden) renderSquadSheet();
+          updateUI();
+        });
+        // ===== 兵士名簿（在籍の兵士・英霊名鑑） =====
+        let soldierTab = "live";
+        const skillTags = (ids) =>
+          ids.length
+            ? ids
+                .map(
+                  (id) =>
+                    '<span class="skill-tag' +
+                    (SOLDIER_SKILLS[id].unique ? " unique" : "") +
+                    '" title="' +
+                    esc(SOLDIER_SKILLS[id].text) +
+                    '">' +
+                    SOLDIER_SKILLS[id].name +
+                    "</span>",
+                )
+                .join("")
+            : '<span class="muted">なし（Lv' + SQUAD_RULES.skillLevels[0] + "で習得）</span>";
+        function soldierWhere(s) {
+          const q = squadById(s.squadId);
+          if (!q) return "所属なし";
+          return (
+            squadName(q) +
+            "（" +
+            (s.out ? "離脱中・次の戦闘から復帰" : q.state === "deployed" ? "配置中" : squadStateText(q)) +
+            "）"
+          );
+        }
+        function soldierCard(s) {
+          const max = s.level >= SQUAD_RULES.maxLevel,
+            need = SQUAD_RULES.xpToLevel(s.level),
+            st = soldierStats(s);
+          let act = "";
+          if (s.level >= SQUAD_RULES.nameLevel)
+            act =
+              '<div class="card-actions"><button data-name="' +
+              s.id +
+              '">' +
+              (s.name ? "✏️ 名前を変える" : "✏️ 名前を付ける") +
+              "</button></div>";
+          return (
+            '<div class="s-card' +
+            (s.name ? " named" : "") +
+            '"><h3>' +
+            esc(soldierName(s)) +
+            " <small>" +
+            SOLDIER_TYPES[s.type].name +
+            "・Lv" +
+            s.level +
+            " " +
+            titleText(s) +
+            "</small></h3>" +
+            '<div class="xpbar"><i style="width:' +
+            (max ? 100 : Math.round((s.xp / need) * 100)) +
+            '%"></i></div><small>' +
+            (max ? "最大レベル" : "経験 " + Math.floor(s.xp) + "/" + need) +
+            "・HP " +
+            Math.ceil(s.hp) +
+            "/" +
+            st.maxHp +
+            "・攻" +
+            fmt(st.atk) +
+            "・防" +
+            fmt(st.def) +
+            "</small><p>スキル " +
+            skillTags(s.skills) +
+            "</p><p><small>出陣 " +
+            s.battles +
+            "・討伐 " +
+            s.kills +
+            "・生存 " +
+            s.wavesSurvived +
+            "W・" +
+            esc(soldierWhere(s)) +
+            (s.level < SQUAD_RULES.nameLevel ? "・Lv" + SQUAD_RULES.nameLevel + "で命名可" : "") +
+            "</small></p>" +
+            act +
+            "</div>"
+          );
+        }
+        function renderSoldierSheet() {
+          $("tabLive").classList.toggle("active", soldierTab === "live");
+          $("tabFallen").classList.toggle("active", soldierTab === "fallen");
+          $("tabLive").setAttribute("aria-selected", soldierTab === "live");
+          $("tabFallen").setAttribute("aria-selected", soldierTab === "fallen");
+          let html = "";
+          if (soldierTab === "live") {
+            const list = soldiers
+              .filter((s) => s.alive && squadById(s.squadId))
+              .sort((a, b) => !!b.name - !!a.name || b.level - a.level || b.xp - a.xp);
+            $("soldierHint").textContent =
+              "在籍 " +
+              list.length +
+              "人。Lv" +
+              SQUAD_RULES.nameLevel +
+              "で命名、Lv" +
+              SQUAD_RULES.skillLevels.join("・Lv") +
+              "でスキル、Lv" +
+              SQUAD_RULES.eliteLevel +
+              "で精鋭兵。成長はウェーブクリア時に保存されます。";
+            html = list.length
+              ? list.map(soldierCard).join("")
+              : '<p class="muted">兵士がいません。兵種を選んで道をタップすると雇用できます。</p>';
+          } else {
+            const f = soldierSave.fallen;
+            $("soldierHint").textContent =
+              "名前を付けた兵士の戦死を記録します。英霊は復活しません。（" + f.length + "名）";
+            html = f.length
+              ? f
+                  .map(
+                    (v) =>
+                      '<div class="s-card named"><h3>🎖' +
+                      esc(v.name) +
+                      " <small>" +
+                      SOLDIER_TYPES[v.type].name +
+                      "・最終Lv" +
+                      v.level +
+                      "</small></h3><p>スキル " +
+                      skillTags(v.skills) +
+                      "</p><p><small>出陣 " +
+                      v.battles +
+                      "・討伐 " +
+                      v.kills +
+                      "・ウェーブ" +
+                      v.wave +
+                      "で戦死</small></p></div>",
+                  )
+                  .join("")
+              : '<p class="muted">まだ英霊はいません。</p>';
+          }
+          $("soldierList").innerHTML = html;
+        }
+        function openSoldierSheet(tab) {
+          soldierTab = tab || "live";
+          renderSoldierSheet();
+          $("soldierSheet").hidden = false;
+          $("soldierClose").focus();
+        }
+        const closeSoldierSheet = () => ($("soldierSheet").hidden = true);
+        $("soldiers").onclick = () => openSoldierSheet("live");
+        $("soldierClose").onclick = closeSoldierSheet;
+        $("tabLive").onclick = () => openSoldierSheet("live");
+        $("tabFallen").onclick = () => openSoldierSheet("fallen");
+        $("soldierSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("soldierSheet")) return closeSoldierSheet();
+          const b = ev.target.closest("[data-name]");
+          if (!b) return;
+          const s = soldierById(+b.dataset.name);
+          if (!s) return;
+          const v = prompt(
+            "名前（" + SQUAD_RULES.nameMax + "文字まで。空にすると名前を外します）",
+            s.name || "",
+          );
+          if (v === null) return;
+          const err = nameSoldier(s.id, v);
+          msg(err || (s.name ? soldierName(s) + " と名付けた。" : "名前を外した。"));
+          renderSoldierSheet();
           updateUI();
         });
         // ===== 塔パネル・武将配属画面 =====
@@ -4418,7 +5200,14 @@
               const h = heroState[id],
                 c = WARLORDS[id],
                 here = h.tower === t || h.squad === t;
-              const where = h.tower || h.squad ? "配属先：" + esc(postLabel(h)) : "未配属";
+              const inj = injuryOf(id);
+              const where = inj
+                ? '<span class="injured">🩹 負傷中：あと' +
+                  inj.left +
+                  "ウェーブで復帰（配属できません）</span>"
+                : h.tower || h.squad
+                  ? "配属先：" + esc(postLabel(h))
+                  : "未配属";
               const timer =
                 h.active > 0
                   ? "（必殺技 発動中）"
@@ -4427,6 +5216,7 @@
                     : "";
               let actions = "";
               if (t && here) actions += "<button disabled>" + word + "に配属中</button>";
+              else if (t && inj) actions += "<button disabled>負傷中</button>";
               else if (t)
                 actions +=
                   '<button data-assign="' +
@@ -4634,6 +5424,20 @@
               hireSquad,
               blockCount,
               gainXp,
+              roster,
+              nameSoldier,
+              healSquad,
+              healCost,
+              learnSkill,
+              damageSquad,
+              withdrawSoldier,
+              squadsWaveEnd,
+              saveRoster,
+              restoreRoster,
+              soldierSave: () => soldierSave,
+              setSkillRng: (f) => (skillRng = f || Math.random),
+              SOLDIER_SKILLS,
+              RANKS,
             },
             projectToRoad,
             // 指定した敵を追加（テスト用）。d は道に沿った距離
@@ -4691,6 +5495,9 @@
               useSkill,
               canUseSkill,
               squadHeroMods,
+              injureHero,
+              healInjuries,
+              injuryOf,
             },
           };
         }

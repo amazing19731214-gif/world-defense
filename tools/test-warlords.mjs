@@ -379,7 +379,7 @@ check(
     (await save(page)).owned.yukimura === 1,
 );
 check("全滅しても武将の再使用待ちは残る", hs.yukimura.cd > 0 && hs.yukimura.cd < cdBeforeWipe);
-check("全滅の通知に武将の帰還", /未配属に戻りました/.test(await page.textContent("#msg")));
+check("全滅の通知に武将の負傷", /負傷して退却/.test(await page.textContent("#msg")));
 await page.evaluate(() => {
   const s = WD_DEBUG.state();
   for (let i = s.enemies.length - 1; i >= 0; i--) if (!s.enemies[i].holder) s.enemies.splice(i, 1);
