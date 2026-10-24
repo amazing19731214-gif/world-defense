@@ -197,7 +197,7 @@ for (const [label, xy, re] of [
   ["草地", [330, 300], /道の上/],
   ["入口の近く", [60, 300], /入口/],
   ["城の直前", [880, 300], /城の直前/],
-  ["近すぎる位置", [700, 300], /近すぎ/],
+  ["近すぎる位置", [600, 300], /近すぎ/], // 隊形の後ろ（右）は部隊の選択範囲なので手前で試す
 ]) {
   await tapMap(page, ...xy);
   st = await S(page);
@@ -343,8 +343,12 @@ await step(page, 2);
 st = await S(page);
 check("攻撃で経験値を獲得", so(st, L2).xp > xp0 || so(st, L2).level > 1);
 await clearEnemies(page);
-await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "goblin", d: 694 + 60, hp: 3, speed: 0, reward: 10 }));
-const killsBefore = (await S(page)).soldiers.reduce((n, m) => n + m.kills, 0);
+// 敵を出す前の撃破数を同じ評価の中で数える（評価の合間にも画面の更新で戦闘が進むため）
+const killsBefore = await page.evaluate(() => {
+  const n = WD_DEBUG.state().soldiers.reduce((n, m) => n + m.kills, 0);
+  WD_DEBUG.addEnemy({ kind: "goblin", d: 694 + 60, hp: 3, speed: 0, reward: 10 });
+  return n;
+});
 await step(page, 1);
 st = await S(page);
 check(
@@ -436,9 +440,14 @@ const lsStats = await page.evaluate((id) => {
 check("最後の生存者は小さな能力ボーナス", lsStats.with_ > lsStats.without);
 await clearEnemies(page);
 await endWave(page);
-// 弓兵隊#3を待機させて枠を空け、新しい槍兵隊を作って編入
+// 弓兵隊#3を待機させて解散し、枠（4部隊まで）を空けてから新しい槍兵隊を作って編入
 await deselect(page);
-await page.evaluate(() => WD_DEBUG.squadApi.orderRetreat(WD_DEBUG.state().squads.find((q) => q.id === 3)));
+await page.evaluate(() => {
+  const a = WD_DEBUG.squadApi,
+    q = WD_DEBUG.state().squads.find((q) => q.id === 3);
+  a.orderRetreat(q);
+  a.disbandSquad(q);
+});
 await tapHire(page, "spearman");
 await tapMap(page, ...U1);
 st = await S(page);
@@ -482,12 +491,16 @@ check(
   "別の兵種の部隊には編入できない",
   /同じ兵種/.test(await api(page, "transferSoldier", arc.alive[0], ash.id)),
 );
-check(
-  "満員（5人）の部隊には編入できない",
-  /満員/.test(
-    await api(page, "transferSoldier", st.squads.filter((q) => q.type === "archer")[1].alive[0], arc.id),
-  ),
-);
+const full = await page.evaluate((id) => {
+  // 弓兵隊を新兵補充で10人（満員）にしてから、もう1人補充を試す
+  const a = WD_DEBUG.squadApi,
+    q = WD_DEBUG.state().squads.find((x) => x.id === id);
+  WD_DEBUG.setGold(99999);
+  while (a.roster(q).length < 10) if (a.recruitInto(q)) break;
+  return { n: a.roster(q).length, err: a.recruitInto(q) };
+}, arc.id);
+check("1部隊は10人まで（新兵補充で増やせる）", full.n === 10, JSON.stringify(full));
+check("満員（10人）の部隊には補充・編入できない", /満員/.test(full.err), full.err);
 await startHeldWave(page);
 check("ウェーブ中は移籍できない", /ウェーブ中/.test(await api(page, "transferSoldier", ash.alive[0], "new")));
 check("ウェーブ中は補充できない", /ウェーブ中/.test(await api(page, "recruitInto", { squad: ash.id })));
@@ -815,8 +828,8 @@ check("横スクロールが出ない", !layout.hScroll);
 check("ボタンの高さ 44px 以上", layout.minBtnH >= 44, String(layout.minBtnH));
 check("文字 14px 以上", layout.minFont >= 14, String(layout.minFont));
 check(
-  "部隊パネルはマップに重ならない・コンパクト（高さ 330px 以下）",
-  !layout.overlap && layout.panelH <= 330,
+  "部隊パネルはマップに重ならない・コンパクト（高さ 400px 以下。10人の部隊は2段）",
+  !layout.overlap && layout.panelH <= 400,
   String(layout.panelH),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "s4-mobile.png"), fullPage: true });

@@ -265,21 +265,12 @@ await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 r = await ev(() => WD_DEBUG.state().soldiers.filter((x) => x.type === "cavalry").length);
 check("騎兵を保存して再読み込みで復元", r === 5, String(r));
-await page.tap("#siege");
-const filters = await page.$$eval("#siegePick .filters button", (bs) => bs.map((b) => b.textContent));
-check(
-  "攻城編成の絞り込みに騎兵",
-  filters.some((f) => /騎兵/.test(f)),
-  filters.join(),
-);
-await page.tap('#siegePick .filters button:has-text("騎兵")');
-await page.tap("#siegePick [data-add]");
 r = await ev(() => {
-  const s = WD_DEBUG.state();
-  return WD_DEBUG.squadApi.siege()[0].soldiers.map((id) => s.soldiers.find((x) => x.id === id).type);
+  const s = WD_DEBUG.state(),
+    q = s.squads.find((x) => x.type === "cavalry");
+  return { slot: q.slot, siege: WD_DEBUG.squadApi.siege()[q.slot].soldiers.length };
 });
-check("攻城編成に騎兵を登録", r.join() === "cavalry", r.join());
-await page.tap("#siegeClose");
+check("騎兵の部隊がそのまま攻城の部隊になる（5人）", r.slot >= 0 && r.siege === 5, JSON.stringify(r));
 
 console.log("■ 画面（390px）");
 await tapHire(page, "cavalry");
