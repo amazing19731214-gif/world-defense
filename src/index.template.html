@@ -929,7 +929,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v20（役割別武将スキル・7か国の領土）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v21（役割別武将スキル・領土の効果）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2835,7 +2835,7 @@
           return (heroHas(h, "hideyoshi") ? 0.75 : 1) * (couponOwner() ? 1 - WARLORD_RULES.supplyDiscount : 1);
         }
         function consumeCoupon() { const h = couponOwner(); if (h) h.couponWave = -1; }
-        function recruitCost(q) { return Math.ceil(SOLDIER_TYPES[q.type].cost * (heroHas(heroOnSquad(q), "hideyoshi") ? 0.8 : 1)); }
+        function recruitCost(q) { return Math.ceil(unitCost(q.type) * (heroHas(heroOnSquad(q), "hideyoshi") ? 0.8 : 1)); }
         function weaponPower(h) {
           if (h.tower) return towerStats(h.tower).damage;
           if (!h.squad) return 0;
@@ -3461,11 +3461,13 @@
           q.face = -1;
           joinWave(q);
         }
+        // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × squadSize
+        const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
         // 新しい部隊を雇用して配置（squadSize 人 × 費用）
         function hireSquad(type, x, y) {
           const c = SOLDIER_TYPES[type];
           if (!c || !c.enabled) return (msg("その兵種はまだ使えません。"), null);
-          const cost = c.cost * SQUAD_RULES.squadSize;
+          const cost = unitCost(type) * SQUAD_RULES.squadSize;
           const r = placeCheck(x, y);
           if (r.error) return (msg(r.error), null);
           if (squads.length >= SQUAD_RULES.maxSquads)
@@ -4175,7 +4177,7 @@
         const repairCost = (t) =>
           t.destroyed
             ? 0
-            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - towerHp(t) / towerMaxHp(t)) * serviceFactor("repair", t));
+            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - territoryBonus("repair")) * (1 - towerHp(t) / towerMaxHp(t)) * serviceFactor("repair", t));
         function damageTower(t, dmg, ranged = false, enemy = null) {
           if (t.destroyed) return;
           t.hp = towerHp(t) - absorbShield(t, dmg * heroGuard(t, ranged, enemy), ranged);
@@ -4326,7 +4328,7 @@
             for (const h of ownedHeroes()) endSkill(h);
             for (const t of towers) t.heroShield = null;
             squadsWaveEnd();
-            gold += 50 + wave * 8;
+            gold += Math.round((50 + wave * 8) * (1 + territoryBonus("waveGold"))); // 領土の効果で増える
             msg(
               wave === 20
                 ? "🎉 20ウェーブクリア！ 勝利！"
@@ -6057,7 +6059,7 @@
           if (!confirm("最初からやり直しますか？")) return;
           cancelHeroTarget();
           combatClock = 0;
-          gold = 500;
+          gold = startGold();
           hp = 20;
           wave = 0;
           selectedTower = null;
@@ -6092,6 +6094,7 @@
           $("pause").textContent = "⏸ 停止";
           msg(
             "新しいゲームを開始。塔を建てよう！" +
+              (startGold() > 500 ? " 領土の効果で開始ゴールド " + startGold() + "G。" : "") +
               (kept ? " 育てた兵士 " + kept + " 人が待機中（「編成」から配置）。" : ""),
           );
           updateUI();
@@ -6106,9 +6109,9 @@
             (UNIT_ASSETS[type] ? '<img alt="" src="' + UNIT_ASSETS[type] + '">' : c.icon + " ") +
             '<span class="u-label"><span>' +
             c.name +
-            "</span> <span>" +
-            c.cost * SQUAD_RULES.squadSize +
-            "G</span></span>";
+            '</span> <span class="u-cost">' +
+            unitCostLabel(type) +
+            "</span></span>";
           b.onclick = () => {
             selectedUnitType = type;
             placeSquadId = null;
@@ -6119,7 +6122,7 @@
                 "（" +
                 SQUAD_RULES.squadSize +
                 "人・" +
-                c.cost * SQUAD_RULES.squadSize +
+                unitCost(type) * SQUAD_RULES.squadSize +
                 "G）：" +
                 c.text +
                 "。道をタップして配置しよう。",
@@ -6128,7 +6131,15 @@
           };
           $("unitTools").insertBefore(b, $("organize"));
         }
+        function unitCostLabel(type) {
+          return unitCost(type) * SQUAD_RULES.squadSize + "G";
+        }
         function renderSquadUI() {
+          // 雇用ボタンの費用（領土を取ると変わる）
+          document.querySelectorAll("[data-u] .u-cost").forEach((el) => {
+            const v = unitCostLabel(el.closest("[data-u]").dataset.u);
+            if (el.textContent !== v) el.textContent = v;
+          });
           setHtml(
             $("unitCount"),
             "配置 " +
@@ -6332,7 +6343,7 @@
                 acts += '<button data-place="' + q.id + '">配置する</button>';
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
               if (!playing && list.length < SQUAD_RULES.squadSize)
-                acts += '<button data-recruit="' + q.id + '">新兵補充 ' + c.cost + "G</button>";
+                acts += '<button data-recruit="' + q.id + '">新兵補充 ' + recruitCost(q) + "G</button>";
               if (!playing && q.state === "reserve")
                 acts += '<button data-disband="' + q.id + '">解散</button>';
               if (!playing && healCost(q))
@@ -6912,6 +6923,9 @@
             '<p class="muted">領土の隣の国だけ攻められます。7か国の統一を目指そう（統一の報酬 🎴 ガチャ券 +' +
             UNIFY_TICKETS +
             "）。</p>" +
+            '<p class="muted">領土の効果：' +
+            (bonusList().join("・") || "まだありません（国を取ると防衛戦が有利になります）") +
+            "</p>" +
             '<div class="card-actions"><button data-provinces-close>兵士の一覧に戻る</button></div>';
           for (const p of PROVINCE_ORDER) {
             const P = PROVINCES[p],
@@ -6949,6 +6963,14 @@
               state +
               (C && !P.home
                 ? "・強さ " + "★".repeat(Math.round((C.power - 1) * 5) + 1) + "・城の耐久 " + C.hp
+                : "") +
+              (PROVINCE_BONUS[p]
+                ? "<br>" +
+                  (own ? "✅" : "取ると") +
+                  " " +
+                  PROVINCE_BONUS[p].name +
+                  "：" +
+                  PROVINCE_BONUS[p].text
                 : "") +
               "・隣：" +
               P.adj.map((a) => PROVINCES[a].name).join("・") +
@@ -7218,6 +7240,17 @@
           shinano: { name: "信濃", castle: "fukashi", adj: ["mino", "mikawa", "totomi", "kai"] },
           kai: { name: "甲斐", castle: "tsutsujigasaki", adj: ["suruga", "shinano"] },
         };
+        var territoryReady = false; // 領土のデータの準備ができたか（var：起動の途中でも参照できる）
+        // 領土の効果（国の特産）。領土にした国の効果が防衛戦に効く（同じ種類は足し合わせる）
+        //   waveGold … ウェーブクリアのゴールド（割合）、startGold … 開始ゴールド、repair … 塔の修理費の割引、hire … 兵士の雇用・補充費の割引
+        const PROVINCE_BONUS = {
+          owari: { name: "楽市楽座", waveGold: 0.2, text: "ウェーブクリアのゴールド +20%" },
+          totomi: { name: "東海道", startGold: 100, text: "開始ゴールド +100" },
+          mino: { name: "美濃の鍛冶", repair: 0.3, text: "塔の修理費 -30%" },
+          suruga: { name: "駿河の港", startGold: 100, text: "開始ゴールド +100" },
+          shinano: { name: "山国の兵", hire: 0.15, text: "兵士の雇用・補充費 -15%" },
+          kai: { name: "甲州金", waveGold: 0.2, text: "ウェーブクリアのゴールド +20%" },
+        };
         const PROVINCE_ORDER = Object.keys(PROVINCES); // 一覧の並び（おおよそ攻めやすい順）
         const CASTLE_ORDER = PROVINCE_ORDER.map((p) => PROVINCES[p].castle).filter(Boolean);
         const UNIFY_TICKETS = 10; // 7か国を統一したときの報酬（1回だけ）
@@ -7266,6 +7299,21 @@
         const provinceOf = (castleId) => PROVINCE_ORDER.find((p) => PROVINCES[p].castle === castleId);
         const ownsProvince = (p) => !!(PROVINCES[p].home || conquest[PROVINCES[p].castle].captured);
         const ownedCount = () => PROVINCE_ORDER.filter(ownsProvince).length;
+        function territoryBonus(key) {
+          if (!territoryReady) return 0; // 起動の途中（領土のデータの準備前）は効果なしで計算する
+          let n = 0;
+          for (const p of PROVINCE_ORDER)
+            if (PROVINCE_BONUS[p] && ownsProvince(p)) n += PROVINCE_BONUS[p][key] || 0;
+          return n;
+        }
+        territoryReady = true;
+        const startGold = () => 500 + territoryBonus("startGold");
+        // 起動したときの開始ゴールドにも領土の効果を足す（まだ何もしていないゲームだけ）
+        if (wave === 0 && !towers.length && gold === 500) gold = startGold();
+        const bonusList = () =>
+          PROVINCE_ORDER.filter((p) => PROVINCE_BONUS[p] && ownsProvince(p)).map(
+            (p) => PROVINCE_BONUS[p].name + "（" + PROVINCE_BONUS[p].text + "）",
+          );
         // 攻められる国：まだ領土でなく、領土の隣にある国
         const canAttackProvince = (p) => !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince);
         // 城を目標にできるか：攻められる国の城、または占領済みの城（演習）
@@ -8572,6 +8620,10 @@
               targetCastleId,
               ownsProvince,
               canAttackProvince,
+              territoryBonus,
+              startGold,
+              unitCost,
+              repairCost,
               siege: () => siegeUnits,
               siegeAdd,
               siegeRemove,

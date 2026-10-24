@@ -131,6 +131,9 @@ try{
  check('2倍速は再使用待ち・毒の時間へ一度だけ反映',Math.abs(r.elapsed-2)<.001&&Math.abs(r.left-4)<.001,r);
  // Range checks and invalid/cancelled targeting do not consume a skill.
  r=await run('masamune',()=>{const {A,h,q,other}=F;const before=h.cd;const used=A.useSkill(h,{point:{x:740,y:300}});return {used,cd:h.cd,before,x:q.x};});check('重複配置になる突撃は消費せず拒否',!r.used&&r.cd===r.before&&r.x===650,r);
+ await setup('hideyoshi');
+ check('領土の補充割引と秀吉の割引が両方効く',await page.evaluate(()=>{const {S,A,q}=F;S.conquest()[S.PROVINCES.shinano.castle].captured=true;return A.recruitCost(q)===Math.ceil(S.unitCost(q.type)*.8);}));
+ check('領土の修理割引と秀吉の割引が両方効く',await page.evaluate(()=>{const {S,A,t}=F;S.conquest()[S.PROVINCES.mino.castle].captured=true;A.assignHero('hideyoshi',t);t.hp=WD_DEBUG.towerApi.towerMaxHp(t)/2;return S.repairCost(t)===Math.ceil(100*WD_DEBUG.towerApi.TOWER_HP.repairRate*.5*.7*.75);}));
  await setup('mitsuhide');
  await page.evaluate(()=>{F.A.beginHeroTarget(F.h);F.A.draw();});
  check('対象選択中は停止し案内を表示',await page.locator('#heroTargetBar').isVisible()&&await page.evaluate(()=>WD_DEBUG.state().paused));
