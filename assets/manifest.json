@@ -2,8 +2,8 @@
   "sprites": {
     "arrow": "sprites/arrow.png",
     "cannon": "sprites/cannon.png",
-    "magic": "sprites/magic.png",
-    "ice": "sprites/ice.png",
+    "magic": "sprites/gun.png",
+    "ice": "sprites/water.png",
     "castle": "sprites/castle.png",
     "goblin": "sprites/goblin.png",
     "tree": "sprites/tree.png",

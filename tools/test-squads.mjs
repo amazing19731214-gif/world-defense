@@ -650,7 +650,10 @@ check(
   "リセット後は部隊パネル・編成画面を閉じる",
   !(await page.isVisible("#squadPanel")) && !(await page.isVisible("#squadSheet")),
 );
-check("武将の保存データは残る", await page.evaluate(() => !!localStorage.getItem("worldDefense.warlords.v1")));
+check(
+  "武将の保存データは残る",
+  await page.evaluate(() => !!localStorage.getItem("worldDefense.warlords.v1")),
+);
 await context.close();
 
 console.log("■ フレームレートに依存しない");

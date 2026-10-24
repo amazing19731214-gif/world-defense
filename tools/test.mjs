@@ -210,7 +210,7 @@ check(
   String(tid(st, 2).st.rate),
 );
 check("武田信玄：配属先の塔自身は対象外（設定）", near(tid(st, 1).st.rate, 0.45));
-check("武田信玄：遠い塔#4(魔法)は対象外", near(tid(st, 4).st.rate, 0.8));
+check("武田信玄：遠い塔#4(鉄砲)は対象外", near(tid(st, 4).st.rate, 0.8));
 check("武田信玄：塔#3(距離220)は対象外", near(tid(st, 3).st.rate, 1.6));
 await deselect(page);
 await assignVia(page, B, "kanbei");

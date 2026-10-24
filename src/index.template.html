@@ -144,6 +144,14 @@
         .unit-tools button {
           font-size: 14px;
         }
+        .tower-tools button {
+          padding: 6px 3px;
+          min-width: 0;
+        }
+        .tower-tools .t-img {
+          width: 26px;
+          height: 26px;
+        }
         canvas {
           border-width: 3px;
           margin: 10px 0;
@@ -283,6 +291,34 @@
         width: 64px;
         height: 64px;
         font-size: 28px;
+      }
+      .tower-tools button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 6px 4px;
+        line-height: 1.2;
+      }
+      .tower-tools .t-img {
+        width: 30px;
+        height: 30px;
+        object-fit: contain;
+        flex: none;
+      }
+      .tower-tools .t-img:not([src]) {
+        display: none;
+      }
+      .tower-tools .t-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      .tower-tools .t-text small {
+        font-size: 14px;
+        color: inherit;
       }
       .unit-tools {
         align-items: center;
@@ -499,9 +535,22 @@
           <span id="skillLabel"></span><span class="bar"><i id="skillBar"></i></span>
         </button>
       </section>
-      <div class="tools">
-        <button data-t="arrow">🏹 弓 100G</button><button data-t="cannon">💣 大砲 180G</button
-        ><button data-t="magic">🔮 魔法 220G</button><button data-t="ice">❄️ 氷 150G</button>
+      <div class="tools tower-tools" aria-label="防衛塔">
+        <button data-t="arrow">
+          <img class="t-img" data-sprite="arrow" alt="" /><span class="t-text"
+            >弓<small>100G</small></span
+          ></button
+        ><button data-t="cannon">
+          <img class="t-img" data-sprite="cannon" alt="" /><span class="t-text"
+            >大砲<small>180G</small></span
+          ></button
+        ><button data-t="magic">
+          <img class="t-img" data-sprite="magic" alt="" /><span class="t-text"
+            >鉄砲<small>220G</small></span
+          ></button
+        ><button data-t="ice">
+          <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
+        </button>
       </div>
       <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
         <span class="row-label" id="unitCount">部隊 0/4</span><button id="organize">📋 編成</button>
@@ -529,7 +578,9 @@
         ><button id="roster">👥 武将</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v9（戦国武将ガチャ・兵士部隊）</small>
+      <small
+        >GitHub Pages / Safari対応・ペイント調・個別素材版 v10（戦国の防衛塔・武将ガチャ・兵士部隊）</small
+      >
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -574,10 +625,11 @@
         const types = {
           arrow: { cost: 100, range: 155, damage: 18, rate: 0.45, col: "#a56b35", icon: "🏹" },
           cannon: { cost: 180, range: 130, damage: 48, rate: 1.6, col: "#56616d", icon: "💣" },
-          magic: { cost: 220, range: 170, damage: 32, rate: 0.8, col: "#8a57b5", icon: "🔮" },
-          ice: { cost: 150, range: 145, damage: 9, rate: 0.95, col: "#65b9d6", icon: "❄️" },
+          // 内部ID magic = 鉄砲、ice = 水攻め（以前の魔法・氷。IDは互換のため変えない）
+          magic: { cost: 220, range: 170, damage: 32, rate: 0.8, col: "#5a4632", icon: "💥" },
+          ice: { cost: 150, range: 145, damage: 9, rate: 0.95, col: "#3f8fcf", icon: "🌊" },
         };
-        const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "魔法の塔", ice: "氷の塔" };
+        const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "鉄砲の塔", ice: "水攻めの塔" };
         const CANNON_SPLASH = 65;
 
         // ===== 戦国武将（ガチャで獲得）：調整用設定 =====
@@ -1631,7 +1683,7 @@
                 y: e.y - 6,
                 tx,
                 ty,
-                type: "magic",
+                type: "fire",
                 age: 0,
                 duration: 0.3,
                 col: "#ff9b54",
@@ -1714,11 +1766,21 @@
         }
         function fire(t, e) {
           const p = types[t.type];
-          const duration = t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : 0.34;
+          const duration =
+            t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : t.type === "magic" ? 0.12 : 0.38;
           t.aim = Math.atan2(e.y - (t.y - 42), e.x - t.x);
           t.recoil = 0.22;
           if (shots.length >= 160) shots.shift();
-          shots.push({ x: t.x, y: t.y - 42, tx: e.x, ty: e.y, type: t.type, age: 0, duration, col: p.col });
+          // 弾の出る位置：鉄砲は画像の銃口、水攻めは水桶の上、ほかは塔の上部
+          const from =
+            t.type === "magic"
+              ? { x: t.x + 36, y: t.y - 57 }
+              : t.type === "ice"
+                ? { x: t.x, y: t.y - 62 }
+                : { x: t.x, y: t.y - 42 };
+          shots.push({ x: from.x, y: from.y, tx: e.x, ty: e.y, type: t.type, age: 0, duration, col: p.col });
+          // 鉄砲：銃口の火花と発砲煙（見た目のみ）
+          if (t.type === "magic") burst(from.x + 4, from.y, "#ffe6a0", "gunsmoke");
           const st = towerStats(t);
           let damage = st.damage;
           if (t.type === "cannon") {
@@ -1991,8 +2053,8 @@
               : t.type === "cannon"
                 ? "#596575"
                 : t.type === "magic"
-                  ? "#7e4fbd"
-                  : "#5cb7d4";
+                  ? "#4a3a30"
+                  : "#3f7fb0";
           poly(
             [
               [x - 30, y - 27],
@@ -2037,8 +2099,9 @@
             ctx.restore();
             ellipse(x + 23, y - 47, 9, 9, "#242e39");
           } else {
-            ellipse(x, y - 44, 12, 16, t.type === "magic" ? "#c684fa" : "#9eeaff");
-            ellipse(x - 4, y - 49, 4, 5, "#ffffffbb");
+            // 鉄砲は黒い銃口、水攻めは水の玉
+            ellipse(x, y - 44, 10, 10, t.type === "magic" ? "#3a332c" : "#5fb0e4");
+            ellipse(x - 3, y - 47, 3, 3, t.type === "magic" ? "#a99c86" : "#d8f3ff");
           }
           for (let i = 0; i < t.level; i++) ellipse(x - 15 + i * 8, y + 26, 3, 3, "#ffe484");
         }
@@ -2429,11 +2492,7 @@
           ctx.restore();
         }
         function towerDetails(t) {
-          if (sprites[t.type]) {
-            if (t.type === "magic" || t.type === "ice")
-              bloom(t.x, t.y - 54, 23, t.type === "magic" ? "#d498ff55" : "#a9eeff55");
-            return;
-          }
+          if (sprites[t.type]) return;
           const x = t.x,
             y = t.y;
           ctx.save();
@@ -2467,32 +2526,24 @@
             ellipse(x - 19, y + 5, 5, 5, "#d3c3a1");
           }
           if (t.type === "magic") {
-            bloom(x, y - 54, 42, "#c987ff99");
-            ellipse(x, y - 54, 11, 13, "#e5b8ff");
-            ellipse(x - 4, y - 60, 3, 5, "#ffffff");
+            // 鉄砲（画像がないときの代わりの絵）：のぼりと銃身
+            banner(x - 22, y - 58, "#b8352e");
+            ctx.save();
+            ctx.translate(x + 4, y - 44);
+            ctx.rotate(-0.25);
+            ctx.fillStyle = "#3a332c";
+            ctx.fillRect(-4, -3, 30, 6);
+            ctx.fillStyle = "#8a5a2b";
+            ctx.fillRect(-14, -4, 12, 8);
+            ctx.restore();
           }
           if (t.type === "ice") {
-            bloom(x, y - 53, 38, "#92e8ff99");
-            poly(
-              [
-                [x, y - 74],
-                [x + 12, y - 54],
-                [x, y - 31],
-                [x - 12, y - 54],
-              ],
-              "#a5f4ff",
-              "#4e9bb4",
-              2,
-            );
-            poly(
-              [
-                [x, y - 72],
-                [x, y - 33],
-                [x - 10, y - 54],
-              ],
-              "#efffff99",
-              null,
-            );
+            // 水攻め（画像がないときの代わりの絵）：水桶と流れ落ちる水
+            ellipse(x, y - 52, 20, 7, "#7a4f28");
+            ellipse(x, y - 53, 16, 5, "#4aa0dc");
+            ctx.fillStyle = "#4aa0dccc";
+            ctx.fillRect(x + 18, y - 52, 5, 40);
+            ellipse(x + 21, y - 10, 9, 3, "#7cc4f0cc");
           }
           ctx.restore();
         }
@@ -2928,6 +2979,9 @@
           ctx.fillText(c.name, x + 84, y + 56);
           ctx.restore();
         }
+        document.querySelectorAll("[data-sprite]").forEach((img) => {
+          if (embeddedSprites[img.dataset.sprite]) img.src = embeddedSprites[img.dataset.sprite];
+        });
         for (const name of ["arrow", "cannon", "magic", "ice", "castle", "goblin", "tree", "pine", "rocks"]) {
           const im = new Image();
           im.onload = () => {
@@ -2947,7 +3001,16 @@
             color,
             kind,
             age: 0,
-            duration: kind === "cannon" ? 0.8 : kind === "death" ? 0.6 : 0.42,
+            duration:
+              kind === "cannon"
+                ? 0.8
+                : kind === "death"
+                  ? 0.6
+                  : kind === "gunsmoke"
+                    ? 0.9
+                    : kind === "ice"
+                      ? 0.55
+                      : 0.42,
           });
         }
         function animateVisuals(dt) {
@@ -3026,7 +3089,12 @@
         }
         function projectile(s) {
           const p = Math.min(1, s.age / s.duration),
-            arc = s.type === "cannon" ? Math.sin(p * Math.PI) * 100 : 0,
+            arc =
+              s.type === "cannon"
+                ? Math.sin(p * Math.PI) * 100
+                : s.type === "ice"
+                  ? Math.sin(p * Math.PI) * 45
+                  : 0,
             x = s.x + (s.tx - s.x) * p,
             y = s.y + (s.ty - s.y) * p - arc;
           ctx.save();
@@ -3062,8 +3130,36 @@
             ellipse(x, y + arc + 8, 6, 3, "#354f3a44");
             ellipse(x, y, 7, 7, "#293b4b");
             ellipse(x - 2, y - 3, 2.5, 2, "#a5b8ba");
+          } else if (s.type === "magic") {
+            // 鉄砲の銃弾：細い光の筋と弾
+            const dx = s.tx - s.x,
+              dy = s.ty - s.y,
+              l = Math.hypot(dx, dy) || 1;
+            ctx.strokeStyle = "#fff1b8";
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(x - (dx / l) * 22, y - (dy / l) * 22);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ellipse(x, y, 3, 3, "#3a332c");
+            ellipse(x - 0.8, y - 0.8, 1.2, 1.2, "#ffe6a0");
+          } else if (s.type === "ice") {
+            // 水攻め：放物線を描く水の塊と、後ろに続くしずく
+            const dx = s.tx - s.x,
+              dy = s.ty - s.y;
+            for (let i = 3; i >= 1; i--) {
+              const q = Math.max(0, p - i * 0.06),
+                qx = s.x + dx * q,
+                qy = s.y + dy * q - Math.sin(q * Math.PI) * 45;
+              ellipse(qx, qy, 4 - i, 4 - i, "#8fd3f5aa");
+            }
+            ellipse(x, y, 8, 6, "#3f8fcf");
+            ellipse(x - 2, y - 2, 4, 2.5, "#c9efff");
           } else {
-            const color = s.type === "ice" ? "#b4f6ff" : "#eabaff";
+            // ドラゴンの火球など
+            const color = s.col || "#ff9b54";
             ctx.strokeStyle = color;
             ctx.lineWidth = 4;
             ctx.globalAlpha = 0.45;
@@ -3073,22 +3169,8 @@
             ctx.stroke();
             ctx.globalAlpha = 1;
             bloom(x, y, 19, color + "88");
-            if (s.type === "ice")
-              poly(
-                [
-                  [x, y - 9],
-                  [x + 6, y],
-                  [x, y + 9],
-                  [x - 6, y],
-                ],
-                "#e5fdff",
-                "#7bcede",
-                1,
-              );
-            else {
-              ellipse(x, y, 6, 6, "#dda5ff");
-              ellipse(x - 2, y - 2, 2.5, 2.5, "#fff8ff");
-            }
+            ellipse(x, y, 6, 6, color);
+            ellipse(x - 2, y - 2, 2.5, 2.5, "#fff3dc");
           }
           ctx.restore();
         }
@@ -3106,6 +3188,28 @@
             ctx.restore();
             return;
           }
+          if (e.kind === "gunsmoke") {
+            // 発砲煙：銃口の火花のあと、灰色の煙が広がりながら上る
+            ctx.save();
+            if (p < 0.18) {
+              ctx.globalAlpha = 1 - p / 0.18;
+              bloom(e.x, e.y, 16, "#ffd76acc");
+              ellipse(e.x, e.y, 5, 4, "#fff4c8");
+            }
+            ctx.globalAlpha = (1 - p) * 0.75;
+            for (let i = 0; i < (reduced ? 2 : 4); i++) {
+              const a = i * 1.9 + 0.4;
+              ellipse(
+                e.x + Math.cos(a) * 6 * p + i * 3 * p,
+                e.y - 16 * p - i * 3 * p,
+                5 + p * 9 + i,
+                4 + p * 7 + i,
+                "#d9d6cecc",
+              );
+            }
+            ctx.restore();
+            return;
+          }
           ctx.save();
           ctx.globalAlpha = 1 - p;
           if (e.kind === "death" && sprites.goblin) {
@@ -3118,12 +3222,14 @@
           const n = reduced ? 3 : e.kind === "cannon" ? 12 : 7;
           let color =
             e.kind === "ice"
-              ? "#b2f4ff"
+              ? "#7cc4f0"
               : e.kind === "magic"
-                ? "#e9bdff"
-                : e.kind === "cannon"
-                  ? "#ffd273"
-                  : e.color;
+                ? "#ffe08a"
+                : e.kind === "fire"
+                  ? "#ffb070"
+                  : e.kind === "cannon"
+                    ? "#ffd273"
+                    : e.color;
           if (e.kind === "cannon") {
             for (let i = 0; i < 5; i++) {
               const a = i * 2.4;
@@ -3140,7 +3246,17 @@
             ctx.beginPath();
             ctx.ellipse(e.x, e.y, 65 * p, 30 * p, 0, 0, 7);
             ctx.stroke();
-          } else if (e.kind === "ice" || e.kind === "magic") {
+          } else if (e.kind === "ice") {
+            // 水しぶき：足元に広がる波紋
+            ctx.strokeStyle = "#a9e2ffcc";
+            ctx.lineWidth = 2.5 * (1 - p) + 0.5;
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y + 10, 8 + 30 * p, 3 + 10 * p, 0, 0, 7);
+            ctx.stroke();
+          } else if (e.kind === "magic") {
+            // 着弾：土ぼこり
+            ellipse(e.x, e.y + 6, 6 + 10 * p, 4 + 6 * p, "#b9a27a88");
+          } else if (e.kind === "fire") {
             ctx.strokeStyle = color;
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -3153,16 +3269,11 @@
               px = e.x + Math.cos(a) * r,
               py = e.y + Math.sin(a) * r - (e.kind === "death" ? p * 15 : 0);
             if (e.kind === "ice") {
-              poly(
-                [
-                  [px, py - 5],
-                  [px + 3, py],
-                  [px, py + 5],
-                  [px - 3, py],
-                ],
-                color,
-                null,
-              );
+              // 水しぶき：上に跳ねて落ちるしずく
+              const up = Math.sin(p * Math.PI) * 18;
+              ellipse(e.x + Math.cos(a) * 18 * p, e.y - up + Math.sin(a) * 6, 2.2, 3, color);
+            } else if (e.kind === "magic") {
+              ellipse(px * 0.4 + e.x * 0.6, py * 0.4 + e.y * 0.6, 1.5, 1.5, color);
             } else ellipse(px, py, Math.max(1, (1 - p) * 4), Math.max(1, (1 - p) * 4), color);
           }
           ctx.restore();
@@ -3202,7 +3313,7 @@
                     );
                   ctx.restore();
                 }
-                if (t.recoil > 0) {
+                if (t.recoil > 0 && t.type !== "magic") {
                   const a = t.aim || 0;
                   bloom(t.x + Math.cos(a) * 23, t.y - 42 + Math.sin(a) * 23, 16, "#ffecab99");
                 }
@@ -3226,27 +3337,31 @@
                   ctx.globalAlpha = 1;
                 }
                 if (e.slow > 0) {
-                  ellipse(e.x, e.y + e.r, e.r + 7, 5, "#a0eaff88");
-                  for (let i = 0; i < 3; i++) {
-                    let x = e.x + (i - 1) * 12,
-                      y = e.y + 8;
-                    poly(
-                      [
-                        [x, y - 10],
-                        [x + 4, y],
-                        [x, y + 4],
-                        [x - 4, y],
-                      ],
-                      "#b9f3ff99",
-                      "#e4ffff",
-                      1,
-                    );
-                  }
-                  ctx.strokeStyle = "#a7efffcc";
-                  ctx.lineWidth = 2;
+                  // 水攻めで足を取られている：足元のぬかるみと水たまり、はねる泥
+                  ellipse(e.x, e.y + e.r + 2, e.r + 10, 6, "#6b4f33aa");
+                  ellipse(e.x - 2, e.y + e.r + 1, e.r + 5, 3.5, "#5fa9d6aa");
+                  ctx.strokeStyle = "#cfeeffaa";
+                  ctx.lineWidth = 1.5;
                   ctx.beginPath();
-                  ctx.arc(e.x, e.y, e.r + 4, -2.8, -0.3);
+                  const rip = reduced ? 0.5 : (visualTime * 1.5) % 1;
+                  ctx.ellipse(
+                    e.x,
+                    e.y + e.r + 2,
+                    (e.r + 4) * (0.6 + rip * 0.6),
+                    3 * (0.6 + rip * 0.6),
+                    0,
+                    0,
+                    7,
+                  );
                   ctx.stroke();
+                  for (let i = 0; i < 2; i++)
+                    ellipse(
+                      e.x + (i ? 9 : -9),
+                      e.y + e.r - 3 - (reduced ? 0 : Math.abs(Math.sin(visualTime * 6 + i)) * 4),
+                      2,
+                      2,
+                      "#7a5a3acc",
+                    );
                 }
                 ctx.restore();
               },
