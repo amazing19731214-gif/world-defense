@@ -53,6 +53,17 @@ for (const [id, rel] of Object.entries(manifest.units || {})) {
   else warnings.push(`unit ${id}: ${rel} が見つかりません（仮アイコンで代用）`);
 }
 
+// 兵士の動きのコマ（idle＝基準の立ち姿、attack＝攻撃の瞬間、death＝戦死）。無い兵種・コマは1枚絵で描く。
+const unitFrames = {};
+for (const [id, poses] of Object.entries(manifest.unitFrames || {})) {
+  unitFrames[id] = {};
+  for (const [pose, rel] of Object.entries(poses)) {
+    const uri = dataUri(rel, `unit frame ${id}.${pose}`);
+    if (uri) unitFrames[id][pose] = uri;
+    else warnings.push(`unit frame ${id}.${pose}: ${rel} が見つかりません`);
+  }
+}
+
 // 敵兵の動き（移動・攻撃・やられ）のコマ。画像がない敵は従来のベクター描画になる。
 const enemyAssets = {};
 for (const [id, anims] of Object.entries(manifest.enemies || {})) {
@@ -70,6 +81,7 @@ for (const [marker, value] of [
   ["/*@@HERO_ASSETS@@*/ {}", heroAssets],
   ["/*@@UNIT_ASSETS@@*/ {}", unitAssets],
   ["/*@@ENEMY_ASSETS@@*/ {}", enemyAssets],
+  ["/*@@UNIT_FRAMES@@*/ {}", unitFrames],
 ]) {
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => JSON.stringify(value));

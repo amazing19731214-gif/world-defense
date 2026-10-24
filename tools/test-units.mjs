@@ -91,7 +91,7 @@ check(
   text,
 );
 check(
-  "ボタンに兵士の絵（衛生兵は仮画像）",
+  "ボタンに兵士の絵",
   (
     await page.$$eval('[data-u="gunner"] img, [data-u="medic"] img', (ims) =>
       ims.map((i) => i.naturalWidth > 0),
@@ -99,6 +99,20 @@ check(
   ).join() === "true,true",
 );
 let r = await ev(page, () => {
+  const F = WD_DEBUG.unitConfig.UNIT_FRAMES,
+    btn = document.querySelector('[data-u="medic"] img').src;
+  return {
+    frames: Object.fromEntries(Object.entries(F).map(([k, v]) => [k, Object.keys(v).join()])),
+    btn: btn.slice(0, 15),
+  };
+});
+check(
+  "鉄砲兵（待機・攻撃・戦死）と衛生兵（待機・戦死）のコマを埋め込み",
+  r.frames.gunner === "idle,attack,death" && r.frames.medic === "idle,death",
+  JSON.stringify(r.frames),
+);
+check("衛生兵のボタンは素材の絵（仮画像ではない）", r.btn === "data:image/webp", r.btn);
+r = await ev(page, () => {
   const T = WD_DEBUG.unitConfig.SOLDIER_TYPES;
   return { g: T.gunner, a: T.archer, s: T.ashigaru, m: T.medic };
 });
