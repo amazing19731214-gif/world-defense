@@ -24,7 +24,7 @@ try {
  await page.tap('#skillGuideOpen');
  check('タッチで説明画面を開く',await page.locator('#skillGuideSheet').isVisible());
  check('未所持でも全30人を表示',await page.locator('[data-guide-hero]').count()===30);
- check('常時効果と技名と再使用時間', (await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('三段撃ち')&&(await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('45秒'));
+ check('常時効果と技名と再使用時間', (await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('三段撃ち')&&(await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('40秒'));
  check('フォーカスは閉じるボタン',await page.evaluate(()=>document.activeElement.id==='skillGuideClose'));
  await page.locator('#skillGuideSearch').fill('織田信長');
  check('武将名で検索',await page.locator('[data-guide-hero]').count()===1);

@@ -862,6 +862,7 @@
           </div>
         </div>
       </header>
+      <div id="heroTargetBar" class="panel" hidden><p id="heroTargetText" role="status"></p><button id="heroTargetCancel">対象選択をキャンセル</button></div>
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
@@ -928,7 +929,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v19（7か国の領土・攻城戦・騎兵）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v20（役割別武将スキル・7か国の領土）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1090,350 +1091,907 @@
           R: { color: "#5f9fc4", text: "#0d2230" },
         };
         const WARLORDS = {
-          nobunaga: {
-            name: "織田信長",
-            rarity: "SSR",
-            short: "信",
-            color: "#9c2f2a",
-            passive: { damageMul: 1.25 },
-            passiveText: "攻撃力 +25%",
-            skill: { name: "三段撃ち", duration: 8, cooldown: 45, attackSpeedMul: 2 },
-            skillText: "8秒間、攻撃速度 ×2",
-          },
-          shingen: {
-            name: "武田信玄",
-            rarity: "SSR",
-            short: "玄",
-            color: "#a8432f",
-            passive: { aura: { radius: 170, attackSpeed: 0.2 }, defMul: 1.15 },
-            passiveText: "半径170の他の塔の攻撃速度 +20%（部隊なら防御 +15%）",
-            skill: {
-              name: "風林火山",
-              duration: 10,
-              cooldown: 45,
-              aura: { radiusMul: 1.25, attackSpeed: 0.45 },
-            },
-            skillText: "10秒間、支援が +45%・範囲 ×1.25 に強化",
-          },
-          kenshin: {
-            name: "上杉謙信",
-            rarity: "SSR",
-            short: "謙",
-            color: "#3c5f9e",
-            passive: { damageMul: 1.3, cannonSplashMul: 1.4 },
-            passiveText: "攻撃力 +30%（大砲なら爆発範囲 +40%）",
-            skill: { name: "車懸りの陣", duration: 1.5, cooldown: 35, volleys: 3, blastDamageMul: 1.5 },
-            skillText: "範囲内の敵全員に3回の範囲攻撃（1回 = 攻撃力×1.5）",
-          },
-          yukimura: {
-            name: "真田幸村",
-            rarity: "SR",
-            short: "幸",
-            color: "#c0392b",
-            passive: { damageMul: 1.15, defMul: 1.3 },
-            passiveText: "攻撃力 +15%（部隊なら防御 +30%）",
-            skill: { name: "日本一の兵", duration: 10, cooldown: 40, attackSpeedMul: 1.6, defMul: 1.5 },
-            skillText: "10秒間、攻撃速度 ×1.6（部隊なら防御 ×1.5）",
-          },
-          kanetsugu: {
-            name: "直江兼続",
-            rarity: "SR",
-            short: "兼",
-            color: "#4a7d5c",
-            passive: { aura: { radius: 150, attackSpeed: 0.15 } },
-            passiveText: "半径150の他の塔の攻撃速度 +15%",
-            skill: {
-              name: "愛の兜",
-              duration: 6,
-              cooldown: 50,
-              heal: 0.3,
-              aura: { radiusMul: 1, attackSpeed: 0.3 },
-            },
-            skillText: "範囲内の部隊の生存兵のHPを30%回復（戦死者は復活しない）・6秒間支援 +30%",
-          },
-          masamune: {
-            name: "伊達政宗",
-            rarity: "SR",
-            short: "政",
-            color: "#2f4a6e",
-            passive: { rangeMul: 1.15, damageMul: 1.1 },
-            passiveText: "射程 +15%・攻撃力 +10%",
-            skill: { name: "独眼竜", duration: 1, cooldown: 30, volleys: 2, blastDamageMul: 1.4 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.4）",
-          },
-          tadakatsu: {
-            name: "本多忠勝",
-            rarity: "SR",
-            short: "忠",
-            color: "#5a4a3a",
-            passive: { damageMul: 1.1, defMul: 1.4 },
-            passiveText: "攻撃力 +10%（部隊なら防御 +40%）",
-            skill: { name: "蜻蛉切", duration: 8, cooldown: 40, attackSpeedMul: 1.3, defMul: 2 },
-            skillText: "8秒間、攻撃速度 ×1.3（部隊なら防御 ×2）",
-          },
-          kanbei: {
-            name: "黒田官兵衛",
-            rarity: "R",
-            short: "官",
-            color: "#55606e",
-            passive: { rangeMul: 1.2 },
-            passiveText: "射程 +20%",
-            skill: { name: "軍略・疾風", duration: 8, cooldown: 40, attackSpeedMul: 1.8 },
-            skillText: "8秒間、攻撃速度 ×1.8",
-          },
-          motonari: {
-            name: "毛利元就",
-            rarity: "R",
-            short: "元",
-            color: "#3f7a6d",
-            passive: { aura: { radius: 150, attackSpeed: 0.12 } },
-            passiveText: "半径150の他の塔の攻撃速度 +12%",
-            skill: {
-              name: "三本の矢",
-              duration: 8,
-              cooldown: 45,
-              aura: { radiusMul: 1.2, attackSpeed: 0.3 },
-            },
-            skillText: "8秒間、支援が +30%・範囲 ×1.2 に強化",
-          },
-          keiji: {
-            name: "前田慶次",
-            rarity: "R",
-            short: "慶",
-            color: "#8a5a2b",
-            passive: { damageMul: 1.15 },
-            passiveText: "攻撃力 +15%",
-            skill: { name: "傾奇者", duration: 6, cooldown: 35, attackSpeedMul: 1.5 },
-            skillText: "6秒間、攻撃速度 ×1.5",
-          },
-          // ---- 追加の20人（第2弾） ----
-          motoyasu: {
-            name: "松平元康",
-            rarity: "SSR",
-            short: "康",
-            color: "#6a7a2a",
-            passive: { defMul: 1.3, damageMul: 1.15 },
-            passiveText: "攻撃力 +15%（部隊なら防御 +30%）",
-            skill: {
-              name: "厭離穢土",
-              duration: 10,
-              cooldown: 45,
-              attackSpeedMul: 1.4,
-              defMul: 2,
-              heal: 0.25,
-            },
-            skillText:
-              "周りの部隊の生存兵のHPを25%回復（戦死者は復活しない）・10秒間、攻撃速度 ×1.4（部隊なら防御 ×2）",
-          },
-          hideyoshi: {
-            name: "羽柴秀吉",
-            rarity: "SSR",
-            short: "秀",
-            color: "#b8862a",
-            passive: { aura: { radius: 180, attackSpeed: 0.22 }, damageMul: 1.1 },
-            passiveText: "攻撃力 +10%・半径180の他の塔の攻撃速度 +22%",
-            skill: { name: "一夜城", duration: 10, cooldown: 50, aura: { radiusMul: 1.3, attackSpeed: 0.5 } },
-            skillText: "10秒間、支援が +50%・範囲 ×1.3 に強化",
-          },
-          mitsuhide: {
-            name: "明智光秀",
-            rarity: "SR",
-            short: "光",
-            color: "#6a4a9a",
-            passive: { damageMul: 1.2, rangeMul: 1.1 },
-            passiveText: "攻撃力 +20%・射程 +10%",
-            skill: { name: "本能寺の変", duration: 1, cooldown: 40, volleys: 2, blastDamageMul: 1.8 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.8）",
-          },
-          mitsunari: {
-            name: "石田三成",
-            rarity: "SR",
-            short: "成",
-            color: "#a8332e",
-            passive: { aura: { radius: 160, attackSpeed: 0.15 }, defMul: 1.1 },
-            passiveText: "半径160の他の塔の攻撃速度 +15%（部隊なら防御 +10%）",
-            skill: {
-              name: "大一大万大吉",
-              duration: 8,
-              cooldown: 45,
-              aura: { radiusMul: 1.2, attackSpeed: 0.35 },
-            },
-            skillText: "8秒間、支援が +35%・範囲 ×1.2 に強化",
-          },
-          yoshihiro: {
-            name: "島津義弘",
-            rarity: "SR",
-            short: "島",
-            color: "#2f4a6e",
-            passive: { damageMul: 1.15, defMul: 1.35 },
-            passiveText: "攻撃力 +15%（部隊なら防御 +35%）",
-            skill: { name: "捨て奸", duration: 8, cooldown: 40, attackSpeedMul: 1.5, defMul: 2 },
-            skillText: "8秒間、攻撃速度 ×1.5（部隊なら防御 ×2）",
-          },
-          ujiyasu: {
-            name: "北条氏康",
-            rarity: "R",
-            short: "氏",
-            color: "#2f4a7e",
-            passive: { defMul: 1.3, damageMul: 1.05 },
-            passiveText: "攻撃力 +5%（部隊なら防御 +30%）",
-            skill: { name: "相模の獅子", duration: 8, cooldown: 40, attackSpeedMul: 1.3, defMul: 1.6 },
-            skillText: "8秒間、攻撃速度 ×1.3（部隊なら防御 ×1.6）",
-          },
-          motochika: {
-            name: "長宗我部元親",
-            rarity: "SR",
-            short: "親",
-            color: "#2a5a9a",
-            passive: { rangeMul: 1.15, damageMul: 1.1 },
-            passiveText: "射程 +15%・攻撃力 +10%",
-            skill: { name: "一領具足", duration: 8, cooldown: 40, attackSpeedMul: 1.7 },
-            skillText: "8秒間、攻撃速度 ×1.7",
-          },
-          kiyomasa: {
-            name: "加藤清正",
-            rarity: "SR",
-            short: "清",
-            color: "#8a6a1a",
-            passive: { damageMul: 1.2, cannonSplashMul: 1.3 },
-            passiveText: "攻撃力 +20%（大砲なら爆発範囲 +30%）",
-            skill: { name: "片鎌槍", duration: 1.5, cooldown: 35, volleys: 3, blastDamageMul: 1.3 },
-            skillText: "範囲内の敵全員に3回の範囲攻撃（1回 = 攻撃力×1.3）",
-          },
-          masanori: {
-            name: "福島正則",
-            rarity: "R",
-            short: "則",
-            color: "#a8332e",
-            passive: { damageMul: 1.2 },
-            passiveText: "攻撃力 +20%",
-            skill: { name: "賤ヶ岳の七本槍", duration: 6, cooldown: 35, attackSpeedMul: 1.6 },
-            skillText: "6秒間、攻撃速度 ×1.6",
-          },
-          kansuke: {
-            name: "山本勘助",
-            rarity: "R",
-            short: "勘",
-            color: "#5a3a7a",
-            passive: { aura: { radius: 150, attackSpeed: 0.12 } },
-            passiveText: "半径150の他の塔の攻撃速度 +12%",
-            skill: { name: "啄木鳥戦法", duration: 1, cooldown: 40, volleys: 2, blastDamageMul: 1.3 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.3）",
-          },
-          hanbei: {
-            name: "竹中半兵衛",
-            rarity: "SR",
-            short: "半",
-            color: "#6a4a8a",
-            passive: { rangeMul: 1.2, aura: { radius: 140, attackSpeed: 0.1 } },
-            passiveText: "射程 +20%・半径140の他の塔の攻撃速度 +10%",
-            skill: { name: "十面埋伏", duration: 1, cooldown: 35, volleys: 2, blastDamageMul: 1.5 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.5）",
-          },
-          yoshiaki: {
-            name: "最上義光",
-            rarity: "R",
-            short: "最",
-            color: "#4a5a6a",
-            passive: { rangeMul: 1.15 },
-            passiveText: "射程 +15%",
-            skill: { name: "羽州の狐", duration: 8, cooldown: 40, attackSpeedMul: 1.5 },
-            skillText: "8秒間、攻撃速度 ×1.5",
-          },
-          yoshikage: {
-            name: "朝倉義景",
-            rarity: "R",
-            short: "朝",
-            color: "#b8532e",
-            passive: { aura: { radius: 140, attackSpeed: 0.1 }, defMul: 1.1 },
-            passiveText: "半径140の他の塔の攻撃速度 +10%（部隊なら防御 +10%）",
-            skill: {
-              name: "一乗谷の雅",
-              duration: 6,
-              cooldown: 50,
-              heal: 0.25,
-              aura: { radiusMul: 1, attackSpeed: 0.2 },
-            },
-            skillText: "範囲内の部隊の生存兵のHPを25%回復（戦死者は復活しない）・6秒間支援 +20%",
-          },
-          dosan: {
-            name: "斎藤道三",
-            rarity: "R",
-            short: "道",
-            color: "#5a3a6a",
-            passive: { damageMul: 1.2 },
-            passiveText: "攻撃力 +20%",
-            skill: { name: "美濃の蝮", duration: 1, cooldown: 35, volleys: 2, blastDamageMul: 1.2 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.2）",
-          },
-          yoshikata: {
-            name: "六角義賢",
-            rarity: "R",
-            short: "六",
-            color: "#5a4a7a",
-            passive: { rangeMul: 1.1, damageMul: 1.08 },
-            passiveText: "射程 +10%・攻撃力 +8%",
-            skill: { name: "観音寺城の守り", duration: 8, cooldown: 45, attackSpeedMul: 1.2, defMul: 1.8 },
-            skillText: "8秒間、攻撃速度 ×1.2（部隊なら防御 ×1.8）",
-          },
-          haruhisa: {
-            name: "尼子晴久",
-            rarity: "R",
-            short: "尼",
-            color: "#2f4a7e",
-            passive: { damageMul: 1.12, defMul: 1.15 },
-            passiveText: "攻撃力 +12%（部隊なら防御 +15%）",
-            skill: { name: "山陰の覇者", duration: 6, cooldown: 35, attackSpeedMul: 1.5 },
-            skillText: "6秒間、攻撃速度 ×1.5",
-          },
-          sorin: {
-            name: "大友宗麟",
-            rarity: "R",
-            short: "宗",
-            color: "#b8532e",
-            passive: { damageMul: 1.1, cannonSplashMul: 1.5 },
-            passiveText: "攻撃力 +10%（大砲なら爆発範囲 +50%）",
-            skill: { name: "国崩し", duration: 1, cooldown: 40, volleys: 2, blastDamageMul: 1.6 },
-            skillText: "範囲内の敵全員に2回の範囲攻撃（1回 = 攻撃力×1.6）",
-          },
-          takanobu: {
-            name: "龍造寺隆信",
-            rarity: "R",
-            short: "龍",
-            color: "#9c2f2a",
-            passive: { damageMul: 1.18 },
-            passiveText: "攻撃力 +18%",
-            skill: { name: "肥前の熊", duration: 6, cooldown: 35, attackSpeedMul: 1.5, defMul: 1.3 },
-            skillText: "6秒間、攻撃速度 ×1.5（部隊なら防御 ×1.3）",
-          },
-          muneshige: {
-            name: "立花宗茂",
-            rarity: "SR",
-            short: "茂",
-            color: "#3a5a8a",
-            passive: { damageMul: 1.15, defMul: 1.2 },
-            passiveText: "攻撃力 +15%（部隊なら防御 +20%）",
-            skill: { name: "西国無双", duration: 8, cooldown: 40, attackSpeedMul: 1.6, defMul: 1.4 },
-            skillText: "8秒間、攻撃速度 ×1.6（部隊なら防御 ×1.4）",
-          },
-          terumoto: {
-            name: "毛利輝元",
-            rarity: "R",
-            short: "輝",
-            color: "#8a6a2a",
-            passive: { aura: { radius: 150, attackSpeed: 0.12 }, defMul: 1.1 },
-            passiveText: "半径150の他の塔の攻撃速度 +12%（部隊なら防御 +10%）",
-            skill: {
-              name: "西軍総大将",
-              duration: 8,
-              cooldown: 45,
-              aura: { radiusMul: 1.2, attackSpeed: 0.28 },
-            },
-            skillText: "8秒間、支援が +28%・範囲 ×1.2 に強化",
-          },
-        };
-        // 武将画像は tools/build.mjs が assets/manifest.json をもとに埋め込む。
-        // 画像がない武将は仮アイコン（レア度の色の円＋一文字）で描画する。
+  "nobunaga": {
+    "name": "織田信長",
+    "rarity": "SSR",
+    "short": "信",
+    "color": "#9c2f2a",
+    "favorite": "gunner",
+    "role": "連続射撃",
+    "squadPassive": {
+      "kind": "nobunaga"
+    },
+    "towerPassive": {
+      "kind": "nobunaga"
+    },
+    "squadText": "攻撃間隔 -8%（鉄砲兵は -18%）",
+    "towerText": "4回攻撃ごとに、標的へ威力60%の追加射撃",
+    "passiveText": "部隊：攻撃間隔 -8%（鉄砲兵は -18%）／塔：4回攻撃ごとに、標的へ威力60%の追加射撃",
+    "skill": {
+      "name": "三段撃ち",
+      "kind": "triple",
+      "duration": 1.2,
+      "cooldown": 40,
+      "target": "enemy"
+    },
+    "skillText": "標的へ威力90%の集中射撃を3回。倒したら別の敵へ切替。",
+    "siegePassive": {
+      "damageMul": 1.25,
+      "defMul": 1,
+      "text": "攻撃 +25%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "shingen": {
+    "name": "武田信玄",
+    "rarity": "SSR",
+    "short": "玄",
+    "color": "#a8432f",
+    "favorite": "spearman",
+    "role": "集団戦",
+    "squadPassive": {
+      "kind": "shingen"
+    },
+    "towerPassive": {
+      "kind": "shingen"
+    },
+    "squadText": "生存兵1人につき防御 +4%（槍兵は +6%、最大5人）",
+    "towerText": "半径140に味方部隊がいる間、被ダメージ -20%",
+    "passiveText": "部隊：生存兵1人につき防御 +4%（槍兵は +6%、最大5人）／塔：半径140に味方部隊がいる間、被ダメージ -20%",
+    "skill": {
+      "name": "風林火山",
+      "kind": "stages",
+      "duration": 12,
+      "cooldown": 48,
+      "target": null
+    },
+    "skillText": "半径160の味方へ4秒ずつ、攻撃+25% → 被ダメージ-30% → 毎秒HP4%回復。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1.15,
+      "text": "攻撃 +0%・防御 +15%（★の攻撃補正は別途適用）"
+    }
+  },
+  "kenshin": {
+    "name": "上杉謙信",
+    "rarity": "SSR",
+    "short": "謙",
+    "color": "#3c5f9e",
+    "favorite": "spearman",
+    "role": "前線維持",
+    "squadPassive": {
+      "kind": "kenshin"
+    },
+    "towerPassive": {
+      "kind": "kenshin"
+    },
+    "squadText": "6秒ごとに先頭を最も元気な兵と交代（槍兵は4秒）",
+    "towerText": "8秒ごとに、次の被ダメージを50%軽減する守りを1回得る",
+    "passiveText": "部隊：6秒ごとに先頭を最も元気な兵と交代（槍兵は4秒）／塔：8秒ごとに、次の被ダメージを50%軽減する守りを1回得る",
+    "skill": {
+      "name": "車懸りの陣",
+      "kind": "wheel",
+      "duration": 2,
+      "cooldown": 38,
+      "target": null
+    },
+    "skillText": "半径130へ威力35%の攻撃を4回。命中した敵の攻撃力を3秒間20%下げる。",
+    "siegePassive": {
+      "damageMul": 1.3,
+      "defMul": 1,
+      "text": "攻撃 +30%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "motoyasu": {
+    "name": "松平元康",
+    "rarity": "SSR",
+    "short": "康",
+    "color": "#6a7a2a",
+    "favorite": "ashigaru",
+    "role": "生存",
+    "squadPassive": {
+      "kind": "motoyasu"
+    },
+    "towerPassive": {
+      "kind": "motoyasu"
+    },
+    "squadText": "HP30%以下の兵の被ダメージ -20%（足軽は -30%）",
+    "towerText": "耐久が低いほど被ダメージを軽減（最大30%）",
+    "passiveText": "部隊：HP30%以下の兵の被ダメージ -20%（足軽は -30%）／塔：耐久が低いほど被ダメージを軽減（最大30%）",
+    "skill": {
+      "name": "三河の底力",
+      "kind": "lastStand",
+      "duration": 8,
+      "cooldown": 50,
+      "target": null
+    },
+    "skillText": "半径160の発動時に生存していた兵士・塔が、8秒以内の致命傷を1回だけHP1で耐える。",
+    "siegePassive": {
+      "damageMul": 1.15,
+      "defMul": 1.3,
+      "text": "攻撃 +15%・防御 +30%（★の攻撃補正は別途適用）"
+    }
+  },
+  "hideyoshi": {
+    "name": "羽柴秀吉",
+    "rarity": "SSR",
+    "short": "秀",
+    "color": "#b8862a",
+    "favorite": "ashigaru",
+    "role": "兵站・再配置",
+    "squadPassive": {
+      "kind": "hideyoshi"
+    },
+    "towerPassive": {
+      "kind": "hideyoshi"
+    },
+    "squadText": "配属部隊の新兵補充費用 -20%",
+    "towerText": "配属塔の修理費用 -25%",
+    "passiveText": "部隊：配属部隊の新兵補充費用 -20%／塔：配属塔の修理費用 -25%",
+    "skill": {
+      "name": "大返し",
+      "kind": "redeploy",
+      "duration": 0.2,
+      "cooldown": 45,
+      "target": "ally"
+    },
+    "skillText": "指定部隊を即座に撤退させ、同じウェーブ中に再配置可能にする。回復なし。",
+    "siegePassive": {
+      "damageMul": 1.1,
+      "defMul": 1,
+      "text": "攻撃 +10%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "yukimura": {
+    "name": "真田幸村",
+    "rarity": "SR",
+    "short": "幸",
+    "color": "#c0392b",
+    "favorite": "ashigaru",
+    "role": "逆境",
+    "squadPassive": {
+      "kind": "yukimura"
+    },
+    "towerPassive": {
+      "kind": "yukimura"
+    },
+    "squadText": "兵士のHPが低いほど攻撃力上昇（最大35%、足軽は50%）",
+    "towerText": "耐久が低いほど攻撃力上昇（最大40%）",
+    "passiveText": "部隊：兵士のHPが低いほど攻撃力上昇（最大35%、足軽は50%）／塔：耐久が低いほど攻撃力上昇（最大40%）",
+    "skill": {
+      "name": "日本一の兵",
+      "kind": "desperate",
+      "duration": 8,
+      "cooldown": 40,
+      "target": null
+    },
+    "skillText": "8秒間、配属先の攻撃力+60%・被ダメージ+25%。",
+    "siegePassive": {
+      "damageMul": 1.15,
+      "defMul": 1.3,
+      "text": "攻撃 +15%・防御 +30%（★の攻撃補正は別途適用）"
+    }
+  },
+  "kanetsugu": {
+    "name": "直江兼続",
+    "rarity": "SR",
+    "short": "兼",
+    "color": "#4a7d5c",
+    "favorite": "medic",
+    "role": "継続回復",
+    "squadPassive": {
+      "kind": "kanetsugu"
+    },
+    "towerPassive": {
+      "kind": "kanetsugu"
+    },
+    "squadText": "回復を受けた兵に3秒の継続回復。衛生兵は治療相手にも付与",
+    "towerText": "半径140の部隊が受ける回復量 +20%",
+    "passiveText": "部隊：回復を受けた兵に3秒の継続回復。衛生兵は治療相手にも付与／塔：半径140の部隊が受ける回復量 +20%",
+    "skill": {
+      "name": "愛の救護陣",
+      "kind": "healingField",
+      "duration": 8,
+      "cooldown": 48,
+      "target": "road"
+    },
+    "skillText": "指定した道に半径100・8秒の救護陣。生存兵と塔を毎秒最大HPの3%回復。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "masamune": {
+    "name": "伊達政宗",
+    "rarity": "SR",
+    "short": "政",
+    "color": "#2f4a6e",
+    "favorite": "cavalry",
+    "role": "突撃・突破",
+    "squadPassive": {
+      "kind": "masamune"
+    },
+    "towerPassive": {
+      "kind": "masamune"
+    },
+    "squadText": "新しい敵への初撃後、次の攻撃待ち -25%（騎兵は -45%）",
+    "towerText": "射程に入った敵への初撃後、次の攻撃待ち -35%",
+    "passiveText": "部隊：新しい敵への初撃後、次の攻撃待ち -25%（騎兵は -45%）／塔：射程に入った敵への初撃後、次の攻撃待ち -35%",
+    "skill": {
+      "name": "独眼竜の突撃",
+      "kind": "charge",
+      "duration": 0.4,
+      "cooldown": 36,
+      "target": "road"
+    },
+    "skillText": "指定地点までの直線上へ威力140%の攻撃と45の押し戻し。騎兵配属時は部隊も地点へ移動。",
+    "siegePassive": {
+      "damageMul": 1.1,
+      "defMul": 1,
+      "text": "攻撃 +10%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "tadakatsu": {
+    "name": "本多忠勝",
+    "rarity": "SR",
+    "short": "忠",
+    "color": "#5a4a3a",
+    "favorite": "spearman",
+    "role": "強敵対策",
+    "squadPassive": {
+      "kind": "tadakatsu"
+    },
+    "towerPassive": {
+      "kind": "tadakatsu"
+    },
+    "squadText": "大将からの被ダメージ -30%（槍兵は -45%）",
+    "towerText": "大将に命中すると2秒間、その敵の攻撃間隔 +25%",
+    "passiveText": "部隊：大将からの被ダメージ -30%（槍兵は -45%）／塔：大将に命中すると2秒間、その敵の攻撃間隔 +25%",
+    "skill": {
+      "name": "蜻蛉切",
+      "kind": "bossStrike",
+      "duration": 0.4,
+      "cooldown": 38,
+      "target": "enemy"
+    },
+    "skillText": "敵1体へ威力300%・防御70%無視の攻撃。大将にはさらに50%増加。",
+    "siegePassive": {
+      "damageMul": 1.1,
+      "defMul": 1.4,
+      "text": "攻撃 +10%・防御 +40%（★の攻撃補正は別途適用）"
+    }
+  },
+  "mitsuhide": {
+    "name": "明智光秀",
+    "rarity": "SR",
+    "short": "光",
+    "color": "#6a4a9a",
+    "favorite": "gunner",
+    "role": "狙撃",
+    "squadPassive": {
+      "kind": "mitsuhide"
+    },
+    "towerPassive": {
+      "kind": "mitsuhide"
+    },
+    "squadText": "HP満タンの敵への初撃 +25%（鉄砲兵は +50%）",
+    "towerText": "射程内で攻撃力が最も高い敵を優先",
+    "passiveText": "部隊：HP満タンの敵への初撃 +25%（鉄砲兵は +50%）／塔：射程内で攻撃力が最も高い敵を優先",
+    "skill": {
+      "name": "穿つ一弾",
+      "kind": "snipe",
+      "duration": 0.4,
+      "cooldown": 38,
+      "target": "enemy"
+    },
+    "skillText": "敵1体へ威力280%の狙撃と1.5秒の攻撃封じ。大将の封じは0.7秒。",
+    "siegePassive": {
+      "damageMul": 1.2,
+      "defMul": 1,
+      "text": "攻撃 +20%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "mitsunari": {
+    "name": "石田三成",
+    "rarity": "SR",
+    "short": "成",
+    "color": "#a8332e",
+    "favorite": null,
+    "role": "同時攻撃",
+    "squadPassive": {
+      "kind": "mitsunari"
+    },
+    "towerPassive": {
+      "kind": "mitsunari"
+    },
+    "squadText": "半径150に同兵種の別部隊がいると攻撃力 +15%",
+    "towerText": "半径150に別種類の塔があると射程 +15%",
+    "passiveText": "部隊：半径150に同兵種の別部隊がいると攻撃力 +15%／塔：半径150に別種類の塔があると射程 +15%",
+    "skill": {
+      "name": "大一大万大吉",
+      "kind": "rally",
+      "duration": 0.2,
+      "cooldown": 42,
+      "target": null
+    },
+    "skillText": "半径180の塔・兵士の攻撃/治療待ちを1回だけ即完了（必殺技の待ちは戻さない）。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1.1,
+      "text": "攻撃 +0%・防御 +10%（★の攻撃補正は別途適用）"
+    }
+  },
+  "yoshihiro": {
+    "name": "島津義弘",
+    "rarity": "SR",
+    "short": "島",
+    "color": "#2f4a6e",
+    "favorite": "gunner",
+    "role": "接近迎撃",
+    "squadPassive": {
+      "kind": "yoshihiro"
+    },
+    "towerPassive": {
+      "kind": "yoshihiro"
+    },
+    "squadText": "距離60以内への攻撃 +15%（鉄砲兵は +35%）",
+    "towerText": "敵が近いほど与ダメージ上昇（最大30%）",
+    "passiveText": "部隊：距離60以内への攻撃 +15%（鉄砲兵は +35%）／塔：敵が近いほど与ダメージ上昇（最大30%）",
+    "skill": {
+      "name": "釣り野伏せ",
+      "kind": "ambush",
+      "duration": 10,
+      "cooldown": 38,
+      "target": "road"
+    },
+    "skillText": "指定した道に10秒間の伏兵。敵が半径55に入ると一度だけ、半径90へ威力200%の攻撃。",
+    "siegePassive": {
+      "damageMul": 1.15,
+      "defMul": 1.35,
+      "text": "攻撃 +15%・防御 +35%（★の攻撃補正は別途適用）"
+    }
+  },
+  "motochika": {
+    "name": "長宗我部元親",
+    "rarity": "SR",
+    "short": "親",
+    "color": "#2a5a9a",
+    "favorite": "archer",
+    "role": "制圧",
+    "squadPassive": {
+      "kind": "motochika"
+    },
+    "towerPassive": {
+      "kind": "motochika"
+    },
+    "squadText": "攻撃で敵を15%減速。持続0.5秒（弓兵は1秒）",
+    "towerText": "命中した敵の攻撃力を2秒間 -12%",
+    "passiveText": "部隊：攻撃で敵を15%減速。持続0.5秒（弓兵は1秒）／塔：命中した敵の攻撃力を2秒間 -12%",
+    "skill": {
+      "name": "土佐の制圧陣",
+      "kind": "suppression",
+      "duration": 7,
+      "cooldown": 40,
+      "target": "road"
+    },
+    "skillText": "指定した道の半径100で7秒間、敵の移動速度-45%・攻撃間隔+40%。",
+    "siegePassive": {
+      "damageMul": 1.1,
+      "defMul": 1,
+      "text": "攻撃 +10%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "kiyomasa": {
+    "name": "加藤清正",
+    "rarity": "SR",
+    "short": "清",
+    "color": "#8a6a1a",
+    "favorite": "spearman",
+    "role": "前線整理",
+    "squadPassive": {
+      "kind": "kiyomasa"
+    },
+    "towerPassive": {
+      "kind": "kiyomasa"
+    },
+    "squadText": "近接攻撃時、近くの別の敵1体へ威力20%の追撃（槍兵は35%）",
+    "towerText": "最大耐久 +15%（配属時に現在耐久は回復しない）",
+    "passiveText": "部隊：近接攻撃時、近くの別の敵1体へ威力20%の追撃（槍兵は35%）／塔：最大耐久 +15%（配属時に現在耐久は回復しない）",
+    "skill": {
+      "name": "片鎌槍",
+      "kind": "sweep",
+      "duration": 0.4,
+      "cooldown": 35,
+      "target": "road"
+    },
+    "skillText": "指定地点への前方範囲を威力160%で薙ぎ、敵を道に沿って60押し戻す。大将は20。",
+    "siegePassive": {
+      "damageMul": 1.2,
+      "defMul": 1,
+      "text": "攻撃 +20%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "hanbei": {
+    "name": "竹中半兵衛",
+    "rarity": "SR",
+    "short": "半",
+    "color": "#6a4a8a",
+    "favorite": "medic",
+    "role": "緊急救護",
+    "squadPassive": {
+      "kind": "hanbei"
+    },
+    "towerPassive": {
+      "kind": "hanbei"
+    },
+    "squadText": "部隊内でHP割合が最も低い兵の被ダメージ -20%",
+    "towerText": "半径150で最もHP割合が低い部隊の被ダメージ -15%",
+    "passiveText": "部隊：部隊内でHP割合が最も低い兵の被ダメージ -20%／塔：半径150で最もHP割合が低い部隊の被ダメージ -15%",
+    "skill": {
+      "name": "応急の一策",
+      "kind": "firstAid",
+      "duration": 0.2,
+      "cooldown": 38,
+      "target": "heal"
+    },
+    "skillText": "指定した生存兵1人または塔1基の最大HPの45%を回復。戦死・全壊は対象外。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "muneshige": {
+    "name": "立花宗茂",
+    "rarity": "SR",
+    "short": "茂",
+    "color": "#3a5a8a",
+    "favorite": "cavalry",
+    "role": "救援",
+    "squadPassive": {
+      "kind": "muneshige"
+    },
+    "towerPassive": {
+      "kind": "muneshige"
+    },
+    "squadText": "半径150で別部隊が足止め中なら攻撃力 +15%（騎兵は25%）",
+    "towerText": "味方部隊が足止めしている敵への攻撃 +25%",
+    "passiveText": "部隊：半径150で別部隊が足止め中なら攻撃力 +15%（騎兵は25%）／塔：味方部隊が足止めしている敵への攻撃 +25%",
+    "skill": {
+      "name": "西国無双",
+      "kind": "rescue",
+      "duration": 0.4,
+      "cooldown": 38,
+      "target": "ally"
+    },
+    "skillText": "指定した味方部隊の半径80へ威力130%の攻撃と押し戻し。騎兵配属時は近くの空いた道へ救援移動。",
+    "siegePassive": {
+      "damageMul": 1.15,
+      "defMul": 1.2,
+      "text": "攻撃 +15%・防御 +20%（★の攻撃補正は別途適用）"
+    }
+  },
+  "kanbei": {
+    "name": "黒田官兵衛",
+    "rarity": "R",
+    "short": "官",
+    "color": "#55606e",
+    "favorite": null,
+    "role": "標的指定",
+    "squadPassive": {
+      "kind": "kanbei"
+    },
+    "towerPassive": {
+      "kind": "kanbei"
+    },
+    "squadText": "攻撃した敵に2秒の弱点印（味方からの被ダメージ +8%）",
+    "towerText": "同じ敵への連続攻撃で威力 +6%ずつ（最大30%）",
+    "passiveText": "部隊：攻撃した敵に2秒の弱点印（味方からの被ダメージ +8%）／塔：同じ敵への連続攻撃で威力 +6%ずつ（最大30%）",
+    "skill": {
+      "name": "軍略・集中砲火",
+      "kind": "focus",
+      "duration": 7,
+      "cooldown": 40,
+      "target": "enemy"
+    },
+    "skillText": "指定した敵1体を7秒間優先攻撃し、味方からの被ダメージを20%増やす。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "motonari": {
+    "name": "毛利元就",
+    "rarity": "R",
+    "short": "元",
+    "color": "#3f7a6d",
+    "favorite": "archer",
+    "role": "連携",
+    "squadPassive": {
+      "kind": "motonari"
+    },
+    "towerPassive": {
+      "kind": "motonari"
+    },
+    "squadText": "異なる兵3人が同じ敵を攻撃すると威力35%の追加ダメージ",
+    "towerText": "別の塔が1秒以内に攻撃した敵への攻撃 +20%",
+    "passiveText": "部隊：異なる兵3人が同じ敵を攻撃すると威力35%の追加ダメージ／塔：別の塔が1秒以内に攻撃した敵への攻撃 +20%",
+    "skill": {
+      "name": "三本の矢",
+      "kind": "threeArrows",
+      "duration": 0.4,
+      "cooldown": 32,
+      "target": null
+    },
+    "skillText": "射程内の異なる敵を最大3体、威力120%で同時攻撃。重複命中なし。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "keiji": {
+    "name": "前田慶次",
+    "rarity": "R",
+    "short": "慶",
+    "color": "#8a5a2b",
+    "favorite": "cavalry",
+    "role": "単独行動",
+    "squadPassive": {
+      "kind": "keiji"
+    },
+    "towerPassive": {
+      "kind": "keiji"
+    },
+    "squadText": "半径120に別部隊がいないと攻撃 +15%・防御 +20%（騎兵は25%・30%）",
+    "towerText": "半径140に別の塔がないと攻撃 +20%",
+    "passiveText": "部隊：半径120に別部隊がいないと攻撃 +15%・防御 +20%（騎兵は25%・30%）／塔：半径140に別の塔がないと攻撃 +20%",
+    "skill": {
+      "name": "傾奇者",
+      "kind": "taunt",
+      "duration": 7,
+      "cooldown": 36,
+      "target": "enemy"
+    },
+    "skillText": "指定敵の攻撃を7秒間配属先へ引きつける（敵の射程内のみ）。配属先は被ダメージ-30%。",
+    "siegePassive": {
+      "damageMul": 1.15,
+      "defMul": 1,
+      "text": "攻撃 +15%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "ujiyasu": {
+    "name": "北条氏康",
+    "rarity": "R",
+    "short": "氏",
+    "color": "#2f4a7e",
+    "favorite": "spearman",
+    "role": "突破阻止",
+    "squadPassive": {
+      "kind": "ujiyasu"
+    },
+    "towerPassive": {
+      "kind": "ujiyasu"
+    },
+    "squadText": "足止めの上限時間 +2秒（足軽・槍兵・騎兵のみ）",
+    "towerText": "連続被弾ごとに被ダメージ -5%（最大25%、3秒無被弾で解除）",
+    "passiveText": "部隊：足止めの上限時間 +2秒（足軽・槍兵・騎兵のみ）／塔：連続被弾ごとに被ダメージ -5%（最大25%、3秒無被弾で解除）",
+    "skill": {
+      "name": "相模の獅子",
+      "kind": "blockBoost",
+      "duration": 8,
+      "cooldown": 42,
+      "target": null
+    },
+    "skillText": "8秒間、半径160の足止めできる部隊の足止め上限+1。敵騎兵は騎兵のみ足止め可。",
+    "siegePassive": {
+      "damageMul": 1.05,
+      "defMul": 1.3,
+      "text": "攻撃 +5%・防御 +30%（★の攻撃補正は別途適用）"
+    }
+  },
+  "masanori": {
+    "name": "福島正則",
+    "rarity": "R",
+    "short": "則",
+    "color": "#a8332e",
+    "favorite": "ashigaru",
+    "role": "先手",
+    "squadPassive": {
+      "kind": "masanori"
+    },
+    "towerPassive": {
+      "kind": "masanori"
+    },
+    "squadText": "新しい敵への近接初撃 +20%（足軽は35%）",
+    "towerText": "新しい敵への初撃 +30%",
+    "passiveText": "部隊：新しい敵への近接初撃 +20%（足軽は35%）／塔：新しい敵への初撃 +30%",
+    "skill": {
+      "name": "賤ヶ岳の七本槍",
+      "kind": "sevenSpears",
+      "duration": 1.4,
+      "cooldown": 35,
+      "target": null
+    },
+    "skillText": "半径150へ威力35%の攻撃を7回。近い敵から順に狙い、重複命中あり。",
+    "siegePassive": {
+      "damageMul": 1.2,
+      "defMul": 1,
+      "text": "攻撃 +20%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "kansuke": {
+    "name": "山本勘助",
+    "rarity": "R",
+    "short": "勘",
+    "color": "#5a3a7a",
+    "favorite": null,
+    "role": "罠",
+    "squadPassive": {
+      "kind": "kansuke"
+    },
+    "towerPassive": {
+      "kind": "kansuke"
+    },
+    "squadText": "曲がり角から80以内に配置すると防御 +20%",
+    "towerText": "曲がり角から80以内に建っていると射程 +15%",
+    "passiveText": "部隊：曲がり角から80以内に配置すると防御 +20%／塔：曲がり角から80以内に建っていると射程 +15%",
+    "skill": {
+      "name": "啄木鳥戦法",
+      "kind": "trap",
+      "duration": 10,
+      "cooldown": 38,
+      "target": "road"
+    },
+    "skillText": "指定した道に10秒の罠。最初の敵1体を2秒停止（大将は0.8秒）。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "yoshiaki": {
+    "name": "最上義光",
+    "rarity": "R",
+    "short": "最",
+    "color": "#4a5a6a",
+    "favorite": "archer",
+    "role": "漏れ対策",
+    "squadPassive": {
+      "kind": "yoshiaki"
+    },
+    "towerPassive": {
+      "kind": "yoshiaki"
+    },
+    "squadText": "敵が城に近いほど攻撃力上昇（最大20%、弓兵は30%）",
+    "towerText": "城から250以内に建っていると攻撃間隔 -15%",
+    "passiveText": "部隊：敵が城に近いほど攻撃力上昇（最大20%、弓兵は30%）／塔：城から250以内に建っていると攻撃間隔 -15%",
+    "skill": {
+      "name": "羽州の狐",
+      "kind": "pursuit",
+      "duration": 0.4,
+      "cooldown": 32,
+      "target": null
+    },
+    "skillText": "射程内で城に最も近い敵へ威力200%の狙撃と、3秒間60%減速。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1,
+      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "yoshikage": {
+    "name": "朝倉義景",
+    "rarity": "R",
+    "short": "朝",
+    "color": "#b8532e",
+    "favorite": "medic",
+    "role": "休息回復",
+    "squadPassive": {
+      "kind": "yoshikage"
+    },
+    "towerPassive": {
+      "kind": "yoshikage"
+    },
+    "squadText": "3秒間攻撃・被弾しなければ毎秒HP1%回復",
+    "towerText": "3秒間攻撃・被弾しなければ毎秒耐久0.7%回復",
+    "passiveText": "部隊：3秒間攻撃・被弾しなければ毎秒HP1%回復／塔：3秒間攻撃・被弾しなければ毎秒耐久0.7%回復",
+    "skill": {
+      "name": "一乗谷の休息",
+      "kind": "rest",
+      "duration": 6,
+      "cooldown": 45,
+      "target": null
+    },
+    "skillText": "6秒間、配属先の攻撃・治療を停止し、毎秒最大HPの7%回復。被弾は通常どおり。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1.1,
+      "text": "攻撃 +0%・防御 +10%（★の攻撃補正は別途適用）"
+    }
+  },
+  "dosan": {
+    "name": "斎藤道三",
+    "rarity": "R",
+    "short": "道",
+    "color": "#5a3a6a",
+    "favorite": null,
+    "role": "継続ダメージ",
+    "squadPassive": {
+      "kind": "dosan"
+    },
+    "towerPassive": {
+      "kind": "dosan"
+    },
+    "squadText": "攻撃で毒（3秒間、毎秒攻撃力6%）。重ねず持続を更新",
+    "towerText": "攻撃で同じ毒を付与",
+    "passiveText": "部隊：攻撃で毒（3秒間、毎秒攻撃力6%）。重ねず持続を更新／塔：攻撃で同じ毒を付与",
+    "skill": {
+      "name": "美濃の蝮",
+      "kind": "poisonField",
+      "duration": 6,
+      "cooldown": 35,
+      "target": "road"
+    },
+    "skillText": "半径100の敵へ6秒間、毎秒威力12%の毒。大将には3秒。毒は重ならない。",
+    "siegePassive": {
+      "damageMul": 1.2,
+      "defMul": 1,
+      "text": "攻撃 +20%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "yoshikata": {
+    "name": "六角義賢",
+    "rarity": "R",
+    "short": "六",
+    "color": "#5a4a7a",
+    "favorite": "archer",
+    "role": "射撃対策",
+    "squadPassive": {
+      "kind": "yoshikata"
+    },
+    "towerPassive": {
+      "kind": "yoshikata"
+    },
+    "squadText": "遠距離攻撃の被ダメージ -20%",
+    "towerText": "敵の弓兵を優先し、与ダメージ +20%",
+    "passiveText": "部隊：遠距離攻撃の被ダメージ -20%／塔：敵の弓兵を優先し、与ダメージ +20%",
+    "skill": {
+      "name": "観音寺の守り",
+      "kind": "rangedShield",
+      "duration": 8,
+      "cooldown": 42,
+      "target": "road"
+    },
+    "skillText": "指定した道の半径120の味方へ8秒間、最大HP20%分の遠距離攻撃を吸収する盾。",
+    "siegePassive": {
+      "damageMul": 1.08,
+      "defMul": 1,
+      "text": "攻撃 +8%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "haruhisa": {
+    "name": "尼子晴久",
+    "rarity": "R",
+    "short": "尼",
+    "color": "#2f4a7e",
+    "favorite": "ashigaru",
+    "role": "突破後の迎撃",
+    "squadPassive": {
+      "kind": "haruhisa"
+    },
+    "towerPassive": {
+      "kind": "haruhisa"
+    },
+    "squadText": "自部隊を突破した敵の足止め保護時間を1.5秒に短縮",
+    "towerText": "部隊を突破してから3秒以内の敵への攻撃 +30%",
+    "passiveText": "部隊：自部隊を突破した敵の足止め保護時間を1.5秒に短縮／塔：部隊を突破してから3秒以内の敵への攻撃 +30%",
+    "skill": {
+      "name": "山陰の封鎖",
+      "kind": "seal",
+      "duration": 0.4,
+      "cooldown": 34,
+      "target": "road"
+    },
+    "skillText": "指定した道の半径90の敵の突破保護を解除し、近くの味方が再び足止め可能にする。",
+    "siegePassive": {
+      "damageMul": 1.12,
+      "defMul": 1.15,
+      "text": "攻撃 +12%・防御 +15%（★の攻撃補正は別途適用）"
+    }
+  },
+  "sorin": {
+    "name": "大友宗麟",
+    "rarity": "R",
+    "short": "宗",
+    "color": "#b8532e",
+    "favorite": "gunner",
+    "role": "貫通",
+    "squadPassive": {
+      "kind": "sorin"
+    },
+    "towerPassive": {
+      "kind": "sorin"
+    },
+    "squadText": "防御を20%無視（鉄砲兵は40%）",
+    "towerText": "4回攻撃ごとに後方の敵へ威力50%の貫通追撃",
+    "passiveText": "部隊：防御を20%無視（鉄砲兵は40%）／塔：4回攻撃ごとに後方の敵へ威力50%の貫通追撃",
+    "skill": {
+      "name": "国崩し",
+      "kind": "pierce",
+      "duration": 0.4,
+      "cooldown": 38,
+      "target": "road"
+    },
+    "skillText": "指定地点への直線上の敵を貫通攻撃。先頭は威力220%、後続は150%。",
+    "siegePassive": {
+      "damageMul": 1.1,
+      "defMul": 1,
+      "text": "攻撃 +10%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "takanobu": {
+    "name": "龍造寺隆信",
+    "rarity": "R",
+    "short": "龍",
+    "color": "#9c2f2a",
+    "favorite": "cavalry",
+    "role": "威圧",
+    "squadPassive": {
+      "kind": "takanobu"
+    },
+    "towerPassive": {
+      "kind": "takanobu"
+    },
+    "squadText": "自部隊が足止めしている敵の攻撃力 -15%",
+    "towerText": "塔を距離100以内から攻撃する敵の攻撃力 -15%",
+    "passiveText": "部隊：自部隊が足止めしている敵の攻撃力 -15%／塔：塔を距離100以内から攻撃する敵の攻撃力 -15%",
+    "skill": {
+      "name": "肥前の熊",
+      "kind": "fear",
+      "duration": 6,
+      "cooldown": 36,
+      "target": null
+    },
+    "skillText": "半径140の敵を0.5秒ひるませ（大将は0.2秒）、6秒間攻撃力-25%。",
+    "siegePassive": {
+      "damageMul": 1.18,
+      "defMul": 1,
+      "text": "攻撃 +18%・防御 +0%（★の攻撃補正は別途適用）"
+    }
+  },
+  "terumoto": {
+    "name": "毛利輝元",
+    "rarity": "R",
+    "short": "輝",
+    "color": "#8a6a2a",
+    "favorite": "medic",
+    "role": "持久戦・経済",
+    "squadPassive": {
+      "kind": "terumoto"
+    },
+    "towerPassive": {
+      "kind": "terumoto"
+    },
+    "squadText": "配属部隊のウェーブ終了時のHP回復量を20%から35%へ",
+    "towerText": "配属塔が倒した敵から20%で追加1G（1ウェーブ最大10G）",
+    "passiveText": "部隊：配属部隊のウェーブ終了時のHP回復量を20%から35%へ／塔：配属塔が倒した敵から20%で追加1G（1ウェーブ最大10G）",
+    "skill": {
+      "name": "西軍の兵站",
+      "kind": "supply",
+      "duration": 0.2,
+      "cooldown": 45,
+      "target": null
+    },
+    "skillText": "次の準備時間に使える治療・修理30%引きを1回分得る。重複不可。",
+    "siegePassive": {
+      "damageMul": 1,
+      "defMul": 1.1,
+      "text": "攻撃 +0%・防御 +10%（★の攻撃補正は別途適用）"
+    }
+  }
+};
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
         const SAVE_KEY = "worldDefense.warlords.v1";
 
@@ -1832,7 +2390,7 @@
         const heroState = {};
         let cutin = null; // 必殺技発動時の小さなカットイン（見た目のみ）
         function newHeroState(id) {
-          return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0 };
+          return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0, passiveClock: 0, guardReady: false, lastActivity: 0, lastHit: -100, hitStack: 0, shots: 0, chain: 0, seen: new Set(), wardUsed: new Set(), protected: new Set(), economyGold: 0, couponWave: -1 };
         }
         // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将・負傷の残りウェーブ」だけ。戦闘は保存しない。
         function loadWarlordSave() {
@@ -2001,63 +2559,549 @@
 
         // ===== 武将：能力計算 =====
         // 毎回 types（元の数値）とレベルから計算し、塔や兵士のデータは書き換えない。
+        // ===== 武将の役割別エンジン（数値・一時状態・ダメージ経路を共通化） =====
+        const WARLORD_RULES = {
+          radius: 160, targetRange: 240, maxGuard: 0.65, maxVulnerability: 0.35,
+          enemyArmor: { goblin: 0, slime: 0, wolf: 3, knight: 10, dragon: 0, boss: 16 },
+          maxExtraGold: 10, extraGoldChance: 0.2, supplyDiscount: 0.3,
+        };
+        let combatClock = 0, enemySerial = 0, pendingSkillTarget = null;
+        const aliveEnemies = () => enemies.filter((e) => !e.gone && e.hp > 0);
+        const heroHas = (h, id) => h && h.id === id;
+        const favorite = (h, q) => !!(h && q && WARLORDS[h.id].favorite === q.type);
+        const activeKind = (h, kind) => h && h.active > 0 && WARLORDS[h.id].skill.kind === kind;
+        const rawMaxHp = (s) => {
+          const c = SOLDIER_TYPES[s.type], lv = Math.min(s.level, SQUAD_RULES.statTaper) - 1 + Math.max(0, s.level - SQUAD_RULES.statTaper) * 0.5;
+          return Math.round(c.hp + c.grow.hp * lv);
+        };
+        const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
+        const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
+        const targetToken = (o) => (towers.includes(o) ? "t:" : "s:") + o.id;
+        function seenTarget(h, token) {
+          const yes = h.seen.has(token);
+          h.seen.add(token);
+          return yes;
+        }
+        function nearBend(pos) {
+          return [upper, lower].some((path) => path.slice(1, -1).some(([x, y], j) => {
+            const a = path[j], b = path[j + 2], cross = (x - a[0]) * (b[1] - y) - (y - a[1]) * (b[0] - x);
+            return Math.abs(cross) > 1 && Math.hypot(pos.x - x, pos.y - y) <= 80;
+          }));
+        }
+        function inHeroArea(h, p, radius = WARLORD_RULES.radius) {
+          const pos = heroPos(h);
+          return !!(pos && dist(pos, p) <= radius);
+        }
         function auraFrom(h) {
-          const a = WARLORDS[h.id].passive.aura,
-            pos = heroPos(h);
-          if (!a || !pos) return null;
-          const boost = h.active > 0 ? WARLORDS[h.id].skill.aura : null;
-          return {
-            pos,
-            radius: a.radius * (boost ? boost.radiusMul : 1),
-            attackSpeed: boost ? boost.attackSpeed : a.attackSpeed,
-          };
+          if (!activeKind(h, "stages") || !heroPos(h)) return null;
+          return { pos: heroPos(h), radius: 160, attackSpeed: 0 };
+        }
+        function stagedBonus(p) {
+          const out = { atk: 1, guard: 0, regen: 0 };
+          for (const h of ownedHeroes()) {
+            if (!activeKind(h, "stages") || !inHeroArea(h, p)) continue;
+            const phase = Math.min(2, Math.floor((WARLORDS[h.id].skill.duration - h.active) / 4));
+            if (phase === 0) out.atk = Math.max(out.atk, 1.25);
+            if (phase === 1) out.guard = Math.max(out.guard, 0.3);
+            if (phase === 2) out.regen = Math.max(out.regen, 0.04);
+          }
+          return out;
         }
         function towerStats(t) {
-          const p = types[t.type];
-          let range = p.range,
-            damage = p.damage * (1 + 0.55 * (t.level - 1)),
-            splash = CANNON_SPLASH,
-            speedMul = 1,
-            aura = 0;
-          const h = heroOn(t);
+          const p = types[t.type], h = heroOn(t);
+          let damage = p.damage * (1 + 0.55 * (t.level - 1)), range = p.range, speedMul = 1;
           if (h) {
-            const c = WARLORDS[h.id];
-            range *= c.passive.rangeMul || 1;
-            damage *= (c.passive.damageMul || 1) * starMul(h.id);
-            if (t.type === "cannon") splash *= c.passive.cannonSplashMul || 1;
-            if (h.active > 0 && c.skill.attackSpeedMul) speedMul *= c.skill.attackSpeedMul;
+            damage *= starMul(h.id);
+            if (h.id === "yukimura") damage *= 1 + (1 - Math.max(0, towerHp(t)) / towerMaxHp(t)) * 0.4;
+            if (h.id === "keiji" && !towers.some((o) => o !== t && !o.destroyed && dist(o, t) < 140)) damage *= 1.2;
+            if (h.id === "mitsunari" && towers.some((o) => o !== t && !o.destroyed && o.type !== t.type && dist(o, t) <= 150)) range *= 1.15;
+            if (h.id === "kansuke" && nearBend(t)) range *= 1.15;
+            if (h.id === "yoshiaki" && dist(t, { x: 960, y: 300 }) <= 250) speedMul /= 0.85;
+            if (activeKind(h, "desperate")) damage *= 1.6;
           }
-          // 支援は武将ごとに1回だけ適用（同じ武将は1か所にしか配属できないので重複しない）
-          for (const other of ownedHeroes()) {
-            const a = auraFrom(other);
-            if (!a || (other.tower === t && !HERO_RULES.auraIncludesSelf)) continue;
-            if (dist(a.pos, t) <= a.radius) aura += a.attackSpeed;
-          }
-          speedMul = Math.min(HERO_RULES.maxAttackSpeedMul, speedMul * (1 + aura));
-          return { range, damage, splash, rate: p.rate / speedMul, speedMul, aura };
+          damage *= stagedBonus(t).atk;
+          return { range, damage, splash: CANNON_SPLASH, rate: p.rate / Math.min(2.5, speedMul), speedMul, aura: 0 };
         }
-        // 部隊に配属された武将の効果（兵士の能力計算 soldierStats から使う）
         function squadHeroMods(q) {
           const h = q && heroOnSquad(q);
           if (!h) return null;
-          const c = WARLORDS[h.id],
-            on = h.active > 0;
-          return {
-            atk: (c.passive.damageMul || 1) * starMul(h.id),
-            def: (c.passive.defMul || 1) * (on && c.skill.defMul ? c.skill.defMul : 1),
-            range: c.passive.rangeMul || 1,
-            speed: Math.min(
-              HERO_RULES.maxAttackSpeedMul,
-              on && c.skill.attackSpeedMul ? c.skill.attackSpeedMul : 1,
-            ),
-          };
+          const out = { atk: starMul(h.id), def: 1, range: 1, speed: 1 };
+          if (h.id === "nobunaga" && !SOLDIER_TYPES[q.type].heal) out.speed = 1 / (favorite(h, q) ? 0.82 : 0.92);
+          if (h.id === "shingen") out.def *= 1 + members(q).length * (favorite(h, q) ? 0.06 : 0.04);
+          if (h.id === "keiji" && !fieldSquads().some((o) => o !== q && dist(o, q) < 120)) {
+            out.atk *= favorite(h, q) ? 1.25 : 1.15;
+            out.def *= favorite(h, q) ? 1.3 : 1.2;
+          }
+          if (h.id === "mitsunari" && fieldSquads().some((o) => o !== q && o.type === q.type && dist(o, q) <= 150)) out.atk *= 1.15;
+          if (h.id === "muneshige" && fieldSquads().some((o) => o !== q && dist(o, q) <= 150 && blockCount(o))) out.atk *= favorite(h, q) ? 1.25 : 1.15;
+          if (h.id === "kansuke" && nearBend(q)) out.def *= 1.2;
+          if (activeKind(h, "desperate")) out.atk *= 1.6;
+          out.atk *= stagedBonus(q).atk;
+          return out;
         }
-
-        // ===== 武将：配属・解除・必殺技 =====
+        function soldierHeroAtk(s) {
+          const q = squadById(s.squadId), h = q && heroOnSquad(q);
+          return heroHas(h, "yukimura") ? 1 + (1 - Math.max(0, s.hp) / rawMaxHp(s)) * (favorite(h, q) ? 0.5 : 0.35) : 1;
+        }
+        function passiveTextFor(id, target) {
+          const c = WARLORDS[id];
+          return towers.includes(target) ? c.towerText : squads.includes(target) ? c.squadText : c.passiveText;
+        }
         function endSkill(h) {
           h.active = 0;
           h.volleysLeft = 0;
+          h.field = h.skillTarget = null;
+          if (pendingSkillTarget && pendingSkillTarget.h === h) cancelHeroTarget();
         }
+        function touchHero(target) {
+          const h = towers.includes(target) ? heroOn(target) : heroOnSquad(target);
+          if (h) h.lastActivity = combatClock;
+        }
+        function putWeakness(e, amount, duration) {
+          e.weakness = Math.min(WARLORD_RULES.maxVulnerability, Math.max(e.weakness || 0, amount));
+          e.weakLeft = Math.max(e.weakLeft || 0, duration);
+        }
+        function putAttackDebuff(e, amount, duration) {
+          e.attackDebuff = Math.max(e.attackDebuff || 0, Math.min(0.4, amount));
+          e.debuffLeft = Math.max(e.debuffLeft || 0, duration);
+        }
+        function putSlow(e, multiplier, duration) {
+          e.heroSlow = Math.min(e.heroSlow || 1, Math.max(0.35, multiplier));
+          e.heroSlowLeft = Math.max(e.heroSlowLeft || 0, duration);
+        }
+        function putPoison(e, dps, duration, source) {
+          e.poisonDps = Math.max(e.poisonDps || 0, dps);
+          e.poisonLeft = Math.max(e.poisonLeft || 0, duration);
+          e.poisonSource = source;
+        }
+        function targetPriority(pos, range, h) {
+          const list = aliveEnemies().filter((e) => dist(pos, e) <= range);
+          const marked = ownedHeroes().find((v) => activeKind(v, "focus") && list.includes(v.skillTarget));
+          if (marked) return marked.skillTarget;
+          if (heroHas(h, "mitsuhide") && h.tower) return list.sort((a, b) => enemyAttackPower(b) - enemyAttackPower(a) || b.d - a.d)[0];
+          if (heroHas(h, "yoshikata") && h.tower) return list.sort((a, b) => Number(b.kind === "dragon") - Number(a.kind === "dragon") || b.d - a.d)[0];
+          return list.sort((a, b) => b.d - a.d)[0];
+        }
+        function enemyAttackPower(e) {
+          return (ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin).damage;
+        }
+        function dealEnemyDamage(e, raw, source = {}, options = {}) {
+          if (!e || e.gone || e.hp <= 0 || raw <= 0) return 0;
+          const { h, q, t, s } = source;
+          const normal = options.normal !== false;
+          let damage = raw, ignore = options.ignoreArmor || 0;
+          if (normal && h) {
+            const token = (s ? "s" + s.id : "tower") + ":" + enemyToken(e), fresh = !seenTarget(h, token);
+            if (q && h.id === "mitsuhide" && e.hp >= e.max - 0.001) damage *= favorite(h, q) ? 1.5 : 1.25;
+            if (h.id === "masanori" && fresh && (!q || SOLDIER_TYPES[q.type].block)) damage *= t ? 1.3 : favorite(h, q) ? 1.35 : 1.2;
+            if (h.id === "masamune" && fresh) {
+              if (s) s.cd *= favorite(h, q) ? 0.55 : 0.75;
+              else if (t) t.nextRateMul = 0.65;
+            }
+            if (q && h.id === "yoshihiro" && dist(q, e) <= 60) damage *= favorite(h, q) ? 1.35 : 1.15;
+            if (t && h.id === "yoshihiro") damage *= 1 + 0.3 * Math.max(0, 1 - dist(t, e) / towerStats(t).range);
+            if (q && h.id === "yoshiaki") damage *= 1 + Math.min(1, e.d / pathLength(e.path)) * (favorite(h, q) ? 0.3 : 0.2);
+            if (t && h.id === "muneshige" && e.blockedBy) damage *= 1.25;
+            if (t && h.id === "haruhisa" && (e.recentBreak || 0) > 0) damage *= 1.3;
+            if (t && h.id === "yoshikata" && e.kind === "dragon") damage *= 1.2;
+            if (t && h.id === "kanbei") {
+              h.chain = h.chainTarget === e ? Math.min(5, h.chain + 1) : 0;
+              h.chainTarget = e;
+              damage *= 1 + h.chain * 0.06;
+            }
+            if (t && h.id === "motonari" && e.lastTowerId !== undefined && e.lastTowerId !== t.id && combatClock - e.lastTowerAt <= 1) damage *= 1.2;
+            if (q && h.id === "sorin") ignore = Math.max(ignore, favorite(h, q) ? 0.4 : 0.2);
+          }
+          const focus = ownedHeroes().some((v) => activeKind(v, "focus") && v.skillTarget === e);
+          const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
+          const armor = Math.max(0, e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0);
+          damage *= (1 + vulnerability) * 30 / (30 + armor * (1 - Math.min(1, ignore)));
+          e.hp -= damage;
+          e.hit = 0.18;
+          e.lastHitBy = s ? s.id : null;
+          e.lastTowerHero = t && h ? h.id : null;
+          if (t) { e.lastTowerId = t.id; e.lastTowerAt = combatClock; }
+          if (h) h.lastActivity = combatClock;
+          if (normal && h && e.hp > 0) {
+            if (q && h.id === "kanbei") putWeakness(e, 0.08, 2);
+            if (h.id === "dosan") putPoison(e, raw * 0.06, 3, source);
+            if (q && h.id === "motochika") putSlow(e, 0.85, favorite(h, q) ? 1 : 0.5);
+            if (t && h.id === "motochika") putAttackDebuff(e, 0.12, 2);
+            if (t && h.id === "tadakatsu" && e.kind === "boss") { e.attackSlow = 1.25; e.attackSlowLeft = 2; }
+            if (q && h.id === "motonari" && s) {
+              e.comboByHero ||= {};
+              const ids = e.comboByHero[h.id] ||= [];
+              if (!ids.includes(s.id)) ids.push(s.id);
+              if (ids.length >= 3) { ids.length = 0; dealEnemyDamage(e, raw * 0.35, source, { normal: false }); }
+            }
+            if (q && h.id === "kiyomasa" && SOLDIER_TYPES[q.type].block) {
+              const other = aliveEnemies().find((a) => a !== e && dist(a, e) < 30);
+              if (other) dealEnemyDamage(other, raw * (favorite(h, q) ? 0.35 : 0.2), source, { normal: false });
+            }
+          }
+          return damage;
+        }
+        function afterTowerFire(t, e, damage) {
+          const h = heroOn(t);
+          if (!h) return;
+          h.shots++;
+          if (h.shots % 4 === 0 && h.id === "nobunaga" && e.hp > 0) {
+            dealEnemyDamage(e, damage * 0.6, { t, h }, { normal: false });
+            burst(e.x, e.y, "#ffbd77", "slash");
+          }
+          if (h.shots % 4 === 0 && h.id === "sorin") {
+            const end = { x: t.x + (e.x - t.x) * 2, y: t.y + (e.y - t.y) * 2 };
+            for (const other of lineTargets(t, end, 22)) if (other !== e && dist(t, other) >= dist(t, e)) dealEnemyDamage(other, damage * 0.5, { t, h }, { normal: false });
+          }
+        }
+        function heroGuard(target, isRanged, enemy) {
+          const t = towers.includes(target) ? target : null, q = t ? null : squadById(target.squadId), pos = t || q;
+          if (!pos) return 1;
+          const h = t ? heroOn(t) : heroOnSquad(q);
+          let multiplier = 1;
+          if (h) {
+            h.lastActivity = combatClock;
+            if (activeKind(h, "desperate")) multiplier *= 1.25;
+            if (activeKind(h, "taunt")) multiplier *= 0.7;
+            if (t && h.id === "shingen" && fieldSquads().some((v) => dist(v, t) <= 140)) multiplier *= 0.8;
+            if (t && h.id === "motoyasu") multiplier *= 1 - 0.3 * (1 - Math.max(0, towerHp(t)) / towerMaxHp(t));
+            if (q && h.id === "motoyasu" && target.hp / rawMaxHp(target) <= 0.3) multiplier *= favorite(h, q) ? 0.7 : 0.8;
+            if (q && h.id === "tadakatsu" && enemy && enemy.kind === "boss") multiplier *= favorite(h, q) ? 0.55 : 0.7;
+            if (q && h.id === "hanbei") {
+              const weak = members(q).reduce((a, b) => !a || b.hp / rawMaxHp(b) < a.hp / rawMaxHp(a) ? b : a, null);
+              if (weak === target) multiplier *= 0.8;
+            }
+            if (q && h.id === "yoshikata" && isRanged) multiplier *= 0.8;
+            if (t && h.id === "kenshin" && h.guardReady) { multiplier *= 0.5; h.guardReady = false; }
+            if (t && h.id === "ujiyasu") {
+              h.hitStack = combatClock - h.lastHit <= 3 ? Math.min(5, h.hitStack + 1) : 1;
+              h.lastHit = combatClock;
+              multiplier *= 1 - h.hitStack * 0.05;
+            }
+          }
+          const stage = stagedBonus(pos);
+          multiplier *= 1 - stage.guard;
+          if (q) for (const other of ownedHeroes()) {
+            if (other.id !== "hanbei" || !other.tower || !inHeroArea(other, q, 150)) continue;
+            const weakest = fieldSquads().filter((v) => inHeroArea(other, v, 150)).sort((a, b) => squadHealthRatio(a) - squadHealthRatio(b))[0];
+            if (weakest === q) { multiplier *= 0.85; break; }
+          }
+          if (enemy) {
+            multiplier *= 1 - (enemy.debuffLeft > 0 ? enemy.attackDebuff : 0);
+            const holder = enemy.blockedBy && heroOnSquad(enemy.blockedBy);
+            if (heroHas(holder, "takanobu")) multiplier *= 0.85;
+            if (t && heroHas(h, "takanobu") && dist(t, enemy) <= 100) multiplier *= 0.85;
+          }
+          return Math.max(1 - WARLORD_RULES.maxGuard, multiplier);
+        }
+        function squadHealthRatio(q) {
+          const list = members(q);
+          return list.length ? list.reduce((n, s) => n + s.hp / rawMaxHp(s), 0) / list.length : 1;
+        }
+        function consumeWard(target) {
+          const token = targetToken(target);
+          for (const h of ownedHeroes()) if (activeKind(h, "lastStand") && h.protected.has(token) && !h.wardUsed.has(token)) {
+            h.wardUsed.add(token);
+            target.hp = 1;
+            burst((h.tower || h.squad).x, (h.tower || h.squad).y, "#fff3bb", "heal");
+            return true;
+          }
+          return false;
+        }
+        function absorbShield(target, damage, ranged) {
+          if (!ranged || !target.heroShield || target.heroShield.until <= combatClock) return damage;
+          const blocked = Math.min(damage, target.heroShield.amount);
+          target.heroShield.amount -= blocked;
+          return damage - blocked;
+        }
+        function healTarget(target, amount, source = null, regen = false) {
+          const t = towers.includes(target) ? target : null, q = t ? null : squadById(target.squadId);
+          if ((t && t.destroyed) || (!t && (!target.alive || target.out || !q))) return 0;
+          const pos = t || q, max = t ? towerMaxHp(t) : rawMaxHp(target);
+          if (!t && ownedHeroes().some((h) => h.id === "kanetsugu" && h.tower && inHeroArea(h, pos, 140))) amount *= 1.2;
+          const healed = Math.max(0, Math.min(amount, max - (t ? towerHp(t) : target.hp)));
+          target.hp += healed;
+          if (healed > 0 && !regen && !t) {
+            const recipient = heroOnSquad(q), giver = source && heroOnSquad(source);
+            if (heroHas(recipient, "kanetsugu") || (heroHas(giver, "kanetsugu") && source.type === "medic")) target.heroRegen = { left: 3, rate: max * 0.02 };
+          }
+          return healed;
+        }
+        function couponOwner() {
+          return !playing && ownedHeroes().find((h) => h.couponWave === wave);
+        }
+        function serviceFactor(kind, target) {
+          const h = kind === "repair" ? heroOn(target) : null;
+          return (heroHas(h, "hideyoshi") ? 0.75 : 1) * (couponOwner() ? 1 - WARLORD_RULES.supplyDiscount : 1);
+        }
+        function consumeCoupon() { const h = couponOwner(); if (h) h.couponWave = -1; }
+        function recruitCost(q) { return Math.ceil(SOLDIER_TYPES[q.type].cost * (heroHas(heroOnSquad(q), "hideyoshi") ? 0.8 : 1)); }
+        function weaponPower(h) {
+          if (h.tower) return towerStats(h.tower).damage;
+          if (!h.squad) return 0;
+          return members(h.squad).reduce((n, s) => { const st = soldierStats(s); return n + Math.max(st.atk, st.heal * 2); }, 0) / 2;
+        }
+        function skillRange(h) { return h.tower ? towerStats(h.tower).range : Math.max(150, SOLDIER_TYPES[h.squad.type].range); }
+        function skillHit(h, e, power, ignoreArmor = 0) {
+          const n = dealEnemyDamage(e, weaponPower(h) * power, { h, t: h.tower, q: h.squad }, { normal: false, ignoreArmor });
+          if (n > 0) burst(e.x, e.y, WARLORDS[h.id].color, "slash");
+          return n;
+        }
+        function lineTargets(a, b, width) {
+          const dx = b.x - a.x, dy = b.y - a.y, len = dx * dx + dy * dy;
+          if (len < 1) return [];
+          return aliveEnemies().filter((e) => {
+            const u = ((e.x - a.x) * dx + (e.y - a.y) * dy) / len;
+            return u >= 0 && u <= 1 && Math.hypot(e.x - a.x - dx * u, e.y - a.y - dy * u) <= width;
+          }).sort((e, f) => dist(e, a) - dist(f, a));
+        }
+        function pushEnemy(e, amount) {
+          if (e.hp <= 0 || e.gone) return;
+          e.blockedBy = e.siege = null;
+          e.blockTime = 0;
+          e.d = Math.max(0, e.d - (e.kind === "boss" ? Math.min(20, amount) : amount));
+          Object.assign(e, pathAt(e.path, e.d));
+        }
+        function movePoint(q, point) {
+          const p = projectToRoad(point.x, point.y);
+          if (!p || p.off > SQUAD_RULES.snapDistance || p.d < SQUAD_RULES.noDeployFromEntry || p.total - p.d < SQUAD_RULES.noDeployBeforeCastle) return null;
+          if (fieldSquads().some((o) => o !== q && dist(o, p) < SQUAD_RULES.minSpacing)) return null;
+          return p;
+        }
+        function moveSquadBySkill(q, point) {
+          const p = movePoint(q, point);
+          if (!p) return false;
+          releaseBlocks(q);
+          q.x = p.x; q.y = p.y;
+          return true;
+        }
+        function rescuePoint(h, ally) {
+          if (!h.squad || h.squad.type !== "cavalry" || h.squad === ally) return null;
+          for (const offset of [-70, 70, -100, 100]) {
+            const p = projectToRoad(ally.x, ally.y), path = p.path;
+            const point = pathAt(path, Math.max(0, p.d + offset)), valid = movePoint(h.squad, point);
+            if (valid && dist(valid, ally) <= 120) return valid;
+          }
+          return null;
+        }
+        function resolveSkillTarget(h, input) {
+          const kind = WARLORDS[h.id].skill.target, pos = heroPos(h);
+          if (!kind) return {};
+          const point = input && input.point ? input.point : input;
+          if (kind === "enemy") {
+            const e = input && input.enemy ? input.enemy : point && Number.isFinite(point.x) ? aliveEnemies().filter((e) => dist(e, point) < 38).sort((a, b) => dist(a, point) - dist(b, point))[0] : targetPriority(pos, skillRange(h), h);
+            return e && e.hp > 0 && !e.gone && enemies.includes(e) && dist(pos, e) <= Math.max(skillRange(h), 180) ? { enemy: e } : null;
+          }
+          if (kind === "ally") {
+            const q = input && input.ally ? input.ally : point && Number.isFinite(point.x) ? fieldSquads().filter((q) => dist(q, point) < 45)[0] : h.squad || fieldSquads()[0];
+            if (!q || q.state !== "deployed" || !members(q).length || dist(pos, q) > WARLORD_RULES.targetRange) return null;
+            const move = WARLORDS[h.id].skill.kind === "rescue" ? rescuePoint(h, q) : null;
+            if (h.squad && h.squad.type === "cavalry" && h.squad !== q && WARLORDS[h.id].skill.kind === "rescue" && !move) return null;
+            return { ally: q, move };
+          }
+          if (kind === "heal") {
+            let target = input && input.heal;
+            if (!target && point && Number.isFinite(point.x)) {
+              target = towers.find((t) => !t.destroyed && dist(t, point) < 35);
+              if (!target) { const q = fieldSquads().find((q) => dist(q, point) < 42); if (q) target = soldierNear(q, point.x, point.y) || members(q)[0]; }
+            }
+            if (!target && point && Number.isFinite(point.x)) return null;
+            if (!target) target = h.tower || (h.squad && members(h.squad).sort((a, b) => a.hp / rawMaxHp(a) - b.hp / rawMaxHp(b))[0]);
+            const t = towers.includes(target), q = target && squadById(target.squadId);
+            if (!target || (t ? target.destroyed : !soldiers.includes(target) || !target.alive || target.out || !q || !onField(q)) || dist(pos, t ? target : q) > WARLORD_RULES.targetRange) return null;
+            return { heal: target };
+          }
+          const p = point && Number.isFinite(point.x) ? projectToRoad(point.x, point.y) : projectToRoad(pos.x, pos.y);
+          if (!p || p.off > SQUAD_RULES.snapDistance || dist(pos, p) > WARLORD_RULES.targetRange || p.d < SQUAD_RULES.noDeployFromEntry || p.total - p.d < SQUAD_RULES.noDeployBeforeCastle) return null;
+          if (WARLORDS[h.id].skill.kind === "charge" && h.squad && h.squad.type === "cavalry" && !movePoint(h.squad, p)) return null;
+          return { point: p };
+        }
+        function useSkill(h, input) {
+          if (!canUseSkill(h)) return false;
+          const target = resolveSkillTarget(h, input);
+          if (!target) return false;
+          const c = WARLORDS[h.id], s = c.skill, pos = heroPos(h);
+          h.active = s.duration; h.cd = s.cooldown; h.skillTarget = target.enemy || null;
+          h.field = { x: target.point ? target.point.x : pos.x, y: target.point ? target.point.y : pos.y };
+          h.pulses = 0; h.pulseClock = 0; h.triggered = false;
+          if (s.kind === "redeploy") {
+            releaseBlocks(target.ally); target.ally.state = "reserve"; target.ally.retreatLeft = 0; target.ally.locked = false;
+            selectedSquad = null; placeSquadId = target.ally.id;
+            // Map placement uses the existing safe deployment checks and does not heal.
+          } else if (s.kind === "firstAid") {
+            healTarget(target.heal, (towers.includes(target.heal) ? towerMaxHp(target.heal) : rawMaxHp(target.heal)) * 0.45);
+          } else if (s.kind === "lastStand") {
+            h.protected = new Set(); h.wardUsed = new Set();
+            for (const q of fieldSquads()) if (inHeroArea(h, q)) for (const m of members(q)) h.protected.add(targetToken(m));
+            for (const t of towers) if (!t.destroyed && inHeroArea(h, t)) h.protected.add(targetToken(t));
+          } else if (s.kind === "rally") {
+            for (const t of towers) if (!t.destroyed && inHeroArea(h, t, 180)) t.cd = 0;
+            for (const q of fieldSquads()) if (inHeroArea(h, q, 180)) for (const m of members(q)) m.cd = 0;
+          } else if (["charge", "pierce", "sweep"].includes(s.kind)) {
+            const end = target.point, targets = lineTargets(pos, end, s.kind === "sweep" ? 60 : 26);
+            if (s.kind === "sweep") for (const e of aliveEnemies()) if (dist(e, end) < 70 && !targets.includes(e)) targets.push(e);
+            targets.forEach((e, i) => { skillHit(h, e, s.kind === "pierce" ? i === 0 ? 2.2 : 1.5 : s.kind === "sweep" ? 1.6 : 1.4, s.kind === "pierce" ? 0.5 : 0); if (s.kind !== "pierce") pushEnemy(e, s.kind === "sweep" ? 60 : 45); });
+            if (s.kind === "charge" && h.squad && h.squad.type === "cavalry") moveSquadBySkill(h.squad, end);
+          } else if (s.kind === "rescue") {
+            const at = { x: target.ally.x, y: target.ally.y };
+            for (const e of aliveEnemies()) if (dist(e, at) < 80) { skillHit(h, e, 1.3); pushEnemy(e, 45); }
+            if (target.move) moveSquadBySkill(h.squad, target.move);
+          } else if (s.kind === "bossStrike" || s.kind === "snipe") {
+            skillHit(h, target.enemy, s.kind === "bossStrike" ? (target.enemy.kind === "boss" ? 4.5 : 3) : 2.8, s.kind === "bossStrike" ? 0.7 : 0);
+            if (s.kind === "snipe") target.enemy.silence = Math.max(target.enemy.silence || 0, target.enemy.kind === "boss" ? 0.7 : 1.5);
+          } else if (s.kind === "threeArrows") {
+            aliveEnemies().filter((e) => dist(e, pos) <= skillRange(h)).sort((a, b) => b.d - a.d).slice(0, 3).forEach((e) => skillHit(h, e, 1.2));
+          } else if (s.kind === "pursuit") {
+            const e = aliveEnemies().filter((e) => dist(e, pos) <= skillRange(h)).sort((a, b) => b.d - a.d)[0];
+            if (e) { skillHit(h, e, 2); putSlow(e, 0.4, 3); }
+          } else if (s.kind === "seal") {
+            for (const e of aliveEnemies()) if (dist(e, h.field) <= 90) { e.breakthrough = 0; e.recentBreak = 0; }
+            assignBlocks();
+          } else if (s.kind === "fear") {
+            for (const e of aliveEnemies()) if (dist(pos, e) <= 140) { e.stun = Math.max(e.stun || 0, e.kind === "boss" ? 0.2 : 0.5); putAttackDebuff(e, 0.25, 6); }
+          } else if (s.kind === "poisonField") {
+            for (const e of aliveEnemies()) if (dist(e, h.field) <= 100) putPoison(e, weaponPower(h) * 0.12, e.kind === "boss" ? 3 : 6, { h, t: h.tower, q: h.squad });
+          } else if (s.kind === "rangedShield") {
+            const shield = (o, max) => { o.heroShield = { until: combatClock + 8, amount: Math.max(o.heroShield && o.heroShield.until > combatClock ? o.heroShield.amount : 0, max * 0.2) }; };
+            for (const q of fieldSquads()) if (dist(q, h.field) <= 120) for (const m of members(q)) shield(m, rawMaxHp(m));
+            for (const t of towers) if (!t.destroyed && dist(t, h.field) <= 120) shield(t, towerMaxHp(t));
+          } else if (s.kind === "supply") h.couponWave = wave;
+          if (s.kind === "taunt") target.enemy.taunt = h;
+          cutin = { id: h.id, age: 0, duration: 1.3 };
+          burst(h.field.x, h.field.y, c.color, "heal");
+          msg("必殺技「" + s.name + "」発動！ " + c.skillText);
+          return true;
+        }
+        function tickHeroes(dt) {
+          combatClock += dt;
+          for (const e of aliveEnemies()) {
+            for (const key of ["weakLeft", "debuffLeft", "heroSlowLeft", "attackSlowLeft", "silence", "stun", "recentBreak"]) e[key] = Math.max(0, (e[key] || 0) - dt);
+            if (!e.heroSlowLeft) e.heroSlow = 1;
+            if (!e.attackSlowLeft) e.attackSlow = 1;
+            if (e.poisonLeft > 0) {
+              const elapsed = Math.min(dt, e.poisonLeft); e.poisonLeft -= elapsed;
+              dealEnemyDamage(e, e.poisonDps * elapsed, e.poisonSource, { normal: false, ignoreArmor: 1 });
+            }
+          }
+          for (const h of ownedHeroes()) {
+            h.cd = Math.max(0, h.cd - dt);
+            const pos = heroPos(h);
+            if (h.id === "kenshin" && pos) {
+              h.passiveClock += dt;
+              const interval = h.tower ? 8 : favorite(h, h.squad) ? 4 : 6;
+              if (h.passiveClock >= interval) {
+                h.passiveClock %= interval;
+                if (h.tower) h.guardReady = true;
+                else {
+                  const list = members(h.squad), front = list[0];
+                  const next = list.slice(1).sort((a, b) => b.hp / rawMaxHp(b) - a.hp / rawMaxHp(a))[0];
+                  if (next && front && next.hp / rawMaxHp(next) > front.hp / rawMaxHp(front)) h.squad.frontId = next.id;
+                }
+              }
+            }
+            if (pos && h.id === "yoshikage" && combatClock - h.lastActivity >= 3) {
+              if (h.tower) healTarget(h.tower, towerMaxHp(h.tower) * 0.007 * dt, null, true);
+              else for (const m of members(h.squad)) healTarget(m, rawMaxHp(m) * 0.01 * dt, null, true);
+            }
+            if (h.active <= 0) continue;
+            if (!pos) { endSkill(h); continue; }
+            const s = WARLORDS[h.id].skill, step = Math.min(dt, h.active);
+            if (s.kind === "triple" || s.kind === "wheel" || s.kind === "sevenSpears") {
+              const count = s.kind === "triple" ? 3 : s.kind === "wheel" ? 4 : 7;
+              h.pulseClock -= step;
+              while (h.pulses < count && h.pulseClock <= 0) {
+                if (s.kind === "wheel") {
+                  for (const e of aliveEnemies()) if (dist(e, pos) <= 130) { skillHit(h, e, 0.35); putAttackDebuff(e, 0.2, 3); }
+                } else {
+                  let e = h.skillTarget;
+                  if (!e || e.hp <= 0 || e.gone || dist(e, pos) > skillRange(h)) e = targetPriority(pos, s.kind === "sevenSpears" ? 150 : skillRange(h), h);
+                  if (s.kind === "sevenSpears") e = aliveEnemies().filter((e) => dist(e, pos) <= 150).sort((a, b) => dist(a, pos) - dist(b, pos))[0];
+                  if (e) skillHit(h, e, s.kind === "triple" ? 0.9 : 0.35);
+                }
+                h.pulses++; h.pulseClock += s.duration / count;
+              }
+            }
+            if (s.kind === "ambush" || s.kind === "trap") {
+              const enemy = aliveEnemies().find((e) => dist(e, h.field) <= (s.kind === "ambush" ? 55 : 26));
+              if (enemy && !h.triggered) {
+                h.triggered = true;
+                if (s.kind === "trap") enemy.stun = Math.max(enemy.stun || 0, enemy.kind === "boss" ? 0.8 : 2);
+                else for (const e of aliveEnemies()) if (dist(e, h.field) <= 90) skillHit(h, e, 2);
+                burst(h.field.x, h.field.y, "#ffcf80", "cannon");
+              }
+            }
+            if (s.kind === "suppression") for (const e of aliveEnemies()) if (dist(e, h.field) <= 100) { putSlow(e, 0.55, 0.12); e.attackSlow = Math.max(e.attackSlow || 1, 1.4); e.attackSlowLeft = Math.max(e.attackSlowLeft || 0, 0.12); }
+            if (s.kind === "healingField") {
+              for (const q of fieldSquads()) if (dist(q, h.field) <= 100) for (const m of members(q)) healTarget(m, rawMaxHp(m) * 0.03 * step, null, true);
+              for (const t of towers) if (!t.destroyed && dist(t, h.field) <= 100) healTarget(t, towerMaxHp(t) * 0.03 * step, null, true);
+            }
+            if (s.kind === "rest") {
+              if (h.tower) healTarget(h.tower, towerMaxHp(h.tower) * 0.07 * step, null, true);
+              else for (const m of members(h.squad)) healTarget(m, rawMaxHp(m) * 0.07 * step, null, true);
+            }
+            h.active = Math.max(0, h.active - dt);
+            if (h.active <= 0) endSkill(h);
+          }
+          for (const q of fieldSquads()) for (const m of members(q)) {
+            if (m.heroRegen && m.heroRegen.left > 0) { const step = Math.min(dt, m.heroRegen.left); m.heroRegen.left -= step; healTarget(m, m.heroRegen.rate * step, null, true); }
+            const stage = stagedBonus(q); if (stage.regen) healTarget(m, rawMaxHp(m) * stage.regen * dt, null, true);
+          }
+          for (const t of towers) if (!t.destroyed) { const stage = stagedBonus(t); if (stage.regen) healTarget(t, towerMaxHp(t) * stage.regen * dt, null, true); }
+        }
+        function drawWarlordFields() {
+          if (pendingSkillTarget) {
+            const h = pendingSkillTarget.h, pos = heroPos(h);
+            if (pos) {
+              const radius = WARLORDS[h.id].skill.target === "enemy" ? Math.max(skillRange(h), 180) : WARLORD_RULES.targetRange;
+              ctx.save(); ctx.setLineDash([8, 6]); ctx.strokeStyle = "#ffe0a5dd"; ctx.fillStyle = "#ffe0a512"; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+            }
+          }
+          for (const h of ownedHeroes()) {
+            if (h.active <= 0 || !h.field) continue;
+            const s = WARLORDS[h.id].skill, area = ["ambush", "trap", "suppression", "healingField"].includes(s.kind);
+            if (!area || (h.triggered && ["trap", "ambush"].includes(s.kind))) continue;
+            const radius = s.kind === "trap" ? 26 : s.kind === "ambush" ? 55 : 100;
+            ctx.save(); ctx.strokeStyle = s.kind === "healingField" ? "#a4ffb5" : "#ffe5a6"; ctx.fillStyle = s.kind === "healingField" ? "#76d78b33" : "#f3cd7430"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(h.field.x, h.field.y, radius, radius * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.font = "bold 14px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#fff4cd"; ctx.fillText(s.kind === "trap" ? "罠" : s.kind === "ambush" ? "伏兵" : s.kind === "healingField" ? "救護" : "制圧", h.field.x, h.field.y - 8);ctx.restore();
+          }
+        }
+        function cancelHeroTarget() {
+          if (!pendingSkillTarget) return;
+          paused = pendingSkillTarget.paused;
+          pendingSkillTarget = null;
+          $("heroTargetBar").hidden = true;
+          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+          last = 0;
+          updateUI();
+        }
+        function beginHeroTarget(h) {
+          if (!canUseSkill(h)) return;
+          pendingSkillTarget = { h, paused };
+          paused = true;
+          $("heroTargetBar").hidden = false;
+          const target = WARLORDS[h.id].skill.target, name = WARLORDS[h.id].skill.name;
+          $("heroTargetText").textContent = "「" + name + "」：" + (target === "enemy" ? "敵をタップ" : target === "ally" ? "味方部隊をタップ" : target === "heal" ? "治療する兵士か塔をタップ" : "道の上の発動地点をタップ") + "（選択中は一時停止・範囲外は発動しません）";
+          $("pause").textContent = "▶ 対象を選択中";
+          C.scrollIntoView({ block: "center", behavior: "instant" });
+          updateUI();
+        }
+        function clickHeroTarget(x, y) {
+          const saved = pendingSkillTarget;
+          if (!saved) return false;
+          const h = saved.h, resolved = resolveSkillTarget(h, { x, y });
+          if (!resolved) { toast("対象か場所を選び直してください。発動は消費していません。"); return true; }
+          paused = saved.paused;
+          const used = useSkill(h, { x, y });
+          if (used) {
+            pendingSkillTarget = null; $("heroTargetBar").hidden = true;
+            $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止"; last = 0; updateUI();
+          } else paused = true;
+          return true;
+        }
+
+        // ===== 武将：配属・解除・必殺技 =====
         // 配属先は塔または部隊。前の配属先からは外れ、配属先にいた別の武将は未配属に戻る
         function assignHero(id, target) {
           const h = heroState[id];
@@ -2076,6 +3120,8 @@
           endSkill(h); // 移動すると発動中の効果は終わる（再使用待ちはそのまま）
           h.tower = isTower ? target : null;
           h.squad = isSquad ? target : null;
+          h.lastActivity = combatClock;
+          for (const t of towers) if (!t.destroyed && t.hp != null) t.hp = Math.min(t.hp, towerMaxHp(t));
           heroSave.lastHero = id;
           persistHeroes();
           msg(
@@ -2091,6 +3137,7 @@
           if (!h || (!h.tower && !h.squad)) return;
           endSkill(h);
           h.tower = h.squad = null;
+          for (const t of towers) if (!t.destroyed && t.hp != null) t.hp = Math.min(t.hp, towerMaxHp(t));
           msg(WARLORDS[id].name + " の配属を解除した。");
         }
         // 部隊が解散したとき：武将は未配属に戻る（再使用待ちは残る）
@@ -2102,77 +3149,7 @@
           return h;
         }
         const canUseSkill = (h) =>
-          h && heroPos(h) && h.cd <= 0 && h.active <= 0 && playing && !paused && !over;
-        function useSkill(h) {
-          if (!canUseSkill(h)) return;
-          const s = WARLORDS[h.id].skill;
-          h.active = s.duration;
-          h.cd = s.cooldown;
-          if (s.volleys) {
-            h.volleysLeft = s.volleys;
-            h.volleyClock = 0;
-          }
-          if (s.heal) {
-            // 範囲内の部隊の生存兵だけ回復（戦死者は対象外＝復活しない）
-            const pos = heroPos(h),
-              r = (WARLORDS[h.id].passive.aura || { radius: 120 }).radius;
-            for (const q of squads) {
-              if (q.state !== "deployed" || (q !== h.squad && dist(q, pos) > r)) continue;
-              for (const m of members(q)) {
-                const max = soldierStats(m).maxHp;
-                m.hp = Math.min(max, m.hp + max * s.heal);
-              }
-            }
-          }
-          cutin = { id: h.id, age: 0, duration: 1.3 };
-          msg("必殺技「" + s.name + "」発動！ " + WARLORDS[h.id].skillText);
-        }
-        function heroVolley(h) {
-          const pos = heroPos(h);
-          let range, dmg;
-          if (h.tower) {
-            const st = towerStats(h.tower);
-            range = st.range;
-            dmg = st.damage * WARLORDS[h.id].skill.blastDamageMul;
-            h.tower.recoil = 0.22;
-          } else {
-            const list = members(h.squad);
-            range = Math.max(HERO_RULES.squadVolleyRange, SOLDIER_TYPES[h.squad.type].range);
-            dmg = list.reduce((n, m) => n + soldierStats(m).atk, 0) * WARLORDS[h.id].skill.blastDamageMul;
-          }
-          let n = 0;
-          for (const e of enemies) {
-            if (e.gone || e.hp <= 0 || dist(pos, e) >= range) continue;
-            e.hp -= dmg;
-            e.hit = 0.18;
-            e.lastHitBy = null;
-            if (n++ < 10) burst(e.x, e.y, "#ffd273", "cannon");
-          }
-        }
-        // 戦闘の時間で進める（停止中・ウェーブ間は進まない。速度切替は dt に反映済み）
-        function tickHeroes(dt) {
-          for (const h of ownedHeroes()) {
-            if (h.cd > 0) h.cd = Math.max(0, h.cd - dt);
-            if (h.active <= 0) continue;
-            if (!heroPos(h)) {
-              endSkill(h);
-              continue;
-            }
-            if (h.volleysLeft > 0) {
-              h.volleyClock -= dt;
-              while (h.volleysLeft > 0 && h.volleyClock <= 0) {
-                heroVolley(h);
-                h.volleysLeft--;
-                h.volleyClock += WARLORDS[h.id].skill.duration / WARLORDS[h.id].skill.volleys;
-              }
-            }
-            h.active = Math.max(0, h.active - dt);
-            if (h.active <= 0) {
-              endSkill(h);
-              msg("「" + WARLORDS[h.id].skill.name + "」の効果が終わった。");
-            }
-          }
-        }
+          h && heroPos(h) && h.cd <= 0 && h.active <= 0 && playing && !battle && !paused && !over;
         function msg(s) {
           $("msg").textContent = s;
         }
@@ -2222,7 +3199,9 @@
             dragon: [135, 85, 27, "#a95b9b", 16],
             boss: [650, 32, 150, "#754359", 27],
           }[kind];
-          const max = conf[0] * (1 + (wave - 1) * 0.19);
+          // 防御導入前と通常攻撃での実効耐久が同じになるようHPを補正する。
+          const armor = WARLORD_RULES.enemyArmor[kind] || 0;
+          const max = conf[0] * (1 + (wave - 1) * 0.19) * 30 / (30 + armor);
           enemies.push({
             path: branch,
             d: 0,
@@ -2231,6 +3210,7 @@
             kind,
             hp: max,
             max,
+            armor,
             speed: conf[1],
             reward: conf[2],
             color: conf[3],
@@ -2245,7 +3225,7 @@
         const soldierById = (id) => soldiers.find((s) => s.id === id) || null;
         const squadById = (id) => squads.find((q) => q.id === id) || null;
         // members … 戦場で戦っている兵士（生存本能で離脱した兵士は除く）、roster … 所属している生存兵すべて
-        const members = (q) => soldiers.filter((s) => s.alive && !s.out && s.squadId === q.id);
+        const members = (q) => soldiers.filter((s) => s.alive && !s.out && s.squadId === q.id).sort((a, b) => Number(b.id === q.frontId) - Number(a.id === q.frontId));
         const roster = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
         const onField = (q) => q.state === "deployed" || q.state === "retreating";
         const fieldSquads = () => squads.filter(onField);
@@ -2276,7 +3256,7 @@
         }
         const hasSkill = (s, id) => (s.skills || []).includes(id);
         // 能力は兵種の基本値＋レベル成長＋称号・階級・スキルのボーナスから毎回計算する（積み上がらない）
-        function soldierStats(s) {
+        function soldierStats(s, ignoreHero = false) {
           const c = SOLDIER_TYPES[s.type],
             // statTaper を超えたレベルの伸びは半分
             lv =
@@ -2287,10 +3267,10 @@
             ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 },
             el = s.level >= SQUAD_RULES.eliteLevel ? SQUAD_RULES.elite : { atk: 0, def: 0 };
           // 部隊に配属された武将の効果（武将は1か所だけなので重複しない）
-          const hm = squadHeroMods(squadById(s.squadId)) || { atk: 1, def: 1, range: 1, speed: 1 };
+          const hm = (!ignoreHero && squadHeroMods(squadById(s.squadId))) || { atk: 1, def: 1, range: 1, speed: 1 };
           return {
             maxHp: Math.round(c.hp + c.grow.hp * lv),
-            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * hm.atk,
+            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
             def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def) * hm.def,
             rate: (c.rate * (1 - skillSum(s, "haste"))) / hm.speed,
             range: c.range * (1 + skillSum(s, "range")) * hm.range,
@@ -2454,7 +3434,7 @@
                 py = ay + dy * t,
                 off = Math.hypot(x - px, y - py);
               if (!best || off < best.off)
-                best = { x: px, y: py, off, d: along + len * t, total: pathLength(path) };
+                best = { x: px, y: py, off, d: along + len * t, total: pathLength(path), path };
               along += len;
             }
           }
@@ -2524,7 +3504,8 @@
           if (q.state !== "deployed") return 0;
           const list = members(q),
             extra = list.some((s) => skillSum(s, "block") > 0) ? 1 : 0; // 槍衾（部隊に1回まで）
-          return Math.min(SOLDIER_TYPES[q.type].block + extra, list.length);
+          const boost = SOLDIER_TYPES[q.type].block > 0 && ownedHeroes().some((h) => activeKind(h, "blockBoost") && inHeroArea(h, q)) ? 1 : 0;
+          return Math.min(SOLDIER_TYPES[q.type].block + extra + boost, list.length);
         };
         const blockCount = (q) => enemies.reduce((n, e) => n + (e.blockedBy === q ? 1 : 0), 0);
         // 足止めの解除。撤退・全滅・リセットのときに必ず呼ぶ
@@ -2560,16 +3541,17 @@
             if (!squads.includes(q) || n > blockCap(q)) {
               e.blockedBy = null;
               e.blockTime = 0;
-            } else if (e.blockTime >= SQUAD_RULES.maxBlockTime) {
+            } else if (e.blockTime >= SQUAD_RULES.maxBlockTime + (heroHas(heroOnSquad(q), "ujiyasu") ? 2 : 0)) {
               e.blockedBy = null;
               e.blockTime = 0;
-              e.breakthrough = SQUAD_RULES.breakthroughTime;
+              e.recentBreak = 3;
+              e.breakthrough = heroHas(heroOnSquad(q), "haruhisa") ? 1.5 : SQUAD_RULES.breakthroughTime;
             } else held.set(q, n);
           }
         }
 
         // ===== 兵士部隊：被弾・戦死・撤退 =====
-        function damageSquad(q, raw, ranged, kind) {
+        function damageSquad(q, raw, ranged, kind, enemy = null) {
           const front = members(q)[0];
           if (!front) return;
           const st = soldierStats(front),
@@ -2578,7 +3560,9 @@
             spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(front, "spearGuard")) : 1,
             guard =
               (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1) * spear;
-          front.hp -= ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard;
+          const dmg = ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard * heroGuard(front, ranged, enemy || (kind ? { kind } : null));
+          front.hp -= absorbShield(front, dmg, ranged);
+          if (front.hp <= 0) consumeWard(front);
           front.hit = 0.2;
           // 不屈：倒れるはずの攻撃を1ウェーブに1回だけ HP1 で耐える
           if (front.hp <= 0 && hasSkill(front, "unyielding") && !front.unyieldUsed) {
@@ -2701,7 +3685,7 @@
           }
           // 兵士の攻撃（1人ずつ。攻撃間隔は余りを持ち越すのでフレームレートに左右されない）
           for (const q of squads) {
-            if (q.state !== "deployed") continue;
+            if (q.state !== "deployed" || activeKind(heroOnSquad(q), "rest")) continue;
             for (const s of members(q)) {
               s.cd -= dt;
               if (s.cd > 0) continue;
@@ -2711,9 +3695,8 @@
               }
               const st = soldierStats(s),
                 alive = enemies.filter((e) => !e.gone && e.hp > 0);
-              const target =
-                alive.find((e) => e.blockedBy === q) ||
-                alive.filter((e) => dist(q, e) <= st.range).sort((a, b) => b.d - a.d)[0];
+              const marked = ownedHeroes().find((h) => activeKind(h, "focus") && h.skillTarget && alive.includes(h.skillTarget) && dist(q, h.skillTarget) <= st.range);
+              const target = (marked && marked.skillTarget) || alive.find((e) => e.blockedBy === q) || targetPriority(q, st.range, heroOnSquad(q));
               if (!target) {
                 s.cd = 0;
                 continue;
@@ -2727,15 +3710,15 @@
               // 突撃（騎兵）：新しい敵への最初の一撃だけ強い
               if (charge && s.chargeTarget !== target) {
                 s.chargeTarget = target;
-                target.hp -= hitDmg * (charge + skillSum(s, "chargeAdd"));
+                dealEnemyDamage(target, hitDmg * (charge + skillSum(s, "chargeAdd")), { s, q, h: heroOnSquad(q) });
                 burst(target.x - 6, target.y - 8, "#ffd9a0", "slash");
-              } else target.hp -= hitDmg;
+              } else dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
               if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) {
-                target.hp -= hitDmg;
+                dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
                 burst(target.x + 6, target.y - 6, "#ffe3a0", "slash");
               }
               target.hit = 0.18;
-              target.lastHitBy = s.id; // 撃破した兵士の記録用（塔の攻撃で上書きされる）
+              touchHero(q);
               gainXp(s, SQUAD_RULES.xpPerHit);
               if (SOLDIER_TYPES[q.type].block) burst(target.x, target.y, "#fff1c4", "slash");
               else {
@@ -2758,7 +3741,7 @@
           }
           // 敵の攻撃：足止めしている部隊 → 届く範囲の部隊 → 届く範囲の塔（道の上から。道を外れて塔へは向かわない）
           for (const e of enemies) {
-            if (e.gone || e.hp <= 0) continue;
+            if (e.gone || e.hp <= 0 || e.stun > 0 || e.silence > 0) continue;
             const a = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin;
             e.unitCd = (e.unitCd || 0) - dt;
             if (e.unitCd > 0) continue;
@@ -2786,11 +3769,16 @@
                 }
               }
             }
+            if (!e.blockedBy && e.taunt && activeKind(e.taunt, "taunt")) {
+              const h = e.taunt, pos = heroPos(h);
+              if (h.squad && h.squad.state === "deployed" && pos && dist(pos, e) <= reach) { target = h.squad; tower = null; }
+              else if (h.tower && !h.tower.destroyed && a.tower && dist(h.tower, e) <= a.tower.reach) { target = null; tower = h.tower; }
+            }
             if (!target && !tower) {
               e.unitCd = 0;
               continue;
             }
-            e.unitCd += a.rate;
+            e.unitCd += a.rate * (e.attackSlowLeft > 0 ? e.attackSlow : 1);
             e.atkAnim = 0.35;
             const tx = target ? target.x : tower.x;
             e.face = tx < e.x ? -1 : 1;
@@ -2809,9 +3797,9 @@
               });
             }
             const scale = 1 + (wave - 1) * TOWER_HP.waveScale;
-            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged, e.kind);
+            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged, e.kind, e);
             else {
-              damageTower(tower, a.tower.damage * scale);
+              damageTower(tower, a.tower.damage * scale, !!a.ranged, e);
               // 大将は塔の前で立ち止まって攻撃する（1回の進軍で最長 siegeMax 秒。永久には止まらない）
               if (a.tower.siege && !tower.destroyed && !e.siegeDone) e.siege = tower;
             }
@@ -2841,7 +3829,8 @@
           s.atk = 0.18;
           const max = soldierStats(best.m).maxHp,
             amount = Math.min(st.heal, max - best.m.hp);
-          best.m.hp += amount; // 最大HPを超えない
+          healTarget(best.m, amount, q); // 最大HPを超えず、救護系パッシブを反映
+          touchHero(q);
           s.heals = (s.heals || 0) + 1;
           gainXp(s, SQUAD_RULES.xpPerHeal);
           const off = formationOffset(best.o, best.i);
@@ -2862,6 +3851,7 @@
           gainXp(s, SQUAD_RULES.xpPerKill + Math.round(e.reward / 2));
         }
         function squadsWaveStart() {
+          for (const h of ownedHeroes()) { h.seen.clear(); h.economyGold = 0; if (h.couponWave < wave) h.couponWave = -1; }
           for (const q of squads) joinWave(q);
         }
         // ウェーブ終了：生存者だけが成長する。戦死者は復活しない。HPは一部だけ回復
@@ -2884,7 +3874,9 @@
             s.instinctTried = false;
             s.unyieldUsed = false;
             const max = soldierStats(s).maxHp;
-            s.hp = Math.min(max, s.hp + max * SQUAD_RULES.waveEndHeal);
+            const q = squadById(s.squadId), extra = q && heroHas(heroOnSquad(q), "terumoto") ? 0.15 : 0;
+            s.hp = Math.min(max, s.hp + max * (SQUAD_RULES.waveEndHeal + extra));
+            s.heroShield = s.heroRegen = null;
           }
           for (const q of squads) {
             q.locked = false;
@@ -2945,15 +3937,16 @@
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
           const c = SOLDIER_TYPES[q.type];
           if (roster(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
-          if (gold < c.cost) return "資金が足りません（" + c.name + " " + c.cost + "G）。";
-          gold -= c.cost;
+          const price = recruitCost(q);
+          if (gold < price) return "資金が足りません（" + c.name + " " + price + "G）。";
+          gold -= price;
           newSoldier(q.type, q.id);
           return null;
         }
         // 治療：ウェーブの合間にゴールドで部隊の生存兵を全回復する（戦死者は対象外＝復活しない）
         const healCost = (q) =>
           Math.ceil(
-            roster(q).reduce(
+            serviceFactor("heal", q) * roster(q).reduce(
               (n, s) =>
                 n +
                 SOLDIER_TYPES[s.type].cost *
@@ -2970,6 +3963,7 @@
           if (!c) return squadName(q) + " は全員元気です。";
           if (gold < c) return "資金が足りません（治療 " + c + "G）。";
           gold -= c;
+          consumeCoupon();
           for (const s of roster(q)) s.hp = soldierStats(s).maxHp;
           return null;
         }
@@ -3173,7 +4167,7 @@
         }
         restoreRoster();
         // ===== 防衛塔の耐久 =====
-        const towerMaxHp = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
+        const towerMaxHp = (t) => Math.round(baseTowerMax(t) * (heroHas(heroOn(t), "kiyomasa") ? 1.15 : 1));
         function towerHp(t) {
           if (t.hp == null) t.hp = towerMaxHp(t);
           return t.hp;
@@ -3181,10 +4175,11 @@
         const repairCost = (t) =>
           t.destroyed
             ? 0
-            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - towerHp(t) / towerMaxHp(t)));
-        function damageTower(t, dmg) {
+            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - towerHp(t) / towerMaxHp(t)) * serviceFactor("repair", t));
+        function damageTower(t, dmg, ranged = false, enemy = null) {
           if (t.destroyed) return;
-          t.hp = towerHp(t) - dmg;
+          t.hp = towerHp(t) - absorbShield(t, dmg * heroGuard(t, ranged, enemy), ranged);
+          if (t.hp <= 0) consumeWard(t);
           t.hitFlash = 0.25;
           burst(t.x + (Math.random() - 0.5) * 30, t.y - 30 - Math.random() * 30, "#c9b38a", "thit");
           if (t.hp <= 0) destroyTower(t);
@@ -3233,17 +4228,15 @@
           if (t.type === "cannon") {
             enemies.forEach((a) => {
               if (dist(a, e) < st.splash) {
-                a.hp -= damage;
-                a.hit = 0.18;
-                a.lastHitBy = null;
+                dealEnemyDamage(a, damage, { t, h: heroOn(t) });
               }
             });
           } else {
-            e.hp -= damage;
-            e.hit = 0.18;
-            e.lastHitBy = null;
+            dealEnemyDamage(e, damage, { t, h: heroOn(t) });
             if (t.type === "ice") e.slow = 1.7;
           }
+          touchHero(t);
+          afterTowerFire(t, e, damage);
         }
         // 戦闘・演出・武将の時間は必ずこの関数で進める（速度切替を一か所で反映）
         const gameStep = (dt) => Math.min(dt, 0.05) * speed;
@@ -3264,6 +4257,7 @@
           updateBlocks(dt);
           for (const e of enemies) {
             e.slow = Math.max(0, e.slow - dt);
+            if (e.hp <= 0 || e.stun > 0) continue;
             if (e.blockedBy) continue; // 足止め中は移動しない（上限時間・解除は updateBlocks / releaseBlocks）
             if (e.siege) {
               e.siegeTime = (e.siegeTime || 0) + dt;
@@ -3271,7 +4265,7 @@
               e.siege = null;
               e.siegeDone = true;
             }
-            e.d += e.speed * (e.slow > 0 ? 0.48 : 1) * dt;
+            e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
               hp--;
@@ -3282,7 +4276,7 @@
           tickHeroes(dt);
           tickSquads(dt);
           for (const t of towers) {
-            if (t.destroyed) continue; // 破壊された塔は攻撃しない
+            if (t.destroyed || activeKind(heroOn(t), "rest")) continue; // 破壊・休息中は攻撃しない
             t.cd -= dt;
             if (t.cd <= 0) {
               const st = towerStats(t);
@@ -3291,8 +4285,9 @@
                 .sort((a, b) => b.d - a.d);
               // 攻撃間隔の余りを持ち越し、フレームレートで攻撃回数が変わらないようにする
               if (targets.length) {
-                fire(t, targets[0]);
-                t.cd += st.rate;
+                fire(t, targetPriority(t, st.range, heroOn(t)) || targets[0]);
+                t.cd += st.rate * (t.nextRateMul || 1);
+                t.nextRateMul = 1;
               } else t.cd = 0;
             }
           }
@@ -3301,6 +4296,8 @@
             if (!e.gone && e.hp <= 0) {
               e.gone = true;
               gold += e.reward;
+              const rewardHero = e.lastTowerHero && heroState[e.lastTowerHero];
+              if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
               if (e.kind === "boss") grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
               if (enemySet(e)) {
@@ -3326,6 +4323,8 @@
             msg("ゲームオーバー！ 最初から挑戦しよう。");
           } else if (spawned >= spawnTotal && enemies.length === 0) {
             playing = false;
+            for (const h of ownedHeroes()) endSkill(h);
+            for (const t of towers) t.heroShield = null;
             squadsWaveEnd();
             gold += 50 + wave * 8;
             msg(
@@ -4831,6 +5830,7 @@
             return;
           }
           auraRings();
+          drawWarlordFields();
           noDeployZones();
           const actors = [
             ...fieldSquads().map((q) => ({ y: q.y + UNIT_FOOT, draw: () => drawSquad(q) })),
@@ -4857,6 +5857,9 @@
                   ctx.translate(0, reduced ? 0 : Math.sin(e.d * 0.17) * 2);
                   soldierFallback(e);
                 }
+                if (e.poisonLeft > 0) ellipse(e.x, e.y + 10, e.r + 3, 4, "#b989c499");
+                if (e.stun > 0 || e.silence > 0) { ctx.fillStyle = "#fff1a3"; ctx.font = "bold 14px system-ui"; ctx.fillText(e.stun > 0 ? "停止" : "封", e.x - 10, e.y - 25); }
+                if (ownedHeroes().some((h) => activeKind(h, "focus") && h.skillTarget === e)) { ctx.strokeStyle = "#ffcf72"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke(); }
                 if (e.hit > 0) {
                   ctx.globalAlpha = e.hit * 3;
                   ellipse(e.x, e.y, e.r + 3, e.r + 3, "#fff6d6");
@@ -4904,6 +5907,7 @@
             x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
             y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
           if (battle) return; // 攻城戦の最中は防衛の操作をしない
+          if (clickHeroTarget(x, y)) return;
           // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
           const hitSquad = squadAt(x, y);
           if (hitSquad) {
@@ -5003,6 +6007,7 @@
           updateUI();
         };
         $("pause").onclick = () => {
+          if (pendingSkillTarget) return cancelHeroTarget();
           paused = !paused;
           $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
           updateUI();
@@ -5030,6 +6035,7 @@
           const c = repairCost(t);
           if (gold < c) return msg("資金が足りません（修理 " + c + "G）。");
           gold -= c;
+          consumeCoupon();
           t.hp = towerMaxHp(t);
           msg(towerLabel(t) + " を修理した（" + c + "G）。");
           updateUI();
@@ -5049,6 +6055,8 @@
         };
         $("reset").onclick = () => {
           if (!confirm("最初からやり直しますか？")) return;
+          cancelHeroTarget();
+          combatClock = 0;
           gold = 500;
           hp = 20;
           wave = 0;
@@ -5195,9 +6203,9 @@
               .join("") +
               (list.length < SQUAD_RULES.squadSize
                 ? '<button class="chip add" data-recruit-chip' +
-                  (playing || gold < SOLDIER_TYPES[q.type].cost ? " disabled" : "") +
+                  (playing || gold < recruitCost(q) ? " disabled" : "") +
                   ' aria-label="新兵を1人補充"><span>＋補充</span><span class="cost">' +
-                  (playing ? "戦闘後" : SOLDIER_TYPES[q.type].cost + "G") +
+                  (playing ? "戦闘後" : recruitCost(q) + "G") +
                   "</span></button>"
                 : ""),
           );
@@ -5252,7 +6260,7 @@
                   "</b>" +
                   starText(hh.id) +
                   "<br><small>" +
-                  WARLORDS[hh.id].passiveText +
+                  passiveTextFor(hh.id, q) +
                   "</small>"
               : "<small>武将なし（「武将」から配属できます）</small>",
           );
@@ -5262,7 +6270,7 @@
         $("sqMembers").addEventListener("click", (ev) => {
           if (ev.target.closest("[data-recruit-chip]")) {
             const err = recruitInto(selectedSquad);
-            msg(err || "新兵を1人補充した（" + SOLDIER_TYPES[selectedSquad.type].cost + "G）。");
+            msg(err || "新兵を1人補充した（" + recruitCost(selectedSquad) + "G）。");
             updateUI();
             return;
           }
@@ -6406,11 +7414,11 @@
         }
         // 部隊の兵士の能力（攻城編成の武将の効果を掛ける）
         function battleStats(g, s) {
-          const st = Object.assign({}, soldierStats(s));
+          const st = Object.assign({}, soldierStats(s, true));
           if (g.hero) {
             const c = WARLORDS[g.hero];
-            st.atk *= (c.passive.damageMul || 1) * starMul(g.hero);
-            st.def *= c.passive.defMul || 1;
+            st.atk *= (c.siegePassive.damageMul || 1) * starMul(g.hero);
+            st.def *= c.siegePassive.defMul || 1;
           }
           return st;
         }
@@ -7066,7 +8074,7 @@
                   "</b>" +
                   starText(h.id) +
                   " 配属中<br><small>" +
-                  WARLORDS[h.id].passiveText +
+                  passiveTextFor(h.id, t) +
                   "</small></p>"
               : "<p><small>武将なし（「武将配属」から配属できます）</small></p>",
           );
@@ -7140,7 +8148,8 @@
             msg(playing ? "必殺技はまだ使えません。" : "必殺技はウェーブ中に使えます。");
             return;
           }
-          useSkill(h);
+          if (WARLORDS[h.id].skill.target) beginHeroTarget(h);
+          else useSkill(h);
           updateUI();
         }
 
@@ -7204,7 +8213,7 @@
                 ' <span class="stars">' +
                 starText(id) +
                 "</span></h3><p>常時：" +
-                c.passiveText +
+                esc(passiveTextFor(id, t)) +
                 "</p><p>必殺技「" +
                 c.skill.name +
                 "」：" +
@@ -7361,47 +8370,15 @@
             heroes ? "skillGuideHeroes" : "skillGuideSoldiers",
           );
           $("skillGuideHint").textContent = heroes
-            ? "未所持を含む全武将を掲載。常時効果は配属中、必殺技はウェーブ中に使用できます。範囲支援は他の塔が対象で、配属先の塔自身には掛かりません。回復で戦死者は復活しません。"
-            : "通常スキルはLv" +
-              SQUAD_RULES.skillLevels.join("・Lv") +
-              "で習得。固有スキルはLv" +
-              SQUAD_RULES.uniqueLevel +
-              "で" +
-              Math.round(SQUAD_RULES.uniqueChance * 100) +
-              "%の確率で習得し、最大" +
-              SQUAD_RULES.maxSkills +
-              "つまで。未実装のスキルは現在習得できません。";
+            ? "防衛戦の役割別スキルです。攻城戦は従来の攻撃・防御補正を維持しています。未所持を含む全武将を掲載。部隊用・塔用の常時効果を別々に掲載。必殺技はウェーブ中に使用できます。得意兵種は効果が高まり、対象を選ぶ技はマップをタップして発動します。回復で戦死者は復活しません。"
+            : "通常スキルはLv" + SQUAD_RULES.skillLevels.join("・Lv") + "で習得。固有スキルはLv" + SQUAD_RULES.uniqueLevel + "で" + Math.round(SQUAD_RULES.uniqueChance * 100) + "%の確率で習得し、最大" + SQUAD_RULES.maxSkills + "つまで。未実装のスキルは現在習得できません。";
           let cards;
           if (heroes) {
             const order = Object.fromEntries(Object.keys(RARITY).map((id, i) => [id, i]));
             cards = Object.entries(WARLORDS)
               .sort(([, a], [, b]) => order[a.rarity] - order[b.rarity])
-              .filter(([, c]) =>
-                [c.name, c.rarity, c.passiveText, c.skill.name, c.skillText]
-                  .join(" ")
-                  .toLocaleLowerCase()
-                  .includes(query),
-              )
-              .map(
-                ([id, c]) =>
-                  '<article class="guide-card" data-guide-hero="' +
-                  id +
-                  '"><div class="guide-card-head">' +
-                  avatarHtml(id) +
-                  "<h3>" +
-                  rarityTag(id) +
-                  " " +
-                  esc(c.name) +
-                  "</h3></div><p><b>常時効果：</b>" +
-                  esc(c.passiveText) +
-                  "</p><p><b>必殺技「" +
-                  esc(c.skill.name) +
-                  "」</b><br>" +
-                  esc(c.skillText) +
-                  '</p><p class="guide-meta">再使用まで ' +
-                  c.skill.cooldown +
-                  "秒（戦闘中のみ進行）</p></article>",
-              );
+              .filter(([, c]) => [c.name, c.rarity, c.passiveText, c.skill.name, c.skillText].join(" ").toLocaleLowerCase().includes(query))
+              .map(([id, c]) => '<article class="guide-card" data-guide-hero="' + id + '"><div class="guide-card-head">' + avatarHtml(id) + '<h3>' + rarityTag(id) + ' ' + esc(c.name) + '</h3></div><p class="guide-meta">' + esc(c.role) + (c.favorite ? '／得意：' + esc(SOLDIER_TYPES[c.favorite].name) : '／全兵種') + '</p><p><b>常時効果：</b>' + '部隊：' + esc(c.squadText) + '<br>塔：' + esc(c.towerText) + '</p><p><b>必殺技「' + esc(c.skill.name) + '」</b><br>' + esc(c.skillText) + '</p><p class="guide-meta">再使用まで ' + c.skill.cooldown + '秒（戦闘中のみ進行）</p></article>');
           } else {
             cards = Object.entries(SOLDIER_SKILLS)
               .filter(([, c]) =>
@@ -7438,19 +8415,10 @@
         function openSkillGuide() {
           if (guideReturn) return;
           const main = document.querySelector("main");
-          guideReturn = {
-            paused,
-            y: window.scrollY,
-            style: document.body.style.cssText,
-            inert: main.inert,
-            focus: document.activeElement,
-          };
-          $("skillGuideStatus").textContent =
-            playing && !over
-              ? paused
-                ? "ゲームは停止中です。閉じても停止を維持します。"
-                : "読んでいる間は一時停止します。閉じると再開します。"
-              : "一覧を閉じると、そのままゲームに戻れます。";
+          guideReturn = { paused, y: window.scrollY, style: document.body.style.cssText, inert: main.inert, focus: document.activeElement };
+          $("skillGuideStatus").textContent = (playing || battle) && !over
+            ? paused ? "ゲームは停止中です。閉じても停止を維持します。" : "読んでいる間は一時停止します。閉じると再開します。"
+            : "一覧を閉じると、そのままゲームに戻れます。";
           paused = true;
           $("pause").textContent = "▶ 再開";
           $("skillGuideSearch").value = "";
@@ -7491,10 +8459,10 @@
         $("skillGuideHeroes").onclick = () => selectGuideKind("heroes");
         $("skillGuideSoldiers").onclick = () => selectGuideKind("soldiers");
         $("skillGuideSearch").oninput = renderSkillGuide;
-        $("skillGuideSheet").onclick = (ev) => {
-          if (ev.target === $("skillGuideSheet")) closeSkillGuide();
-        };
+        $("skillGuideSheet").onclick = (ev) => { if (ev.target === $("skillGuideSheet")) closeSkillGuide(); };
+        $("heroTargetCancel").onclick = cancelHeroTarget;
         document.addEventListener("keydown", (ev) => {
+          if (pendingSkillTarget && !guideReturn && ev.key === "Escape") { ev.preventDefault(); cancelHeroTarget(); return; }
           if (!guideReturn) return;
           if (ev.key === "Escape") {
             ev.preventDefault();
@@ -7681,6 +8649,10 @@
               useSkill,
               canUseSkill,
               squadHeroMods,
+              dealEnemyDamage, heroGuard, healTarget, tickHeroes, resolveSkillTarget,
+              beginHeroTarget, cancelHeroTarget, recruitCost, serviceFactor, consumeCoupon,
+              weaponPower, moveSquadBySkill, endSkill, WARLORD_RULES, targetPriority, afterTowerFire, drawWarlordFields,
+              draw: () => draw(), clock: () => combatClock,
               injureHero,
               healInjuries,
               injuryOf,
