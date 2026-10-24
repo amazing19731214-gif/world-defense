@@ -150,17 +150,17 @@ await tapMap(page, ...A);
 await page.tap("#assign");
 check("配属画面が開く", await page.isVisible("#heroSheet"));
 const sheetText = await page.textContent("#heroList");
-check("能力と配属先が表示される", sheetText.includes("射程 +20%") && sheetText.includes("未配属"));
+check("能力と配属先が表示される", sheetText.includes("連続攻撃") && sheetText.includes("未配属"));
 await page.tap('[data-assign="kanbei"]');
 st = await S(page);
 check("黒田官兵衛を塔#1に配属", st.heroes.kanbei.tower === 1);
-check("射程 155 → 186", near(tid(st, 1).st.range, 186), String(tid(st, 1).st.range));
+check("官兵衛の連続攻撃効果は射程を変えない", near(tid(st, 1).st.range, 155), String(tid(st, 1).st.range));
 check("塔パネルに武将名", (await page.textContent("#tpHero")).includes("黒田官兵衛"));
 await page.tap("#upgrade");
 st = await S(page);
 check(
-  "強化後 Lv2 攻撃 18×1.55、射程は186のまま",
-  tid(st, 1).level === 2 && near(tid(st, 1).st.damage, 27.9) && near(tid(st, 1).st.range, 186),
+  "強化後 Lv2 攻撃 18×1.55、射程は155のまま",
+  tid(st, 1).level === 2 && near(tid(st, 1).st.damage, 27.9) && near(tid(st, 1).st.range, 155),
 );
 for (let i = 0; i < 4; i++) {
   await deselect(page);
@@ -171,7 +171,7 @@ for (let i = 0; i < 4; i++) {
 st = await S(page);
 check(
   "再配属を繰り返しても効果が積み上がらない",
-  near(tid(st, 1).st.range, 186) && near(tid(st, 2).st.range, 155),
+  near(tid(st, 1).st.range, 155) && near(tid(st, 2).st.range, 155),
 );
 await deselect(page);
 await assignVia(page, B, "kanbei");
@@ -193,197 +193,48 @@ await page.tap("#sheetClose");
 st = await S(page);
 check("解除できる", st.heroes.kenshin.tower === null && near(tid(st, 2).st.damage, 18));
 
-console.log("■ 上杉謙信・武田信玄・重複");
+console.log("■ 新パッシブ・必殺技・停止・速度");
 await deselect(page);
 await assignVia(page, Cc, "kenshin");
 st = await S(page);
-check(
-  "上杉謙信：大砲の攻撃 ×1.3・爆発 65→91",
-  near(tid(st, 3).st.damage, 62.4) && near(tid(st, 3).st.splash, 91),
-);
+check("謙信の守りは攻撃と爆発範囲を増やさない", near(tid(st,3).st.damage,48) && near(tid(st,3).st.splash,65));
 await deselect(page);
 await assignVia(page, A, "shingen");
-st = await S(page);
-check(
-  "武田信玄：近く(90)の塔#2 間隔 0.45→0.375",
-  near(tid(st, 2).st.rate, 0.375),
-  String(tid(st, 2).st.rate),
-);
-check("武田信玄：配属先の塔自身は対象外（設定）", near(tid(st, 1).st.rate, 0.45));
-check("武田信玄：遠い塔#4(鉄砲)は対象外", near(tid(st, 4).st.rate, 0.8));
-check("武田信玄：塔#3(距離220)は対象外", near(tid(st, 3).st.rate, 1.6));
 await deselect(page);
 await assignVia(page, B, "kanbei");
 st = await S(page);
-check(
-  "黒田官兵衛＋武田信玄の支援は別々に1回ずつ適用",
-  near(tid(st, 2).st.range, 186) && near(tid(st, 2).st.rate, 0.375),
-);
-if (shots) await page.screenshot({ path: path.join(shots, "1-assigned.png"), fullPage: true });
-
-console.log("■ 必殺技・停止・速度");
-await deselect(page);
-await tapMap(page, ...B);
+check("旧攻撃速度オーラは廃止され、近くの塔も元の間隔",near(tid(st,2).st.rate,.45));
+await tapMap(page,...B);
 check("ウェーブ前は必殺技を使えない", await page.isDisabled("#skill"));
 await page.tap("#start");
-// ウェーブが途中で終わらないよう、どの塔の射程にも入らない停止した敵を置く
-await page.evaluate(() =>
-  WD_DEBUG.state().enemies.push({
-    path: [
-      [0, 300],
-      [1, 300],
-    ],
-    d: 0,
-    x: 0,
-    y: 300,
-    kind: "knight",
-    hp: 1e9,
-    max: 1e9,
-    speed: 0,
-    reward: 0,
-    color: "#677b9b",
-    r: 15,
-    slow: 0,
-  }),
-);
-await page.waitForTimeout(100);
-check("ウェーブ中は使える", !(await page.isDisabled("#skill")));
-await page.tap("#skill");
-st = await S(page);
-check(
-  "黒田官兵衛 必殺技：効果8秒・再使用40秒",
-  near(st.heroes.kanbei.active, 8, 0.2) && near(st.heroes.kanbei.cd, 40, 0.2),
-);
-check(
-  "必殺技 ×1.8 と武田信玄の支援 ×1.2 は掛け算（×2.16）",
-  near(tid(st, 2).st.speedMul, 2.16),
-  String(tid(st, 2).st.speedMul),
-);
-check("必殺技の表示（残り秒数）", (await page.textContent("#skillLabel")).includes("発動中"));
-if (shots) await page.screenshot({ path: path.join(shots, "2-skill.png"), fullPage: true });
-await page.tap("#pause");
-const p0 = (await S(page)).heroes.kanbei;
-await page.waitForTimeout(1200);
-const p1 = (await S(page)).heroes.kanbei;
-check("停止中は効果時間・再使用待ちが止まる", p0.active === p1.active && p0.cd === p1.cd);
-await page.tap("#pause");
-let t0 = Date.now(),
-  a0 = (await S(page)).heroes.kanbei.active;
-await page.waitForTimeout(1000);
-let a1 = (await S(page)).heroes.kanbei.active,
-  real = (Date.now() - t0) / 1000;
-check(
-  "x1：実時間とほぼ同じ速さで減る",
-  near(a0 - a1, real, 0.35),
-  `${(a0 - a1).toFixed(2)} vs ${real.toFixed(2)}`,
-);
-await page.tap("#speed");
-t0 = Date.now();
-a0 = (await S(page)).heroes.kanbei.active;
-await page.waitForTimeout(1000);
-a1 = (await S(page)).heroes.kanbei.active;
-real = (Date.now() - t0) / 1000;
-check(
-  "x2：2倍の速さで減る（敵・塔と同じ時間）",
-  near(a0 - a1, real * 2, 0.6),
-  `${(a0 - a1).toFixed(2)} vs ${(real * 2).toFixed(2)}`,
-);
-await page.tap("#speed");
-await page.evaluate(() => WD_DEBUG.step(10));
-st = await S(page);
-check(
-  "効果時間が終わると終了・再使用待ちは継続",
-  st.heroes.kanbei.active === 0 && st.heroes.kanbei.cd > 0 && st.heroes.kanbei.cd < 40,
-);
-check("効果終了後は攻撃速度が支援分だけに戻る", near(tid(st, 2).st.rate, 0.375));
-const cdBefore = st.heroes.kanbei.cd;
-await deselect(page);
-await assignVia(page, E, "kanbei");
-await deselect(page);
-await assignVia(page, B, "kanbei");
-st = await S(page);
-check(
-  "再配属しても再使用待ちはリセットされない",
-  near(st.heroes.kanbei.cd, cdBefore, 1.5) && st.heroes.kanbei.cd > 20,
-  `${cdBefore} → ${st.heroes.kanbei.cd}`,
-);
-check("再使用待ち中は発動できない", await page.isDisabled("#skill"));
-// 武田信玄の必殺技
-await deselect(page);
-await page.tap('[data-t="magic"]');
-await tapMap(page, 330, 505); // 塔#6：武田信玄から距離205（通常170の外・強化212.5の内）
-st = await S(page);
-check("塔#6 は通常の支援範囲外", near(tid(st, 6).st.rate, 0.8));
-await tapMap(page, ...A);
-await page.tap("#skill");
-st = await S(page);
-check("武田信玄 必殺技：支援 +45%（塔#2 は上限内で ×1.45）", near(tid(st, 2).st.speedMul, 1.45));
-check(
-  "武田信玄 必殺技：範囲 ×1.25 で塔#6(距離205)にも届く",
-  near(tid(st, 6).st.rate, 0.8 / 1.45) && near(tid(st, 3).st.rate, 1.6),
-);
-await page.evaluate(() => (WD_DEBUG.state().heroState.kanbei.cd = 0)); // テスト用に再使用待ちを省略
-await deselect(page);
-await tapMap(page, ...B);
-await page.tap("#skill");
-st = await S(page);
-check(
-  "弓の必殺技 ×1.8 ＋ 武田信玄の必殺技 ×1.45 → 上限 ×2.5 で頭打ち",
-  near(tid(st, 2).st.speedMul, 2.5),
-  String(tid(st, 2).st.speedMul),
-);
-await page.evaluate(() => WD_DEBUG.step(10.5));
-st = await S(page);
-check(
-  "武田信玄 必殺技終了で元の支援に戻る",
-  near(tid(st, 2).st.speedMul, 1.2) && near(tid(st, 6).st.rate, 0.8),
-);
-// 上杉謙信の必殺技（敵を射程内に置いて確認）
-await deselect(page);
-await tapMap(page, ...Cc);
-const hpDrop = await page.evaluate(() => {
-  const s = WD_DEBUG.state(),
-    t = s.towers.find((t) => t.id === 3);
-  s.enemies.push({
-    path: [
-      [t.x, t.y + 60],
-      [t.x + 1, t.y + 60],
-    ],
-    d: 0,
-    x: t.x,
-    y: t.y + 60,
-    kind: "knight",
-    hp: 99999,
-    max: 99999,
-    speed: 0,
-    reward: 0,
-    color: "#677b9b",
-    r: 15,
-    slow: 0,
-  });
-  return s.enemies[0];
-});
-await page.tap("#skill");
-await page.evaluate(() => WD_DEBUG.step(2));
-const enemyHp = await page.evaluate(() => WD_DEBUG.state().enemies.find((e) => e.max === 99999)?.hp);
-st = await S(page);
-check(
-  "上杉謙信 必殺技：射程内の敵に範囲砲撃（3回分以上の追加ダメージ）",
-  enemyHp !== undefined && 99999 - enemyHp >= 62.4 * 1.5 * 3,
-  String(99999 - enemyHp),
-);
-check(
-  "上杉謙信 必殺技：1.5秒で終了・再使用待ち35秒",
-  st.heroes.kenshin.active === 0 && st.heroes.kenshin.cd > 32,
-);
-
+await page.evaluate(()=>{WD_DEBUG.stopSpawning();WD_DEBUG.addEnemy({d:0,hp:1e9,speed:0,holder:true,unitCd:1e9});const t=WD_DEBUG.state().towers.find(t=>t.id===2);WD_DEBUG.addEnemy({d:350,hp:1e9,speed:0,unitCd:1e9});});
+check("ウェーブ中は使える",!(await page.isDisabled("#skill")));
+// Direct API lets timing tests avoid target-selection UI (tested separately).
+const used=await page.evaluate(()=>{const h=WD_DEBUG.state().heroState.kanbei;const e=WD_DEBUG.state().enemies.find(e=>!e.holder);e.x=420;e.y=280;e.speed=0;const used=WD_DEBUG.heroApi.useSkill(h,{enemy:e});WD_DEBUG.step(.05);return used;});
+check("集中砲火：指定敵に発動",used);
+st=await S(page);
+check("集中砲火：効果7秒・再使用40秒",near(st.heroes.kanbei.active,7,.3)&&near(st.heroes.kanbei.cd,40,.3));
+check("必殺技の表示（残り秒数）",(await page.textContent("#skillLabel")).includes("発動中"));
+await page.tap("#pause");const p0=(await S(page)).heroes.kanbei;await page.waitForTimeout(400);const p1=(await S(page)).heroes.kanbei;
+check("停止中は効果時間・再使用待ちが止まる",p0.active===p1.active&&p0.cd===p1.cd);
+await page.tap("#pause");let t0=Date.now(),a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);let a1=(await S(page)).heroes.kanbei.active,real=(Date.now()-t0)/1000;
+check("x1：実時間とほぼ同じ速さ",near(a0-a1,real,.35));
+await page.tap("#speed");t0=Date.now();a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);a1=(await S(page)).heroes.kanbei.active;real=(Date.now()-t0)/1000;
+check("x2：2倍の速さ",near(a0-a1,real*2,.6));await page.tap("#speed");
+await page.evaluate(()=>WD_DEBUG.step(8));st=await S(page);
+check("効果終了後も再使用待ちは継続",st.heroes.kanbei.active===0&&st.heroes.kanbei.cd>0);
+const cdBefore=st.heroes.kanbei.cd;
+await deselect(page);await assignVia(page,E,"kanbei");await deselect(page);await assignVia(page,B,"kanbei");st=await S(page);
+check("再配属しても再使用待ちは戻らない",near(st.heroes.kanbei.cd,cdBefore,1.5)&&st.heroes.kanbei.cd>20);
+check("再使用待ち中は発動できない",await page.isDisabled("#skill"));
+// Recoup existing upgrade/assignment coverage; role-specific effects are tested in test-warlord-roles.mjs.
 console.log("■ 売却・リセット");
 await deselect(page);
 await tapMap(page, ...B);
 const goldBefore = (await S(page)).gold;
 await page.tap("#sell");
 st = await S(page);
-check("武将付きの塔を売却 → 武将は未配属", st.heroes.kanbei.tower === null && st.towers.length === 5);
+check("武将付きの塔を売却 → 武将は未配属", st.heroes.kanbei.tower === null && st.towers.length === 4);
 check("売却額は従来どおり（投資の70%）", st.gold - goldBefore === Math.floor(100 * 0.7));
 check("売却した塔の支援は消える／再使用待ちは保持", st.heroes.kanbei.cd > 0);
 await page.tap("#roster");

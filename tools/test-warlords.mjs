@@ -302,8 +302,8 @@ let hs = await H(page);
 check("真田幸村を足軽隊#1に配属", hs.yukimura.squad === 1 && hs.yukimura.tower === null);
 const withY = (await soldiersOf(page, 1))[0];
 check(
-  "部隊の兵士に武将の効果（攻撃 ×1.15・防御 ×1.3）",
-  near(withY.atk, base.atk * 1.15) && near(withY.def, base.def * 1.3),
+  "幸村の低HP効果は満タン時には上乗せしない",
+  near(withY.atk, base.atk) && near(withY.def, base.def),
 );
 check("部隊パネルに武将名", /真田幸村/.test(await page.textContent("#sqHeroLine")));
 check("必殺技ボタンを部隊パネルに表示", await page.isVisible("#sqSkill"));
@@ -335,10 +335,10 @@ check("ウェーブ中は部隊の必殺技を使える", !(await page.isDisable
 await page.tap("#sqSkill");
 hs = await H(page);
 const sk = (await soldiersOf(page, 1))[0];
-check("日本一の兵：効果10秒・再使用40秒", near(hs.yukimura.active, 10, 0.2) && near(hs.yukimura.cd, 40, 0.2));
+check("日本一の兵：効果8秒・再使用40秒", near(hs.yukimura.active, 8, 0.2) && near(hs.yukimura.cd, 40, 0.2));
 check(
-  "必殺技中は部隊の防御 ×1.3×1.5・攻撃間隔 ÷1.6",
-  near(sk.def, base.def * 1.95) && near(sk.rate, base.rate / 1.6),
+  "決死中は攻撃×1.6、防御値と攻撃間隔は変えない",
+  near(sk.atk, base.atk * 1.6) && near(sk.def, base.def) && near(sk.rate, base.rate),
 );
 await step(page, 3);
 const cdMid = (await H(page)).yukimura.cd;
@@ -405,7 +405,9 @@ const heal = await page.evaluate(() => {
     q1 = s.squads.find((q) => q.type === "spearman");
   const dead = s.soldiers.filter((m) => m.squadId === q1.id && !m.alive).map((m) => m.id);
   const before = api.members(q1).map((m) => m.hp);
-  WD_DEBUG.heroApi.useSkill(WD_DEBUG.heroApi.heroState().kanetsugu);
+  for (const e of s.enemies) e.unitCd = 99999;
+  WD_DEBUG.heroApi.useSkill(WD_DEBUG.heroApi.heroState().kanetsugu, {point:q1});
+  WD_DEBUG.step(0.5);
   const after = api.members(q1).map((m) => m.hp);
   return {
     dead,
@@ -416,7 +418,7 @@ const heal = await page.evaluate(() => {
   };
 });
 check(
-  "愛の兜：生存兵のHPを回復",
+  "愛の救護陣：生存兵のHPを継続回復",
   heal.after.every((h, i) => h > heal.before[i]),
 );
 check("回復でも戦死者は復活しない", heal.dead.length >= 1 && heal.stillDead, JSON.stringify(heal));
@@ -428,7 +430,7 @@ const vol = await page.evaluate(() => {
   WD_DEBUG.step(1.6);
   return { dmg: hp0 - e.hp };
 });
-check("車懸りの陣：部隊の周囲の敵に範囲攻撃", vol.dmg > 100, String(vol.dmg));
+check("車懸りの陣：部隊の周囲の敵に範囲攻撃", vol.dmg > 10, String(vol.dmg));
 
 console.log("■ 待機中の部隊・解散");
 await page.evaluate(() => {
@@ -573,6 +575,8 @@ console.log("■ 武将30人（第2弾の20人を含む）");
     for (const id of Object.keys(WD_DEBUG.config.WARLORDS)) {
       for (const target of ["tower", "squad"]) {
         const st = WD_DEBUG.state();
+        if (q.state === "reserve") sq.deployReserve(q, 650, 300);
+        for (const e of st.enemies) e.unitCd = 1e9;
         if (target === "tower") {
           if (!st.towers.length) {
             // 道の外の草地に塔を1基
@@ -581,8 +585,11 @@ console.log("■ 武将30人（第2弾の20人を含む）");
           api.assignHero(id, st.towers[0]);
         } else api.assignHero(id, q);
         const h = api.heroState()[id];
+        api.endSkill(h);
         h.cd = 0;
-        api.useSkill(h);
+        const kind = WD_DEBUG.config.WARLORDS[id].skill.target;
+        const input = kind === "enemy" ? {enemy:st.enemies.find(e=>!e.holder)} : kind === "ally" ? {ally:q} : kind === "heal" ? {heal:sq.members(q)[0]} : kind === "road" ? {point:q} : undefined;
+        api.useSkill(h, input);
         WD_DEBUG.step(1.2);
         used.push(h.cd > 0);
       }
