@@ -80,6 +80,7 @@ async function newContext(extra = {}) {
 const fight = (page, castle) =>
   page.evaluate((castle) => {
     const a = WD_DEBUG.squadApi;
+    a.setCounterRng(() => 0.99); // 反撃（奪い返し）は起こさない（test-counter で確認）
     if (!a.battle()) a.startBattle();
     if (castle != null) a.battle().castleHp = castle;
     for (let i = 0; i < 4000 && a.battle(); i++) WD_DEBUG.step(0.1);
