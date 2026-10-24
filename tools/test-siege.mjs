@@ -283,12 +283,12 @@ const sprites = await page.evaluate(() => {
   };
 });
 check(
-  "敵兵は戦国の兵（足軽・足軽組頭・槍兵・騎兵・弓兵・大将）",
-  Object.values(sprites.names).join() === "足軽,足軽組頭,槍兵,騎兵,弓兵,大将",
+  "敵兵は戦国の兵5種（足軽・槍兵・騎兵・弓兵・大将）",
+  Object.values(sprites.names).join() === "足軽,足軽,槍兵,騎兵,弓兵,大将",
   JSON.stringify(sprites.names),
 );
 await page.evaluate(() => {
-  for (const [i, k] of ["goblin", "knight", "wolf", "dragon", "boss", "slime"].entries())
+  for (const [i, k] of ["goblin", "knight", "wolf", "dragon", "boss"].entries())
     WD_DEBUG.addEnemy({ kind: k, d: 330 + i * 70, hp: 1e9, speed: 0 });
 });
 await step(page, 0.4);

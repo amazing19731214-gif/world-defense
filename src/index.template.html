@@ -1134,10 +1134,11 @@
             rate: 1.0,
             tower: { damage: 3, reach: 76 },
           },
+          // 旧データ互換のための内部ID。もう出現しない（敵兵は足軽・槍兵・騎兵・弓兵・大将の5種）
           slime: {
-            name: "足軽組頭",
+            name: "足軽",
             sprite: "ashigaru",
-            height: 46,
+            height: 40,
             damage: 10,
             rate: 1.0,
             tower: { damage: 4, reach: 76 },
@@ -1584,7 +1585,6 @@
           let kind = "goblin";
           if (wave > 3 && Math.random() < 0.22) kind = "wolf";
           if (wave > 6 && Math.random() < 0.18) kind = "knight";
-          if (wave > 9 && Math.random() < 0.12) kind = "slime";
           if (wave > 12 && Math.random() < 0.1) kind = "dragon";
           if (wave % 5 === 0 && spawned === spawnTotal - 1) kind = "boss";
           const conf = {
@@ -2475,140 +2475,68 @@
           }
           for (let i = 0; i < t.level; i++) ellipse(x - 15 + i * 8, y + 26, 3, 3, "#ffe484");
         }
-        function creature(e) {
-          if (e.kind === "goblin" && sprites.goblin) {
-            const stride = reduced ? 0 : Math.sin(e.d * 0.19);
-            ellipse(e.x + 2, e.y + 12, 15, 5, "#2e523855");
-            ctx.save();
-            ctx.translate(e.x, e.y + 14);
-            ctx.rotate(stride * 0.045);
-            sprite("goblin", 0, 0, 39, 45);
-            ctx.restore();
-            healthBar(e);
-            return;
-          }
-          let x = e.x,
+        // 画像が読み込めないときの簡易表示：赤い甲冑の兵（兵種ごとに槍・弓・馬・大将の前立て）
+        function soldierFallback(e) {
+          const x = e.x,
             y = e.y,
-            r = e.r,
-            phase = Math.sin(visualTime * 9 + e.d * 0.06) * 3;
-          ellipse(x + 3, y + r * 0.8, r * 1.1, r * 0.36, "#354a3977");
-          ctx.save();
-          ctx.translate(x, y + phase);
-          let col = e.color;
-          if (e.kind === "goblin") {
-            poly(
-              [
-                [-r * 0.85, -r * 0.5],
-                [-r * 1.6, -r],
-                [-r * 0.65, -r * 0.9],
-              ],
-              "#6aab56",
-              "#346c40",
-              2,
-            );
-            poly(
-              [
-                [r * 0.85, -r * 0.5],
-                [r * 1.6, -r],
-                [r * 0.65, -r * 0.9],
-              ],
-              "#6aab56",
-              "#346c40",
-              2,
-            );
-            ellipse(0, 0, r, r * 0.9, "#69aa55");
-            ellipse(-5, -3, 4, 5, "#fff7d4");
-            ellipse(6, -3, 4, 5, "#fff7d4");
-            ellipse(-4, -3, 2, 3, "#2e3734");
-            ellipse(7, -3, 2, 3, "#2e3734");
-            ctx.strokeStyle = "#553c2b";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(1, 6, 5, 0, Math.PI);
-            ctx.stroke();
-          } else if (e.kind === "wolf") {
-            poly(
-              [
-                [-r, -r * 0.2],
-                [-r, -r * 1.6],
-                [-2, -r * 0.8],
-                [r, -r * 1.6],
-                [r, r * 0.3],
-              ],
-              "#a39173",
-              "#5c5a4b",
-              3,
-            );
-            ellipse(0, 2, r, r * 0.75, "#ac9d81");
-            ellipse(-5, -3, 3, 4, "#f8e6bb");
-            ellipse(6, -3, 3, 4, "#f8e6bb");
-            ellipse(1, 6, 4, 3, "#3c3934");
-          } else if (e.kind === "slime") {
-            ellipse(0, 3, r, r * 0.8, "#71d09b");
-            ellipse(-5, -2, 4, 5, "white");
-            ellipse(6, -2, 4, 5, "white");
-            ellipse(-4, -2, 2, 3, "#315c4b");
-            ellipse(7, -2, 2, 3, "#315c4b");
-            ellipse(-5, 7, 6, 2, "#d8ffe6");
-          } else if (e.kind === "dragon") {
-            poly(
-              [
-                [-r, 0],
-                [-r * 1.9, -r * 1.2],
-                [-4, -r * 0.5],
-              ],
-              "#d36c7a",
-              "#813c55",
-              2,
-            );
-            poly(
-              [
-                [r, 0],
-                [r * 1.8, -r * 1.2],
-                [4, -r * 0.5],
-              ],
-              "#d36c7a",
-              "#813c55",
-              2,
-            );
-            ellipse(0, 0, r, r, "#b65777");
-            poly(
-              [
-                [-8, -r * 0.7],
-                [0, -r * 1.6],
-                [9, -r * 0.7],
-              ],
-              "#f0bb7b",
-              "#814c57",
-              2,
-            );
-            ellipse(-5, -2, 3, 4, "#ffea9d");
-            ellipse(6, -2, 3, 4, "#ffea9d");
-          } else {
-            ellipse(0, 0, r, r, "#8193a3");
-            poly(
-              [
-                [-r, -r * 0.35],
-                [-r * 0.8, -r * 1.2],
-                [0, -r * 1.55],
-                [r * 0.8, -r * 1.2],
-                [r, -r * 0.35],
-              ],
-              e.kind === "boss" ? "#713f63" : "#a9b5c3",
-              "#3e4b55",
-              2,
-            );
-            ctx.fillStyle = "#f9e3a7";
-            ctx.fillRect(-7, -5, 5, 5);
-            ctx.fillRect(4, -5, 5, 5);
-            ctx.fillStyle = "#4b4d57";
-            ctx.fillRect(-4, 3, 9, 8);
+            k = e.kind === "boss" ? 1.5 : 1,
+            f = e.face < 0 ? -1 : 1;
+          ellipse(x + 2, y + 12, 13 * k, 4 * k, "#2e523855");
+          if (e.kind === "wolf") {
+            ellipse(x, y + 4, 17, 8, "#6b4a32");
+            ellipse(x + 15 * f, y - 2, 6, 5, "#6b4a32");
           }
-          ctx.restore();
-          ctx.fillStyle = "#333b35";
-          ctx.fillRect(x - r, y - r - 21, r * 2, 5);
-          ctx.fillStyle = "#f36c5d";
-          ctx.fillRect(x - r, y - r - 21, r * 2 * Math.max(0, e.hp / e.max), 5);
+          ctx.fillStyle = "#3a2a22";
+          ctx.fillRect(x - 5 * k, y + 2 * k, 3 * k, 9 * k);
+          ctx.fillRect(x + 2 * k, y + 2 * k, 3 * k, 9 * k);
+          poly(
+            [
+              [x - 8 * k, y + 3 * k],
+              [x - 7 * k, y - 10 * k],
+              [x + 7 * k, y - 10 * k],
+              [x + 8 * k, y + 3 * k],
+            ],
+            "#b8322b",
+            "#5a1a16",
+            2,
+          );
+          ellipse(x, y - 15 * k, 5 * k, 5 * k, "#f0c9a0");
+          poly(
+            [
+              [x - 10 * k, y - 16 * k],
+              [x, y - 25 * k],
+              [x + 10 * k, y - 16 * k],
+            ],
+            "#2b2522",
+            "#151110",
+            1,
+          );
+          if (e.kind === "boss") {
+            poly(
+              [
+                [x - 7, y - 37],
+                [x, y - 47],
+                [x + 7, y - 37],
+              ],
+              "#e2b84a",
+              "#7a5a18",
+              1,
+            );
+          }
+          ctx.strokeStyle = "#4a3624";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (e.kind === "knight") {
+            ctx.moveTo(x + 6 * f, y + 8);
+            ctx.lineTo(x + 16 * f, y - 30);
+          } else if (e.kind === "dragon") {
+            ctx.arc(x + 8 * f, y - 6, 9, -1.2, 1.2);
+          } else {
+            ctx.moveTo(x + 6 * f, y);
+            ctx.lineTo(x + 14 * f, y - 12 * k);
+          }
+          ctx.stroke();
+          healthBar(e);
         }
         function bloom(x, y, r, color) {
           let g = ctx.createRadialGradient(x, y, 1, x, y, r);
@@ -2914,70 +2842,6 @@
             ctx.fillStyle = "#4aa0dccc";
             ctx.fillRect(x + 18, y - 52, 5, 40);
             ellipse(x + 21, y - 10, 9, 3, "#7cc4f0cc");
-          }
-          ctx.restore();
-        }
-        function creatureDetails(e) {
-          if (e.kind === "goblin" && sprites.goblin) return;
-          const x = e.x,
-            y = e.y;
-          ctx.save();
-          if (e.kind === "goblin") {
-            ctx.fillStyle = "#70442e";
-            ctx.fillRect(x - 8, y + 7, 5, 6);
-            ctx.fillRect(x + 4, y + 7, 5, 6);
-            poly(
-              [
-                [x - 11, y - 7],
-                [x, y - 20],
-                [x + 11, y - 7],
-              ],
-              "#b55d39",
-              "#753d2e",
-              2,
-            );
-          }
-          if (e.kind === "wolf") {
-            poly(
-              [
-                [x - 12, y + 1],
-                [x - 24, y - 7],
-                [x - 20, y + 9],
-              ],
-              "#b6a17c",
-              "#67594a",
-              2,
-            );
-          }
-          if (e.kind === "slime") {
-            bloom(x, y, 24, "#abffe044");
-          }
-          if (e.kind === "dragon") {
-            bloom(x, y - 9, 34, "#ffb97744");
-            poly(
-              [
-                [x - 8, y - 13],
-                [x, y - 26],
-                [x + 9, y - 12],
-              ],
-              "#e9a66b",
-              "#7c4358",
-              2,
-            );
-          }
-          if (e.kind === "boss") {
-            poly(
-              [
-                [x - 17, y - 25],
-                [x - 11, y - 48],
-                [x, y - 33],
-                [x + 11, y - 48],
-                [x + 17, y - 25],
-              ],
-              "#e8c36b",
-              "#7b5739",
-              3,
-            );
           }
           ctx.restore();
         }
@@ -3446,7 +3310,7 @@
         document.querySelectorAll("[data-sprite]").forEach((img) => {
           if (embeddedSprites[img.dataset.sprite]) img.src = embeddedSprites[img.dataset.sprite];
         });
-        for (const name of ["arrow", "cannon", "magic", "ice", "castle", "goblin", "tree", "pine", "rocks"]) {
+        for (const name of ["arrow", "cannon", "magic", "ice", "castle", "tree", "pine", "rocks"]) {
           const im = new Image();
           im.onload = () => {
             sprites[name] = im;
@@ -3623,7 +3487,7 @@
             ellipse(x, y, 8, 6, "#3f8fcf");
             ellipse(x - 2, y - 2, 4, 2.5, "#c9efff");
           } else {
-            // ドラゴンの火球など
+            // 色つきの弾（大砲など）
             const color = s.col || "#ff9b54";
             ctx.strokeStyle = color;
             ctx.lineWidth = 4;
@@ -3734,13 +3598,6 @@
           }
           ctx.save();
           ctx.globalAlpha = 1 - p;
-          if (e.kind === "death" && sprites.goblin) {
-            ctx.save();
-            ctx.translate(e.x, e.y + 12);
-            ctx.rotate(p * 1.4);
-            sprite("goblin", 0, 0, 34 * (1 - p * 0.25), 40 * (1 - p * 0.25));
-            ctx.restore();
-          }
           const n = reduced ? 3 : e.kind === "cannon" ? 12 : 7;
           let color =
             e.kind === "ice"
@@ -3834,14 +3691,8 @@
               draw: () => {
                 ctx.save();
                 if (!drawEnemySprite(e)) {
-                  const stride = reduced ? 0 : Math.sin(e.d * 0.17) * 3;
-                  ctx.translate(0, stride);
-                  if (e.kind !== "slime" && e.kind !== "dragon") {
-                    ellipse(e.x - 6, e.y + e.r, 4, 3 + Math.abs(stride), "#534c3d");
-                    ellipse(e.x + 6, e.y + e.r, 4, 6 - Math.abs(stride), "#534c3d");
-                  }
-                  creature(e);
-                  creatureDetails(e);
+                  ctx.translate(0, reduced ? 0 : Math.sin(e.d * 0.17) * 2);
+                  soldierFallback(e);
                 }
                 if (e.hit > 0) {
                   ctx.globalAlpha = e.hit * 3;
