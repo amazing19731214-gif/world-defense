@@ -220,14 +220,14 @@ check("兵士5人を押しやすいボタンで表示", (await page.$$("#sqMembe
 await page.tap("#sqMembers [data-soldier]:nth-child(3)");
 const info = await page.textContent("#soldierInfo");
 check(
-  "兵士の戦歴（兵種・Lv・称号・HP・撃破・生存W・所属）",
+  "兵士の戦歴（兵種・Lv・階級・HP・撃破・生存W・スキル）",
   /足軽 #3/.test(info) &&
     /Lv1/.test(info) &&
     /新兵/.test(info) &&
     /HP 70\/70/.test(info) &&
     /撃破 0/.test(info) &&
     /生存 0W/.test(info) &&
-    /所属 足軽隊 #1/.test(info),
+    /スキル なし/.test(info),
   info,
 );
 if (shots) await page.screenshot({ path: path.join(shots, "s1-panel.png"), fullPage: true });
@@ -395,7 +395,7 @@ await endWave(page);
 st = await S(page);
 check(
   "ウェーブを生き延びて称号「熟練兵」を獲得・戦歴に記録",
-  so(st, L4).title === "熟練兵" && so(st, L4).history.some((h) => /熟練兵/.test(h)),
+  so(st, L4).title.includes("熟練兵") && so(st, L4).history.some((h) => /熟練兵/.test(h)),
 );
 check("経験値・レベルはウェーブをまたいで保持", so(st, L3).level === lv.a.level);
 
@@ -650,9 +650,19 @@ if (shots) await page.screenshot({ path: path.join(shots, "s3-battle.png"), full
 console.log("■ リセット");
 await page.tap("#reset");
 st = await S(page);
+// 兵士はゲームをまたいで残る：最後にクリアしたウェーブの時点で保存した生存兵だけが、待機中・HP満タンで戻る
+const savedRoster = await page.evaluate(() => WD_DEBUG.squadApi.soldierSave());
 check(
-  "リセットで兵士・部隊・経験値・戦歴を初期化",
-  st.squads.length === 0 && st.soldiers.length === 0 && st.gold === 500 && st.wave === 0,
+  "リセットで保存済みの生存兵だけが待機中で戻る（ゴールド・ウェーブは初期化）",
+  st.soldiers.length === savedRoster.soldiers.length &&
+    st.soldiers.every(
+      (m) =>
+        m.alive && savedRoster.soldiers.some((v) => v.id === m.id && v.level === m.level && v.xp === m.xp),
+    ) &&
+    st.squads.every((q) => q.state === "reserve") &&
+    st.gold === 500 &&
+    st.wave === 0,
+  `${st.soldiers.length} vs ${savedRoster.soldiers.length}`,
 );
 check(
   "リセット後は部隊パネル・編成画面を閉じる",
