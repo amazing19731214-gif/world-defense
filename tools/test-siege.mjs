@@ -21,6 +21,11 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -197,7 +202,7 @@ await page.evaluate(() => {
   const t = WD_DEBUG.state().towers[0];
   t.hp = WD_DEBUG.towerApi.towerMaxHp(t);
 });
-await page.tap('[data-u="spearman"]');
+await tapHire(page, "spearman");
 await tapMap(page, 640, 300);
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "goblin", d: 694 + 40, hp: 1e9, speed: 60 }));
 const g0 = (await T(page))[0].hp;

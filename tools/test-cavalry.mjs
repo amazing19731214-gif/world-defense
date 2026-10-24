@@ -21,6 +21,11 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -93,10 +98,10 @@ check(
 );
 check("騎兵の撤退は速い（1.5秒）・進軍の速さを持つ（攻城戦用）", r.c.retreatTime === 1.5 && r.c.march > 1);
 check("騎兵のコマ（待機・攻撃・戦死）を埋め込み", r.frames === "idle,attack,death", r.frames);
-await page.tap('[data-u="cavalry"]');
+await tapHire(page, "cavalry");
 check("騎兵を選ぶと説明を表示", /騎馬隊（5人・140G）/.test(await page.textContent("#msg")));
 await tapMap(650, 300);
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(400, 165);
 r = await ev(() => WD_DEBUG.state().squads.map((q) => q.type + ":" + WD_DEBUG.squadApi.members(q).length));
 check("道をタップして騎馬隊を雇用（5人）", r.join() === "cavalry:5,ashigaru:5", r.join());
@@ -277,7 +282,7 @@ check("攻城編成に騎兵を登録", r.join() === "cavalry", r.join());
 await page.tap("#siegeClose");
 
 console.log("■ 画面（390px）");
-await page.tap('[data-u="cavalry"]');
+await tapHire(page, "cavalry");
 const lay = await ev(() => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
   minBtn: Math.min(
