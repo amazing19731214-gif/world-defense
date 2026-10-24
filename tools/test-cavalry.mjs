@@ -246,7 +246,7 @@ r = await ev(() => {
   a.setSkillRng();
   const sk = a.SOLDIER_SKILLS;
   return {
-    skills: m.skills,
+    skills: m.skills.filter((id) => !sk[id].job), // 熟練度で覚える職業スキルは別
     pool: Object.keys(sk).filter((k) => sk[k].types.includes("cavalry") && !sk[k].unique && !sk[k].future),
   };
 });

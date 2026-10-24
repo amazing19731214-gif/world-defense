@@ -36,12 +36,12 @@ try {
  check('該当なし表示とHTML注入の防止',(await page.locator('#skillGuidePanel').innerText()).includes('該当するスキルがありません')&&await page.locator('#skillGuidePanel img').count()===0);
  await page.tap('#skillGuideSoldiers');
  check('兵士タブは検索をクリア',await page.locator('#skillGuideSearch').inputValue()==='');
- check('20スキルを表示',await page.locator('[data-guide-soldier]').count()===20);
+ check('兵士スキル（職業スキルを含む）をすべて表示',await page.locator('[data-guide-soldier]').count()===await page.evaluate(()=>Object.keys(WD_DEBUG.squadApi.SOLDIER_SKILLS).length));
  const text=await page.locator('#skillGuideHint').innerText();
  check('習得条件を設定から表示',text.includes('Lv5・Lv15')&&text.includes('Lv30')&&text.includes('30%')&&text.includes('最大20個'));
  check('城攻め名人は習得不可と明示',(await page.locator('[data-guide-soldier="siegeMaster"]').innerText()).includes('未実装・習得不可'));
  await page.locator('#skillGuideSearch').fill('衛生兵');
- check('兵種から適合スキルを検索',await page.locator('[data-guide-soldier]').count()===6);
+ check('兵種から適合スキルを検索（衛生兵の職業スキル「応急処置」を含む）',await page.locator('[data-guide-soldier]').count()===7);
  await page.locator('#skillGuideSearch').fill('');
  const folder=process.env.SCREENSHOTS;
  if(folder){fs.mkdirSync(folder,{recursive:true});await page.screenshot({path:path.join(folder,'skills-soldiers.png')});}

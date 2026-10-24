@@ -146,15 +146,17 @@ r = await ev(page, () => {
   const lvTo = (lv) => {
     while (m.level < lv) a.gainXp(m, R.xpToLevel(m.level) - m.xp, true);
   };
+  // レベルで習得するスキルだけを数える（職業スキルは熟練度で別に習得する）
+  const lvSkills = () => m.skills.filter((id) => !a.SOLDIER_SKILLS[id].job);
   lvTo(4);
-  const at4 = m.skills.length;
+  const at4 = lvSkills().length;
   lvTo(5);
-  const at5 = m.skills.slice(),
+  const at5 = lvSkills(),
     hist5 = m.history.join("/");
   lvTo(14);
-  const at14 = m.skills.length;
+  const at14 = lvSkills().length;
   lvTo(15);
-  const at15 = m.skills.slice();
+  const at15 = lvSkills();
   const st19 = a.soldierStats(m);
   lvTo(19);
   const t19 = a.titleText(m),
@@ -174,8 +176,8 @@ r = await ev(page, () => {
     t20,
     eliteUp: s20.atk > s19.atk && s20.def > s19.def,
     lv30: m.level,
-    skills30: m.skills.slice(),
-    fits: m.skills.every((id) => sk[id].types.includes("spearman") && !sk[id].future),
+    skills30: lvSkills(),
+    fits: lvSkills().every((id) => sk[id].types.includes("spearman") && !sk[id].future),
     hist5,
     hist20,
     st19,
@@ -199,15 +201,15 @@ r = await ev(page, () => {
     const m = { type, level: 1, xp: 0, skills: [], alive: true, history: [], squadId: 0, name: null };
     a.setSkillRng(() => 0);
     while (m.level < 30) a.gainXp(m, R.xpToLevel(m.level) - m.xp, true);
-    out[type] = m.skills.slice();
+    out[type] = m.skills.filter((id) => !a.SOLDIER_SKILLS[id].job); // 職業スキルは別（熟練度で習得）
   }
   a.setSkillRng();
   return out;
 });
 const uniq = { ashigaru: "unyielding", spearman: "spearWall", archer: "sureShot" };
 check(
-  "Lv30 の固有スキルは兵種ごと・最大3つ",
-  Object.entries(r).every(([t, s]) => s.length === 3 && s[2] === uniq[t]),
+  "Lv30 の固有スキルは兵種ごと（レベルで覚えるのは3つ）",
+  Object.entries(r).every(([t, s]) => s.length === 3 && s.includes(uniq[t])),
   JSON.stringify(r),
 );
 r = await ev(page, () => {
@@ -718,11 +720,12 @@ r = await ev(page, () => ({
   squads: WD_DEBUG.state().squads.length,
 }));
 check(
-  "不正な値は直して読み込む（Lv上限・重複/不明/兵種違いのスキル・名前の記号）",
+  // 転職で別の兵種のスキルも覚えられるので、兵種違いのスキルは残す（重複・存在しないスキルは除く）
+  "不正な値は直して読み込む（Lv上限・重複/不明のスキル・名前の記号）",
   r.soldiers.length === 3 &&
     r.soldiers[0].level === 99 && // レベルの上限は無くなった（Lv99もそのまま）
     r.soldiers[0].xp === 0 &&
-    r.soldiers[0].skills.join() === "longShot" &&
+    r.soldiers[0].skills.join() === "longShot,spearMaster" &&
     r.soldiers[0].name === "i弓/i" &&
     r.soldiers[0].hist.join() === "a",
   JSON.stringify(r.soldiers),

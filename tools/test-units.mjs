@@ -323,7 +323,7 @@ r = await ev(page, () => {
     const at = {};
     while (m.level < 30) {
       a.gainXp(m, R.xpToLevel(m.level) - m.xp, true);
-      at[m.level] = m.skills.slice();
+      at[m.level] = m.skills.filter((id) => !a.SOLDIER_SKILLS[id].job); // 熟練度で覚える職業スキルは別
     }
     out[type] = { at5: at[5], at15: at[15], at30: at[30] };
   }
