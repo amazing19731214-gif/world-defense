@@ -36,11 +36,6 @@ async function newContext(seeds = {}) {
     isMobile: true,
     hasTouch: true,
   });
-  await context.addInitScript((seeds) => {
-    if (sessionStorage.getItem("seeded")) return;
-    sessionStorage.setItem("seeded", "1");
-    for (const [k, v] of Object.entries(seeds)) localStorage.setItem(k, v);
-  }, seeds);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -48,6 +43,16 @@ async function newContext(seeds = {}) {
   page.on("dialog", (d) => d.accept());
   await page.goto(url);
   await page.waitForFunction(() => window.WD_DEBUG);
+  // 保存データは最初に一度だけ入れて読み込み直す（再読み込みのたびに入れ直さない）。
+  // 読み込みのたびに保存データを触る準備スクリプトは、直前の保存と重なると古い内容を読むことがあるため使わない
+  if (seeds && Object.keys(seeds).length) {
+    await page.evaluate((seeds) => {
+      localStorage.clear();
+      for (const [k, v] of Object.entries(seeds)) localStorage.setItem(k, v);
+    }, seeds);
+    await page.goto(url);
+    await page.waitForFunction(() => window.WD_DEBUG);
+  }
   return { page, errors, context };
 }
 const ev = (page, fn, arg) => page.evaluate(fn, arg);
