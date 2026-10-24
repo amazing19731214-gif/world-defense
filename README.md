@@ -6,6 +6,17 @@ Tower Defense Game
 
 開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
 
+## 清洲城の攻略（v18・Phase 5）
+
+- 攻城戦の相手は城ごとのデータ（`NPC_CASTLES`）になった。最初の城は**清洲城（尾張）**（耐久1600・防衛塔4基・守備兵17人）。
+  城の並び `CASTLE_ORDER` の、まだ占領していない最初の城が攻略目標になる（7か国へ広げるときは城を足す）。
+- 攻城編成の画面に攻略目標（城名・国・耐久・塔・守備兵・報酬・占領状況）を表示。出陣ボタンにも城の名前を出す。
+- 勝利すると**占領**し、保存する（キー `worldDefense.conquest.v1`：城ごとの占領・挑戦回数・勝利数）。
+  - 初めて攻め落としたときだけ報酬（清洲城：🎴 ガチャ券 +3）。
+  - 占領済みの城は「演習」として何度でも攻められる（報酬・占領なし。経験値・戦死・負傷はふだんどおり）。
+  - 撤退・敗北では占領しない（挑戦回数だけ増える）。
+- 結果画面に占領の知らせと報酬を表示する。
+
 ## 攻城戦（v17・Phase 4 基本システム）
 
 - 「⚔️ 攻城編成」画面の「⚔️ 出陣（攻城戦）」で始める（防衛のウェーブ中は不可）。防衛戦の状態はそのまま止まり、終わると戻る。
@@ -176,6 +187,7 @@ Tower Defense Game
 | `tools/test-soldiers.mjs` | 動作確認：兵士の育成・スキル・命名・保存・英霊名鑑・武将の負傷 |
 | `tools/test-formation.mjs` | 動作確認：攻城部隊編成（4部隊・10人・武将・重複禁止・保存） |
 | `tools/test-units.mjs` | 動作確認：鉄砲兵・衛生兵（攻撃・回復・成長・保存・攻城編成） |
+| `tools/test-castle.mjs` | 動作確認：NPC城の攻略（攻略目標・占領・報酬・演習・保存） |
 | `tools/test-battle.mjs` | 動作確認：攻城戦（出撃・進軍・戦闘・勝敗・経験値・戦死・負傷・撤退） |
 | `tools/test-limits.mjs` | 動作確認：部隊の保有上限・画面上部の案内・解散 |
 | `tools/test-cavalry.mjs` | 動作確認：騎兵（敵の騎兵の足止め・突撃・槍兵に弱い・撤退・保存・攻城編成） |
@@ -197,6 +209,7 @@ node tools/test-units.mjs       # 鉄砲兵・衛生兵の動作確認
 node tools/test-cavalry.mjs     # 騎兵の動作確認
 node tools/test-limits.mjs      # 部隊の保有上限・解散の動作確認
 node tools/test-battle.mjs      # 攻城戦の動作確認
+node tools/test-castle.mjs      # NPC城の攻略の動作確認
 ```
 
 iPhone から更新する場合は、生成済みの `index.html` をそのままアップロードすれば動きます。
