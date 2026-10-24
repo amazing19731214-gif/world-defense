@@ -38,7 +38,7 @@ try {
  check('兵士タブは検索をクリア',await page.locator('#skillGuideSearch').inputValue()==='');
  check('20スキルを表示',await page.locator('[data-guide-soldier]').count()===20);
  const text=await page.locator('#skillGuideHint').innerText();
- check('習得条件を設定から表示',text.includes('Lv5・Lv15')&&text.includes('Lv30')&&text.includes('30%')&&text.includes('3つ'));
+ check('習得条件を設定から表示',text.includes('Lv5・Lv15')&&text.includes('Lv30')&&text.includes('30%')&&text.includes('最大20個'));
  check('城攻め名人は習得不可と明示',(await page.locator('[data-guide-soldier="siegeMaster"]').innerText()).includes('未実装・習得不可'));
  await page.locator('#skillGuideSearch').fill('衛生兵');
  check('兵種から適合スキルを検索',await page.locator('[data-guide-soldier]').count()===6);

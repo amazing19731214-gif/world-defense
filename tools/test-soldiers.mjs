@@ -222,8 +222,9 @@ r = await ev(page, () => {
   return { n, after: m.skills.length, ok };
 });
 check(
-  "スキルは3つまで（それ以上は習得しない）",
-  r.after === Math.max(r.n, Math.min(3, r.n + 2)) && r.after <= 3,
+  "Lv30 を超えても、覚えられるスキルが残っていればさらに習得できる（装備は20個まで）",
+  r.after >= r.n && r.after <= 20,
+  JSON.stringify(r),
 );
 
 console.log("■ スキルの効果（強くなりすぎない）");
@@ -719,7 +720,7 @@ r = await ev(page, () => ({
 check(
   "不正な値は直して読み込む（Lv上限・重複/不明/兵種違いのスキル・名前の記号）",
   r.soldiers.length === 3 &&
-    r.soldiers[0].level === 30 &&
+    r.soldiers[0].level === 99 && // レベルの上限は無くなった（Lv99もそのまま）
     r.soldiers[0].xp === 0 &&
     r.soldiers[0].skills.join() === "longShot" &&
     r.soldiers[0].name === "i弓/i" &&
