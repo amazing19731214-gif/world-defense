@@ -133,17 +133,24 @@ check(
 if (shots) await page.screenshot({ path: path.join(shots, "c2-capture.png") });
 await page.tap("#battleClose");
 
-console.log("■ 再読み込み・演習");
+console.log("■ 再読み込み・次の目標・演習");
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 await page.tap("#siege");
 text = await page.textContent("#siegeTarget");
 check(
-  "再読み込みしても占領済み（演習として攻められる）",
-  /占領済み：清洲城/.test(text) && /演習/.test(text),
+  "清洲城を取ると、次の攻略目標は隣の国の城（曳馬城・遠江）",
+  /攻略目標：曳馬城（遠江）/.test(text) && /領土 2\/7/.test(text),
   text,
 );
-check("ボタンは「演習」", /演習（清洲城を攻める）/.test(await page.textContent("#siegeGo")));
+await page.tap("#siegeTarget [data-provinces]");
+text = await page.textContent("#siegePick");
+check("領土の一覧で尾張（清洲城）は領土", /尾張（清洲城）🏯 領土/.test(text), text.slice(0, 200));
+await page.tap('#siegePick [data-target="kiyosu"]');
+check(
+  "占領済みの清洲城を「演習」の目標にできる",
+  /演習（清洲城を攻める）/.test(await page.textContent("#siegeGo")),
+);
 await page.tap("#siegeGo");
 check("状況欄に演習と表示", /清洲城（演習）/.test(await page.textContent("#battleInfo")));
 r = await fight(page, 1);
