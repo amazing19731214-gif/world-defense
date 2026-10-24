@@ -1324,6 +1324,45 @@
         background: #12343c;
         padding: 4px 0;
       }
+      /* 修練場 */
+      .tr-diffs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .tr-diff {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        min-height: 88px;
+        min-width: 0;
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      .tr-diff b {
+        font-size: 18px;
+      }
+      .tr-diff small {
+        font-size: 14px;
+        color: inherit;
+        opacity: 0.85;
+      }
+      .tr-start {
+        width: 100%;
+        min-height: 52px;
+        font-size: 17px;
+        color: #fff8e8;
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+      }
+      .train-bar {
+        margin: 0 0 6px;
+        border-color: #e1bc77;
+      }
     </style>
   </head>
   <body>
@@ -1348,6 +1387,10 @@
       </header>
       <p id="counterBanner" class="counter-banner" role="status" hidden></p>
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
+      <section id="trainBar" class="panel train-bar" hidden aria-label="修練場">
+        <div id="trainInfo" class="battle-info"></div>
+        <button id="trainRetreat" class="retreat">↩ 修練場から撤退</button>
+      </section>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
         <div id="battleSkills" class="battle-skills" aria-label="武将の必殺技"></div>
@@ -1428,14 +1471,15 @@
         </button>
       </div>
       <div class="tools menu-tools">
-        <button id="heroGrowth">👑 主人公</button><button id="gacha">🎴 ガチャ</button
+        <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
+        ><button id="gacha">🎴 ガチャ</button
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v28（主人公・無限育成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v29（修練場・主人公・無限育成）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1502,6 +1546,15 @@
         </div>
         <p id="soldierHint" class="muted" style="margin: 6px 0"></p>
         <div id="soldierList"></div>
+      </div>
+    </div>
+    <div id="trainingSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="trTitle">
+        <div class="panel-head hg-head">
+          <strong id="trTitle">⚔️ 修練場</strong
+          ><button id="trClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="trBody"></div>
       </div>
     </div>
     <div id="heroGrowthSheet" class="sheet-back" hidden>
@@ -2565,7 +2618,8 @@
           xpPerHit: 1, // 攻撃1回
           xpPerKill: 6, // 撃破（＋敵の報酬の半分）
           xpPerWave: 20, // 出撃してウェーブを生き延びた（上限の対象外）
-          xpPerHeal: 2, // 衛生兵が味方を回復した（戦闘中の上限 xpWaveCap の対象）
+          xpPerHeal: 2, // 衛生兵が味方を回復した（戦闘中の上限 xpWaveCap の対象。満タンの味方は回復しないので対象外）
+          xpPerBlock: 1, // 敵の攻撃を受け止めた（実際にダメージを受けたとき。戦闘中の上限の対象）
           xpWaveCap: 70, // 1人が1ウェーブの戦闘で得られる経験値の上限（1回の戦闘で急成長しない）
           // 次のレベルまでに必要な経験値（Lv30まではこれまでと同じ。Lv30を超えると少しずつ多く必要になる）
           xpToLevel: (lv) =>
@@ -2932,17 +2986,20 @@
           selectedUnitType = null, // 雇用する兵種（null なら塔の建設モード）
           placeSquadId = null, // 配置する待機中の部隊
           heroPickFor = null, // パネルの中で武将を選んでいる塔・部隊
+          training = null, // 修練場の挑戦中の状態（通常の防衛戦では null）
           squadDetailOpen = false; // 部隊のパネルで兵士の詳細を開いているか
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         function updateUI() {
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
-          $("wave").textContent = "WAVE " + wave + "/20";
+          $("wave").textContent = training
+            ? "修練 " + wave + (training.D.endless ? "" : "/" + TRAINING.waves)
+            : "WAVE " + wave + "/20";
           $("start").disabled = playing || over || !!battle;
           $("upgrade").disabled =
             !selectedTower || gold < upgradePrice(selectedTower) || selectedTower.level >= 5;
-          $("sell").disabled = !selectedTower;
+          $("sell").disabled = !selectedTower || !!training;
           document
             .querySelectorAll("[data-t]")
             .forEach((b) => b.classList.toggle("active", b.dataset.t === selectedType));
@@ -2950,6 +3007,7 @@
           renderTowerPanel();
           renderSquadUI();
           renderBattleBar();
+          renderTrainBar();
           renderCounterBanner();
         }
         function renderCounterBanner() {
@@ -3319,7 +3377,10 @@
           const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
           const armor = Math.max(0, e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0);
           damage *= (1 + vulnerability) * 30 / (30 + armor * (1 - Math.min(1, ignore)));
+          const hpBefore = e.hp;
           e.hp -= damage;
+          // 修練場：兵士は実際に減らしたHPの分だけ経験値（倒れた敵をさらに攻撃しても増えない）
+          if (s && training) earnXp(s, "damage", Math.min(damage, Math.max(0, hpBefore)), e);
           e.hit = 0.18;
           e.lastHitBy = s ? s.id : null;
           e.lastTowerHero = t && h ? h.id : null;
@@ -3805,6 +3866,7 @@
           return best;
         }
         function createEnemy() {
+          if (training) return enemies.push(trainingEnemy(training, spawned, spawnTotal));
           const branch = Math.random() < 0.3 + (0.4 * (wave % 3)) / 2 ? upper : lower;
           let kind = "goblin";
           if (wave > 3 && Math.random() < 0.22) kind = "wolf";
@@ -3837,6 +3899,397 @@
             r: conf[4],
             slow: 0,
           });
+        }
+        // ===== 修練場（育成用の戦場） =====
+        // 通常の防衛戦と同じ地図・塔・部隊・武将・スキルで、敵レベルの決まった敵と戦う。
+        // 始めるときに通常の防衛戦の状態（ウェーブ・城HP・ゴールド・塔）を控えておき、終わったら元に戻す（領土・反撃・ガチャ券は動かない）。
+        // 兵士の成長と戦死は本物（主人公はLv1から再出発、一般の兵士は永久に戦死）
+        const TRAINING_KEY = "worldDefense.training.v1";
+        const TRAINING = {
+          waves: 10, // 1回の挑戦（無限は終わりなし）
+          maxHit: 0.6, // 敵の一撃で減るHPの上限（兵士の最大HPに対する割合）
+          castleHp: 20, // 修練場の城HP（通常の防衛戦とは別）
+          diffs: {
+            beginner: { name: "初級", from: 1, to: 30, xpMul: 1, gold: 1, rec: "Lv1〜30の兵士向け" },
+            advanced: { name: "上級", from: 30, to: 100, xpMul: 1, gold: 2, rec: "Lv30〜の兵士向け（おすすめ）" },
+            super: { name: "超級", from: 100, to: 500, xpMul: 1, gold: 3, rec: "Lv100〜の兵士向け" },
+            endless: { name: "無限", from: 20, grow: 1.12, xpMul: 1, gold: 1, endless: true, rec: "どこまで耐えられるか（ウェーブごとに敵Lv +12%）" },
+          },
+          order: ["beginner", "advanced", "super", "endless"],
+          // 敵レベル L の強さ（通常の敵の何倍か）。HPだけでなく攻撃・防御・速さ・数も上がる。一撃で倒れすぎないよう攻撃の伸びは控えめ
+          // Lv100を超えた分はゆっくり（塔は兵士のレベルでは強くならないので、超級でも守り切れるように）
+          hp: (L) => 1 + 0.06 * Math.min(L, 100) + 0.015 * Math.max(0, L - 100),
+          atk: (L) => 1 + 0.012 * Math.min(L, 100) + 0.006 * Math.max(0, L - 100),
+          armor: (L) => 0.1 * Math.min(L, 100) + 0.02 * Math.max(0, L - 100),
+          speed: (L) => 1 + Math.min(0.35, L * 0.0025),
+          count: (w, L) => 10 + Math.round(w * 1.5) + Math.min(10, Math.floor(L / 50)),
+          // 兵種（敵）の基本値：HP・速さ・倒したときのG・色・大きさ（通常の防衛戦と同じ）
+          base: {
+            goblin: [45, 65, 10, "#b65e3e", 12],
+            wolf: [35, 110, 12, "#9c8466", 10],
+            knight: [145, 42, 22, "#677b9b", 15],
+            dragon: [135, 85, 27, "#a95b9b", 16],
+            boss: [650, 32, 150, "#754359", 27],
+          },
+          // 経験値：敵レベル L の「1単位」= xpUnit(L) × 難易度の倍率
+          xpUnit: (L) => 6 + 2 * L,
+          kindXp: { goblin: 1, wolf: 1, knight: 1.6, dragon: 1.5, boss: 8 }, // 敵1体の価値（単位の何倍か）
+          dmgShare: 0.7, // 敵の価値のうち、与えたダメージ（実際に減らしたHP）の割合に応じて配る分
+          killShare: 0.3, // とどめを刺した兵士の分
+          healXp: 0.6, // 実際に回復したHP ÷ 相手の最大HP × 単位 × この値
+          blockXp: 0.4, // 実際に受けた＋防御で減らしたダメージ ÷ 自分の最大HP × 単位 × この値
+          waveXp: 1.5, // ウェーブを生き延びた（上限の対象外）
+          clearXp: 6, // 10ウェーブをクリアした（最後の敵レベルの単位の何倍か・上限の対象外）
+          waveCap: (L) => 70 + 12 * L, // 1人が1ウェーブの戦闘で得られる上限（通常は70）
+          goldPerWave: 10, // 報酬のG：クリアしたウェーブ × これ × 難易度の倍率（通常の防衛戦のゴールドに足す）
+          clearGold: 50,
+        };
+        function trainLevel(T, w) {
+          const D = T.D,
+            n = Math.max(1, w);
+          if (D.endless) return Math.round(D.from * D.grow ** (n - 1));
+          return Math.round(D.from + ((D.to - D.from) * (n - 1)) / (TRAINING.waves - 1));
+        }
+        const trainUnit = (T, L) => TRAINING.xpUnit(L) * T.D.xpMul;
+        function trainingEnemy(T, i, total) {
+          const w = T.wave,
+            L = trainLevel(T, w),
+            branch = Math.random() < 0.5 ? upper : lower;
+          // 敵レベルが上がると、硬い槍兵・弓兵が増える
+          let kind = "goblin";
+          const r = Math.random();
+          if (r < Math.min(0.35, 0.1 + L / 400)) kind = "knight";
+          else if (r < Math.min(0.35, 0.1 + L / 400) + (L >= 15 ? Math.min(0.3, 0.08 + L / 600) : 0)) kind = "dragon";
+          else if (r < 0.75) kind = Math.random() < 0.35 ? "wolf" : "goblin";
+          // 5ウェーブ目の最後に中ボス、10ウェーブ目の最後に大将（無限は5ウェーブごと）
+          const bossWave = w % 5 === 0 && i === total - 1;
+          const role = bossWave ? (w % 10 === 0 ? "boss" : "mid") : null;
+          if (role) kind = "boss";
+          const c = TRAINING.base[kind],
+            hpMul = role === "boss" ? 1.6 : role === "mid" ? 0.8 : 1,
+            max = c[0] * TRAINING.hp(L) * hpMul;
+          return {
+            path: branch,
+            d: 0,
+            x: 0,
+            y: 300,
+            kind,
+            hp: max,
+            max,
+            armor: (WARLORD_RULES.enemyArmor[kind] || 0) + TRAINING.armor(L),
+            speed: c[1] * TRAINING.speed(L),
+            reward: c[2],
+            color: c[3],
+            r: c[4],
+            slow: 0,
+            lv: L,
+            atkMul: TRAINING.atk(L) * (role ? 1.25 : 1),
+            role,
+            xpWorth: trainUnit(T, L) * TRAINING.kindXp[kind] * (role === "boss" ? 1.5 : 1),
+          };
+        }
+        // 経験値（通常の防衛戦・攻城戦・修練場で共通の入口）。kind：hit 攻撃1回・damage 減らしたHP・kill 撃破・heal 回復・block 防御・wave 生存
+        // 通常の防衛戦はこれまでどおりの値（防御だけ新しく1）。修練場は敵レベルに応じ、実際の量（HP）に比例する
+        function earnXp(s, kind, amount = 1, ref = null) {
+          if (!s || !s.alive) return;
+          const T = training;
+          if (!T) {
+            if (kind === "hit") gainXp(s, SQUAD_RULES.xpPerHit);
+            else if (kind === "kill") gainXp(s, SQUAD_RULES.xpPerKill + Math.round((ref ? ref.reward : 0) / 2));
+            else if (kind === "heal") amount > 0 && gainXp(s, SQUAD_RULES.xpPerHeal);
+            else if (kind === "block") amount > 0 && gainXp(s, SQUAD_RULES.xpPerBlock);
+            else if (kind === "wave") gainXp(s, SQUAD_RULES.xpPerWave, true);
+            return;
+          }
+          const unit = trainUnit(T, trainLevel(T, T.wave));
+          if (kind === "damage" && ref && amount > 0) gainXp(s, (amount / ref.max) * ref.xpWorth * TRAINING.dmgShare);
+          else if (kind === "kill" && ref) gainXp(s, ref.xpWorth * TRAINING.killShare);
+          else if (kind === "heal" && amount > 0 && ref) gainXp(s, (amount / ref) * unit * TRAINING.healXp);
+          else if (kind === "block" && amount > 0 && ref) gainXp(s, (Math.min(amount, ref) / ref) * unit * TRAINING.blockXp);
+          else if (kind === "wave") gainXp(s, unit * TRAINING.waveXp, true);
+        }
+        // 1ウェーブの戦闘で得られる経験値の上限
+        const xpCap = () => (training ? TRAINING.waveCap(trainLevel(training, training.wave)) : SQUAD_RULES.xpWaveCap);
+        function loadTrainingSave() {
+          try {
+            const d = JSON.parse(localStorage.getItem(TRAINING_KEY) || "null");
+            const out = { best: {}, clears: {} };
+            for (const k of TRAINING.order) {
+              const b = d && d.best && d.best[k];
+              if (b) out.best[k] = { waves: intIn(b.waves, 0, 1e6, 0), level: intIn(b.level, 0, 1e9, 0) };
+              out.clears[k] = intIn(d && d.clears && d.clears[k], 0, 1e9, 0);
+            }
+            return out;
+          } catch (err) {
+            return { best: {}, clears: {} };
+          }
+        }
+        const trainingSave = loadTrainingSave();
+        function startTraining(key) {
+          if (training) return "修練場で挑戦中です。";
+          if (battle) return "攻城戦の最中は始められません。";
+          if (playing) return "防衛のウェーブ中は始められません。ウェーブの合間に始めよう。";
+          const D = TRAINING.diffs[key];
+          if (!D) return "その難易度はありません。";
+          training = {
+            key,
+            D,
+            wave: 0,
+            cleared: 0,
+            done: false,
+            rec: {}, // 兵士ごとの獲得経験値 { battle, clear, lv0 }
+            joined: new Set(), // 一度でも戦った兵士
+            heroFell: null,
+            keep: {
+              wave,
+              hp,
+              gold,
+              over,
+              towers: towers.map((t) => ({ t, f: { type: t.type, x: t.x, y: t.y, level: t.level, spent: t.spent, hp: t.hp, destroyed: t.destroyed, cd: t.cd } })),
+            },
+          };
+          for (const s of soldiers) if (s.alive) training.rec[s.id] = { battle: 0, clear: 0, lv0: s.level };
+          wave = 0;
+          hp = TRAINING.castleHp;
+          over = false;
+          enemies = [];
+          selectedTower = null;
+          msg("⚔️ 修練場（" + D.name + "）を始めた。部隊を配置して「ウェーブ開始」！ 塔の建設・強化は修練場の中だけ（終わると元に戻る）。");
+          updateUI();
+          return null;
+        }
+        // ウェーブのはじめ（修練場）：敵の数を決める
+        function trainingWaveStart() {
+          training.wave = wave;
+          spawnTotal = TRAINING.count(wave, trainLevel(training, wave));
+          for (const q of fieldSquads()) for (const s of members(q)) training.joined.add(s.id);
+          msg(
+            "修練場 " + training.D.name + "：ウェーブ " + wave + " 開始（敵Lv" + trainLevel(training, wave) + "）" +
+              (wave % 10 === 0 ? "　大将が現れる！" : wave % 5 === 0 ? "　中ボスが現れる！" : ""),
+          );
+        }
+        function trainingWaveCleared() {
+          const T = training;
+          T.cleared = wave;
+          msg("修練場 ウェーブ " + wave + " クリア！" + (T.D.endless || wave < TRAINING.waves ? " 次のウェーブへ。" : ""));
+          if (!T.D.endless && wave >= TRAINING.waves) endTraining("clear");
+        }
+        // 修練場を終える（クリア・撤退・敗北）。報酬は1回だけ（done）。通常の防衛戦の状態を元に戻す
+        function endTraining(result) {
+          const T = training;
+          if (!T || T.done) return;
+          T.done = true;
+          const lastLv = trainLevel(T, Math.max(1, T.cleared || T.wave));
+          // 戦いの途中なら片付ける（敵・足止め・撤退中の部隊・武将の効果）
+          playing = false;
+          for (const q of squads) releaseBlocks(q);
+          enemies = [];
+          spawned = spawnTotal = 0;
+          for (const h of ownedHeroes()) endSkill(h);
+          for (const q of squads) {
+            q.locked = false;
+            if (q.state === "retreating") {
+              q.state = "reserve";
+              q.retreatLeft = 0;
+            }
+          }
+          for (const s of soldiers) {
+            if (!s.alive) continue;
+            s.inWave = false;
+            s.out = false;
+            s.heroFell = false;
+            s.waveXp = 0;
+            s.instinctTried = s.unyieldUsed = false;
+          }
+          // クリアのボーナス：最後まで生き残った、修練場で戦った兵士だけ
+          if (result === "clear")
+            for (const s of soldiers)
+              if (s.alive && T.joined.has(s.id)) gainXp(s, trainUnit(T, lastLv) * TRAINING.clearXp, true, "clear");
+          const tier = T.D.endless ? 1 + Math.floor(lastLv / 100) : T.D.gold,
+            reward = T.cleared * TRAINING.goldPerWave * tier + (result === "clear" ? TRAINING.clearGold * tier : 0);
+          // 通常の防衛戦の状態に戻す（修練場で建てた塔はなくなり、強化・修理・被害も元に戻る）
+          const K = T.keep,
+            keepSet = new Set(K.towers.map((x) => x.t));
+          for (const t of towers) if (!keepSet.has(t)) { const h = heroOn(t); if (h) { endSkill(h); h.tower = null; } }
+          for (const x of K.towers) Object.assign(x.t, x.f);
+          towers = K.towers.map((x) => x.t);
+          wave = K.wave;
+          hp = K.hp;
+          over = K.over;
+          gold = K.gold + reward;
+          selectedTower = null;
+          saveRoster(); // 修練場で得た経験値を保存（撤退・敗北でも、それまでに得た分は残る）
+          // 記録
+          const b = trainingSave.best[T.key] || { waves: 0, level: 0 };
+          trainingSave.best[T.key] = { waves: Math.max(b.waves, T.cleared), level: Math.max(b.level, T.cleared ? lastLv : 0) };
+          if (result === "clear") trainingSave.clears[T.key] = (trainingSave.clears[T.key] || 0) + 1;
+          try {
+            localStorage.setItem(TRAINING_KEY, JSON.stringify(Object.assign({ version: 1 }, trainingSave)));
+          } catch (err) {}
+          T.result = result;
+          T.reward = reward;
+          T.lastLv = lastLv;
+          training = null;
+          showTrainingResult(T);
+          updateUI();
+        }
+        // 修練場の画面：難易度を選んで始める（挑戦中は状況と撤退）
+        let trainPick = "advanced"; // いちばん選ばれる上級を最初から選んでおく
+        function renderTrainingSheet() {
+          const T = training;
+          if (T) {
+            $("trBody").innerHTML =
+              "<p>挑戦中：<b>" +
+              T.D.name +
+              "</b>・ウェーブ " +
+              wave +
+              (T.D.endless ? "" : "/" + TRAINING.waves) +
+              "・敵Lv " +
+              trainLevel(T, Math.max(1, wave)) +
+              '</p><div class="card-actions"><button data-tr-retreat>↩ 撤退する</button></div>';
+            return;
+          }
+          $("trBody").innerHTML =
+            '<p class="muted">強い敵と10ウェーブ戦って兵士と主人公を鍛える戦場です（無限は負けるか撤退するまで）。5ウェーブ目に中ボス、10ウェーブ目に大将。' +
+            "通常の防衛戦のウェーブ・城・ゴールド・塔は、終わると元に戻ります。戦死はふだんどおり（主人公はLv1から再出発、ほかの兵士は永久）。報酬は経験値と少しのG（ガチャ券・領土はなし）。</p>" +
+            '<div class="tr-diffs">' +
+            TRAINING.order
+              .map((k) => {
+                const D = TRAINING.diffs[k],
+                  b = trainingSave.best[k];
+                return (
+                  '<button class="tr-diff' +
+                  (k === trainPick ? " active" : "") +
+                  '" data-tr-diff="' +
+                  k +
+                  '" aria-pressed="' +
+                  (k === trainPick) +
+                  '"><b>' +
+                  D.name +
+                  "</b><span>敵Lv " +
+                  (D.endless ? D.from + "〜（上がり続ける）" : D.from + "〜" + D.to) +
+                  "</span><small>" +
+                  D.rec +
+                  (b && b.waves ? "・最高 " + b.waves + "ウェーブ（敵Lv" + b.level + "）" : "") +
+                  (trainingSave.clears[k] ? "・クリア " + trainingSave.clears[k] + "回" : "") +
+                  "</small></button>"
+                );
+              })
+              .join("") +
+            "</div>" +
+            '<button id="trStart" class="tr-start">⚔️ ' +
+            TRAINING.diffs[trainPick].name +
+            "で挑戦する</button>";
+        }
+        function openTraining() {
+          renderTrainingSheet();
+          $("trainingSheet").hidden = false;
+          $("trClose").focus();
+        }
+        const closeTraining = () => ($("trainingSheet").hidden = true);
+        function retreatTraining() {
+          if (!training) return;
+          if (!confirm("修練場から撤退しますか？（ここまでの経験値は残ります。クリアのボーナスはありません）")) return;
+          closeTraining();
+          endTraining("retreat");
+        }
+        $("trainingOpen").onclick = openTraining;
+        $("trClose").onclick = closeTraining;
+        $("trainRetreat").onclick = retreatTraining;
+        $("trainingSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("trainingSheet")) return closeTraining();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "trClose") return;
+          if (b.dataset.trDiff) {
+            trainPick = b.dataset.trDiff;
+            renderTrainingSheet();
+          } else if (b.id === "trStart") {
+            const err = startTraining(trainPick);
+            if (err) {
+              msg(err);
+              toast(err);
+            } else closeTraining();
+          } else if (b.dataset.trRetreat !== undefined) retreatTraining();
+        });
+        // 挑戦中の帯：難易度・ウェーブ・敵Lv・城HP・獲得経験値（戦闘／クリア）
+        function renderTrainBar() {
+          const T = training,
+            bar = $("trainBar");
+          bar.hidden = !T;
+          if (!T) return;
+          const recs = Object.values(T.rec),
+            xp = Math.floor(recs.reduce((n, r) => n + r.battle, 0));
+          setHtml(
+            $("trainInfo"),
+            "<b>⚔️ 修練場・" +
+              T.D.name +
+              "</b> ウェーブ " +
+              wave +
+              (T.D.endless ? "" : "/" + TRAINING.waves) +
+              "・敵Lv " +
+              trainLevel(T, Math.max(1, playing ? wave : wave + 1)) +
+              (playing ? "" : "（次）") +
+              "・城 " +
+              hp +
+              "/" +
+              TRAINING.castleHp +
+              "<br>獲得経験値：戦闘 +" +
+              xp +
+              "（クリアのボーナスは" +
+              (T.D.endless ? "なし" : TRAINING.waves + "ウェーブ後") +
+              "）",
+          );
+        }
+        function showTrainingResult(T) {
+          const title =
+            T.result === "clear"
+              ? "⚔️ 修練場クリア！（" + T.D.name + "）"
+              : T.result === "retreat"
+                ? "↩ 修練場から撤退（" + T.D.name + "）"
+                : "修練場で敗北…（" + T.D.name + "）";
+          const rows = soldiers
+            .filter((s) => T.rec[s.id] && (T.rec[s.id].battle > 0 || T.rec[s.id].clear > 0 || !s.alive || T.joined.has(s.id)))
+            .sort((a, b) => T.rec[b.id].battle + T.rec[b.id].clear - (T.rec[a.id].battle + T.rec[a.id].clear));
+          const sum = (k) => rows.reduce((n, s) => n + T.rec[s.id][k], 0);
+          let html =
+            "<p>クリアしたウェーブ <b>" +
+            T.cleared +
+            (T.D.endless ? "" : "/" + TRAINING.waves) +
+            "</b>・敵Lv <b>" +
+            T.lastLv +
+            "</b>・報酬 <b>🪙 " +
+            T.reward +
+            "G</b></p><p>経験値（合計）：戦闘 <b>+" +
+            Math.floor(sum("battle")) +
+            "</b>・クリア <b>+" +
+            Math.floor(sum("clear")) +
+            "</b></p>" +
+            (T.heroFell
+              ? '<p class="injured">👑 主人公が戦死しました。Lv1から再出発します（' + esc(T.heroFell) + "）。</p>"
+              : "") +
+            (T.result === "clear" ? "" : '<p class="muted">撤退・敗北では、クリアのボーナス経験値はありません（戦闘で得た分は残ります）。</p>');
+          html += rows
+            .map((s) => {
+              const r = T.rec[s.id];
+              return (
+                '<div class="pick-row' +
+                (isHeroSoldier(s) ? " named" : "") +
+                '"><span><b>' +
+                esc(soldierName(s)) +
+                "</b><br><small>" +
+                (s.alive ? "Lv" + r.lv0 + " → Lv" + s.level : '<span class="injured">戦死（復活しません）</span>') +
+                "・戦闘 +" +
+                Math.floor(r.battle) +
+                "・クリア +" +
+                Math.floor(r.clear) +
+                "</small></span></div>"
+              );
+            })
+            .join("");
+          $("battleTitle").textContent = title;
+          $("battleBody").innerHTML = html;
+          $("battleSheet").hidden = false;
+          msg(title + " 報酬 " + T.reward + "G");
         }
         // ===== 兵士部隊：兵士・部隊・称号 =====
         // 所属は兵士側の squadId だけで管理する（部隊は兵士リストを持たない）ので、
@@ -4021,12 +4474,17 @@
           squads.sort((a, b) => (a.slot < 0 ? 99 : a.slot) - (b.slot < 0 ? 99 : b.slot) || a.id - b.id);
         }
         // 経験値。戦闘中に得る分は1ウェーブ xpWaveCap まで（ウェーブ終了の生存ボーナスは別枠）
-        function gainXp(s, n, waveBonus) {
-          if (!s.alive || n <= 0) return;
+        function gainXp(s, n, waveBonus, tag = "battle") {
+          if (!s.alive || !(n > 0)) return;
           if (!waveBonus) {
-            n = Math.min(n, SQUAD_RULES.xpWaveCap - (s.waveXp || 0));
+            n = Math.min(n, xpCap() - (s.waveXp || 0));
             if (n <= 0) return;
             s.waveXp = (s.waveXp || 0) + n;
+          }
+          // 修練場：戦闘の経験値とクリアの経験値を分けて数える（結果画面に出す）
+          if (training) {
+            const r = training.rec[s.id] || (training.rec[s.id] = { battle: 0, clear: 0, lv0: s.level });
+            r[tag === "clear" ? "clear" : "battle"] += n;
           }
           s.xp += n;
           while (s.level < SQUAD_RULES.maxLevel && s.xp >= SQUAD_RULES.xpToLevel(s.level)) {
@@ -4130,7 +4588,8 @@
           s.xp = 0;
           s.pts = emptyPoints(); // ステータスポイントと能力は初期値へ（スキル・スキルのレベル・装備・名前・戦歴は残す）
           // ジョブ（未実装）を追加したときは、ここで初期職へ戻す
-          s.waveXp = SQUAD_RULES.xpWaveCap; // このウェーブ（攻城戦）では、もう経験値を得ない
+          s.waveXp = Infinity; // このウェーブ（攻城戦・修練場）では、もう経験値を得ない
+          if (training) training.heroFell = soldierName(s);
           s.inWave = false; // ウェーブを生き延びた報酬も受け取らない
           s.heroFell = true;
           s.lastSurvivor = false;
@@ -4308,7 +4767,12 @@
             guard =
               (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1) * spear;
           const dmg = ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard * heroGuard(front, ranged, enemy || (kind ? { kind } : null));
-          front.hp -= absorbShield(front, dmg, ranged);
+          const hpBefore = front.hp;
+          // 修練場の敵の一撃は、最大HPの6割まで（強い敵でも一撃で倒れ続けない）
+          const hit = enemy && enemy.lv ? Math.min(dmg, st.maxHp * TRAINING.maxHit) : dmg;
+          front.hp -= absorbShield(front, hit, ranged);
+          // 防御の経験値：実際に受けたHP＋防御などで減らした分（倒れた兵士には付かない）
+          if (front.hp > 0) earnXp(front, "block", Math.max(0, hpBefore - front.hp) + Math.max(0, raw - hit), st.maxHp);
           if (front.hp <= 0) consumeWard(front);
           front.hit = 0.2;
           // 不屈：倒れるはずの攻撃を1ウェーブに1回だけ HP1 で耐える
@@ -4485,7 +4949,7 @@
               }
               target.hit = 0.18;
               touchHero(q);
-              gainXp(s, SQUAD_RULES.xpPerHit);
+              earnXp(s, "hit");
               if (ct.range <= 60) burst(target.x, target.y, "#fff1c4", "slash");
               else {
                 const musket = ct.shot === "musket";
@@ -4563,9 +5027,10 @@
               });
             }
             const scale = 1 + (wave - 1) * TOWER_HP.waveScale;
-            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged, e.kind, e);
+            // 修練場の敵は敵レベルで攻撃が強くなる（e.atkMul）。通常の防衛戦はウェーブで少しずつ
+            if (target) damageSquad(target, a.damage * (e.atkMul || 1 + (wave - 1) * 0.05), !!a.ranged, e.kind, e);
             else {
-              damageTower(tower, a.tower.damage * scale, !!a.ranged, e);
+              damageTower(tower, a.tower.damage * (e.atkMul || scale), !!a.ranged, e);
               // 大将は塔の前で立ち止まって攻撃する（1回の進軍で最長 siegeMax 秒。永久には止まらない）
               if (a.tower.siege && !tower.destroyed && !e.siegeDone) e.siege = tower;
             }
@@ -4594,11 +5059,12 @@
           s.cd += st.rate;
           s.atk = 0.18;
           const max = soldierStats(best.m).maxHp,
-            amount = Math.min(st.heal, max - best.m.hp);
+            amount = Math.min(st.heal, max - best.m.hp),
+            hpBefore = best.m.hp;
           healTarget(best.m, amount, q); // 最大HPを超えず、救護系パッシブを反映
           touchHero(q);
           s.heals = (s.heals || 0) + 1;
-          gainXp(s, SQUAD_RULES.xpPerHeal);
+          earnXp(s, "heal", best.m.hp - hpBefore, max); // 実際に回復したHPだけ
           const off = formationOffset(best.o, best.i);
           if (effects.length >= 80) effects.shift();
           effects.push({
@@ -4614,7 +5080,7 @@
           const s = e.lastHitBy ? soldierById(e.lastHitBy) : null;
           if (!s || !s.alive) return;
           s.kills++;
-          gainXp(s, SQUAD_RULES.xpPerKill + Math.round(e.reward / 2));
+          earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
           for (const h of ownedHeroes()) { h.seen.clear(); h.economyGold = 0; if (h.couponWave < wave) h.couponWave = -1; }
@@ -4630,7 +5096,7 @@
               s.xpClaim = claim;
               const before = rankTitle(s);
               s.wavesSurvived++;
-              gainXp(s, SQUAD_RULES.xpPerWave, true);
+              earnXp(s, "wave");
               const after = rankTitle(s);
               if (after !== before) logHistory(s, "称号「" + after.name + "」を得た");
             }
@@ -5141,7 +5607,7 @@
               const rewardHero = e.lastTowerHero && heroState[e.lastTowerHero];
               if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
-              if (e.kind === "boss") grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
+              if (e.kind === "boss" && !training) grantTickets(GACHA.ticketsPerBoss, "ボス撃破"); // 修練場ではガチャ券なし
               if (enemySet(e)) {
                 if (effects.length >= 80) effects.shift();
                 effects.push({
@@ -5158,7 +5624,10 @@
           }
           enemies = enemies.filter((e) => !e.gone);
           for (const e of enemies) if (e.blockedBy && !squads.includes(e.blockedBy)) e.blockedBy = null;
-          if (hp <= 0) {
+          if (hp <= 0 && training) {
+            hp = 0;
+            endTraining("lose"); // 修練場の負け：通常の防衛戦はゲームオーバーにしない
+          } else if (hp <= 0) {
             hp = 0;
             over = true;
             playing = false;
@@ -5178,6 +5647,12 @@
             for (const h of ownedHeroes()) endSkill(h);
             for (const t of towers) t.heroShield = null;
             squadsWaveEnd();
+            if (training) {
+              // 修練場：ウェーブの報酬・反撃・負傷の回復・ガチャ券は通常の防衛戦だけ
+              trainingWaveCleared();
+              updateUI();
+              return;
+            }
             gold += Math.round((50 + wave * 8) * (1 + territoryBonus("waveGold"))); // 領土の効果で増える
             msg(
               wave === 20
@@ -5838,6 +6313,21 @@
           ctx.fillRect(e.x - e.r, e.y - e.r - 21, e.r * 2, 5);
           ctx.fillStyle = "#ed6654";
           ctx.fillRect(e.x - e.r, e.y - e.r - 21, e.r * 2 * Math.max(0, e.hp / e.max), 5);
+          enemyTag(e, e.y - e.r - 23);
+        }
+        // 修練場の敵：体力バーの上に敵レベル、中ボス・大将は赤い札
+        function enemyTag(e, y) {
+          if (!e.lv) return;
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.font = "bold 12px system-ui";
+          const label = (e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : "") + "Lv" + e.lv,
+            w = ctx.measureText(label).width + 8;
+          ctx.fillStyle = e.role ? "#b8322bee" : "#1f2a22cc";
+          ctx.fillRect(e.x - w / 2, y - 14, w, 14);
+          ctx.fillStyle = e.role ? "#fff1d0" : "#ffe3a0";
+          ctx.fillText(label, e.x, y - 3);
+          ctx.restore();
         }
         // 武将画像（あれば）。読み込めない・存在しない場合は仮アイコンで描画する。
         const heroImages = Object.create(null);
@@ -5910,6 +6400,7 @@
           ctx.fillRect(e.x - bw / 2, top, bw, 5);
           ctx.fillStyle = "#ed6654";
           ctx.fillRect(e.x - bw / 2, top, bw * Math.max(0, e.hp / e.max), 5);
+          enemyTag(e, top - 2);
           return true;
         }
         // 塔：耐久バー・被弾のゆれ・破壊後のがれき
@@ -6889,14 +7380,16 @@
         );
         $("start").onclick = () => {
           if (playing || over || battle) return;
+          if (training && training.done) return;
           wave++;
           spawned = 0;
           spawnTotal = 8 + wave * 3;
           spawnClock = 0.5;
           playing = true;
           paused = false;
+          if (training) trainingWaveStart();
           squadsWaveStart();
-          msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
+          if (!training) msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
           updateUI();
         };
         $("pause").onclick = () => {
@@ -6934,6 +7427,7 @@
         };
         $("sell").onclick = () => {
           if (!selectedTower || selectedTower.destroyed) return;
+          if (training) return (msg("修練場では塔を売却できません（終わると塔は元に戻ります）。"), toast($("msg").textContent));
           gold += Math.floor(selectedTower.spent * 0.7);
           const h = heroOn(selectedTower);
           if (h) {
@@ -6946,6 +7440,7 @@
           updateUI();
         };
         $("reset").onclick = () => {
+          if (training) return (msg("修練場の挑戦中です。先に撤退してください。"), toast($("msg").textContent));
           if (!confirm("最初からやり直しますか？")) return;
           combatClock = 0;
           gold = startGold();
@@ -8631,6 +9126,7 @@
           return siegeUnits.map((u) => u.soldiers.map(soldierById).filter((s) => s && siegeEligible(s.id)));
         }
         function canStartBattle() {
+          if (training) return "修練場の挑戦中は出陣できません。";
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
           if (battle) return "攻城戦の最中です。";
           if (!battleRoster().some((l) => l.length)) return "攻城編成に兵士がいません。";
@@ -10205,6 +10701,20 @@
               selectedUnitType,
               placeSquadId,
             }),
+            trainingApi: {
+              startTraining,
+              endTraining,
+              trainLevel,
+              training: () => training,
+              TRAINING,
+              trainingSave: () => trainingSave,
+              earnXp,
+            },
+            // 修練場のウェーブ w の敵を、出現させずに作って返す（確認用）
+            trainingEnemies: (w, total) => {
+              const t = Object.assign({}, training, { wave: w });
+              return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
             squadApi: {
               members,
               squadName,
