@@ -53,11 +53,23 @@ for (const [id, rel] of Object.entries(manifest.units || {})) {
   else warnings.push(`unit ${id}: ${rel} が見つかりません（仮アイコンで代用）`);
 }
 
+// 敵兵の動き（移動・攻撃・やられ）のコマ。画像がない敵は従来のベクター描画になる。
+const enemyAssets = {};
+for (const [id, anims] of Object.entries(manifest.enemies || {})) {
+  enemyAssets[id] = {};
+  for (const [anim, list] of Object.entries(anims)) {
+    enemyAssets[id][anim] = list.map((rel) => dataUri(rel, `enemy ${id}.${anim}`)).filter(Boolean);
+    if (enemyAssets[id][anim].length < list.length)
+      warnings.push(`enemy ${id}.${anim}: 見つからないコマがあります`);
+  }
+}
+
 let html = fs.readFileSync(path.join(root, "src", "index.template.html"), "utf8");
 for (const [marker, value] of [
   ["/*@@EMBEDDED_SPRITES@@*/ {}", sprites],
   ["/*@@HERO_ASSETS@@*/ {}", heroAssets],
   ["/*@@UNIT_ASSETS@@*/ {}", unitAssets],
+  ["/*@@ENEMY_ASSETS@@*/ {}", enemyAssets],
 ]) {
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => JSON.stringify(value));

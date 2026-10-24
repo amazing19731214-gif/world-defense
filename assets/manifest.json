@@ -168,5 +168,81 @@
     "spearman": "units/spearman.png",
     "gunner": "units/gunner.png",
     "cavalry": "units/cavalry.png"
+  },
+  "enemies": {
+    "ashigaru": {
+      "walk": [
+        "enemies/ashigaru_walk0.webp",
+        "enemies/ashigaru_walk1.webp",
+        "enemies/ashigaru_walk2.webp",
+        "enemies/ashigaru_walk3.webp"
+      ],
+      "attack": [
+        "enemies/ashigaru_attack0.webp",
+        "enemies/ashigaru_attack1.webp"
+      ],
+      "death": [
+        "enemies/ashigaru_death0.webp",
+        "enemies/ashigaru_death1.webp"
+      ]
+    },
+    "archer": {
+      "walk": [
+        "enemies/archer_walk0.webp",
+        "enemies/archer_walk1.webp",
+        "enemies/archer_walk2.webp",
+        "enemies/archer_walk3.webp"
+      ],
+      "attack": [
+        "enemies/archer_attack0.webp",
+        "enemies/archer_attack1.webp"
+      ],
+      "death": [
+        "enemies/archer_death0.webp",
+        "enemies/archer_death1.webp"
+      ]
+    },
+    "spearman": {
+      "walk": [
+        "enemies/spearman_walk0.webp",
+        "enemies/spearman_walk1.webp",
+        "enemies/spearman_walk2.webp",
+        "enemies/spearman_walk3.webp"
+      ],
+      "attack": [
+        "enemies/spearman_attack0.webp",
+        "enemies/spearman_attack1.webp"
+      ],
+      "death": [
+        "enemies/spearman_death0.webp",
+        "enemies/spearman_death1.webp"
+      ]
+    },
+    "cavalry": {
+      "walk": [
+        "enemies/cavalry_walk0.webp",
+        "enemies/cavalry_walk1.webp",
+        "enemies/cavalry_walk2.webp"
+      ],
+      "attack": [
+        "enemies/cavalry_attack0.webp"
+      ],
+      "death": [
+        "enemies/cavalry_death0.webp"
+      ]
+    },
+    "general": {
+      "walk": [
+        "enemies/general_walk0.webp",
+        "enemies/general_walk1.webp",
+        "enemies/general_walk2.webp"
+      ],
+      "attack": [
+        "enemies/general_attack0.webp"
+      ],
+      "death": [
+        "enemies/general_death0.webp"
+      ]
+    }
   }
 }
