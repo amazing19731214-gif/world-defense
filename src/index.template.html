@@ -538,6 +538,10 @@
         padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
         font-size: 15px;
       }
+      .battle-info {
+        line-height: 1.5;
+        margin-bottom: 8px;
+      }
       .toast {
         position: fixed;
         left: 50%;
@@ -733,6 +737,10 @@
         </div>
       </header>
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
+      <section id="battleBar" class="panel" hidden aria-label="攻城戦">
+        <div id="battleInfo" class="battle-info"></div>
+        <button id="battleRetreat" class="retreat">↩ 全軍撤退</button>
+      </section>
       <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
@@ -794,7 +802,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v16.1（騎兵・鉄砲兵・衛生兵）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v17（攻城戦・騎兵・鉄砲兵・衛生兵）</small>
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -830,6 +838,16 @@
         <p id="siegeSaved" class="saved" aria-live="polite"></p>
         <div id="siegeUnit"></div>
         <div id="siegePick"></div>
+        <button id="siegeGo" class="gacha-pull">⚔️ 出陣（攻城戦）</button>
+      </div>
+    </div>
+    <div id="battleSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="battleTitle">
+        <div class="panel-head">
+          <strong id="battleTitle">攻城戦の結果</strong
+          ><button id="battleClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <div id="battleBody"></div>
       </div>
     </div>
     <div id="gachaSheet" class="sheet-back" hidden>
@@ -1621,7 +1639,7 @@
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
           $("wave").textContent = "WAVE " + wave + "/20";
-          $("start").disabled = playing || over;
+          $("start").disabled = playing || over || !!battle;
           $("upgrade").disabled =
             !selectedTower || gold < upgradePrice(selectedTower) || selectedTower.level >= 5;
           $("sell").disabled = !selectedTower;
@@ -1631,6 +1649,7 @@
           $("gacha").textContent = "🎴 ガチャ" + (heroSave.tickets ? "(" + heroSave.tickets + ")" : "");
           renderTowerPanel();
           renderSquadUI();
+          renderBattleBar();
         }
         const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
         const towerLabel = (t) =>
@@ -2709,6 +2728,7 @@
 
         // ===== 兵士部隊：再編成（ウェーブ間のみ） =====
         function transferSoldier(soldierId, target) {
+          if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は編成できません。";
           const s = soldierById(soldierId);
           if (!s || !s.alive) return "戦死した兵士は編成できません。";
@@ -2733,6 +2753,7 @@
         }
         // 解散：待機中の部隊の兵士を除隊させる（戦死ではないので英霊名鑑には残らない。保存データからも外す）
         function disbandSquad(q) {
+          if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は解散できません。";
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
           if (q.state !== "reserve") return "道に出ている部隊は解散できません。先に撤退させてください。";
@@ -2749,6 +2770,7 @@
           return null;
         }
         function recruitInto(q) {
+          if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は補充できません。";
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
           const c = SOLDIER_TYPES[q.type];
@@ -2771,6 +2793,7 @@
             ),
           );
         function healSquad(q) {
+          if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は治療できません。";
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
           const c = healCost(q);
@@ -3055,6 +3078,10 @@
         // 戦闘・演出・武将の時間は必ずこの関数で進める（速度切替を一か所で反映）
         const gameStep = (dt) => Math.min(dt, 0.05) * speed;
         function tick(dt) {
+          if (battle) {
+            if (!paused && !document.hidden) tickBattle(gameStep(dt)); // 攻城戦中は防衛戦を進めない
+            return;
+          }
           if (!playing || paused || over) return;
           dt = gameStep(dt);
           spawnClock -= dt;
@@ -4629,6 +4656,10 @@
           }
           ctx.clearRect(0, 0, W, H);
           ctx.drawImage(scenery, 0, 0);
+          if (battle) {
+            drawBattle();
+            return;
+          }
           auraRings();
           noDeployZones();
           const actors = [
@@ -4702,6 +4733,7 @@
           const r = C.getBoundingClientRect(),
             x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
             y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
+          if (battle) return; // 攻城戦の最中は防衛の操作をしない
           // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
           const hitSquad = squadAt(x, y);
           if (hitSquad) {
@@ -4789,7 +4821,7 @@
             }),
         );
         $("start").onclick = () => {
-          if (playing || over) return;
+          if (playing || over || battle) return;
           wave++;
           spawned = 0;
           spawnTotal = 8 + wave * 3;
@@ -4870,6 +4902,8 @@
           closeSquadSheet();
           closeSoldierSheet();
           closeSiege();
+          battle = null; // 攻城戦の途中なら中止（戦死はすでに保存済み）
+          $("battleSheet").hidden = true;
           resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
           cutin = null;
           closeSheet();
@@ -5493,6 +5527,7 @@
         const siegeHeroUnit = (id) => siegeUnits.findIndex((u) => u.hero === id);
         // 兵士を部隊に加える。move=true なら別の部隊から移す（同じ兵士は1部隊だけ）
         function siegeAdd(i, id, move) {
+          if (battle) return "攻城戦の最中は編成を変えられません。";
           const u = siegeUnits[i];
           if (!u) return "部隊が見つかりません。";
           if (!siegeEligible(id))
@@ -5512,6 +5547,7 @@
           return null;
         }
         function siegeRemove(i, id) {
+          if (battle) return "攻城戦の最中は編成を変えられません。";
           const u = siegeUnits[i];
           if (!u || !u.soldiers.includes(id)) return "その兵士はこの部隊にいません。";
           u.soldiers = u.soldiers.filter((x) => x !== id);
@@ -5520,6 +5556,7 @@
         }
         // 武将を部隊に置く（null で外す）。同じ武将は1部隊だけ・負傷中は不可
         function siegeSetHero(i, id, move) {
+          if (battle) return "攻城戦の最中は編成を変えられません。";
           const u = siegeUnits[i];
           if (!u) return "部隊が見つかりません。";
           if (id === null) {
@@ -5645,6 +5682,7 @@
           else html += '<p class="muted">兵士がいません。下の一覧から追加してください。</p>';
           $("siegeUnit").innerHTML = html + "</div>";
           $("siegePick").innerHTML = siegeHeroPick ? siegeHeroHtml(i) : siegeSoldierHtml(i);
+          $("siegeGo").disabled = !!canStartBattle();
         }
         function siegeSoldierHtml(i) {
           const ids = savedSoldierIds();
@@ -5759,6 +5797,21 @@
         }
         const closeSiege = () => ($("siegeSheet").hidden = true);
         $("siege").onclick = openSiege;
+        $("siegeGo").onclick = () => {
+          const err = canStartBattle();
+          if (err) {
+            siegeNote = "⚠ " + err;
+            return renderSiege();
+          }
+          const lists = battleRoster();
+          const plan = lists
+            .map((l, i) => (l.length ? SIEGE_RULES.names[i] + " " + l.length + "人" : ""))
+            .filter(Boolean)
+            .join("・");
+          if (!confirm("出陣しますか？\n" + plan + "\n（戦死した兵士は復活しません）")) return;
+          closeSiege();
+          startBattle();
+        };
         $("siegeClose").onclick = closeSiege;
         $("siegeSheet").addEventListener("click", (ev) => {
           if (ev.target === $("siegeSheet")) return closeSiege();
@@ -5797,6 +5850,676 @@
           else siegeNote = "";
           renderSiege();
         });
+        // ===== 攻城戦（Phase 4：基本システム） =====
+        // 攻城編成の第一〜第四部隊が、左から順に出撃してNPCの城（右端）を攻める。部隊は自動で戦う。
+        // 防衛戦の地図を使い、NPC側は防衛塔と守備隊（赤い甲冑の兵）を持つ。城の耐久を0にすれば勝利。
+        // 経験値・戦死・武将の負傷は防衛戦と同じルール（戦死はその場で保存、経験値は戦いが終わったときに保存）。
+        const SIEGE_BATTLE = {
+          interval: 10, // 部隊の出撃間隔（秒）
+          timeLimit: 180, // 制限時間（秒）。過ぎると撤退（敗北）
+          march: 38, // 進軍の速さ（px/秒）。兵種の march（騎兵 1.8）を掛ける。部隊の中で一番遅い兵に合わせる
+          castle: { x: 905, y: 300, hp: 1600, reach: 70 }, // NPCの城（道の終点の手前で攻撃する）
+          blockGap: 34, // 守備隊の手前この距離で止まって戦う
+          enemyReach: 36, // 守備隊（近接）の攻撃が届く距離
+          xpSurvive: 20, // 出撃して生き残った兵士（撤退以外）
+          xpWin: 20, // 勝利したときの追加
+          // NPCの防衛塔（味方の塔と同じ種類。攻撃は兵士の先頭へ）
+          towers: [
+            { type: "arrow", x: 330, y: 80, damage: 12 },
+            { type: "arrow", x: 330, y: 525, damage: 12 },
+            { type: "magic", x: 700, y: 190, damage: 20 },
+            { type: "cannon", x: 790, y: 415, damage: 24 },
+          ],
+          towerLevel: 2,
+          // 守備隊（道の上に立って足止めする）。path：upper / lower（合流後はどちらでも同じ道）
+          garrison: [
+            { path: "upper", d: 330, kind: "goblin", n: 4 },
+            { path: "lower", d: 330, kind: "goblin", n: 4 },
+            { path: "upper", d: 780, kind: "knight", n: 3 },
+            { path: "upper", d: 830, kind: "dragon", n: 3 },
+            { path: "upper", d: 1000, kind: "boss", n: 1 },
+            { path: "upper", d: 1000, kind: "knight", n: 2 },
+          ],
+          garrisonHp: { goblin: 90, knight: 260, dragon: 150, wolf: 110, boss: 1200 },
+          garrisonReward: { goblin: 10, knight: 22, dragon: 27, wolf: 12, boss: 150 }, // 経験値の計算用
+        };
+        let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
+        const MERGE_D = pathLength(upper.slice(0, 5)); // 上下の道が合流する地点（道に沿った距離）
+        const samePath = (a, b, d) => d >= MERGE_D || a === b;
+        // 出陣できるか（防衛のウェーブ中は不可）。各部隊の出撃できる兵士（保存済みの生存兵）を返す
+        function battleRoster() {
+          return siegeUnits.map((u) => u.soldiers.map(soldierById).filter((s) => s && siegeEligible(s.id)));
+        }
+        function canStartBattle() {
+          if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
+          if (battle) return "攻城戦の最中です。";
+          if (!battleRoster().some((l) => l.length)) return "攻城編成に兵士がいません。";
+          return null;
+        }
+        function startBattle() {
+          const err = canStartBattle();
+          if (err) return err;
+          refreshSiege();
+          const lists = battleRoster();
+          selectedTower = null;
+          selectedSquad = null;
+          selectedUnitType = null;
+          placeSquadId = null;
+          shots = [];
+          effects.length = 0;
+          unitGhosts.length = 0;
+          const towersNpc = SIEGE_BATTLE.towers.map((c, i) => {
+            const t = {
+              id: 900 + i,
+              x: c.x,
+              y: c.y,
+              type: c.type,
+              level: SIEGE_BATTLE.towerLevel,
+              cd: 1,
+              npc: true,
+            };
+            t.hp = towerMaxHp(t);
+            t.damage = c.damage;
+            return t;
+          });
+          const garrison = [];
+          for (const g of SIEGE_BATTLE.garrison) {
+            const path = g.path === "lower" ? lower : upper;
+            for (let i = 0; i < g.n; i++) {
+              const d = g.d + i * 12,
+                p = pathAt(path, d),
+                hp = SIEGE_BATTLE.garrisonHp[g.kind];
+              garrison.push({
+                kind: g.kind,
+                path,
+                d,
+                x: p.x,
+                y: p.y + (i % 2 ? 9 : -9),
+                hp,
+                max: hp,
+                r: g.kind === "boss" ? 27 : 13,
+                face: -1,
+                blockedBy: true, // 立ち止まっている（絵は立ち姿）
+                cd: 0.5 + i * 0.2,
+                atkAnim: 0,
+                reward: SIEGE_BATTLE.garrisonReward[g.kind],
+              });
+            }
+          }
+          battle = {
+            t: 0,
+            nextUnit: 0,
+            groups: siegeUnits.map((u, i) => ({
+              idx: i,
+              name: SIEGE_RULES.names[i],
+              list: lists[i],
+              hero: u.hero && !injuryOf(u.hero) ? u.hero : null,
+              path: i % 2 ? lower : upper,
+              d: 0,
+              x: 0,
+              y: 300,
+              state: lists[i].length ? "wait" : "empty",
+              fallen: 0,
+            })),
+            towers: towersNpc,
+            garrison,
+            castleHp: SIEGE_BATTLE.castle.hp,
+            kills: 0,
+            result: null,
+            id: Date.now().toString(36),
+          };
+          for (const l of lists) for (const s of l) s.waveXp = 0;
+          msg("出陣！ 第一部隊から" + SIEGE_BATTLE.interval + "秒ごとに出撃し、NPCの城を目指します。");
+          updateUI();
+          return null;
+        }
+        const groupAlive = (g) => g.list.filter((s) => s.alive && !s.siegeOut);
+        const groupActive = (g) => g.state === "march" || g.state === "fight";
+        function launchGroup(g) {
+          g.state = "march";
+          g.d = 0;
+          Object.assign(g, pathAt(g.path, 0));
+          for (const s of g.list) {
+            s.battles++;
+            s.cd = 0.3 + Math.random() * 0.4;
+            s.chargeTarget = null;
+            logHistory(s, g.name + "として攻城戦に出陣");
+          }
+          if (g.hero) msg(g.name + "（武将 " + WARLORDS[g.hero].name + "）が出撃！");
+          else msg(g.name + " が出撃！");
+        }
+        // 部隊の兵士の能力（攻城編成の武将の効果を掛ける）
+        function battleStats(g, s) {
+          const st = Object.assign({}, soldierStats(s));
+          if (g.hero) {
+            const c = WARLORDS[g.hero];
+            st.atk *= (c.passive.damageMul || 1) * starMul(g.hero);
+            st.def *= c.passive.defMul || 1;
+          }
+          return st;
+        }
+        // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
+        const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
+        function battleHurt(g, raw, ranged, kind) {
+          const alive = groupAlive(g),
+            s = alive[0];
+          if (!s) return;
+          const st = battleStats(g, s),
+            weak = SOLDIER_TYPES[s.type].spearWeak,
+            spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) : 1;
+          s.hp -=
+            ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
+            (1 - skillSum(s, "guard")) *
+            (ranged ? 1 - skillSum(s, "rangedGuard") : 1) *
+            spear;
+          s.hit = 0.2;
+          if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
+            s.unyieldUsed = true;
+            s.hp = 1;
+          }
+          if (s.hp <= 0) {
+            s.alive = false; // 永久死亡（防衛戦と同じ）
+            s.hp = 0;
+            s.diedWave = wave;
+            s.diedIn = g.name + "（攻城戦）";
+            logHistory(s, g.name + "（攻城戦）で戦死");
+            recordDeath(s);
+            g.fallen++;
+            unitGhosts.push({
+              type: s.type,
+              x: g.x,
+              y: g.y,
+              age: 0,
+              duration: 1.2,
+              scale: SQUAD_SCALE,
+              face: 1,
+            });
+            if (unitGhosts.length > 16) unitGhosts.shift();
+            if (!groupAlive(g).length) groupLost(g);
+            return;
+          }
+          // 生存本能：攻城戦では戦場を離れて陣へ戻る（生き残る）
+          if (hasSkill(s, "instinct") && !s.instinctTried && s.hp < st.maxHp * SQUAD_RULES.instinctHp) {
+            s.instinctTried = true;
+            if (Math.random() < SQUAD_RULES.instinctChance) {
+              s.siegeOut = true;
+              logHistory(s, "攻城戦で生存本能により離脱");
+              if (!groupAlive(g).length) groupLost(g, true);
+            }
+          }
+        }
+        // 部隊が全滅（または全員離脱）した。武将は戦死せず負傷する
+        function groupLost(g, withdrew) {
+          g.state = "lost";
+          const h = g.hero && heroState[g.hero];
+          if (h && !withdrew) injureHero(h);
+          msg(
+            g.name +
+              (withdrew ? " は全員が戦場を離れた。" : " が全滅した…") +
+              (h && !withdrew ? " 武将 " + WARLORDS[g.hero].name + " は負傷して退却。" : ""),
+          );
+        }
+        // 前方で足止めしてくる守備隊（同じ道、合流後はどちらの道でも）
+        function blockerAhead(g) {
+          let best = null;
+          for (const e of battle.garrison) {
+            if (e.hp <= 0 || !samePath(e.path, g.path, e.d)) continue;
+            const gap = e.d - g.d;
+            if (gap >= -6 && gap <= SIEGE_BATTLE.blockGap && (!best || e.d < best.d)) best = e;
+          }
+          return best;
+        }
+        const castleDist = (g) => Math.hypot(SIEGE_BATTLE.castle.x - g.x, SIEGE_BATTLE.castle.y - g.y);
+        function tickBattle(dt) {
+          const B = battle;
+          if (!B || B.result) return;
+          B.t += dt;
+          while (B.nextUnit < B.groups.length && B.t >= B.nextUnit * SIEGE_BATTLE.interval) {
+            const g = B.groups[B.nextUnit++];
+            if (g.state === "wait") launchGroup(g);
+          }
+          for (const e of B.garrison) e.atkAnim = Math.max(0, e.atkAnim - dt);
+          for (const t of B.towers) t.hitFlash = Math.max(0, (t.hitFlash || 0) - dt);
+          // 進軍：守備隊の手前・城の前では止まる
+          for (const g of B.groups) {
+            if (!groupActive(g)) continue;
+            const atCastle = castleDist(g) <= SIEGE_BATTLE.castle.reach;
+            if (blockerAhead(g) || atCastle) g.state = "fight";
+            else {
+              g.state = "march";
+              const speed =
+                SIEGE_BATTLE.march * Math.min(...groupAlive(g).map((s) => SOLDIER_TYPES[s.type].march || 1));
+              g.d += speed * dt;
+              Object.assign(g, pathAt(g.path, g.d));
+            }
+          }
+          // 味方の攻撃・回復（兵士1人ずつ。間隔は防衛戦と同じく余りを持ち越す）
+          for (const g of B.groups) {
+            if (!groupActive(g)) continue;
+            for (const s of groupAlive(g)) {
+              s.cd -= dt;
+              if (s.cd > 0) continue;
+              const st = battleStats(g, s),
+                c = SOLDIER_TYPES[s.type];
+              if (c.heal) {
+                // 衛生兵：攻城の部隊の中でHPの割合が最も低い味方1人（自分は除く）
+                let best = null,
+                  ratio = 1;
+                for (const o of B.groups) {
+                  if (!groupActive(o) || Math.hypot(o.x - g.x, o.y - g.y) > st.range) continue;
+                  for (const m of groupAlive(o)) {
+                    if (m === s) continue;
+                    const r = m.hp / soldierStats(m).maxHp;
+                    if (r < ratio) {
+                      ratio = r;
+                      best = { m, o };
+                    }
+                  }
+                }
+                if (!best) {
+                  s.cd = 0;
+                  continue;
+                }
+                s.cd += st.rate;
+                s.atk = 0.18;
+                best.m.hp += Math.min(st.heal, soldierStats(best.m).maxHp - best.m.hp);
+                s.heals = (s.heals || 0) + 1;
+                gainXp(s, SQUAD_RULES.xpPerHeal);
+                if (effects.length >= 80) effects.shift();
+                effects.push({
+                  x: best.o.x,
+                  y: best.o.y - 20,
+                  kind: "heal",
+                  color: "#7be08a",
+                  age: 0,
+                  duration: 0.8,
+                });
+                continue;
+              }
+              // 攻撃の相手：届く守備隊 → 届く塔 → 城
+              let target = null,
+                td = st.range;
+              for (const e of B.garrison) {
+                if (e.hp <= 0) continue;
+                const dd = Math.hypot(e.x - g.x, e.y - g.y);
+                if (dd <= td) {
+                  td = dd;
+                  target = e;
+                }
+              }
+              let tower = null;
+              if (!target)
+                for (const t of B.towers) {
+                  if (t.destroyed) continue;
+                  const dd = Math.hypot(t.x - g.x, t.y - g.y);
+                  if (dd <= td) {
+                    td = dd;
+                    tower = t;
+                  }
+                }
+              const castle = !target && !tower && castleDist(g) <= SIEGE_BATTLE.castle.reach + st.range;
+              if (!target && !tower && !castle) {
+                s.cd = 0;
+                continue;
+              }
+              s.cd += st.rate;
+              s.atk = 0.18;
+              let dmg = st.atk * (target && target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1);
+              const key = target || tower || "castle";
+              if (c.charge && s.chargeTarget !== key) {
+                s.chargeTarget = key;
+                dmg *= c.charge + skillSum(s, "chargeAdd");
+              }
+              if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) dmg *= 2;
+              const tx = target ? target.x : tower ? tower.x : SIEGE_BATTLE.castle.x,
+                ty = target ? target.y : tower ? tower.y - 30 : SIEGE_BATTLE.castle.y - 40;
+              if (c.range > 60) {
+                const musket = c.shot === "musket";
+                if (musket) burst(g.x + 14, g.y - 22, "#ffe6a0", "gunsmoke");
+                if (shots.length >= 160) shots.shift();
+                shots.push({
+                  x: g.x + 10,
+                  y: g.y - 22,
+                  tx,
+                  ty,
+                  type: musket ? "magic" : "arrow",
+                  age: 0,
+                  duration: musket ? 0.12 : 0.22,
+                  col: "#a56b35",
+                });
+              } else burst(tx, ty, "#fff1c4", "slash");
+              gainXp(s, SQUAD_RULES.xpPerHit);
+              if (target) {
+                target.hp -= dmg;
+                target.hit = 0.18;
+                if (target.hp <= 0) {
+                  s.kills++;
+                  B.kills++;
+                  gainXp(s, SQUAD_RULES.xpPerKill + Math.round(target.reward / 2));
+                  if (effects.length >= 80) effects.shift();
+                  effects.push({
+                    x: target.x,
+                    y: target.y,
+                    kind: "edeath",
+                    ekind: target.kind,
+                    face: -1,
+                    age: 0,
+                    duration: 0.9,
+                  });
+                }
+              } else if (tower) {
+                tower.hp -= dmg;
+                tower.hitFlash = 0.25;
+                if (tower.hp <= 0) {
+                  tower.hp = 0;
+                  tower.destroyed = true;
+                  if (effects.length >= 78) effects.splice(0, 2);
+                  effects.push({
+                    x: tower.x,
+                    y: tower.y,
+                    kind: "collapse",
+                    color: "#8a7a66",
+                    age: 0,
+                    duration: 1.4,
+                  });
+                  msg("NPCの" + TOWER_NAMES[tower.type] + "を破壊した！");
+                }
+              } else B.castleHp -= dmg;
+            }
+          }
+          B.garrison = B.garrison.filter((e) => e.hp > 0);
+          // 守備隊の攻撃（届く部隊の先頭の兵士へ）
+          const scale = 1 + Math.max(0, wave - 1) * 0.05;
+          for (const e of B.garrison) {
+            e.cd -= dt;
+            if (e.cd > 0) continue;
+            const a = ENEMY_VS_UNIT[e.kind],
+              reach = a.ranged || SIEGE_BATTLE.enemyReach;
+            let tg = null,
+              best = reach;
+            for (const g of B.groups) {
+              if (!groupActive(g)) continue;
+              const dd = Math.hypot(g.x - e.x, g.y - e.y);
+              if (dd <= best) {
+                best = dd;
+                tg = g;
+              }
+            }
+            if (!tg) {
+              e.cd = 0;
+              continue;
+            }
+            e.cd += a.rate;
+            e.atkAnim = 0.35;
+            if (a.ranged) {
+              if (shots.length >= 160) shots.shift();
+              shots.push({
+                x: e.x,
+                y: e.y - 14,
+                tx: tg.x,
+                ty: tg.y - 16,
+                type: "arrow",
+                age: 0,
+                duration: 0.3,
+                col: "#a56b35",
+              });
+            }
+            battleHurt(tg, a.damage * scale, !!a.ranged, e.kind);
+          }
+          // NPCの塔の攻撃
+          for (const t of B.towers) {
+            if (t.destroyed) continue;
+            t.cd -= dt;
+            if (t.cd > 0) continue;
+            const p = types[t.type];
+            let tg = null,
+              best = p.range;
+            for (const g of B.groups) {
+              if (!groupActive(g)) continue;
+              const dd = Math.hypot(g.x - t.x, g.y - t.y);
+              if (dd <= best) {
+                best = dd;
+                tg = g;
+              }
+            }
+            if (!tg) {
+              t.cd = 0;
+              continue;
+            }
+            t.cd += p.rate * 1.4;
+            if (shots.length >= 160) shots.shift();
+            shots.push({
+              x: t.x,
+              y: t.y - 42,
+              tx: tg.x,
+              ty: tg.y - 14,
+              type: t.type === "magic" ? "magic" : t.type === "cannon" ? "cannon" : "arrow",
+              age: 0,
+              duration: t.type === "cannon" ? 0.5 : 0.25,
+              col: p.col,
+            });
+            if (t.type === "magic") burst(t.x + 4, t.y - 42, "#ffe6a0", "gunsmoke");
+            battleHurt(tg, t.damage * scale, true, "tower");
+          }
+          // 勝敗
+          if (B.castleHp <= 0) return endBattle("win");
+          const pending = B.groups.some((g) => g.state === "wait");
+          if (!pending && !B.groups.some(groupActive)) return endBattle("lose");
+          if (B.t >= SIEGE_BATTLE.timeLimit) return endBattle("timeup");
+        }
+        // 終了：生き残った兵士に経験値を与えて保存する（1回の攻城戦で1回だけ）
+        function endBattle(result) {
+          const B = battle;
+          if (!B || B.result) return;
+          B.result = result;
+          B.castleHp = Math.max(0, B.castleHp);
+          const report = [];
+          for (const g of B.groups) {
+            const launched = g.state !== "wait" && g.state !== "empty";
+            const out = { name: g.name, launched, total: g.list.length, alive: 0, dead: [], hero: g.hero };
+            for (const s of g.list) {
+              if (!s.alive) {
+                out.dead.push(soldierName(s));
+                continue;
+              }
+              out.alive++;
+              if (launched && result !== "retreat")
+                gainXp(s, SIEGE_BATTLE.xpSurvive + (result === "win" ? SIEGE_BATTLE.xpWin : 0), true);
+              s.waveXp = 0;
+              s.siegeOut = false;
+              s.instinctTried = false;
+              s.unyieldUsed = false;
+              s.chargeTarget = null;
+              patchSavedSoldier(s, pickSaved(s)); // 成長を保存（戦死はその場で保存済み）
+            }
+            report.push(out);
+          }
+          // 戦死で空になった防衛の部隊を片付ける
+          for (const q of squads.slice())
+            if (!roster(q).length) {
+              releaseBlocks(q);
+              releaseHeroFromSquad(q);
+              squads = squads.filter((x) => x !== q);
+            }
+          refreshSiege();
+          B.report = report;
+          shots = [];
+          showBattleResult(B);
+          battle = null;
+          updateUI();
+        }
+        function retreatBattle() {
+          if (battle && !battle.result) endBattle("retreat");
+        }
+        function showBattleResult(B) {
+          const title =
+            B.result === "win"
+              ? "🏯 勝利！ NPCの城を攻め落とした"
+              : B.result === "retreat"
+                ? "↩ 全軍撤退"
+                : B.result === "timeup"
+                  ? "⌛ 時間切れ（撤退）"
+                  : "敗北… 全部隊が倒れた";
+          let html =
+            "<p>経過 " +
+            Math.floor(B.t) +
+            "秒・城の耐久 " +
+            Math.ceil(B.castleHp) +
+            "/" +
+            SIEGE_BATTLE.castle.hp +
+            "・撃破 " +
+            B.kills +
+            "</p>";
+          for (const r of B.report) {
+            if (!r.total) continue;
+            html +=
+              '<div class="s-card"><h3>' +
+              r.name +
+              (r.launched ? "" : " <small>（出撃前に終了）</small>") +
+              "</h3><p>生還 " +
+              r.alive +
+              "/" +
+              r.total +
+              (r.hero ? "・武将 " + WARLORDS[r.hero].name : "") +
+              "</p>" +
+              (r.dead.length
+                ? '<p class="injured">戦死：' + r.dead.map(esc).join("・") + "（復活しません）</p>"
+                : "") +
+              "</div>";
+          }
+          html +=
+            '<p class="muted">' +
+            (B.result === "retreat"
+              ? "撤退したので、生還した兵士の生存ボーナスはありません。"
+              : "生還した兵士は経験値 +" +
+                (SIEGE_BATTLE.xpSurvive + (B.result === "win" ? SIEGE_BATTLE.xpWin : 0)) +
+                "（ほかに戦闘中の経験値）。") +
+            "</p>";
+          $("battleTitle").textContent = title;
+          $("battleBody").innerHTML = html;
+          $("battleSheet").hidden = false;
+          msg(title);
+        }
+        $("battleClose").onclick = () => ($("battleSheet").hidden = true);
+        $("battleRetreat").onclick = () => {
+          if (battle && confirm("全軍撤退しますか？（生還した兵士は生き残りますが、敗北になります）"))
+            retreatBattle();
+        };
+        function renderBattleBar() {
+          const bar = $("battleBar");
+          bar.hidden = !battle;
+          if (!battle) return;
+          const B = battle;
+          setHtml(
+            $("battleInfo"),
+            "<b>攻城戦</b> " +
+              Math.floor(B.t) +
+              "/" +
+              SIEGE_BATTLE.timeLimit +
+              "秒・城 " +
+              Math.ceil(Math.max(0, B.castleHp)) +
+              "/" +
+              SIEGE_BATTLE.castle.hp +
+              "<br>" +
+              B.groups
+                .filter((g) => g.list.length)
+                .map(
+                  (g) =>
+                    g.name.replace("部隊", "") +
+                    " " +
+                    (g.state === "wait"
+                      ? "待機（" + Math.max(0, Math.ceil(g.idx * SIEGE_BATTLE.interval - B.t)) + "秒）"
+                      : g.state === "lost"
+                        ? "壊滅"
+                        : groupAlive(g).length + "人"),
+                )
+                .join("・"),
+          );
+        }
+        // 描画：NPCの塔・守備隊・味方の部隊・城の耐久
+        function drawBattle() {
+          const B = battle,
+            actors = [];
+          renderBattleBar(); // 時間・城・各部隊の状況（変わったときだけ書き換わる）
+          for (const t of B.towers)
+            actors.push({
+              y: t.y,
+              draw: () => {
+                tower(t);
+                if (t.destroyed) return;
+                towerHpBar(t);
+                // NPCの塔の印（赤い旗）
+                ctx.fillStyle = "#b8322b";
+                ctx.fillRect(t.x + 18, t.y - 92, 12, 9);
+                ctx.fillStyle = "#3a2a22";
+                ctx.fillRect(t.x + 17, t.y - 92, 2, 22);
+              },
+            });
+          for (const e of B.garrison)
+            actors.push({
+              y: e.y,
+              draw: () => {
+                ctx.save();
+                if (!drawEnemySprite(e)) soldierFallback(e);
+                if (e.hit > 0) {
+                  ctx.globalAlpha = e.hit * 3;
+                  ellipse(e.x, e.y, e.r + 3, e.r + 3, "#fff6d6");
+                }
+                ctx.restore();
+              },
+            });
+          for (const g of B.groups) {
+            if (!groupActive(g)) continue;
+            const list = groupAlive(g);
+            list.forEach((s, i) => {
+              const o = battleOffset(i),
+                ground = g.y + o[1] + UNIT_FOOT;
+              actors.push({
+                y: ground,
+                draw: () => {
+                  ellipse(g.x + o[0] + 1, ground, 10, 3.5, "#2e523866");
+                  unitFigure(s.type, g.x + o[0], ground, {
+                    scale: SQUAD_SCALE,
+                    face: 1,
+                    dy: g.state === "march" && !reduced ? -Math.abs(Math.sin(visualTime * 8 + s.id)) * 2 : 0,
+                    flash: s.hit > 0 && Math.floor(s.hit * 30) % 2 === 0,
+                    pose: s.atk > 0 ? "attack" : null,
+                  });
+                },
+              });
+            });
+            actors.push({
+              y: g.y + 40,
+              draw: () => {
+                // 部隊名の札
+                ctx.save();
+                ctx.font = "bold 13px system-ui";
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#143c45dd";
+                ctx.fillRect(g.x - 26, g.y - 62, 52, 17);
+                ctx.fillStyle = "#ffe3a0";
+                ctx.fillText(g.name.replace("部隊", "") + " " + list.length, g.x, g.y - 49);
+                ctx.restore();
+              },
+            });
+          }
+          for (const u of unitGhosts) actors.push({ y: u.y + UNIT_FOOT, draw: () => drawUnitGhost(u) });
+          actors.sort((a, b) => a.y - b.y);
+          for (const a of actors) a.draw();
+          for (const s of shots) projectile(s);
+          for (const e of effects) effect(e);
+          // 城の耐久バーと「敵城」の札
+          const c = SIEGE_BATTLE.castle,
+            r = Math.max(0, B.castleHp / c.hp);
+          ctx.fillStyle = "#1f2a22dd";
+          ctx.fillRect(c.x - 52, c.y - 140, 104, 12);
+          ctx.fillStyle = r > 0.5 ? "#ef6a58" : r > 0.25 ? "#ffb35a" : "#ffe27a";
+          ctx.fillRect(c.x - 50, c.y - 138, 100 * r, 8);
+          ctx.font = "bold 14px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#fff1d0";
+          ctx.fillText("敵城 " + Math.ceil(Math.max(0, B.castleHp)), c.x, c.y - 146);
+        }
         // ===== 塔パネル・武将配属画面 =====
         const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
         const esc = (s) =>
@@ -6216,6 +6939,11 @@
               healSquad,
               healCost,
               disbandSquad,
+              battle: () => battle,
+              startBattle,
+              endBattle,
+              retreatBattle,
+              SIEGE_BATTLE,
               siege: () => siegeUnits,
               siegeAdd,
               siegeRemove,
