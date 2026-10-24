@@ -928,7 +928,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v18（清洲城の攻略・攻城戦・騎兵）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v19（7か国の領土・攻城戦・騎兵）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -5765,7 +5765,8 @@
         const typeLabel = (t) => (SOLDIER_TYPES[t] ? SOLDIER_TYPES[t].name : t);
         const typeIcon = (t) => (SOLDIER_TYPES[t] && (SOLDIER_TYPES[t].icon || SOLDIER_TYPES[t].mark)) || "";
 
-        let siegeTab = 0,
+        let siegeProvinces = false, // 領土の一覧を出しているか
+          siegeTab = 0,
           siegeFilter = "all",
           siegeHeroPick = false,
           siegeNote = "";
@@ -5851,7 +5852,11 @@
               .join("");
           else html += '<p class="muted">兵士がいません。下の一覧から追加してください。</p>';
           $("siegeUnit").innerHTML = html + "</div>";
-          $("siegePick").innerHTML = siegeHeroPick ? siegeHeroHtml(i) : siegeSoldierHtml(i);
+          $("siegePick").innerHTML = siegeProvinces
+            ? provincesHtml()
+            : siegeHeroPick
+              ? siegeHeroHtml(i)
+              : siegeSoldierHtml(i);
           $("siegeGo").disabled = !!canStartBattle();
           const tid = targetCastleId(),
             TC = NPC_CASTLES[tid],
@@ -5876,11 +5881,74 @@
                 : TC.reward && TC.reward.tickets
                   ? "・初めて攻め落とすと 🎴 ガチャ券 +" + TC.reward.tickets
                   : "") +
-              "</small>",
+              "</small>" +
+              '<div class="card-actions"><button data-provinces>🗾 領土 ' +
+              ownedCount() +
+              "/" +
+              PROVINCE_ORDER.length +
+              "・目標を選ぶ</button></div>",
           );
           $("siegeGo").textContent = done
             ? "⚔️ 演習（" + TC.name + "を攻める）"
             : "⚔️ 出陣（" + TC.name + "を攻める）";
+        }
+        // 領土の一覧（地図は使わず国名で管理）
+        function provincesHtml() {
+          const tid = targetCastleId();
+          let html =
+            '<h3 style="margin:12px 0 0;font-size:16px">🗾 領土 ' +
+            ownedCount() +
+            "/" +
+            PROVINCE_ORDER.length +
+            "か国</h3>" +
+            '<p class="muted">領土の隣の国だけ攻められます。7か国の統一を目指そう（統一の報酬 🎴 ガチャ券 +' +
+            UNIFY_TICKETS +
+            "）。</p>" +
+            '<div class="card-actions"><button data-provinces-close>兵士の一覧に戻る</button></div>';
+          for (const p of PROVINCE_ORDER) {
+            const P = PROVINCES[p],
+              C = P.castle && NPC_CASTLES[P.castle],
+              own = ownsProvince(p),
+              open = canAttackProvince(p),
+              isTarget = P.castle === tid;
+            let state, btn;
+            if (P.home) {
+              state = "🏠 自国";
+              btn = "<button disabled>自国</button>";
+            } else if (own) {
+              state = "🏯 領土（演習できる）";
+              btn = isTarget
+                ? "<button disabled>目標</button>"
+                : '<button data-target="' + P.castle + '">演習</button>';
+            } else if (open) {
+              state = "⚔️ 攻略できる";
+              btn = isTarget
+                ? "<button disabled>目標</button>"
+                : '<button data-target="' + P.castle + '">目標にする</button>';
+            } else {
+              state = "🔒 隣の国を取ると攻められる";
+              btn = "<button disabled>まだ</button>";
+            }
+            html +=
+              '<div class="pick-row' +
+              (own ? " named" : "") +
+              '"><span><b>' +
+              (isTarget ? "🎯" : "") +
+              P.name +
+              "</b>（" +
+              (P.home ? P.homeCastle : C.name) +
+              "）<br><small>" +
+              state +
+              (C && !P.home
+                ? "・強さ " + "★".repeat(Math.round((C.power - 1) * 5) + 1) + "・城の耐久 " + C.hp
+                : "") +
+              "・隣：" +
+              P.adj.map((a) => PROVINCES[a].name).join("・") +
+              "</small></span>" +
+              btn +
+              "</div>";
+          }
+          return html;
         }
         function siegeSoldierHtml(i) {
           const ids = savedSoldierIds();
@@ -5988,6 +6056,7 @@
         function openSiege() {
           refreshSiege();
           siegeHeroPick = false;
+          siegeProvinces = false;
           siegeNote = "";
           renderSiege();
           $("siegeSheet").hidden = false;
@@ -6022,7 +6091,18 @@
           if (d.unit !== undefined) {
             siegeTab = +d.unit;
             siegeHeroPick = false;
+            siegeProvinces = false;
             changed = false;
+          } else if (d.provinces !== undefined) {
+            siegeProvinces = true;
+            changed = false;
+          } else if (d.provincesClose !== undefined) {
+            siegeProvinces = false;
+            changed = false;
+          } else if (d.target) {
+            err = setTarget(d.target);
+            changed = false;
+            if (!err) siegeNote = "🎯 攻略目標を " + NPC_CASTLES[d.target].name + " にしました";
           } else if (d.filter) {
             siegeFilter = d.filter;
             changed = false;
@@ -6031,6 +6111,7 @@
           else if (d.remove) err = siegeRemove(i, +d.remove);
           else if (d.heroPick !== undefined) {
             siegeHeroPick = true;
+            siegeProvinces = false;
             changed = false;
           } else if (d.heroCancel !== undefined) {
             siegeHeroPick = false;
@@ -6045,7 +6126,7 @@
             siegeNote = siegeSaveOk
               ? "✓ " + SIEGE_RULES.names[i] + " の編成を保存しました"
               : "⚠ 保存できませんでした（この端末では保存が使えません）";
-          else siegeNote = "";
+          else if (!d.target) siegeNote = "";
           renderSiege();
         });
         // ===== 攻城戦（Phase 4：基本システム） =====
@@ -6064,35 +6145,76 @@
           garrisonHp: { goblin: 90, knight: 260, dragon: 150, wolf: 110, boss: 1200 },
           garrisonReward: { goblin: 10, knight: 22, dragon: 27, wolf: 12, boss: 150 }, // 経験値の計算用
         };
-        // NPCの城（Phase 5）。将来は7か国（三河・尾張・美濃・遠江・駿河・甲斐・信濃）へ増やす。
-        // 城ごとに耐久・防衛塔・守備隊・初めて攻略したときの報酬を持つ。攻略目標は CASTLE_ORDER の順で、未占領の最初の城
+        // ===== NPCの城と領土（7か国） =====
+        // 国ごとにNPCの城が1つある。自国（三河・岡崎城）から始め、自分の領土の隣の国だけ攻められる。
+        // 城を攻め落とすとその国が領土になる。初めて攻め落としたときだけ報酬、7か国そろうと統一の報酬。
+        // 城の強さ power は守備兵の体力・攻撃と防衛塔の攻撃に掛ける（1 = 清洲城）
+        const BASE_TOWERS = [
+          { type: "arrow", x: 330, y: 80, damage: 12 },
+          { type: "arrow", x: 330, y: 525, damage: 12 },
+          { type: "magic", x: 700, y: 190, damage: 20 },
+          { type: "cannon", x: 790, y: 415, damage: 24 },
+        ];
+        // 守備隊（道の上に立って足止めする）。path：upper / lower（合流後はどちらでも同じ道）
+        const BASE_GARRISON = [
+          { path: "upper", d: 330, kind: "goblin", n: 4 },
+          { path: "lower", d: 330, kind: "goblin", n: 4 },
+          { path: "upper", d: 780, kind: "knight", n: 3 },
+          { path: "upper", d: 830, kind: "dragon", n: 3 },
+          { path: "upper", d: 1000, kind: "boss", n: 1 },
+          { path: "upper", d: 1000, kind: "knight", n: 2 },
+        ];
+        const npcCastle = (name, province, hp, power, tickets, extra = []) => ({
+          name,
+          province,
+          hp,
+          power,
+          reward: { tickets }, // 初めて攻め落としたときだけ
+          towers: BASE_TOWERS,
+          towerLevel: 2,
+          garrison: BASE_GARRISON.concat(extra),
+        });
         const NPC_CASTLES = {
-          kiyosu: {
-            name: "清洲城",
-            province: "尾張",
-            hp: 1600,
-            reward: { tickets: 3 }, // 初めて攻め落としたときだけ
-            // NPCの防衛塔（味方の塔と同じ種類。攻撃は兵士の先頭へ）
-            towers: [
-              { type: "arrow", x: 330, y: 80, damage: 12 },
-              { type: "arrow", x: 330, y: 525, damage: 12 },
-              { type: "magic", x: 700, y: 190, damage: 20 },
-              { type: "cannon", x: 790, y: 415, damage: 24 },
-            ],
-            towerLevel: 2,
-            // 守備隊（道の上に立って足止めする）。path：upper / lower（合流後はどちらでも同じ道）
-            garrison: [
-              { path: "upper", d: 330, kind: "goblin", n: 4 },
-              { path: "lower", d: 330, kind: "goblin", n: 4 },
-              { path: "upper", d: 780, kind: "knight", n: 3 },
-              { path: "upper", d: 830, kind: "dragon", n: 3 },
-              { path: "upper", d: 1000, kind: "boss", n: 1 },
-              { path: "upper", d: 1000, kind: "knight", n: 2 },
-            ],
-          },
+          kiyosu: npcCastle("清洲城", "尾張", 1600, 1, 3),
+          hikuma: npcCastle("曳馬城", "遠江", 1800, 1.1, 3, [
+            { path: "lower", d: 560, kind: "goblin", n: 3 },
+          ]),
+          inabayama: npcCastle("稲葉山城", "美濃", 2200, 1.25, 4, [
+            { path: "lower", d: 600, kind: "dragon", n: 2 },
+          ]),
+          sunpu: npcCastle("駿府城", "駿河", 2400, 1.35, 4, [
+            { path: "upper", d: 560, kind: "knight", n: 3 },
+          ]),
+          fukashi: npcCastle("深志城", "信濃", 2600, 1.45, 5, [
+            { path: "upper", d: 520, kind: "wolf", n: 3 },
+            { path: "lower", d: 520, kind: "wolf", n: 3 },
+          ]),
+          tsutsujigasaki: npcCastle("躑躅ヶ崎館", "甲斐", 3000, 1.6, 5, [
+            { path: "upper", d: 520, kind: "wolf", n: 3 },
+            { path: "lower", d: 520, kind: "wolf", n: 3 },
+            { path: "upper", d: 900, kind: "boss", n: 1 },
+          ]),
         };
-        const CASTLE_ORDER = ["kiyosu"];
-        // 占領の記録（保存キー worldDefense.conquest.v1）。{ 城ID: { captured, attempts, wins } }
+        // 国：castle（NPCの城）・adj（隣の国）。自国（home）は最初から領土で、攻める城はない
+        const PROVINCES = {
+          mikawa: {
+            name: "三河",
+            home: true,
+            homeCastle: "岡崎城",
+            adj: ["owari", "mino", "totomi", "shinano"],
+          },
+          owari: { name: "尾張", castle: "kiyosu", adj: ["mikawa", "mino"] },
+          totomi: { name: "遠江", castle: "hikuma", adj: ["mikawa", "suruga", "shinano"] },
+          mino: { name: "美濃", castle: "inabayama", adj: ["owari", "mikawa", "shinano"] },
+          suruga: { name: "駿河", castle: "sunpu", adj: ["totomi", "kai"] },
+          shinano: { name: "信濃", castle: "fukashi", adj: ["mino", "mikawa", "totomi", "kai"] },
+          kai: { name: "甲斐", castle: "tsutsujigasaki", adj: ["suruga", "shinano"] },
+        };
+        const PROVINCE_ORDER = Object.keys(PROVINCES); // 一覧の並び（おおよそ攻めやすい順）
+        const CASTLE_ORDER = PROVINCE_ORDER.map((p) => PROVINCES[p].castle).filter(Boolean);
+        const UNIFY_TICKETS = 10; // 7か国を統一したときの報酬（1回だけ）
+        // 占領の記録（保存キー worldDefense.conquest.v1）
+        //   castles: { 城ID: { captured, attempts, wins } }、target: 選んだ攻略目標の城ID、unified: 統一の報酬を受け取った
         const CONQUEST_KEY = "worldDefense.conquest.v1";
         function loadConquest() {
           const out = {};
@@ -6111,20 +6233,56 @@
               wins: intIn(v.wins, 0, 1e6, 0),
             };
           }
+          conquestMeta.target = d && NPC_CASTLES[d.target] ? d.target : null;
+          conquestMeta.unified = !!(d && d.unified === true);
           return out;
         }
+        const conquestMeta = { target: null, unified: false };
         const conquest = loadConquest();
         function persistConquest() {
           try {
-            localStorage.setItem(CONQUEST_KEY, JSON.stringify({ version: 1, castles: conquest }));
+            localStorage.setItem(
+              CONQUEST_KEY,
+              JSON.stringify({
+                version: 1,
+                castles: conquest,
+                target: conquestMeta.target,
+                unified: conquestMeta.unified,
+              }),
+            );
             return true;
           } catch (err) {
             return false;
           }
         }
-        // 攻略目標：まだ占領していない最初の城。すべて占領済みなら最後の城を「演習」として攻める
-        const targetCastleId = () =>
-          CASTLE_ORDER.find((id) => !conquest[id].captured) || CASTLE_ORDER[CASTLE_ORDER.length - 1];
+        const provinceOf = (castleId) => PROVINCE_ORDER.find((p) => PROVINCES[p].castle === castleId);
+        const ownsProvince = (p) => !!(PROVINCES[p].home || conquest[PROVINCES[p].castle].captured);
+        const ownedCount = () => PROVINCE_ORDER.filter(ownsProvince).length;
+        // 攻められる国：まだ領土でなく、領土の隣にある国
+        const canAttackProvince = (p) => !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince);
+        // 城を目標にできるか：攻められる国の城、または占領済みの城（演習）
+        function targetError(castleId) {
+          const p = provinceOf(castleId);
+          if (!p) return "その城はありません。";
+          if (ownsProvince(p) || canAttackProvince(p)) return null;
+          return PROVINCES[p].name + "は領土の隣ではないので、まだ攻められません。";
+        }
+        function setTarget(castleId) {
+          if (battle) return "攻城戦の最中は目標を変えられません。";
+          const err = targetError(castleId);
+          if (err) return err;
+          conquestMeta.target = castleId;
+          persistConquest();
+          return null;
+        }
+        // 攻略目標：選んだ城（攻められる国の城、または演習に選んだ領土の城）→ 攻められる最初の国の城 →
+        // すべて領土なら最初の城を演習で。選んだ城を攻め落とすと選択は外れ、次の国が目標になる
+        function targetCastleId() {
+          const t = conquestMeta.target;
+          if (t && !targetError(t)) return t;
+          const p = PROVINCE_ORDER.find(canAttackProvince);
+          return p ? PROVINCES[p].castle : CASTLE_ORDER[0];
+        }
         let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
         const MERGE_D = pathLength(upper.slice(0, 5)); // 上下の道が合流する地点（道に沿った距離）
         const samePath = (a, b, d) => d >= MERGE_D || a === b;
@@ -6163,7 +6321,7 @@
               npc: true,
             };
             t.hp = towerMaxHp(t);
-            t.damage = c.damage;
+            t.damage = c.damage * C.power;
             return t;
           });
           const garrison = [];
@@ -6172,7 +6330,7 @@
             for (let i = 0; i < g.n; i++) {
               const d = g.d + i * 12,
                 p = pathAt(path, d),
-                hp = SIEGE_BATTLE.garrisonHp[g.kind];
+                hp = Math.round(SIEGE_BATTLE.garrisonHp[g.kind] * C.power);
               garrison.push({
                 kind: g.kind,
                 path,
@@ -6210,6 +6368,7 @@
             castleId,
             castleName: C.name,
             castleMax: C.hp,
+            power: C.power,
             practice: conquest[castleId].captured, // 占領済みの城は演習（報酬・占領なし。経験値は得られる）
             castleHp: C.hp,
             kills: 0,
@@ -6521,7 +6680,7 @@
                 col: "#a56b35",
               });
             }
-            battleHurt(tg, a.damage * scale, !!a.ranged, e.kind);
+            battleHurt(tg, a.damage * scale * B.power, !!a.ranged, e.kind);
           }
           // NPCの塔の攻撃
           for (const t of B.towers) {
@@ -6608,6 +6767,11 @@
             if (!rec.captured) {
               rec.captured = true;
               B.captured = true;
+              if (conquestMeta.target === B.castleId) conquestMeta.target = null; // 次の国を目標に
+              if (ownedCount() === PROVINCE_ORDER.length && !conquestMeta.unified) {
+                conquestMeta.unified = true;
+                B.unified = true;
+              }
             }
           }
           persistConquest();
@@ -6617,6 +6781,7 @@
             const r = NPC_CASTLES[B.castleId].reward;
             if (r && r.tickets) grantTickets(r.tickets, B.castleName + "を攻略", true);
           }
+          if (B.unified) grantTickets(UNIFY_TICKETS, "7か国を統一", true);
           battle = null;
           updateUI();
         }
@@ -6643,7 +6808,14 @@
                 C.province +
                 "）を占領した！" +
                 (C.reward && C.reward.tickets ? " 🎴 ガチャ券 +" + C.reward.tickets : "") +
-                "</p>"
+                "</p><p>領土 " +
+                ownedCount() +
+                "/" +
+                PROVINCE_ORDER.length +
+                "か国</p>"
+              : "") +
+            (B.unified
+              ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
               : "") +
             "<p>経過 " +
             Math.floor(B.t) +
@@ -7426,6 +7598,12 @@
               SIEGE_BATTLE,
               NPC_CASTLES,
               conquest: () => conquest,
+              conquestMeta: () => conquestMeta,
+              PROVINCES,
+              setTarget,
+              targetCastleId,
+              ownsProvince,
+              canAttackProvince,
               siege: () => siegeUnits,
               siegeAdd,
               siegeRemove,
