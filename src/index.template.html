@@ -413,6 +413,11 @@
         border-color: #7fd18b;
         background: #24412f;
       }
+      .tools.unit-tools .squad-chip.out.active {
+        background: #2f5a3d;
+        border-color: #ffd28a;
+        color: #fff1d0;
+      }
       .squad-chip.wait {
         opacity: 0.55;
       }
@@ -471,8 +476,10 @@
       .panel-actions.two {
         grid-template-columns: repeat(2, 1fr);
       }
+      /* 1部隊10人まで：5人ずつ2段 */
       .members {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 6px;
         margin: 6px 0;
       }
@@ -1068,7 +1075,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v24（攻城戦の武将の必殺技・部隊ボタンですぐ配置）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v25（防衛戦と攻城戦で同じ4部隊・攻城戦の武将の必殺技）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2170,9 +2177,11 @@
         // 塔に配属する「武将」とは別のシステム。兵士は1人ずつ個別に管理し、HPが0になると永久に死亡する。
         // 能力・経験値・称号の数値はすべてここで調整する。
         const SQUAD_RULES = {
-          squadSize: 5, // 1部隊の上限人数（新規雇用時の人数）
+          squadSize: 10, // 1部隊の上限人数（攻城戦の部隊と同じ）
+          hireSize: 5, // 新しく雇うときの人数（残りは「新兵補充」で1人ずつ）
           maxDeployed: 4, // 道に同時に出せる部隊数
-          maxSquads: 8, // 保有できる部隊数（配置中＋待機中）
+          maxSquads: 4, // 保有できる部隊数。防衛戦も攻城戦も同じ第一〜第四部隊を使う
+          slotNames: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
           snapDistance: 46, // タップ位置から道の中心線までの許容距離
           minSpacing: 60, // 部隊どうしの最小間隔
           noDeployFromEntry: 170, // 入口からこの距離までは配置不可
@@ -3448,7 +3457,12 @@
         const roster = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
         const onField = (q) => q.state === "deployed" || q.state === "retreating";
         const fieldSquads = () => squads.filter(onField);
-        const squadName = (q) => SOLDIER_TYPES[q.type].squadName + " #" + q.id;
+        // 部隊名は枠（第一〜第四部隊）と兵種。古い保存データから移した枠外の部隊は「予備隊」
+        const squadName = (q) =>
+          q.slot >= 0
+            ? SQUAD_RULES.slotNames[q.slot] + "（" + SOLDIER_TYPES[q.type].name + "）"
+            : "予備隊 #" + q.id + "（" + SOLDIER_TYPES[q.type].name + "）";
+        const slotShort = (q) => (q.slot >= 0 ? SQUAD_RULES.slotNames[q.slot].replace("部隊", "") : "予備");
         // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
         const soldierName = (s) => (s.name ? "🎖" + s.name : SOLDIER_TYPES[s.type].name + " #" + s.id);
         const unitGhosts = []; // 戦死・撤退の退場演出（見た目のみ）
@@ -3549,9 +3563,30 @@
             retreatLeft: 0,
             locked: false,
             fallen: 0,
+            slot: -1,
           };
           squads.push(q);
+          fixSlots();
           return q;
+        }
+        // 第一〜第四部隊の枠を決める（保存済みの枠を優先し、空いた枠を前から使う）。表示も枠の順にそろえる
+        function fixSlots() {
+          const used = new Set();
+          for (const q of squads) {
+            if (Number.isInteger(q.slot) && q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads && !used.has(q.slot))
+              used.add(q.slot);
+            else q.slot = -1;
+          }
+          for (const q of squads) {
+            if (q.slot >= 0) continue;
+            for (let i = 0; i < SQUAD_RULES.maxSquads; i++)
+              if (!used.has(i)) {
+                q.slot = i;
+                used.add(i);
+                break;
+              }
+          }
+          squads.sort((a, b) => (a.slot < 0 ? 99 : a.slot) - (b.slot < 0 ? 99 : b.slot) || a.id - b.id);
         }
         // 経験値。戦闘中に得る分は1ウェーブ xpWaveCap まで（ウェーブ終了の生存ボーナスは別枠）
         function gainXp(s, n, waveBonus) {
@@ -3681,13 +3716,13 @@
           q.face = -1;
           joinWave(q);
         }
-        // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × squadSize
+        // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × hireSize
         const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
-        // 新しい部隊を雇用して配置（squadSize 人 × 費用）
+        // 新しい部隊を雇用して配置（hireSize 人 × 費用）
         function hireSquad(type, x, y) {
           const c = SOLDIER_TYPES[type];
           if (!c || !c.enabled) return (msg("その兵種はまだ使えません。"), null);
-          const cost = unitCost(type) * SQUAD_RULES.squadSize;
+          const cost = unitCost(type) * SQUAD_RULES.hireSize;
           const r = placeCheck(x, y);
           if (r.error) return (msg(r.error), null);
           if (squads.length >= SQUAD_RULES.maxSquads)
@@ -3695,16 +3730,23 @@
               msg(
                 "保有できる部隊は " +
                   SQUAD_RULES.maxSquads +
-                  " 部隊までです。「編成」から待機中の部隊を配置するか、解散して枠を空けてください。",
+                  " 部隊までです（防衛戦も攻城戦も同じ部隊）。待機中の部隊を配置するか、解散して枠を空けてください。",
               ),
               null
             );
           if (gold < cost) return (msg("資金が足りません（" + c.squadName + " " + cost + "G）。"), null);
           gold -= cost;
           const q = newSquad(type);
-          for (let i = 0; i < SQUAD_RULES.squadSize; i++) newSoldier(type, q.id);
+          for (let i = 0; i < SQUAD_RULES.hireSize; i++) newSoldier(type, q.id);
           putOnRoad(q, r.point);
-          msg(squadName(q) + "（" + SQUAD_RULES.squadSize + "人）を雇用して配置した。");
+          msg(
+            squadName(q) +
+              "（" +
+              SQUAD_RULES.hireSize +
+              "人）を雇用して配置した。「編成」の新兵補充で" +
+              SQUAD_RULES.squadSize +
+              "人まで増やせる。",
+          );
           return q;
         }
         // 待機中の部隊を再配置（費用なし。戦闘中に撤退した部隊はそのウェーブ中は出せない）
@@ -3850,7 +3892,7 @@
           });
           if (unitGhosts.length > 16) unitGhosts.shift();
           const alive = members(q);
-          if (alive.length === 1 && q.fallen >= SQUAD_RULES.squadSize - 1 && !alive[0].lastSurvivor) {
+          if (alive.length === 1 && q.fallen >= SQUAD_RULES.hireSize - 1 && !alive[0].lastSurvivor) {
             alive[0].lastSurvivor = true;
             logHistory(alive[0], squadName(q) + " でただ一人生き残った（最後の生存者）");
             msg(soldierName(alive[0]) + " が " + squadName(q) + " 最後の生存者となった。");
@@ -3863,6 +3905,7 @@
         function wipeSquad(q) {
           releaseBlocks(q);
           squads = squads.filter((v) => v !== q);
+          fixSlots(); // 空いた枠に予備隊を入れる
           if (selectedSquad === q) selectedSquad = null;
           if (placeSquadId === q.id) placeSquadId = null;
           // 配属されていた武将は戦死せず負傷する（しばらく出陣できない）
@@ -4131,6 +4174,7 @@
             releaseBlocks(from);
             releaseHeroFromSquad(from);
             squads = squads.filter((q) => q !== from);
+            fixSlots(); // 空いた枠に予備隊を入れる
             if (selectedSquad === from) selectedSquad = null;
           }
           return null;
@@ -4145,10 +4189,12 @@
           releaseHeroFromSquad(q);
           soldiers = soldiers.filter((s) => !ids.has(s.id));
           squads = squads.filter((x) => x !== q);
+          fixSlots(); // 空いた枠に予備隊を入れる
           if (selectedSquad === q) selectedSquad = null;
           if (placeSquadId === q.id) placeSquadId = null;
           soldierSave.soldiers = soldierSave.soldiers.filter((v) => !ids.has(v.id));
           soldierSave.squads = soldierSave.squads.filter((v) => v.id !== q.id);
+          for (const v of soldierSave.squads) if (squadById(v.id)) v.slot = squadById(v.id).slot;
           writeSoldierSave();
           refreshSiege();
           return null;
@@ -4234,6 +4280,22 @@
             wave: intIn(f.wave, 0, 999, 0),
           };
         }
+        // 古い保存データ（5人×最大8部隊）を10人の部隊にまとめる。同じ兵種の部隊どうしを、前の部隊から満員になるまで詰める。
+        // 兵士は1人も失わない（兵種が5種類以上あって4部隊に収まらないときは、枠外の「予備隊」として残る）
+        function mergeOldSquads(squadsIn, list, count) {
+          for (const type of Object.keys(SOLDIER_TYPES)) {
+            const qs = squadsIn.filter((q) => q.type === type && count[q.id]);
+            if (qs.length < 2) continue;
+            const members = list.filter((v) => qs.some((q) => q.id === v.squadId));
+            for (const q of qs) count[q.id] = 0;
+            members.forEach((v, i) => {
+              const q = qs[Math.floor(i / SQUAD_RULES.squadSize)];
+              v.squadId = q.id;
+              count[q.id]++;
+            });
+          }
+          // 空になった部隊は読み込み後に消える。枠は restoreRoster で前から振り直す
+        }
         function loadSoldierSave() {
           const fresh = { seq: 0, squadSeq: 0, squads: [], soldiers: [], fallen: [] };
           let raw = null;
@@ -4248,9 +4310,13 @@
             if (!d || typeof d !== "object") throw new Error("not an object");
             const squadsIn = (Array.isArray(d.squads) ? d.squads : [])
               .filter((q) => q && SOLDIER_TYPES[q.type] && SOLDIER_TYPES[q.type].enabled)
-              .map((q) => ({ id: intIn(q.id, 1, 1e9, 0), type: q.type }))
+              .map((q) => ({
+                id: intIn(q.id, 1, 1e9, 0),
+                type: q.type,
+                slot: Number.isInteger(q.slot) ? q.slot : -1,
+              }))
               .filter((q, i, a) => q.id && a.findIndex((x) => x.id === q.id) === i)
-              .slice(0, SQUAD_RULES.maxSquads);
+              .slice(0, 16); // 古い保存データは8部隊まであった
             const ids = new Set(),
               count = {},
               list = [];
@@ -4288,6 +4354,8 @@
               .filter(Boolean)
               .slice(0, SQUAD_RULES.fallenMax);
             const maxId = Math.max(0, ...list.map((v) => v.id), ...fallen.map((f) => f.id));
+            // 枠（slot）の無い以前の形式のときだけまとめる（今の形式では同じ兵種の部隊が2つあってもよい）
+            if (!squadsIn.some((q) => q.slot >= 0)) mergeOldSquads(squadsIn, list, count);
             return {
               seq: Math.max(intIn(d.seq, 0, 1e9, 0), maxId),
               squadSeq: Math.max(intIn(d.squadSeq, 0, 1e9, 0), ...squadsIn.map((q) => q.id), 0),
@@ -4322,13 +4390,14 @@
         // ウェーブクリア時：部隊に所属する生存兵をすべて保存する
         function saveRoster() {
           const live = squads.filter((q) => roster(q).length);
-          soldierSave.squads = live.map((q) => ({ id: q.id, type: q.type }));
+          soldierSave.squads = live.map((q) => ({ id: q.id, type: q.type, slot: q.slot }));
           soldierSave.soldiers = soldiers
             .filter((s) => s.alive && live.some((q) => q.id === s.squadId))
             .map(pickSaved);
           soldierSave.seq = Math.max(soldierSave.seq, soldierSeq);
           soldierSave.squadSeq = Math.max(soldierSave.squadSeq, squadSeq);
           writeSoldierSave();
+          if (siegeReady) refreshSiege(); // 保存された新兵も攻城の部隊に入る（起動中は攻城編成の読み込み前）
         }
         // 保存済みの兵士だけを書き換える（名前など。戦闘中の経験値はここでは保存しない）
         function patchSavedSoldier(s, fields) {
@@ -4366,7 +4435,14 @@
           for (const sq of soldierSave.squads) {
             const q = newSquad(sq.type);
             q.id = sq.id;
+            q.slot = -1;
           }
+          // 保存した枠を戻してから、枠の無い部隊に空いた枠を割り当てる
+          for (const q of squads) {
+            const sq = soldierSave.squads.find((v) => v.id === q.id);
+            q.slot = sq && Number.isInteger(sq.slot) ? sq.slot : -1;
+          }
+          fixSlots();
           squadSeq = Math.max(squadSeq, soldierSave.squadSeq);
           for (const v of soldierSave.soldiers) {
             const s = Object.assign(
@@ -5414,6 +5490,11 @@
           [0, 11],
           [14, -5],
           [14, 9],
+          [28, -12],
+          [28, 2],
+          [28, 14],
+          [42, -5],
+          [42, 9],
         ];
         function formationOffset(q, i) {
           const f = FORMATION[i % FORMATION.length];
@@ -5424,7 +5505,7 @@
           let best = null,
             bestD = 1e9;
           for (const q of fieldSquads()) {
-            if (x < q.x - 40 || x > q.x + 40 || y < q.y - 56 || y > q.y + 30) continue;
+            if (x < q.x - 40 || x > q.x + 56 || y < q.y - 56 || y > q.y + 30) continue;
             const d = Math.hypot(q.x - x, q.y - 12 - y);
             if (d < bestD) {
               bestD = d;
@@ -5557,16 +5638,18 @@
             }
           }
           // 人数の表示：生存（HPの割合で明るさ）と戦死を小さな丸で
+          // 10人まで並ぶので間隔を詰め、隊形の中ほど（後ろへ伸びた分）に合わせる
           const pips = Math.min(SQUAD_RULES.squadSize, list.length + q.fallen),
             top = q.y - 50,
-            left = q.x - ((pips - 1) * 9) / 2;
+            gap = pips > 5 ? 7 : 9,
+            left = q.x - (q.face || -1) * (pips > 5 ? 14 : 0) - ((pips - 1) * gap) / 2;
           for (let i = 0; i < pips; i++) {
             const s = list[i];
             if (s) {
               const r = Math.max(0, s.hp / soldierStats(s).maxHp);
-              ellipse(left + i * 9, top, 4, 4, "#1f2f24");
-              ellipse(left + i * 9, top, 3, 3, r > 0.5 ? "#7fe08a" : r > 0.25 ? "#ffd77d" : "#ef6a58");
-            } else ellipse(left + i * 9, top, 3, 3, "#3a3a3acc");
+              ellipse(left + i * gap, top, 3.5, 3.5, "#1f2f24");
+              ellipse(left + i * gap, top, 2.6, 2.6, r > 0.5 ? "#7fe08a" : r > 0.25 ? "#ffd77d" : "#ef6a58");
+            } else ellipse(left + i * gap, top, 2.6, 2.6, "#3a3a3acc");
           }
           const hh = heroOnSquad(q);
           if (hh) {
@@ -6357,9 +6440,9 @@
             msg(
               c.squadName +
                 "（" +
-                SQUAD_RULES.squadSize +
+                SQUAD_RULES.hireSize +
                 "人・" +
-                unitCost(type) * SQUAD_RULES.squadSize +
+                unitCost(type) * SQUAD_RULES.hireSize +
                 "G）：" +
                 c.text +
                 "。道をタップして配置しよう。",
@@ -6425,15 +6508,14 @@
             lv +
             '"><span class="chip-top">' +
             (UNIT_ASSETS[q.type] ? '<img alt="" src="' + UNIT_ASSETS[q.type] + '">' : c.icon) +
-            "#" +
-            q.id +
+            slotShort(q) +
             '</span><span class="chip-sub">' +
             (out ? (q.state === "retreating" ? "撤退中" : "出陣中") : list.length + "人 Lv" + lv) +
             "</span></button>"
           );
         }
         function unitCostLabel(type) {
-          return unitCost(type) * SQUAD_RULES.squadSize + "G";
+          return unitCost(type) * SQUAD_RULES.hireSize + "G";
         }
         function renderSquadUI() {
           // 雇用ボタンの費用（領土を取ると変わる）
@@ -6942,15 +7024,14 @@
           renderSoldierSheet();
           updateUI();
         });
-        // ===== 攻城部隊編成（将来の攻城戦用。戦闘処理はまだない） =====
-        // 第一〜第四部隊（配列の順＝出撃順）。各部隊に兵士 maxSoldiers 人・武将1人まで。
-        // 保存するのは兵士・武将のIDと並び順だけ（能力・経験値は兵士の保存データを参照し、コピーしない）。
-        // 選べる兵士は「兵士の保存データにいる生存兵」（ウェーブをクリアして保存された兵士）。
-        // 防衛側の配属（塔・部隊）とは別の計画なので、防衛で使用中の武将も選べる。負傷中の武将は選べない。
+        // ===== 攻城部隊編成 =====
+        // 第一〜第四部隊（配列の順＝出撃順）は、防衛戦の第一〜第四部隊と同じ部隊（兵士は自動で決まる）。
+        // 出撃するのは「兵士の保存データにいる生存兵」（ウェーブをクリアして保存された兵士）。
+        // 武将だけは防衛側の配属（塔・部隊）とは別に選ぶ。防衛で使用中の武将も選べる。負傷中の武将は選べない。
         const SIEGE_KEY = "worldDefense.siege.v1";
         const SIEGE_RULES = {
           names: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
-          maxSoldiers: 10,
+          maxSoldiers: SQUAD_RULES.squadSize,
         };
         const siegeEmpty = () => SIEGE_RULES.names.map(() => ({ soldiers: [], hero: null }));
         const savedSoldierIds = () => new Set(soldierSave.soldiers.map((v) => v.id));
@@ -6959,19 +7040,22 @@
           const s = soldierById(id);
           return !!(s && s.alive && savedSoldierIds().has(id));
         };
-        // 編成を検査して、使えない兵士（戦死など）・所持していない武将・重複を取り除く
+        // 枠 i の防衛の部隊（無ければ null）
+        const slotSquad = (i) => squads.find((q) => q.slot === i) || null;
+        // 編成を作り直す：兵士は防衛の部隊から（保存済みの生存兵だけ）、武将は所持していて重複しないものだけ
         function cleanSiege(units) {
           const out = siegeEmpty(),
-            seen = new Set(),
             heroes = new Set();
+          out.forEach((u, i) => {
+            const q = slotSquad(i);
+            if (q)
+              u.soldiers = roster(q)
+                .filter((s) => siegeEligible(s.id))
+                .slice(0, SIEGE_RULES.maxSoldiers)
+                .map((s) => s.id);
+          });
           (Array.isArray(units) ? units : []).slice(0, out.length).forEach((u, i) => {
             if (!u || typeof u !== "object") return;
-            for (const id of Array.isArray(u.soldiers) ? u.soldiers : []) {
-              if (!Number.isInteger(id) || seen.has(id) || !siegeEligible(id)) continue;
-              if (out[i].soldiers.length >= SIEGE_RULES.maxSoldiers) break;
-              seen.add(id);
-              out[i].soldiers.push(id);
-            }
             if (
               typeof u.hero === "string" &&
               WARLORDS[u.hero] &&
@@ -6989,19 +7073,20 @@
           try {
             raw = localStorage.getItem(SIEGE_KEY);
           } catch (err) {
-            return siegeEmpty();
+            return cleanSiege([]);
           }
-          if (!raw) return siegeEmpty();
+          if (!raw) return cleanSiege([]); // 武将の保存が無くても、兵士は部隊から決まる
           try {
             const d = JSON.parse(raw);
             return cleanSiege(d && d.units);
           } catch (err) {
             console.warn("攻城編成の保存データを読み込めないため初期化します", err);
-            return siegeEmpty();
+            return cleanSiege([]);
           }
         }
         let siegeUnits = loadSiege(),
           siegeSaveOk = true;
+        var siegeReady = true;
         function persistSiege() {
           try {
             localStorage.setItem(SIEGE_KEY, JSON.stringify({ version: 1, units: siegeUnits }));
@@ -7019,37 +7104,9 @@
             persistSiege();
           }
         }
-        const siegeUnitOf = (id) => siegeUnits.findIndex((u) => u.soldiers.includes(id));
         const siegeHeroUnit = (id) => siegeUnits.findIndex((u) => u.hero === id);
-        // 兵士を部隊に加える。move=true なら別の部隊から移す（同じ兵士は1部隊だけ）
-        function siegeAdd(i, id, move) {
-          if (battle) return "攻城戦の最中は編成を変えられません。";
-          const u = siegeUnits[i];
-          if (!u) return "部隊が見つかりません。";
-          if (!siegeEligible(id))
-            return soldierById(id) && !soldierById(id).alive
-              ? "戦死した兵士は編成できません。"
-              : "その兵士は編成できません（ウェーブをクリアして保存された生存兵から選びます）。";
-          const from = siegeUnitOf(id);
-          if (from === i) return null;
-          if (u.soldiers.length >= SIEGE_RULES.maxSoldiers)
-            return SIEGE_RULES.names[i] + " は満員です（" + SIEGE_RULES.maxSoldiers + "人まで）。";
-          if (from >= 0) {
-            if (!move) return "この兵士は " + SIEGE_RULES.names[from] + " にいます。";
-            siegeUnits[from].soldiers = siegeUnits[from].soldiers.filter((x) => x !== id);
-          }
-          u.soldiers.push(id);
-          persistSiege();
-          return null;
-        }
-        function siegeRemove(i, id) {
-          if (battle) return "攻城戦の最中は編成を変えられません。";
-          const u = siegeUnits[i];
-          if (!u || !u.soldiers.includes(id)) return "その兵士はこの部隊にいません。";
-          u.soldiers = u.soldiers.filter((x) => x !== id);
-          persistSiege();
-          return null;
-        }
+        // 兵士の入れ替えは防衛の「編成」で行う（攻城の部隊＝防衛の部隊）
+        const SIEGE_SOLDIER_NOTE = "攻城の部隊は防衛戦の部隊と同じです。兵士の補充・移籍・解散は「📋 編成」で行います。";
         // 武将を部隊に置く（null で外す）。同じ武将は1部隊だけ・負傷中は不可
         function siegeSetHero(i, id, move) {
           if (battle) return "攻城戦の最中は編成を変えられません。";
@@ -7093,7 +7150,6 @@
 
         let siegeProvinces = false, // 領土の一覧を出しているか
           siegeTab = 0,
-          siegeFilter = "all",
           siegeHeroPick = false,
           siegeNote = "";
         function renderSiege() {
@@ -7127,9 +7183,11 @@
                 .map(([t, n]) => typeLabel(t) + n)
                 .join("・")
             : "なし";
+          const sq = slotSquad(i);
           let html =
             '<div class="unit-box"><h3>' +
             SIEGE_RULES.names[i] +
+            (sq ? "（" + typeLabel(sq.type) + "）" : "") +
             ' <small class="muted">出撃順 ' +
             (i + 1) +
             "番目</small></h3><p>兵士 <b>" +
@@ -7170,13 +7228,11 @@
                   s.level +
                   "<br><small>" +
                   (s.skills.length ? s.skills.map((k) => SOLDIER_SKILLS[k].name).join("・") : "スキルなし") +
-                  '</small></span><button data-remove="' +
-                  id +
-                  '">外す</button></div>'
+                  "</small></span></div>"
                 );
               })
               .join("");
-          else html += '<p class="muted">兵士がいません。下の一覧から追加してください。</p>';
+          else html += '<p class="muted">出撃できる兵士がいません。</p>';
           $("siegeUnit").innerHTML = html + "</div>";
           $("siegePick").innerHTML = siegeProvinces
             ? provincesHtml()
@@ -7241,7 +7297,7 @@
             '<p class="muted">領土の効果：' +
             (bonusList().join("・") || "まだありません（国を取ると防衛戦が有利になります）") +
             "</p>" +
-            '<div class="card-actions"><button data-provinces-close>兵士の一覧に戻る</button></div>';
+            '<div class="card-actions"><button data-provinces-close>部隊に戻る</button></div>';
           for (const p of PROVINCE_ORDER) {
             const P = PROVINCES[p],
               C = P.castle && NPC_CASTLES[P.castle],
@@ -7298,75 +7354,33 @@
           }
           return html;
         }
+        // 攻城の部隊の兵士は防衛の部隊と同じ。ここでは説明と「編成」への入口だけ出す
         function siegeSoldierHtml(i) {
-          const ids = savedSoldierIds();
-          const pool = soldiers.filter((s) => s.alive && ids.has(s.id));
-          const kinds = Object.keys(SOLDIER_TYPES).filter((t) => pool.some((s) => s.type === t));
-          if (siegeFilter !== "all" && !kinds.includes(siegeFilter)) siegeFilter = "all";
-          const list = pool
-            .filter((s) => siegeFilter === "all" || s.type === siegeFilter)
-            .sort((a, b) => !!b.name - !!a.name || b.level - a.level || b.xp - a.xp || a.id - b.id);
-          const full = siegeUnits[i].soldiers.length >= SIEGE_RULES.maxSoldiers;
-          let html =
-            '<h3 style="margin:12px 0 0;font-size:16px">兵士を追加</h3>' +
-            '<div class="filters">' +
-            ["all", ...kinds]
-              .map(
-                (t) =>
-                  '<button data-filter="' +
-                  t +
-                  '" class="' +
-                  (siegeFilter === t ? "active" : "") +
-                  '">' +
-                  (t === "all" ? "すべて" : typeIcon(t) + typeLabel(t)) +
-                  "</button>",
-              )
-              .join("") +
-            "</div>";
-          if (!pool.length)
-            return (
-              html +
-              '<p class="muted">編成できる兵士がいません。防衛戦でウェーブをクリアすると、生き残った兵士が保存され、ここで選べます。</p>'
-            );
-          html += list
-            .map((s) => {
-              const where = siegeUnitOf(s.id),
-                q = squadById(s.squadId);
-              let btn;
-              if (where === i) btn = '<button data-remove="' + s.id + '">外す</button>';
-              else if (full) btn = "<button disabled>満員</button>";
-              else if (where >= 0) btn = '<button data-move="' + s.id + '">移す</button>';
-              else btn = '<button data-add="' + s.id + '">＋追加</button>';
-              return (
-                '<div class="pick-row' +
-                (s.name ? " named" : "") +
-                '"><span><b>' +
-                esc(soldierName(s)) +
-                "</b> " +
-                typeIcon(s.type) +
-                typeLabel(s.type) +
-                " Lv" +
-                s.level +
-                "<br><small>" +
-                (s.skills.length ? s.skills.map((k) => SOLDIER_SKILLS[k].name).join("・") : "スキルなし") +
-                "／攻城 " +
-                (where >= 0 ? SIEGE_RULES.names[where] : "未所属") +
-                "・防衛 " +
-                (q ? squadName(q) : "なし") +
-                "</small></span>" +
-                btn +
-                "</div>"
-              );
-            })
-            .join("");
-          return html;
+          const q = slotSquad(i),
+            unsaved = q ? roster(q).filter((s) => !siegeEligible(s.id)).length : 0;
+          return (
+            '<p class="muted">' +
+            SIEGE_SOLDIER_NOTE +
+            "</p>" +
+            (unsaved
+              ? '<p class="muted">雇ったばかりの兵士 ' +
+                unsaved +
+                " 人は、防衛戦でウェーブをクリアすると出撃できます。</p>"
+              : "") +
+            (q
+              ? ""
+              : '<p class="muted">' +
+                SIEGE_RULES.names[i] +
+                "はまだありません。防衛戦で「＋ 雇う」から部隊を雇うと、空いている枠に入ります。</p>") +
+            '<div class="card-actions"><button data-organize>📋 編成を開く</button></div>'
+          );
         }
         function siegeHeroHtml(i) {
           const ids = ownedIds();
           let html =
             '<h3 style="margin:12px 0 0;font-size:16px">武将を選ぶ</h3>' +
             '<p class="muted">各部隊に1人まで。同じ武将は1部隊だけ。負傷中の武将は配置できません（防衛での配属はそのまま）。</p>' +
-            '<div class="card-actions"><button data-hero-cancel>兵士の一覧に戻る</button></div>';
+            '<div class="card-actions"><button data-hero-cancel>部隊に戻る</button></div>';
           if (!ids.length) return html + '<p class="muted">武将がいません。武将ガチャで仲間にできます。</p>';
           return (
             html +
@@ -7452,13 +7466,11 @@
             err = setTarget(d.target);
             changed = false;
             if (!err) siegeNote = "🎯 攻略目標を " + NPC_CASTLES[d.target].name + " にしました";
-          } else if (d.filter) {
-            siegeFilter = d.filter;
-            changed = false;
-          } else if (d.add) err = siegeAdd(i, +d.add, false);
-          else if (d.move) err = siegeAdd(i, +d.move, true);
-          else if (d.remove) err = siegeRemove(i, +d.remove);
-          else if (d.heroPick !== undefined) {
+          } else if (d.organize !== undefined) {
+            closeSiege();
+            openSquadSheet();
+            return;
+          } else if (d.heroPick !== undefined) {
             siegeHeroPick = true;
             siegeProvinces = false;
             changed = false;
@@ -7890,7 +7902,6 @@
         // 防衛戦の必殺技の種類 → 攻城戦の型
         const SIEGE_SKILL_OF = {
           triple: "strike",
-          bossStrike: "strike",
           snipe: "strike",
           focus: "strike",
           pursuit: "strike",
@@ -7905,20 +7916,21 @@
           poisonField: "area",
           trap: "area",
           stages: "rally",
-          desperate: "rally",
           rally: "rally",
-          blockBoost: "rally",
           lastStand: "guard",
           rangedShield: "guard",
           taunt: "guard",
           suppression: "guard",
           seal: "guard",
           fear: "guard",
+          redGuard: "guard", // タンク型（幸村・忠勝・氏康）
+          guardAura: "guard",
+          allShield: "guard",
           healingField: "heal",
           firstAid: "heal",
           rest: "heal",
           supply: "heal",
-          redeploy: "heal",
+          greatAid: "heal",
         };
         const siegeSkillType = (id) => SIEGE_SKILL_OF[WARLORDS[id].skill.kind] || "rally";
         const siegeSkillText = (id) =>
@@ -8327,6 +8339,7 @@
               releaseBlocks(q);
               releaseHeroFromSquad(q);
               squads = squads.filter((x) => x !== q);
+              fixSlots(); // 空いた枠に予備隊を入れる
             }
           refreshSiege();
           B.report = report;
@@ -9189,6 +9202,7 @@
             }),
             squadApi: {
               members,
+              squadName,
               soldierStats,
               rankTitle,
               titleText,
@@ -9230,8 +9244,6 @@
               unitCost,
               repairCost,
               siege: () => siegeUnits,
-              siegeAdd,
-              siegeRemove,
               siegeSetHero,
               siegeSummary,
               siegeEligible,

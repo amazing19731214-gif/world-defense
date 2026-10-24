@@ -779,7 +779,7 @@ const lay = await ev(page, () => ({
 }));
 check(
   "4つのボタンが横に並び、はみ出さない（390px）",
-  !lay.hScroll && lay.h >= 44 && lay.panelH <= 330,
+  !lay.hScroll && lay.h >= 44 && lay.panelH <= 400,
   JSON.stringify(lay),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "s4-heal.png"), fullPage: true });

@@ -91,12 +91,12 @@ let r = await ev(page, () => {
   return { n: Object.keys(W).length, count, types: Object.keys(a.SIEGE_SKILL) };
 });
 check(
-  "30人すべてが5つの型のどれかになる（一撃9・範囲6・鼓舞4・守り6・手当て5）",
+  "30人すべてが5つの型のどれかになる（一撃8・範囲6・鼓舞2・守り9・手当て5）",
   r.n === 30 &&
-    r.count.strike === 9 &&
+    r.count.strike === 8 &&
     r.count.area === 6 &&
-    r.count.rally === 4 &&
-    r.count.guard === 6 &&
+    r.count.rally === 2 &&
+    r.count.guard === 9 &&
     r.count.heal === 5,
   JSON.stringify(r),
 );

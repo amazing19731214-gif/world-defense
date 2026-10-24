@@ -336,7 +336,18 @@ const r1 = await page.evaluate(() => ({
   n: WD_DEBUG.squadApi.members(WD_DEBUG.state().squads[0]).length,
 }));
 check("タップで新兵を1人雇って補充（戦死者は戻らない）", r1.n === r0.n + 1 && r0.gold - r1.gold === 24);
-check("5人そろうと「＋補充」は消える", !(await page.isVisible("[data-recruit-chip]")));
+await page.evaluate(() => {
+  const a = WD_DEBUG.squadApi,
+    q = WD_DEBUG.state().squads[0];
+  WD_DEBUG.setGold(9999);
+  while (a.roster(q).length < 10) if (a.recruitInto(q)) break;
+});
+await page.tap("#hireToggle"); // 画面を描き直す（部隊の選択はそのまま）
+await page.tap("#hireToggle");
+check(
+  "10人そろうと「＋補充」は消える",
+  (await page.isVisible("#squadPanel")) && !(await page.isVisible("[data-recruit-chip]")),
+);
 const chipH = await page.evaluate(() =>
   Math.min(
     ...[...document.querySelectorAll("#sqMembers button")].map((b) => b.getBoundingClientRect().height),

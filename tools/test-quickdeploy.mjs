@@ -30,10 +30,10 @@ const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
 );
 const SKEY = "worldDefense.soldiers.v1";
-const TYPES = ["ashigaru", "spearman", "archer", "gunner", "medic", "cavalry", "spearman", "archer"];
+const TYPES = ["ashigaru", "spearman", "archer", "gunner"]; // 第一〜第四部隊
 const save = { version: 1, seq: 40, squadSeq: 8, squads: [], soldiers: [], fallen: [] };
 TYPES.forEach((type, i) => {
-  save.squads.push({ id: i + 1, type });
+  save.squads.push({ id: i + 1, type, slot: i });
   for (let k = 0; k < 5; k++)
     save.soldiers.push({ id: i * 5 + k + 1, type, squadId: i + 1, level: i + 2 + (k % 2) });
 });
@@ -140,12 +140,13 @@ check(
 );
 c = await chips(page);
 check(
-  "保有している8部隊すべてをチップで表示",
-  c.length === 8 && c.map((x) => x.id).join() === "1,2,3,4,5,6,7,8",
+  "第一〜第四部隊をチップで表示",
+  c.length === 4 && c.map((x) => x.id).join() === "1,2,3,4" && /第一/.test(c[0].text),
+  JSON.stringify(c.map((x) => x.text)),
 );
 check(
-  "チップに人数と平均Lv（足軽隊 #1：Lv2・3・2・3・2 → 5人・Lv2）",
-  /5人 Lv2/.test(c[0].text) && /足軽隊 #1・待機中・5人・平均Lv2/.test(c[0].label),
+  "チップに人数と平均Lv（第一部隊：Lv2・3・2・3・2 → 5人・Lv2）",
+  /5人 Lv2/.test(c[0].text) && /第一部隊（足軽）・待機中・5人・平均Lv2/.test(c[0].label),
   JSON.stringify(c[0]),
 );
 check("チップに兵種の絵", (await page.$$('[data-chip="1"] img')).length === 1);
@@ -166,7 +167,11 @@ let r = await page.evaluate(() => ({
   toast: document.getElementById("toast").textContent,
 }));
 check("チップを押すと配置する部隊に選ばれる", r.place === 2, JSON.stringify(r));
-check("道をタップするよう画面の上に表示", /槍兵隊 #2：道をタップして配置しよう/.test(r.toast), r.toast);
+check(
+  "道をタップするよう画面の上に表示",
+  /第二部隊（槍兵）：道をタップして配置しよう/.test(r.toast),
+  r.toast,
+);
 check("選んだチップが目立つ", /active/.test((await chips(page))[1].cls));
 if (shots) await page.screenshot({ path: path.join(shots, "q1-select.png") });
 await tapMap(page, 650, 300);
@@ -206,7 +211,7 @@ r = await page.evaluate(() => ({
 }));
 check(
   "出陣中のチップを押すと部隊パネルが開く（撤退・治療）",
-  r.panel && /槍兵隊 #2/.test(r.title),
+  r.panel && /第二部隊（槍兵）/.test(r.title),
   JSON.stringify(r),
 );
 check("配置の選択は解除", r.place === null);
@@ -238,9 +243,9 @@ check(
   /撤退したばかり/.test(await page.textContent("#toast")) &&
     (await page.evaluate(() => WD_DEBUG.state().placeSquadId)) === null,
 );
-await page.tap('[data-chip="5"]');
+await page.tap('[data-chip="4"]');
 await tapMap(page, 650, 300);
-check("ウェーブ中でもチップから配置できる", (await squadState(page, 5)).state === "deployed");
+check("ウェーブ中でもチップから配置できる", (await squadState(page, 4)).state === "deployed");
 
 console.log("■ 画面（390px）");
 if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle");

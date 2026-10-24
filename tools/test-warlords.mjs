@@ -299,7 +299,7 @@ await tapMap(page, 650, 280);
 await page.tap("#sqHero");
 check(
   "部隊パネルから武将配属画面",
-  (await page.isVisible("#heroSheet")) && /足軽隊 #1/.test(await page.textContent("#sheetTitle")),
+  (await page.isVisible("#heroSheet")) && /第一部隊（足軽）/.test(await page.textContent("#sheetTitle")),
 );
 check("配属ボタンは「この部隊に配属」", /この部隊に配属/.test(await page.textContent("#heroList")));
 await page.tap('[data-assign="yukimura"]');
@@ -455,7 +455,11 @@ const disband = await page.evaluate(() => {
   const s = WD_DEBUG.state(),
     api = WD_DEBUG.squadApi,
     q = s.squads.find((q) => q.type === "ashigaru");
-  const errs = api.members(q).map((m) => api.transferSoldier(m.id, "new"));
+  // 1人目で新しい部隊を作り、残りもその部隊へ移す（部隊は4つまでなので、毎回新しい部隊は作らない）
+  const list = api.members(q),
+    errs = [api.transferSoldier(list[0].id, "new")],
+    to = WD_DEBUG.state().squads.find((x) => x !== q && x.type === "ashigaru");
+  for (const m of list.slice(1)) errs.push(api.transferSoldier(m.id, to.id));
   return {
     exists: WD_DEBUG.state().squads.includes(q),
     hero: WD_DEBUG.heroApi.heroState().kenshin.squad,

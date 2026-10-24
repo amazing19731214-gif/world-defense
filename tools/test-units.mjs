@@ -436,32 +436,28 @@ check(
 );
 await page.tap("#soldierClose");
 
-console.log("■ 攻城編成");
-await page.tap("#siege");
-const filters = await page.$$eval("#siegePick .filters button", (bs) => bs.map((b) => b.textContent));
-check(
-  "兵種の絞り込みに鉄砲兵・衛生兵",
-  filters.some((f) => /鉄砲兵/.test(f)) && filters.some((f) => /衛生兵/.test(f)),
-  filters.join(),
-);
-await page.tap('#siegePick .filters button:has-text("衛生兵")');
-await page.tap("#siegePick [data-add]");
-await page.tap('#siegePick .filters button:has-text("鉄砲兵")');
-await page.tap("#siegePick [data-add]");
+console.log("■ 攻城編成（防衛の部隊と同じ）");
 r = await ev(page, () => {
-  const s = WD_DEBUG.state();
-  return WD_DEBUG.squadApi.siege()[0].soldiers.map((id) => s.soldiers.find((x) => x.id === id).type);
+  const s = WD_DEBUG.state(),
+    type = (id) => s.soldiers.find((x) => x.id === id).type;
+  return WD_DEBUG.squadApi.siege().map((u) => [...new Set(u.soldiers.map(type))].join("+"));
 });
-check("攻城編成に衛生兵・鉄砲兵を登録", r.join() === "medic,gunner", r.join());
-text = await page.textContent("#siegeUnit");
-check("部隊の兵種の内訳に表示", /衛生兵1/.test(text) && /鉄砲兵1/.test(text), text.slice(0, 100));
-if (shots) await page.screenshot({ path: path.join(shots, "u2-siege.png") });
-await page.goto(url);
-await page.waitForFunction(() => window.WD_DEBUG);
 check(
-  "再読み込みしても攻城編成に残る",
-  (await ev(page, () => WD_DEBUG.squadApi.siege()[0].soldiers.length)) === 2,
+  "鉄砲兵・衛生兵の部隊がそのまま攻城の部隊になる（1部隊1兵種）",
+  r.includes("gunner") && r.includes("medic"),
+  JSON.stringify(r),
 );
+await page.tap("#siege");
+const tab = r.indexOf("gunner");
+await page.tap(`#siegeTabs [data-unit="${tab}"]`);
+text = await page.textContent("#siegeUnit");
+check(
+  "攻城編成の画面に部隊の兵種（鉄砲兵）",
+  /（鉄砲兵）/.test(text) && /兵種 鉄砲兵\d/.test(text),
+  text.slice(0, 100),
+);
+if (shots) await page.screenshot({ path: path.join(shots, "u2-siege.png") });
+await page.tap("#siegeClose");
 
 console.log("■ 画面（390px）");
 if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle"); // 雇用ボタンを開いて測る

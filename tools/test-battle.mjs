@@ -32,14 +32,15 @@ const browser = await chromium.launch(
 const SKEY = "worldDefense.soldiers.v1",
   FKEY = "worldDefense.siege.v1",
   WKEY = "worldDefense.warlords.v1";
-// 保存済みの兵士 40人（8部隊×5人・兵種いろいろ・Lv5）。#1 は名前付き
-const types = ["spearman", "ashigaru", "archer", "gunner", "cavalry", "medic", "spearman", "ashigaru"];
+// 保存済みの兵士 40人（第一〜第四部隊×10人・Lv5）。#1 は名前付き
+// 防衛戦と攻城戦は同じ部隊：第一 槍兵、第二 騎兵、第三 弓兵、第四 足軽
+const types = ["spearman", "cavalry", "archer", "ashigaru"];
 function makeSave(level) {
-  const save = { version: 1, seq: 40, squadSeq: 8, squads: [], soldiers: [], fallen: [] };
-  for (let q = 1; q <= 8; q++) {
-    save.squads.push({ id: q, type: types[q - 1] });
-    for (let k = 0; k < 5; k++) {
-      const id = (q - 1) * 5 + k + 1;
+  const save = { version: 1, seq: 40, squadSeq: 4, squads: [], soldiers: [], fallen: [] };
+  for (let q = 1; q <= 4; q++) {
+    save.squads.push({ id: q, type: types[q - 1], slot: q - 1 });
+    for (let k = 0; k < 10; k++) {
+      const id = (q - 1) * 10 + k + 1;
       save.soldiers.push({
         id,
         type: types[q - 1],
@@ -51,15 +52,10 @@ function makeSave(level) {
   }
   return save;
 }
-// 第一部隊：槍兵・足軽、第二部隊：騎兵だけ、第三部隊：弓兵・鉄砲兵・衛生兵、第四部隊：残り
+// 攻城編成で決めるのは武将だけ（兵士は部隊のまま）
 const formation = {
   version: 1,
-  units: [
-    { soldiers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], hero: "yukimura" },
-    { soldiers: [21, 22, 23, 24, 25], hero: null },
-    { soldiers: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 26, 27], hero: null },
-    { soldiers: [31, 32, 33, 34, 35, 36, 37, 38, 39, 40], hero: "kanbei" },
-  ],
+  units: [{ hero: "yukimura" }, { hero: null }, { hero: null }, { hero: "kanbei" }],
 };
 const heroes = { version: 1, owned: { yukimura: 1, kanbei: 1 }, tickets: 0, history: [] };
 async function newContext(seeds) {
@@ -147,8 +143,8 @@ r = await page.evaluate(() => {
     a = WD_DEBUG.squadApi;
   return {
     transfer: a.transferSoldier(s.soldiers[1].id, "new"),
-    edit: a.siegeRemove(0, 1),
-    disband: a.disbandSquad(s.squads[7]),
+    edit: a.siegeSetHero(0, null),
+    disband: a.disbandSquad(s.squads[3]),
   };
 });
 check(
