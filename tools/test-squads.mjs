@@ -343,8 +343,10 @@ await step(page, 2);
 st = await S(page);
 check("攻撃で経験値を獲得", so(st, L2).xp > xp0 || so(st, L2).level > 1);
 await clearEnemies(page);
-// 敵を出す前の撃破数を同じ評価の中で数える（評価の合間にも画面の更新で戦闘が進むため）
+// 敵を出す前の撃破数を同じ評価の中で数える（評価の合間にも画面の更新で戦闘が進むため）。
+// 近くの弓の塔が先に倒すと兵士の撃破にならないので、この確認の間は塔を撃たせない
 const killsBefore = await page.evaluate(() => {
+  for (const t of WD_DEBUG.state().towers) t.cd = 99;
   const n = WD_DEBUG.state().soldiers.reduce((n, m) => n + m.kills, 0);
   WD_DEBUG.addEnemy({ kind: "goblin", d: 694 + 60, hp: 3, speed: 0, reward: 10 });
   return n;
@@ -354,6 +356,7 @@ st = await S(page);
 check(
   "撃破数が1増える（撃破した兵士に記録）",
   st.soldiers.reduce((n, m) => n + m.kills, 0) === killsBefore + 1,
+  JSON.stringify({ before: killsBefore, after: st.soldiers.reduce((n, m) => n + m.kills, 0), enemies: st.enemies }),
 );
 const [L3, L4] = sq(st, 1).alive.slice(1, 3);
 const lv = await page.evaluate((id) => {
@@ -487,9 +490,22 @@ check(
 st = await S(page);
 const ash = st.squads.find((q) => q.type === "ashigaru");
 const arc = st.squads.find((q) => q.type === "archer");
+const mixed = await page.evaluate(
+  ([sid, ashId, arcId]) => {
+    // 弓兵を足軽隊へ移して混成部隊にし、確かめてから元へ戻す
+    const a = WD_DEBUG.squadApi,
+      find = (id) => WD_DEBUG.state().squads.find((q) => q.id === id),
+      err = a.transferSoldier(sid, ashId),
+      name = a.squadName(find(ashId)),
+      back = a.transferSoldier(sid, arcId);
+    return { err, name, back, after: a.squadName(find(ashId)) };
+  },
+  [arc.alive[0], ash.id, arc.id],
+);
 check(
-  "別の兵種の部隊には編入できない",
-  /同じ兵種/.test(await api(page, "transferSoldier", arc.alive[0], ash.id)),
+  "別の兵種の部隊にも編入できる（混成部隊になり、戻すと元の名前）",
+  mixed.err === null && /（混成）/.test(mixed.name) && mixed.back === null && /（足軽）/.test(mixed.after),
+  JSON.stringify(mixed),
 );
 const full = await page.evaluate((id) => {
   // 弓兵隊を新兵補充で10人（満員）にしてから、もう1人補充を試す

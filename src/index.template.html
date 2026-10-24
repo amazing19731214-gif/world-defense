@@ -418,6 +418,33 @@
         border-color: #ffd28a;
         color: #fff1d0;
       }
+      .recruit-pick {
+        margin: 8px 0;
+        padding: 8px;
+        border: 1px solid #b99c60;
+        border-radius: 10px;
+      }
+      .recruit-pick p {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      .recruit-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .recruit-grid button,
+      .recruit-pick > button {
+        min-height: 44px;
+        min-width: 0;
+        font-size: 14px;
+        white-space: nowrap;
+        padding: 6px 2px;
+      }
+      .recruit-pick > button {
+        width: 100%;
+      }
       .squad-chip.wait {
         opacity: 0.55;
       }
@@ -1075,7 +1102,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v25（防衛戦と攻城戦で同じ4部隊・攻城戦の武将の必殺技）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v26（混成部隊・防衛戦と攻城戦で同じ4部隊）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2771,7 +2798,7 @@
         const towerPassive = (t) => { const h = heroOn(t); return h ? WARLORDS[h.id].towerPassive : {}; };
         function medicSupport(q) {
           const out = { heal: 1, range: 1, interval: 1 };
-          if (!q || q.type !== "medic") return out;
+          if (!q || !roster(q).some((s) => s.type === "medic")) return out;
           const own = squadPassive(q);
           out.heal *= own.healMul || 1;
           out.interval *= own.healInterval || 1;
@@ -2904,7 +2931,7 @@
           if (normal && h) {
             const token = (s ? "s" + s.id : "tower") + ":" + enemyToken(e), fresh = !seenTarget(h, token);
             if (q && h.id === "mitsuhide" && e.hp >= e.max - 0.001) damage *= favorite(h, q) ? 1.5 : 1.25;
-            if (h.id === "masanori" && fresh && (!q || SOLDIER_TYPES[q.type].block)) damage *= t ? 1.3 : favorite(h, q) ? 1.35 : 1.2;
+            if (h.id === "masanori" && fresh && (!q || hasType(q, (c) => c.block))) damage *= t ? 1.3 : favorite(h, q) ? 1.35 : 1.2;
             if (h.id === "masamune" && fresh) {
               if (s) s.cd *= favorite(h, q) ? 0.55 : 0.75;
               else if (t) t.nextRateMul = 0.65;
@@ -2944,7 +2971,7 @@
               if (!ids.includes(s.id)) ids.push(s.id);
               if (ids.length >= 3) { ids.length = 0; dealEnemyDamage(e, raw * 0.35, source, { normal: false }); }
             }
-            if (q && h.id === "kiyomasa" && SOLDIER_TYPES[q.type].block) {
+            if (q && h.id === "kiyomasa" && hasType(q, (c) => c.block)) {
               const other = aliveEnemies().find((a) => a !== e && dist(a, e) < 30);
               if (other) dealEnemyDamage(other, raw * (favorite(h, q) ? 0.35 : 0.2), source, { normal: false });
             }
@@ -3047,7 +3074,7 @@
           return couponOwner() ? 1 - WARLORD_RULES.supplyDiscount : 1;
         }
         function consumeCoupon() { const h = couponOwner(); if (h) h.couponWave = -1; }
-        function recruitCost(q) { return unitCost(q.type); }
+        function recruitCost(q, type = q.type) { return unitCost(type); }
         function weaponPower(h) {
           if (h.tower) return towerStats(h.tower).damage;
           if (!h.squad) return 0;
@@ -3457,11 +3484,24 @@
         const roster = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
         const onField = (q) => q.state === "deployed" || q.state === "retreating";
         const fieldSquads = () => squads.filter(onField);
+        // ===== 混成部隊 =====
+        // 1部隊にいろいろな兵種を入れられる。兵士は1人ずつ自分の兵種として戦う。
+        // q.type は部隊の「主な兵種」（一番人数の多い兵種）。表示・武将の得意兵種に使う
+        const squadTypes = (q) => [...new Set(roster(q).map((s) => s.type))];
+        const isMixed = (q) => squadTypes(q).length > 1;
+        const hasType = (q, test) => members(q).some((s) => test(SOLDIER_TYPES[s.type]));
+        function refreshSquadType(q) {
+          const n = {};
+          for (const s of roster(q)) n[s.type] = (n[s.type] || 0) + 1;
+          const best = Math.max(0, ...Object.values(n));
+          if (best && n[q.type] !== best) q.type = Object.keys(n).find((t) => n[t] === best);
+        }
+        const squadTypeLabel = (q) => (isMixed(q) ? "混成" : SOLDIER_TYPES[q.type].name);
         // 部隊名は枠（第一〜第四部隊）と兵種。古い保存データから移した枠外の部隊は「予備隊」
         const squadName = (q) =>
           q.slot >= 0
-            ? SQUAD_RULES.slotNames[q.slot] + "（" + SOLDIER_TYPES[q.type].name + "）"
-            : "予備隊 #" + q.id + "（" + SOLDIER_TYPES[q.type].name + "）";
+            ? SQUAD_RULES.slotNames[q.slot] + "（" + squadTypeLabel(q) + "）"
+            : "予備隊 #" + q.id + "（" + squadTypeLabel(q) + "）";
         const slotShort = (q) => (q.slot >= 0 ? SQUAD_RULES.slotNames[q.slot].replace("部隊", "") : "予備");
         // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
         const soldierName = (s) => (s.name ? "🎖" + s.name : SOLDIER_TYPES[s.type].name + " #" + s.id);
@@ -3768,8 +3808,10 @@
           if (q.state !== "deployed") return 0;
           const list = members(q),
             extra = list.some((s) => skillSum(s, "block") > 0) ? 1 : 0; // 槍衾（部隊に1回まで）
-          const boost = SOLDIER_TYPES[q.type].block > 0 ? squadPassive(q).extraBlock || 0 : 0;
-          return Math.min(SOLDIER_TYPES[q.type].block + extra + boost, list.length);
+          // 混成部隊は、生きている兵士の兵種の中で一番多い足止め数（槍兵が全員倒れると減る）
+          const base = Math.max(0, ...list.map((s) => SOLDIER_TYPES[s.type].block || 0));
+          const boost = base > 0 ? squadPassive(q).extraBlock || 0 : 0;
+          return Math.min(base + extra + boost, list.length);
         };
         const blockCount = (q) => enemies.reduce((n, e) => n + (e.blockedBy === q ? 1 : 0), 0);
         // 足止めの解除。撤退・全滅・リセットのときに必ず呼ぶ
@@ -3785,7 +3827,7 @@
             if (e.gone || e.blockedBy || e.hp <= 0 || e.breakthrough > 0) continue;
             const fast = (ENEMY_VS_UNIT[e.kind] || {}).unblockable; // 敵の騎兵は騎兵でしか止められない
             for (const q of squads) {
-              if (fast && !SOLDIER_TYPES[q.type].blocksCavalry) continue;
+              if (fast && !hasType(q, (c) => c.blocksCavalry)) continue;
               if (blockCount(q) >= blockCap(q) || dist(q, e) > SQUAD_RULES.blockRadius) continue;
               e.blockedBy = q;
               e.blockTime = 0;
@@ -3923,7 +3965,14 @@
                 : ""),
           );
         }
-        const retreatTimeOf = (q) => SOLDIER_TYPES[q.type].retreatTime || SQUAD_RULES.retreatTime;
+        // 撤退は一番遅い兵士に合わせる（騎兵だけの部隊は速い）
+        const retreatTimeOf = (q) =>
+          Math.max(
+            ...(members(q).length ? members(q) : roster(q)).map(
+              (s) => SOLDIER_TYPES[s.type].retreatTime || SQUAD_RULES.retreatTime,
+            ),
+            0.1,
+          );
         function orderRetreat(q) {
           if (!q || q.state !== "deployed") return;
           releaseBlocks(q);
@@ -3954,7 +4003,8 @@
             for (const s of members(q)) {
               s.cd -= dt;
               if (s.cd > 0) continue;
-              if (SOLDIER_TYPES[q.type].heal) {
+              const ct = SOLDIER_TYPES[s.type]; // 兵士ごとの兵種（混成部隊）
+              if (ct.heal) {
                 healTick(s, q); // 衛生兵は攻撃しない
                 continue;
               }
@@ -3971,7 +4021,7 @@
               q.face = target.x < q.x ? -1 : 1;
               // 敵将狙い：大将への攻撃アップ。連続攻撃：一定確率でもう1回
               const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1),
-                charge = SOLDIER_TYPES[q.type].charge;
+                charge = ct.charge;
               // 突撃（騎兵）：新しい敵への最初の一撃だけ強い
               if (charge && s.chargeTarget !== target) {
                 s.chargeTarget = target;
@@ -3985,9 +4035,9 @@
               target.hit = 0.18;
               touchHero(q);
               gainXp(s, SQUAD_RULES.xpPerHit);
-              if (SOLDIER_TYPES[q.type].block) burst(target.x, target.y, "#fff1c4", "slash");
+              if (ct.range <= 60) burst(target.x, target.y, "#fff1c4", "slash");
               else {
-                const musket = SOLDIER_TYPES[q.type].shot === "musket";
+                const musket = ct.shot === "musket";
                 // 鉄砲兵：銃口の閃光と小さな煙（塔の鉄砲と同じ演出）
                 if (musket) burst(q.x + q.face * 16, q.y - 22, "#ffe6a0", "gunsmoke");
                 if (shots.length >= 160) shots.shift();
@@ -4164,11 +4214,12 @@
           if (target !== "new") {
             if (!to) return "編入先の部隊が見つかりません。";
             if (to === from) return null;
-            if (to.type !== s.type) return "同じ兵種の部隊にだけ編入できます。";
             if (roster(to).length >= SQUAD_RULES.squadSize) return squadName(to) + " は満員です。";
           } else if (squads.length >= SQUAD_RULES.maxSquads) return "これ以上部隊を作れません。";
           if (!to) to = newSquad(s.type);
           s.squadId = to.id;
+          refreshSquadType(to);
+          if (from) refreshSquadType(from);
           logHistory(s, squadName(to) + " に編入");
           if (from && !roster(from).length) {
             releaseBlocks(from);
@@ -4199,16 +4250,19 @@
           refreshSiege();
           return null;
         }
-        function recruitInto(q) {
+        // 新兵補充。兵種を選べる（省略すると部隊の主な兵種）。違う兵種を入れると混成部隊になる
+        function recruitInto(q, type = q && q.type) {
           if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は補充できません。";
           if (!q || !squads.includes(q)) return "部隊が見つかりません。";
-          const c = SOLDIER_TYPES[q.type];
+          const c = SOLDIER_TYPES[type];
+          if (!c || !c.enabled) return "その兵種は雇えません。";
           if (roster(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
-          const price = recruitCost(q);
+          const price = recruitCost(q, type);
           if (gold < price) return "資金が足りません（" + c.name + " " + price + "G）。";
           gold -= price;
-          newSoldier(q.type, q.id);
+          newSoldier(type, q.id);
+          refreshSquadType(q);
           return null;
         }
         // 治療：ウェーブの合間にゴールドで部隊の生存兵を全回復する（戦死者は対象外＝復活しない）
@@ -4324,8 +4378,8 @@
               if (!v || typeof v !== "object") continue;
               const q = squadsIn.find((x) => x.id === v.squadId);
               const id = intIn(v.id, 1, 1e9, 0);
-              // 所属部隊が無い・兵種が違う・満員・ID重複の兵士は読み込まない
-              if (!q || q.type !== v.type || !id || ids.has(id)) continue;
+              // 所属部隊が無い・使えない兵種・満員・ID重複の兵士は読み込まない（部隊と違う兵種は混成部隊として読む）
+              if (!q || !SOLDIER_TYPES[v.type] || !SOLDIER_TYPES[v.type].enabled || !id || ids.has(id)) continue;
               if ((count[q.id] || 0) >= SQUAD_RULES.squadSize) continue;
               ids.add(id);
               count[q.id] = (count[q.id] || 0) + 1;
@@ -4390,6 +4444,7 @@
         // ウェーブクリア時：部隊に所属する生存兵をすべて保存する
         function saveRoster() {
           const live = squads.filter((q) => roster(q).length);
+          for (const q of live) refreshSquadType(q); // 戦死で主な兵種が変わることがある
           soldierSave.squads = live.map((q) => ({ id: q.id, type: q.type, slot: q.slot }));
           soldierSave.soldiers = soldiers
             .filter((s) => s.alive && live.some((q) => q.id === s.squadId))
@@ -5576,8 +5631,8 @@
           return true;
         }
         function drawSquad(q) {
-          const c = SOLDIER_TYPES[q.type],
-            list = members(q),
+          const list = members(q),
+            c = { range: Math.max(0, ...list.map((s) => SOLDIER_TYPES[s.type].range)) }, // 一番遠くまで届く兵士の射程
             retreating = q.state === "retreating";
           if (q === selectedSquad) {
             if (c.range > 60) {
@@ -6574,7 +6629,7 @@
               "</b>人</span><span>平均 <b>Lv" +
               fmt(avg) +
               "</b></span>" +
-              (SOLDIER_TYPES[q.type].block
+              (blockCap(q) || members(q).some((s) => SOLDIER_TYPES[s.type].block)
                 ? "<span>足止め <b>" + blockCount(q) + "/" + blockCap(q) + "</b></span>"
                 : "<span>足止めなし</span>"),
           );
@@ -6696,7 +6751,8 @@
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
-        let movingSoldierId = null;
+        let movingSoldierId = null,
+          recruitPick = null; // 新兵補充で兵種を選んでいる部隊
         function squadStateText(q) {
           return q.state === "deployed"
             ? "配置中"
@@ -6713,7 +6769,7 @@
             ? soldierName(moving) + " の編入先を選んでください。"
             : playing
               ? "ウェーブ中は配置・撤退のみ。補充と移籍はウェーブの合間にできます。"
-              : "補充（雇用）と移籍ができます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
+              : "補充（兵種を選んで雇用）と移籍ができます。兵種を混ぜた混成部隊もOK。1部隊" + SQUAD_RULES.squadSize + "人まで。";
           let html = "";
           if (movingSoldierId)
             html +=
@@ -6725,14 +6781,14 @@
               c = SOLDIER_TYPES[q.type];
             let acts = "";
             if (moving) {
-              if (q.type === moving.type && q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
+              if (q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
             } else {
               if (q.state === "reserve" && !q.locked)
                 acts += '<button data-place="' + q.id + '">配置する</button>';
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
-              if (!playing && list.length < SQUAD_RULES.squadSize)
-                acts += '<button data-recruit="' + q.id + '">新兵補充 ' + recruitCost(q) + "G</button>";
+              if (!playing && list.length < SQUAD_RULES.squadSize && recruitPick !== q.id)
+                acts += '<button data-recruit="' + q.id + '">新兵補充…</button>';
               if (!playing && q.state === "reserve")
                 acts += '<button data-disband="' + q.id + '">解散</button>';
               if (!playing && healCost(q))
@@ -6774,6 +6830,28 @@
                 )
                 .join("") +
               (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
+              // 新兵補充：兵種を選ぶ（ほかの操作と分けて並べる）
+              (!moving && !playing && recruitPick === q.id && list.length < SQUAD_RULES.squadSize
+                ? '<div class="recruit-pick"><p>補充する兵種を選ぶ（1人ずつ・あと' +
+                  (SQUAD_RULES.squadSize - list.length) +
+                  "人）</p><div class=\"recruit-grid\">" +
+                  enabledUnitTypes()
+                    .map(
+                      (t) =>
+                        '<button data-recruit-type="' +
+                        t +
+                        '" data-recruit-to="' +
+                        q.id +
+                        '">' +
+                        SOLDIER_TYPES[t].icon +
+                        SOLDIER_TYPES[t].name +
+                        " " +
+                        recruitCost(q, t) +
+                        "G</button>",
+                    )
+                    .join("") +
+                  "</div><button data-recruit-cancel>補充をやめる</button></div>"
+                : "") +
               "</div>";
           }
           const fallen = soldiers.filter((s) => !s.alive);
@@ -6807,6 +6885,7 @@
         }
         function openSquadSheet() {
           movingSoldierId = null;
+          recruitPick = null;
           renderSquadSheet();
           $("squadSheet").hidden = false;
           $("squadClose").focus();
@@ -6830,9 +6909,15 @@
             err = transferSoldier(movingSoldierId, d.moveTo === "new" ? "new" : +d.moveTo);
             if (!err) msg(soldierName(soldierById(movingSoldierId)) + " を編入した。");
             movingSoldierId = null;
+          } else if (d.recruitCancel !== undefined) {
+            recruitPick = null;
+          } else if (d.recruitType) {
+            // 兵種を選んで補充（続けて同じ部隊に補充できるよう、選ぶ画面は開いたまま）
+            const q = squadById(+d.recruitTo);
+            err = recruitInto(q, d.recruitType);
+            if (!err) msg(squadName(q) + " に" + SOLDIER_TYPES[d.recruitType].name + "を1人補充した。");
           } else if (d.recruit) {
-            err = recruitInto(squadById(+d.recruit));
-            if (!err) msg("新兵を補充した。");
+            recruitPick = +d.recruit; // まず兵種を選ぶ
           } else if (d.disband) {
             const q = squadById(+d.disband),
               named = q ? roster(q).filter((s) => s.name) : [];
@@ -7187,7 +7272,7 @@
           let html =
             '<div class="unit-box"><h3>' +
             SIEGE_RULES.names[i] +
-            (sq ? "（" + typeLabel(sq.type) + "）" : "") +
+            (sq ? "（" + squadTypeLabel(sq) + "）" : "") +
             ' <small class="muted">出撃順 ' +
             (i + 1) +
             "番目</small></h3><p>兵士 <b>" +
@@ -9212,6 +9297,10 @@
               orderRetreat,
               hireSquad,
               blockCount,
+              blockCap,
+              retreatTimeOf,
+              isMixed,
+              assignBlocks,
               gainXp,
               roster,
               nameSoldier,
@@ -9264,6 +9353,7 @@
             // 演出の種類（テスト用）
             fx: () => ({ effects: effects.map((e) => e.kind), shots: shots.map((x) => x.type) }),
             // 指定した敵を追加（テスト用）。d は道に沿った距離
+            pathAt: (path, d) => pathAt(path, d),
             addEnemy: (o) => {
               const e = Object.assign(
                 {

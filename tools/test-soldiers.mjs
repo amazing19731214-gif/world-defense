@@ -718,7 +718,7 @@ r = await ev(page, () => ({
 }));
 check(
   "不正な値は直して読み込む（Lv上限・重複/不明/兵種違いのスキル・名前の記号）",
-  r.soldiers.length === 2 &&
+  r.soldiers.length === 3 &&
     r.soldiers[0].level === 30 &&
     r.soldiers[0].xp === 0 &&
     r.soldiers[0].skills.join() === "longShot" &&
@@ -727,8 +727,9 @@ check(
   JSON.stringify(r.soldiers),
 );
 check(
-  "ID重複・兵種違い・存在しない部隊の兵士は読み込まない／Lv10未満の名前は外す",
-  r.soldiers[1].id === 4 && r.soldiers[1].name === null,
+  "部隊と違う兵種の兵士は混成部隊として読み込む／ID重複・存在しない部隊の兵士は読み込まない／Lv10未満の名前は外す",
+  r.soldiers.map((x) => x.id).join() === "1,2,4" && r.soldiers[2].name === null,
+  JSON.stringify(r.soldiers.map((x) => x.id)),
 );
 check("英霊名鑑の不正な記録は除く", r.fallen.length === 1 && r.fallen[0].name === "英霊" && r.squads === 1);
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
