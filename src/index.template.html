@@ -991,7 +991,6 @@
           </div>
         </div>
       </header>
-      <div id="heroTargetBar" class="panel" hidden><p id="heroTargetText" role="status"></p><button id="heroTargetCancel">対象選択をキャンセル</button></div>
       <p id="counterBanner" class="counter-banner" role="status" hidden></p>
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
@@ -1254,7 +1253,7 @@
       "cooldown": 40,
       "target": "enemy"
     },
-    "skillText": "標的へ威力90%の集中射撃を3回。倒したら別の敵へ切替。",
+    "skillText": "自動で選んだ標的へ威力90%の集中射撃を3回。倒したら別の敵へ切替。",
     "siegePassive": {
       "damageMul": 1.25,
       "defMul": 1,
@@ -1454,7 +1453,7 @@
       "heal": 0.2,
       "regen": 0.03
     },
-    "skillText": "指定地点の半径100の生存兵を即時20%回復し、8秒間、毎秒最大HPの3%回復。戦死者は復活しません。",
+    "skillText": "自動選択した地点の半径100の生存兵を即時20%回復し、8秒間、毎秒最大HPの3%回復。戦死者は復活しません。",
     "siegePassive": {
       "damageMul": 1,
       "defMul": 1,
@@ -1484,7 +1483,7 @@
       "cooldown": 36,
       "target": "road"
     },
-    "skillText": "指定地点までの直線上へ威力140%の攻撃と45の押し戻し。騎兵配属時は部隊も地点へ移動。",
+    "skillText": "自動選択した地点までの直線上へ威力140%の攻撃と45の押し戻し。騎兵配属時は部隊も地点へ移動。",
     "siegePassive": {
       "damageMul": 1.1,
       "defMul": 1,
@@ -1670,7 +1669,7 @@
       "cooldown": 35,
       "target": "road"
     },
-    "skillText": "指定地点への前方範囲を威力160%で薙ぎ、敵を道に沿って60押し戻す。大将は20。",
+    "skillText": "自動選択した地点への前方範囲を威力160%で薙ぎ、敵を道に沿って60押し戻す。大将は20。",
     "siegePassive": {
       "damageMul": 1.2,
       "defMul": 1,
@@ -1700,7 +1699,7 @@
       "cooldown": 38,
       "target": "heal"
     },
-    "skillText": "指定した生存兵1人または塔1基の最大HPの45%を回復。戦死・全壊は対象外。",
+    "skillText": "範囲内でHP割合が最も低い生存兵1人または塔1基の最大HPの45%を回復。戦死・全壊は対象外。",
     "siegePassive": {
       "damageMul": 1,
       "defMul": 1,
@@ -1730,7 +1729,7 @@
       "cooldown": 38,
       "target": "ally"
     },
-    "skillText": "指定した味方部隊の半径80へ威力130%の攻撃と押し戻し。騎兵配属時は近くの空いた道へ救援移動。",
+    "skillText": "自動選択した味方部隊の半径80へ威力130%の攻撃と押し戻し。騎兵配属時は近くの空いた道へ救援移動。",
     "siegePassive": {
       "damageMul": 1.15,
       "defMul": 1.2,
@@ -2096,7 +2095,7 @@
       "cooldown": 38,
       "target": "road"
     },
-    "skillText": "指定地点への直線上の敵を貫通攻撃。先頭は威力220%、後続は150%。",
+    "skillText": "自動選択した地点への直線上の敵を貫通攻撃。先頭は威力220%、後続は150%。",
     "siegePassive": {
       "damageMul": 1.1,
       "defMul": 1,
@@ -2754,7 +2753,7 @@
           enemyArmor: { goblin: 0, slime: 0, wolf: 3, knight: 10, dragon: 0, boss: 16 },
           maxExtraGold: 10, extraGoldChance: 0.2, supplyDiscount: 0.3,
         };
-        let combatClock = 0, enemySerial = 0, pendingSkillTarget = null;
+        let combatClock = 0, enemySerial = 0;
         const aliveEnemies = () => enemies.filter((e) => !e.gone && e.hp > 0);
         const heroHas = (h, id) => h && h.id === id;
         const favorite = (h, q) => !!(h && q && WARLORDS[h.id].favorite === q.type);
@@ -2855,7 +2854,6 @@
           h.barriers = null;
           h.volleysLeft = 0;
           h.field = h.skillTarget = null;
-          if (pendingSkillTarget && pendingSkillTarget.h === h) cancelHeroTarget();
         }
         function touchHero(target) {
           const h = towers.includes(target) ? heroOn(target) : heroOnSquad(target);
@@ -3267,14 +3265,6 @@
           for (const t of towers) if (!t.destroyed) { const stage = stagedBonus(t); if (stage.regen) healTarget(t, towerMaxHp(t) * stage.regen * dt, null, true); }
         }
         function drawWarlordFields() {
-          if (pendingSkillTarget) {
-            const h = pendingSkillTarget.h, pos = heroPos(h);
-            if (pos) {
-              const radius = WARLORDS[h.id].skill.target === "enemy" ? Math.max(skillRange(h), 180) : WARLORD_RULES.targetRange;
-              ctx.save(); ctx.setLineDash([8, 6]); ctx.strokeStyle = "#ffe0a5dd"; ctx.fillStyle = "#ffe0a512"; ctx.lineWidth = 2;
-              ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
-            }
-          }
           for (const h of ownedHeroes()) {
             if (h.active <= 0 || !h.field) continue;
             const s = WARLORDS[h.id].skill, area = ["ambush", "trap", "suppression", "healingField", "greatAid", "guardAura", "allShield"].includes(s.kind);
@@ -3285,38 +3275,46 @@
             ctx.font = "bold 14px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#fff4cd"; ctx.fillText(s.kind === "trap" ? "罠" : s.kind === "ambush" ? "伏兵" : s.kind === "healingField" || s.kind === "greatAid" ? "救護" : s.kind === "guardAura" ? "守護" : s.kind === "allShield" ? "盾" : "制圧", h.field.x, h.field.y - 8);ctx.restore();
           }
         }
-        function cancelHeroTarget() {
-          if (!pendingSkillTarget) return;
-          paused = pendingSkillTarget.paused;
-          pendingSkillTarget = null;
-          $("heroTargetBar").hidden = true;
-          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
-          last = 0;
-          updateUI();
-        }
-        function beginHeroTarget(h) {
-          if (!canUseSkill(h)) return;
-          pendingSkillTarget = { h, paused };
-          paused = true;
-          $("heroTargetBar").hidden = false;
-          const target = WARLORDS[h.id].skill.target, name = WARLORDS[h.id].skill.name;
-          $("heroTargetText").textContent = "「" + name + "」：" + (target === "enemy" ? "敵をタップ" : target === "ally" ? "味方部隊をタップ" : target === "heal" ? "治療する兵士か塔をタップ" : "道の上の発動地点をタップ") + "（選択中は一時停止・範囲外は発動しません）";
-          $("pause").textContent = "▶ 対象を選択中";
-          C.scrollIntoView({ block: "center", behavior: "instant" });
-          updateUI();
-        }
-        function clickHeroTarget(x, y) {
-          const saved = pendingSkillTarget;
-          if (!saved) return false;
-          const h = saved.h, resolved = resolveSkillTarget(h, { x, y });
-          if (!resolved) { toast("対象か場所を選び直してください。発動は消費していません。"); return true; }
-          paused = saved.paused;
-          const used = useSkill(h, { x, y });
-          if (used) {
-            pendingSkillTarget = null; $("heroTargetBar").hidden = true;
-            $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止"; last = 0; updateUI();
-          } else paused = true;
-          return true;
+        // Automatic target selection never changes paused or the game clock.
+        function autoSkillInput(h) {
+          const c = WARLORDS[h.id], kind = c.skill.target, pos = heroPos(h);
+          if (!pos) return null;
+          if (!kind) return {};
+          if (kind === "enemy") {
+            const enemy = targetPriority(pos, Math.max(skillRange(h), 180), h);
+            return enemy ? { enemy } : null;
+          }
+          if (kind === "heal") {
+            const candidates = [];
+            for (const q of fieldSquads()) if (dist(pos, q) <= WARLORD_RULES.targetRange)
+              for (const m of members(q)) if (m.hp > 0 && m.hp < rawMaxHp(m)) candidates.push({ target: m, pos: q, ratio: m.hp / rawMaxHp(m) });
+            for (const t of towers) if (!t.destroyed && dist(pos, t) <= WARLORD_RULES.targetRange && towerHp(t) < towerMaxHp(t))
+              candidates.push({ target: t, pos: t, ratio: towerHp(t) / towerMaxHp(t) });
+            candidates.sort((a, b) => a.ratio - b.ratio || dist(pos, a.pos) - dist(pos, b.pos));
+            return candidates.length ? { heal: candidates[0].target } : null;
+          }
+          if (kind === "ally") {
+            const allies = fieldSquads().filter((q) => members(q).length && dist(pos, q) <= WARLORD_RULES.targetRange)
+              .sort((a, b) => squadHealthRatio(a) - squadHealthRatio(b) || blockCount(b) - blockCount(a) || dist(pos, a) - dist(pos, b));
+            for (const ally of allies) if (resolveSkillTarget(h, { ally })) return { ally };
+            return null;
+          }
+          const points = c.skill.kind === "healingField"
+            ? fieldSquads().filter((q) => members(q).length && dist(pos, q) <= WARLORD_RULES.targetRange).sort((a, b) => squadHealthRatio(a) - squadHealthRatio(b))
+            : aliveEnemies().filter((e) => dist(pos, e) <= WARLORD_RULES.targetRange).sort((a, b) => b.d - a.d);
+          const candidates = points.map((v) => ({ x: v.x, y: v.y }));
+          if (["healingField", "ambush", "trap"].includes(c.skill.kind)) candidates.push(pos);
+          for (const point of candidates) {
+            if (resolveSkillTarget(h, { point })) return { point };
+            if (c.skill.kind === "charge") {
+              const road = projectToRoad(point.x, point.y);
+              if (road) for (const offset of [70, 140, -70, -140]) {
+                const near = pathAt(road.path, Math.max(SQUAD_RULES.noDeployFromEntry + 1, Math.min(road.total - SQUAD_RULES.noDeployBeforeCastle - 1, road.d + offset)));
+                if ((near.x - pos.x) * (point.x - pos.x) + (near.y - pos.y) * (point.y - pos.y) > 0 && resolveSkillTarget(h, { point: near })) return { point: near };
+              }
+            }
+          }
+          return null;
         }
 
         // ===== 武将：配属・解除・必殺技 =====
@@ -6151,7 +6149,6 @@
             x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
             y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
           if (battle) return; // 攻城戦の最中は防衛の操作をしない
-          if (clickHeroTarget(x, y)) return;
           // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
           const hitSquad = squadAt(x, y);
           if (hitSquad) {
@@ -6251,7 +6248,6 @@
           updateUI();
         };
         $("pause").onclick = () => {
-          if (pendingSkillTarget) return cancelHeroTarget();
           paused = !paused;
           $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
           updateUI();
@@ -6299,7 +6295,6 @@
         };
         $("reset").onclick = () => {
           if (!confirm("最初からやり直しますか？")) return;
-          cancelHeroTarget();
           combatClock = 0;
           gold = startGold();
           hp = 20;
@@ -8784,14 +8779,16 @@
           "</span>";
         const starText = (id) => "★".repeat(stars(id));
         function useSkillFrom(h) {
-          if (!h) return;
+          if (!h) return false;
           if (!canUseSkill(h)) {
             msg(playing ? "必殺技はまだ使えません。" : "必殺技はウェーブ中に使えます。");
-            return;
+            return false;
           }
-          if (WARLORDS[h.id].skill.target) beginHeroTarget(h);
-          else useSkill(h);
+          const input = autoSkillInput(h);
+          const used = input !== null && useSkill(h, input);
+          if (!used) msg("範囲内に発動できる対象がいません。再使用待ちは消費していません。");
           updateUI();
+          return used;
         }
 
         // ===== 武将一覧・配属画面（配属先は塔または部隊） =====
@@ -9011,7 +9008,7 @@
             heroes ? "skillGuideHeroes" : "skillGuideSoldiers",
           );
           $("skillGuideHint").textContent = heroes
-            ? "防衛戦の役割別スキルです。攻城戦では攻撃・防御の補正と、必殺技を5つの型（一撃・範囲攻撃・鼓舞・守りの陣・手当て）にまとめた効果になります。未所持を含む全武将を掲載。部隊用・塔用の常時効果を別々に掲載。必殺技はウェーブ中に使用できます。得意兵種は効果が高まり、対象を選ぶ技はマップをタップして発動します。回復で戦死者は復活しません。"
+            ? "防衛戦の役割別スキルです。攻城戦では攻撃・防御の補正と、必殺技を5つの型（一撃・範囲攻撃・鼓舞・守りの陣・手当て）にまとめた効果になります。未所持を含む全武将を掲載。部隊用・塔用の常時効果を別々に掲載。必殺技はウェーブ中に使用できます。得意兵種は効果が高まります。必殺技ボタンを押すと対象を自動で選び、戦闘を止めずに発動します。回復で戦死者は復活しません。"
             : "通常スキルはLv" + SQUAD_RULES.skillLevels.join("・Lv") + "で習得。固有スキルはLv" + SQUAD_RULES.uniqueLevel + "で" + Math.round(SQUAD_RULES.uniqueChance * 100) + "%の確率で習得し、最大" + SQUAD_RULES.maxSkills + "つまで。未実装のスキルは現在習得できません。";
           let cards;
           if (heroes) {
@@ -9101,9 +9098,7 @@
         $("skillGuideSoldiers").onclick = () => selectGuideKind("soldiers");
         $("skillGuideSearch").oninput = renderSkillGuide;
         $("skillGuideSheet").onclick = (ev) => { if (ev.target === $("skillGuideSheet")) closeSkillGuide(); };
-        $("heroTargetCancel").onclick = cancelHeroTarget;
         document.addEventListener("keydown", (ev) => {
-          if (pendingSkillTarget && !guideReturn && ev.key === "Escape") { ev.preventDefault(); cancelHeroTarget(); return; }
           if (!guideReturn) return;
           if (ev.key === "Escape") {
             ev.preventDefault();
@@ -9312,7 +9307,7 @@
               canUseSkill,
               squadHeroMods,
               dealEnemyDamage, heroGuard, healTarget, tickHeroes, resolveSkillTarget, absorbShield,
-              beginHeroTarget, cancelHeroTarget, recruitCost, serviceFactor, consumeCoupon,
+              autoSkillInput, useSkillFrom, recruitCost, serviceFactor, consumeCoupon,
               weaponPower, moveSquadBySkill, endSkill, WARLORD_RULES, targetPriority, afterTowerFire, drawWarlordFields,
               draw: () => draw(), clock: () => combatClock,
               injureHero,

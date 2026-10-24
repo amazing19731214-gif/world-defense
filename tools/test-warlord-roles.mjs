@@ -34,7 +34,7 @@ async function run(id,fn,mode='squad',type=null){await setup(id,mode,type);retur
 try{
  // Every configured skill requires a legal target and must work at both postings.
  for(const mode of ['squad','tower'])for(const id of ids){
-  const r=await run(id,()=>{const {A,W,h,e,q,other,t,S}=F;S.members(q)[0].hp*=.5;const target=W[h.id].skill.target;const input=target==='enemy'?{enemy:e}:target==='ally'?{ally:other}:target==='heal'?{heal:S.members(q)[0]}:target==='road'?{point:{x:620,y:300}}:undefined;const ok=A.useSkill(h,input);return {ok,cd:h.cd,expect:W[h.id].skill.cooldown};},mode);
+  const r=await run(id,()=>{const {A,W,h,e,q,other,t,S}=F;S.members(q)[0].hp*=.5;const target=W[h.id].skill.target;const input=target==='enemy'?{enemy:e}:target==='ally'?{ally:other}:target==='heal'?{heal:S.members(q)[0]}:target==='road'?{point:{x:620,y:300}}:undefined;const ok=A.useSkillFrom(h);return {ok,cd:h.cd,expect:W[h.id].skill.cooldown};},mode);
   check(id+' / '+mode+'で合法対象に必殺技を発動',r.ok&&r.cd===r.expect,r);
  }
  let r=await run('nobunaga',()=>{const {A,S,q,h,e,D}=F;const rate=S.soldierStats(S.members(q)[0]).rate;A.useSkill(h,{enemy:e});D.step(1.2);return {rate,damage:100000-e.hp,pulses:h.pulses};});
@@ -150,16 +150,19 @@ try{
  r=await run('kanetsugu',()=>{const {A,S,q,h,other,D}=F;const m=S.members(q)[0],base=S.soldierStats(m,true);A.assignHero('hideyoshi',other);const passive=S.soldierStats(m);A.useSkill(A.heroState().hideyoshi);const active=S.soldierStats(m);A.unassignHero('hideyoshi');return {base,passive,active,after:S.soldierStats(m)};});check('兼続と秀吉：回復量は1.3×1.2、間隔は0.8×0.7、解除で重複を残さない',Math.abs(r.passive.heal-r.base.heal*1.56)<.001&&Math.abs(r.active.rate-r.base.rate*.56)<.001&&Math.abs(r.after.heal-r.base.heal*1.3)<.001&&Math.abs(r.after.rate-r.base.rate*.8)<.001,r);
  r=await run('kanetsugu',()=>{const {A,S,q,other,D}=F;const m=S.members(q)[0],base=S.soldierStats(m,true);A.assignHero('hideyoshi',other);return {siege:S.soldierStats(m,true),base};});check('攻城戦用の基礎能力に防衛戦の回復支援を混入しない',r.siege.heal===r.base.heal&&r.siege.rate===r.base.rate,r);
  r=await run('hideyoshi',()=>{const {A,S,q,other,D}=F;const m=S.members(q)[0],far=S.members(other)[0],dead=S.members(q)[1];m.hp=10;far.hp=10;other.x=900;dead.hp=0;dead.alive=false;A.tickHeroes(1);return {hp:m.hp,far:far.hp,dead:dead.hp};},'tower');check('秀吉塔：生存兵だけ毎秒1%回復、範囲外には届かない',r.hp>10&&r.far===10&&r.dead===0,r);
+ // The public button casts immediately and the game keeps advancing.
  await setup('mitsuhide');
- await page.evaluate(()=>{F.A.beginHeroTarget(F.h);F.A.draw();});
- check('対象選択中は停止し案内を表示',await page.locator('#heroTargetBar').isVisible()&&await page.evaluate(()=>WD_DEBUG.state().paused));
- await page.tap('#skillGuideOpen');await page.keyboard.press('Escape');
- check('対象選択中の説明画面を閉じても選択中の停止を保つ',await page.evaluate(()=>WD_DEBUG.state().paused)&&await page.locator('#heroTargetBar').isVisible());
- await page.tap('#heroTargetCancel');check('キャンセルで再開し必殺技は未消費',await page.evaluate(()=>!WD_DEBUG.state().paused&&F.h.cd===0));
- await page.evaluate(()=>{F.A.beginHeroTarget(F.h);F.A.draw();});
- const xy=await page.evaluate(()=>{const c=document.getElementById('game'),r=c.getBoundingClientRect();return {x:r.left+c.clientLeft+700*c.clientWidth/960,y:r.top+c.clientTop+300*c.clientHeight/600};});
- await page.touchscreen.tap(xy.x,xy.y);
- check('マップの敵タップで発動して再開',await page.evaluate(()=>!WD_DEBUG.state().paused&&F.h.cd>0&&F.e.silence>0));
+ const xy=await page.evaluate(()=>{const c=document.getElementById('game'),r=c.getBoundingClientRect();return {x:r.left+c.clientLeft+650*c.clientWidth/960,y:r.top+c.clientTop+300*c.clientHeight/600};});
+ await page.touchscreen.tap(xy.x,xy.y);await page.tap('#sqSkill');
+ check('必殺技ボタン1回で自動狙撃し、一時停止も対象選択も出さない',await page.evaluate(()=>!WD_DEBUG.state().paused&&F.h.cd>0&&F.e.silence>0&&!document.getElementById('heroTargetBar')));
+ check('発動後も敵の移動・必殺技の時間が進む',await page.evaluate(()=>{const {D,A,e,h}=F;e.speed=30;const d=e.d,cd=h.cd,clock=A.clock();D.step(.2);return e.d>d&&h.cd<cd&&A.clock()>clock&&!D.state().paused;}));
+ check('敵が範囲外なら消費せず戦闘を続ける',await run('mitsuhide',()=>{const {D,A,h}=F;for(const e of D.state().enemies)e.gone=true;const used=A.useSkillFrom(h);return !used&&h.cd===0&&!D.state().paused;}));
+ check('単体回復は他部隊の瀕死の兵を自動で選ぶ',await run('hanbei',()=>{const {A,S,h,q,other}=F;const own=S.members(q)[0],m=S.members(other)[0];own.hp=S.soldierStats(own).maxHp*.6;m.hp=1;const before=own.hp;const target=A.autoSkillInput(h);const used=A.useSkillFrom(h);return target.heal===m&&used&&m.hp>1&&own.hp===before&&!F.D.state().paused;}));
+ check('回復対象が満タンなら消費しない',await run('hanbei',()=>{const {A,S,h,D}=F;const used=A.useSkillFrom(h);return !used&&h.cd===0&&!D.state().paused;}));
+ check('回復は瀕死でも戦死・範囲外の兵を選ばない',await run('hanbei',()=>{const {A,S,h,q,other}=F;const dead=S.members(q)[0];dead.hp=0;dead.alive=false;other.x=950;const far=S.members(other)[0];far.hp=1;return A.autoSkillInput(h)===null&&!A.useSkillFrom(h)&&h.cd===0;}));
+ check('救護陣は傷ついた味方の近くへ自動発動',await run('kanetsugu',()=>{const {A,S,h,other}=F;const m=S.members(other)[0];m.hp=1;const used=A.useSkillFrom(h);return used&&m.hp>1&&!F.D.state().paused;}));
+ check('手動停止中は必殺技で勝手に再開しない',await run('mitsuhide',()=>{const {A,h,D}=F;document.getElementById('pause').click();return !A.useSkillFrom(h)&&D.state().paused&&h.cd===0;}));
+ await setup('mitsuhide');await page.evaluate(()=>F.A.useSkillFrom(F.h));
  await page.tap('#skillGuideOpen');check('一覧が部隊用・塔用を分けて説明',(await page.locator('#skillGuidePanel').innerText()).includes('部隊：')&&(await page.locator('#skillGuidePanel').innerText()).includes('塔：'));
  if(process.env.SCREENSHOTS){fs.mkdirSync(process.env.SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.SCREENSHOTS,'warlords-v17-guide.png')});}
  await page.tap('#skillGuideClose');
