@@ -21,6 +21,11 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -134,10 +139,10 @@ check(
   "防衛塔の「鉄砲」とは別の兵種（塔の名前は鉄砲の塔のまま）",
   (await page.textContent('[data-t="magic"]')).includes("鉄砲") && r.g.name === "鉄砲兵",
 );
-await page.tap('[data-u="gunner"]');
+await tapHire(page, "gunner");
 check("鉄砲兵を選ぶと説明を表示", /鉄砲隊（5人・150G）/.test(await page.textContent("#msg")));
 await tapMap(page, 760, 300);
-await page.tap('[data-u="medic"]');
+await tapHire(page, "medic");
 await tapMap(page, 690, 300);
 r = await ev(page, () =>
   WD_DEBUG.state().squads.map((q) => q.type + ":" + WD_DEBUG.squadApi.members(q).length),
@@ -459,6 +464,7 @@ check(
 );
 
 console.log("■ 画面（390px）");
+if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle"); // 雇用ボタンを開いて測る
 const lay = await ev(page, () => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
   minBtn: Math.min(

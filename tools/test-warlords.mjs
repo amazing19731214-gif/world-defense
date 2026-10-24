@@ -22,6 +22,11 @@ const KEY = "worldDefense.warlords.v1";
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -287,7 +292,7 @@ const OWN = JSON.stringify({
 });
 ({ page, errors, context } = await newPage(OWN));
 await page.evaluate(() => WD_DEBUG.setGold(9000));
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(page, ...M1);
 const base = (await soldiersOf(page, 1))[0];
 await tapMap(page, 650, 280);
@@ -623,7 +628,7 @@ check("ガチャ画面のボタン 44px 以上", g.minBtn >= 44, String(g.minBtn
 check("横スクロールが出ない", !g.hScroll);
 await page.tap("#gachaClose");
 await page.evaluate(() => WD_DEBUG.setGold(500));
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(page, ...M1);
 await page.evaluate(() => WD_DEBUG.heroApi.assignHero("nobunaga", WD_DEBUG.state().squads[0]));
 await tapMap(page, 650, 280);

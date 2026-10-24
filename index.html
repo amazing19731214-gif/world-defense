@@ -331,10 +331,90 @@
       .unit-tools {
         align-items: center;
       }
-      /* 兵種が増えても崩れないよう、4列にそろえる（1行目：部隊数と3兵種、2行目以降：残りの兵種と「編成」） */
+      /* あまり使わない画面切り替えは下にまとめる */
+      .tools.menu-tools {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .tools.menu-tools button {
+        min-width: 0;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
+      .tools.play-tools {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        margin-top: 0;
+      }
+      .tools.play-tools #start {
+        min-height: 56px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #fff8e8;
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+      }
+      .tools.play-tools #start:disabled {
+        background: #3a4a44;
+        border-color: #6f7f78;
+        color: #c9d3cc;
+      }
+      /* 1行目：部隊数・「雇う」・「編成」、2行目以降：保有している部隊のチップ（4列）、雇用ボタン（3列・畳める） */
       .tools.unit-tools {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .unit-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 6px;
+        align-items: center;
+      }
+      .squad-chips {
+        display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .squad-chips:empty {
+        display: none;
+      }
+      .hire-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .hire-row[hidden] {
+        display: none;
+      }
+      .tools.unit-tools .squad-chip {
+        flex-direction: column;
+        gap: 0;
+        padding: 4px 2px;
+        min-height: 52px;
+        line-height: 1.2;
+      }
+      .squad-chip .chip-top {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .tools.unit-tools .squad-chip img {
+        width: 24px;
+        height: 24px;
+      }
+      .squad-chip .chip-sub {
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      /* 出陣中の部隊は緑の枠、配置できない部隊（撤退直後・撤退中・兵士なし）は薄く */
+      .squad-chip.out {
+        border-color: #7fd18b;
+        background: #24412f;
+      }
+      .squad-chip.wait {
+        opacity: 0.55;
       }
       .unit-tools .row-label {
         text-align: center;
@@ -563,6 +643,46 @@
         font-size: 17px;
         font-weight: 800;
         color: #ffe3a0;
+      }
+      .battle-skills {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin: 8px 0;
+      }
+      .battle-skills:empty {
+        display: none;
+      }
+      .battle-skills button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        min-height: 52px;
+        padding: 4px 6px;
+        text-align: left;
+        font-size: 14px;
+        line-height: 1.25;
+      }
+      .battle-skills button > span:last-child {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .battle-skills button b,
+      .battle-skills button small {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 14px;
+      }
+      .battle-skills button.ready {
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+        color: #fff8e8;
+      }
+      .battle-skills button.ready small {
+        color: #fff1c4;
       }
       .battle-info {
         line-height: 1.5;
@@ -876,8 +996,13 @@
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
+        <div id="battleSkills" class="battle-skills" aria-label="武将の必殺技"></div>
         <button id="battleRetreat" class="retreat">↩ 全軍撤退</button>
       </section>
+      <div class="tools play-tools" aria-label="ウェーブ">
+        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
+        ><button id="pause">⏸ 停止</button>
+      </div>
       <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
@@ -892,6 +1017,32 @@
         <button id="repair" class="repair" hidden>🔨 修理</button>
         <button id="skill" class="skill" hidden>
           <span id="skillLabel"></span><span class="bar"><i id="skillBar"></i></span>
+        </button>
+      </section>
+      <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
+        <div class="unit-head">
+          <span class="row-label" id="unitCount">部隊 0/4</span
+          ><button id="hireToggle" aria-expanded="false">＋ 雇う</button
+          ><button id="organize">📋 編成</button>
+        </div>
+        <div id="squadChips" class="squad-chips" aria-label="保有している部隊（タップして配置）"></div>
+        <div id="hireRow" class="hire-row" aria-label="新しく雇う"></div>
+      </div>
+      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
+        <div class="panel-head">
+          <strong id="sqTitle"></strong
+          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
+        </div>
+        <div id="sqSummary" class="tp-stats"></div>
+        <div id="sqHeroLine" class="hero-line"></div>
+        <div id="sqMembers" class="members"></div>
+        <div id="soldierInfo" class="soldier-info"></div>
+        <div class="panel-actions four">
+          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
+          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
+        </div>
+        <button id="sqSkill" class="skill" hidden>
+          <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
         </button>
       </section>
       <div class="tools tower-tools" aria-label="防衛塔">
@@ -911,35 +1062,14 @@
           <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
         </button>
       </div>
-      <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
-        <span class="row-label" id="unitCount">部隊 0/4</span><button id="organize">📋 編成</button>
-      </div>
-      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
-        <div class="panel-head">
-          <strong id="sqTitle"></strong
-          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
-        </div>
-        <div id="sqSummary" class="tp-stats"></div>
-        <div id="sqHeroLine" class="hero-line"></div>
-        <div id="sqMembers" class="members"></div>
-        <div id="soldierInfo" class="soldier-info"></div>
-        <div class="panel-actions four">
-          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
-          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
-        </div>
-        <button id="sqSkill" class="skill" hidden>
-          <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
-        </button>
-      </section>
-      <div class="tools">
-        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
-        ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
-        ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
+      <div class="tools menu-tools">
+        <button id="gacha">🎴 ガチャ</button><button id="roster">👥 武将</button
+        ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
+        ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v22（役割別武将スキル・奪い返し・領土の効果）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v24（攻城戦の武将の必殺技・部隊ボタンですぐ配置）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -6145,7 +6275,7 @@
           msg(
             "新しいゲームを開始。塔を建てよう！" +
               (startGold() > 500 ? " 領土の効果で開始ゴールド " + startGold() + "G。" : "") +
-              (kept ? " 育てた兵士 " + kept + " 人が待機中（「編成」から配置）。" : ""),
+              (kept ? " 育てた兵士 " + kept + " 人が待機中（下の部隊ボタン → 道をタップで配置）。" : ""),
           );
           updateUI();
         };
@@ -6179,7 +6309,71 @@
             );
             updateUI();
           };
-          $("unitTools").insertBefore(b, $("organize"));
+          $("hireRow").appendChild(b);
+        }
+        // 雇用ボタンは畳んでおく（部隊がまだ無いときは開いたまま）
+        let hireOpen = false;
+        $("hireToggle").onclick = () => {
+          hireOpen = !hireOpen;
+          if (!hireOpen && selectedUnitType) selectedUnitType = null;
+          updateUI();
+        };
+        // 部隊チップ：待機中の部隊はタップ→道をタップで配置、出陣中の部隊はパネルを開く
+        $("squadChips").addEventListener("click", (ev) => {
+          const b = ev.target.closest("[data-chip]"),
+            q = b && squadById(+b.dataset.chip);
+          if (!q) return;
+          selectedUnitType = null;
+          selectedTower = null;
+          if (onField(q)) {
+            placeSquadId = null;
+            selectedSquad = q;
+            msg(squadName(q) + "（" + squadStateText(q) + "）：撤退・治療ができます。");
+          } else if (placeSquadId === q.id) {
+            placeSquadId = null;
+            msg(squadName(q) + " の配置をやめた。");
+          } else {
+            selectedSquad = null;
+            placeSquadId = null;
+            if (q.locked) msg(squadName(q) + " は撤退したばかりです。次のウェーブから配置できます。");
+            else if (!members(q).length) msg(squadName(q) + " には出られる兵士がいません。");
+            else {
+              placeSquadId = q.id;
+              msg(squadName(q) + "：道をタップして配置しよう。");
+            }
+            toast($("msg").textContent);
+          }
+          updateUI();
+        });
+        function chipHtml(q) {
+          const c = SOLDIER_TYPES[q.type],
+            list = members(q),
+            lv = list.length ? Math.round(list.reduce((n, s) => n + s.level, 0) / list.length) : 0,
+            out = onField(q),
+            wait = !out && (q.locked || !list.length);
+          return (
+            '<button class="squad-chip' +
+            (out ? " out" : "") +
+            (wait ? " wait" : "") +
+            (placeSquadId === q.id || selectedSquad === q ? " active" : "") +
+            '" data-chip="' +
+            q.id +
+            '" aria-label="' +
+            squadName(q) +
+            "・" +
+            squadStateText(q) +
+            "・" +
+            list.length +
+            "人・平均Lv" +
+            lv +
+            '"><span class="chip-top">' +
+            (UNIT_ASSETS[q.type] ? '<img alt="" src="' + UNIT_ASSETS[q.type] + '">' : c.icon) +
+            "#" +
+            q.id +
+            '</span><span class="chip-sub">' +
+            (out ? (q.state === "retreating" ? "撤退中" : "出陣中") : list.length + "人 Lv" + lv) +
+            "</span></button>"
+          );
         }
         function unitCostLabel(type) {
           return unitCost(type) * SQUAD_RULES.squadSize + "G";
@@ -6202,6 +6396,12 @@
               SQUAD_RULES.maxSquads +
               "</small>",
           );
+          const hireShown = hireOpen || !squads.length || !!selectedUnitType;
+          $("hireRow").hidden = !hireShown;
+          $("hireToggle").textContent = hireShown && squads.length ? "▲ 閉じる" : "＋ 雇う";
+          $("hireToggle").setAttribute("aria-expanded", String(hireShown));
+          $("hireToggle").disabled = !squads.length; // 部隊が無いうちは開いたまま
+          setHtml($("squadChips"), squads.map(chipHtml).join(""));
           document
             .querySelectorAll("[data-u]")
             .forEach((b) => b.classList.toggle("active", b.dataset.u === selectedUnitType));
@@ -7133,7 +7333,8 @@
                   "<br><small>" +
                   (inj
                     ? '<span class="injured">負傷中：あと' + inj.left + "ウェーブで復帰</span>"
-                    : "攻城 " +
+                    : esc(siegeSkillText(id)) +
+                      "<br>攻城 " +
                       (where >= 0 ? SIEGE_RULES.names[where] : "未配置") +
                       (h && (h.tower || h.squad) ? "・防衛 " + esc(postLabel(h)) : "")) +
                   "</small></span>" +
@@ -7547,6 +7748,9 @@
               y: 300,
               state: lists[i].length ? "wait" : "empty",
               fallen: 0,
+              skillCd: 0, // 必殺技は出撃したらすぐ使える
+              rally: 0,
+              guard: 0,
             })),
             towers: towersNpc,
             garrison,
@@ -7597,7 +7801,155 @@
             st.atk *= (c.siegePassive.damageMul || 1) * starMul(g.hero);
             st.def *= c.siegePassive.defMul || 1;
           }
+          if (g.rally > 0) st.atk *= SIEGE_SKILL.rally.atk;
           return st;
+        }
+        // ===== 攻城戦の必殺技 =====
+        // 防衛戦の必殺技（対象の選び方がいろいろ）を、攻城戦では5つの型にまとめる。
+        // 威力は「部隊の兵士の攻撃力の合計」に掛ける（武将の補正・★・兵士の成長が効く）。再使用までの秒数は防衛戦と同じ
+        const SIEGE_SKILL = {
+          strike: {
+            name: "一撃",
+            mul: 4,
+            reach: 200,
+            text: "前方の敵1体（守備兵 → 塔 → 城の順）へ、部隊の攻撃力の合計の400%",
+          },
+          area: {
+            name: "範囲攻撃",
+            mul: 1.5,
+            radius: 150,
+            text: "部隊の半径150の守備兵・塔すべてへ、部隊の攻撃力の合計の150%",
+          },
+          rally: { name: "鼓舞", atk: 1.4, duration: 10, radius: 160, text: "半径160の味方部隊の攻撃 +40%（10秒）" },
+          guard: {
+            name: "守りの陣",
+            hurt: 0.5,
+            duration: 10,
+            radius: 160,
+            text: "半径160の味方部隊の被ダメージ -50%（10秒）",
+          },
+          heal: { name: "手当て", heal: 0.5, radius: 160, text: "半径160の味方の兵士を最大HPの50%回復（戦死者は戻らない）" },
+        };
+        // 防衛戦の必殺技の種類 → 攻城戦の型
+        const SIEGE_SKILL_OF = {
+          triple: "strike",
+          bossStrike: "strike",
+          snipe: "strike",
+          focus: "strike",
+          pursuit: "strike",
+          pierce: "strike",
+          charge: "strike",
+          sweep: "strike",
+          rescue: "strike",
+          wheel: "area",
+          sevenSpears: "area",
+          threeArrows: "area",
+          ambush: "area",
+          poisonField: "area",
+          trap: "area",
+          stages: "rally",
+          desperate: "rally",
+          rally: "rally",
+          blockBoost: "rally",
+          lastStand: "guard",
+          rangedShield: "guard",
+          taunt: "guard",
+          suppression: "guard",
+          seal: "guard",
+          fear: "guard",
+          healingField: "heal",
+          firstAid: "heal",
+          rest: "heal",
+          supply: "heal",
+          redeploy: "heal",
+        };
+        const siegeSkillType = (id) => SIEGE_SKILL_OF[WARLORDS[id].skill.kind] || "rally";
+        const siegeSkillText = (id) =>
+          "「" + WARLORDS[id].skill.name + "」" + SIEGE_SKILL[siegeSkillType(id)].name + "：" + SIEGE_SKILL[siegeSkillType(id)].text;
+        const groupPower = (g) =>
+          groupAlive(g).reduce((n, s) => n + (SOLDIER_TYPES[s.type].heal ? 0 : battleStats(g, s).atk), 0);
+        // 必殺技を使う。使えないときは理由を返す（再使用の時間は減らない）
+        function useSiegeSkill(idx) {
+          const B = battle,
+            g = B && !B.result && B.groups[idx];
+          if (!g || !g.hero) return "武将のいない部隊です。";
+          if (!groupActive(g)) return g.state === "wait" ? g.name + " はまだ出撃していません。" : g.name + " は戦えません。";
+          if (g.skillCd > 0) return "あと " + Math.ceil(g.skillCd) + " 秒で使えます。";
+          const type = siegeSkillType(g.hero),
+            S = SIEGE_SKILL[type],
+            c = WARLORDS[g.hero],
+            near = (o, r) => Math.hypot(o.x - g.x, o.y - g.y) <= r;
+          let done = "";
+          if (type === "strike") {
+            const dmg = groupPower(g) * S.mul;
+            let e = null;
+            for (const o of B.garrison)
+              if (o.hp > 0 && near(o, S.reach) && (!e || Math.hypot(o.x - g.x, o.y - g.y) < Math.hypot(e.x - g.x, e.y - g.y)))
+                e = o;
+            const t = !e && B.towers.find((t) => !t.destroyed && near(t, S.reach));
+            if (e) battleHitGarrison(e, dmg);
+            else if (t) battleHitTower(t, dmg);
+            else if (castleDist(g) <= SIEGE_BATTLE.castle.reach + S.reach) {
+              B.castleHp -= dmg;
+              burst(SIEGE_BATTLE.castle.x, SIEGE_BATTLE.castle.y - 40, "#ffd36a", "cannon");
+            } else return "届く敵がいません（もう少し進んでから）。";
+            if (e || t) burst((e || t).x, (e || t).y - (t ? 30 : 0), "#ffd36a", "cannon");
+            done = "威力 " + Math.round(dmg);
+          } else if (type === "area") {
+            const dmg = groupPower(g) * S.mul,
+              es = B.garrison.filter((o) => o.hp > 0 && near(o, S.radius)),
+              ts = B.towers.filter((t) => !t.destroyed && near(t, S.radius));
+            if (!es.length && !ts.length) return "近くに敵がいません（もう少し進んでから）。";
+            for (const e of es) {
+              battleHitGarrison(e, dmg);
+              burst(e.x, e.y, "#ffb35a", "fire");
+            }
+            for (const t of ts) {
+              battleHitTower(t, dmg);
+              burst(t.x, t.y - 30, "#ffb35a", "cannon");
+            }
+            done = es.length + ts.length + "体に威力 " + Math.round(dmg);
+          } else {
+            const gs = B.groups.filter((o) => groupActive(o) && near(o, S.radius));
+            for (const o of gs) {
+              if (type === "rally") o.rally = S.duration;
+              else if (type === "guard") o.guard = S.duration;
+              else
+                for (const m of groupAlive(o)) {
+                  const max = soldierStats(m).maxHp;
+                  m.hp = Math.min(max, m.hp + max * S.heal);
+                }
+              burst(o.x, o.y - 20, type === "heal" ? "#7be08a" : type === "guard" ? "#8fd0ff" : "#ffd36a", "heal");
+            }
+            done = gs.map((o) => o.name.replace("部隊", "")).join("・");
+          }
+          g.skillCd = c.skill.cooldown;
+          cutin = { id: g.hero, age: 0, duration: 1.3 };
+          B.skillUses = (B.skillUses || 0) + 1;
+          msg(c.name + "「" + c.skill.name + "」（" + S.name + "）！ " + done);
+          if (B.castleHp <= 0) endBattle("win");
+          return null;
+        }
+        // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
+        function battleHitGarrison(e, dmg) {
+          e.hp -= dmg;
+          e.hit = 0.18;
+          if (e.hp > 0 || e.dead) return false;
+          e.dead = true;
+          battle.kills++;
+          if (effects.length >= 80) effects.shift();
+          effects.push({ x: e.x, y: e.y, kind: "edeath", ekind: e.kind, face: -1, age: 0, duration: 0.9 });
+          return true;
+        }
+        function battleHitTower(t, dmg) {
+          t.hp -= dmg;
+          t.hitFlash = 0.25;
+          if (t.hp > 0 || t.destroyed) return;
+          t.hp = 0;
+          t.destroyed = true;
+          if (effects.length >= 78) effects.splice(0, 2);
+          effects.push({ x: t.x, y: t.y, kind: "collapse", color: "#8a7a66", age: 0, duration: 1.4 });
+          msg("NPCの" + TOWER_NAMES[t.type] + "を破壊した！");
         }
         // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
         const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
@@ -7610,6 +7962,7 @@
             spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) : 1;
           s.hp -=
             ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
+            (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
             (1 - skillSum(s, "guard")) *
             (ranged ? 1 - skillSum(s, "rangedGuard") : 1) *
             spear;
@@ -7680,6 +8033,11 @@
             if (g.state === "wait") launchGroup(g);
           }
           for (const e of B.garrison) e.atkAnim = Math.max(0, e.atkAnim - dt);
+          for (const g of B.groups) {
+            if (groupActive(g)) g.skillCd = Math.max(0, g.skillCd - dt); // 出撃してから進む
+            g.rally = Math.max(0, g.rally - dt);
+            g.guard = Math.max(0, g.guard - dt);
+          }
           for (const t of B.towers) t.hitFlash = Math.max(0, (t.hitFlash || 0) - dt);
           // 進軍：守備隊の手前・城の前では止まる
           for (const g of B.groups) {
@@ -7791,41 +8149,12 @@
               } else burst(tx, ty, "#fff1c4", "slash");
               gainXp(s, SQUAD_RULES.xpPerHit);
               if (target) {
-                target.hp -= dmg;
-                target.hit = 0.18;
-                if (target.hp <= 0) {
+                if (battleHitGarrison(target, dmg)) {
                   s.kills++;
-                  B.kills++;
                   gainXp(s, SQUAD_RULES.xpPerKill + Math.round(target.reward / 2));
-                  if (effects.length >= 80) effects.shift();
-                  effects.push({
-                    x: target.x,
-                    y: target.y,
-                    kind: "edeath",
-                    ekind: target.kind,
-                    face: -1,
-                    age: 0,
-                    duration: 0.9,
-                  });
                 }
-              } else if (tower) {
-                tower.hp -= dmg;
-                tower.hitFlash = 0.25;
-                if (tower.hp <= 0) {
-                  tower.hp = 0;
-                  tower.destroyed = true;
-                  if (effects.length >= 78) effects.splice(0, 2);
-                  effects.push({
-                    x: tower.x,
-                    y: tower.y,
-                    kind: "collapse",
-                    color: "#8a7a66",
-                    age: 0,
-                    duration: 1.4,
-                  });
-                  msg("NPCの" + TOWER_NAMES[tower.type] + "を破壊した！");
-                }
-              } else B.castleHp -= dmg;
+              } else if (tower) battleHitTower(tower, dmg);
+              else B.castleHp -= dmg;
             }
           }
           B.garrison = B.garrison.filter((e) => e.hp > 0);
@@ -8054,11 +8383,60 @@
           if (battle && confirm("全軍撤退しますか？（生還した兵士は生き残りますが、敗北になります）"))
             retreatBattle();
         };
+        // 必殺技のボタン：攻城戦の始めに一度だけ作り、あとは文字と押せるかだけ更新する（押している途中で作り直さない）
+        function renderBattleSkills(B) {
+          const box = $("battleSkills");
+          if (box.dataset.battle !== B.id) {
+            box.dataset.battle = B.id;
+            box.innerHTML = B.groups
+              .filter((g) => g.hero && g.list.length)
+              .map(
+                (g) =>
+                  '<button data-bskill="' +
+                  g.idx +
+                  '">' +
+                  avatarHtml(g.hero) +
+                  '<span><b>' +
+                  esc(WARLORDS[g.hero].skill.name) +
+                  "</b><small></small></span></button>",
+              )
+              .join("");
+          }
+          for (const b of box.querySelectorAll("[data-bskill]")) {
+            const g = B.groups[+b.dataset.bskill],
+              S = SIEGE_SKILL[siegeSkillType(g.hero)],
+              ready = groupActive(g) && g.skillCd <= 0,
+              text =
+                g.name.replace("部隊", "") +
+                "・" +
+                (g.state === "lost"
+                  ? "壊滅"
+                  : !groupActive(g)
+                    ? "出撃前"
+                    : ready
+                      ? "使える！"
+                      : "あと" + Math.ceil(g.skillCd) + "秒"),
+              sm = b.querySelector("small");
+            if (sm.textContent !== text) sm.textContent = text;
+            b.title = WARLORDS[g.hero].name + "「" + WARLORDS[g.hero].skill.name + "」" + S.name + "：" + S.text;
+            if (b.disabled === ready) b.disabled = !ready;
+            b.classList.toggle("ready", ready);
+          }
+        }
+        $("battleSkills").addEventListener("click", (ev) => {
+          const b = ev.target.closest("[data-bskill]");
+          if (!b || !battle) return;
+          const err = useSiegeSkill(+b.dataset.bskill);
+          if (err) msg(err);
+          toast($("msg").textContent);
+          updateUI();
+        });
         function renderBattleBar() {
           const bar = $("battleBar");
           bar.hidden = !battle;
           if (!battle) return;
           const B = battle;
+          renderBattleSkills(B);
           setHtml(
             $("battleInfo"),
             "<b>" +
@@ -8123,6 +8501,21 @@
           for (const g of B.groups) {
             if (!groupActive(g)) continue;
             const list = groupAlive(g);
+            if (g.rally > 0 || g.guard > 0)
+              actors.push({
+                y: g.y - 30,
+                draw: () => {
+                  // 鼓舞（金）・守りの陣（青）の輪
+                  ctx.save();
+                  ctx.globalAlpha = 0.55 + 0.25 * Math.sin(visualTime * 6);
+                  ctx.strokeStyle = g.guard > 0 ? "#8fd0ff" : "#ffd36a";
+                  ctx.lineWidth = 3;
+                  ctx.beginPath();
+                  ctx.ellipse(g.x - 12, g.y + 8, 42, 16, 0, 0, 7);
+                  ctx.stroke();
+                  ctx.restore();
+                },
+              });
             list.forEach((s, i) => {
               const o = battleOffset(i),
                 ground = g.y + o[1] + UNIT_FOOT;
@@ -8171,6 +8564,7 @@
           ctx.textAlign = "center";
           ctx.fillStyle = "#fff1d0";
           ctx.fillText(B.castleName + " " + Math.ceil(Math.max(0, B.castleHp)), c.x, c.y - 146);
+          drawCutin();
         }
         // ===== 塔パネル・武将配属画面 =====
         const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
@@ -8555,7 +8949,7 @@
             heroes ? "skillGuideHeroes" : "skillGuideSoldiers",
           );
           $("skillGuideHint").textContent = heroes
-            ? "防衛戦の役割別スキルです。攻城戦は従来の攻撃・防御補正を維持しています。未所持を含む全武将を掲載。部隊用・塔用の常時効果を別々に掲載。必殺技はウェーブ中に使用できます。得意兵種は効果が高まり、対象を選ぶ技はマップをタップして発動します。回復で戦死者は復活しません。"
+            ? "防衛戦の役割別スキルです。攻城戦では攻撃・防御の補正と、必殺技を5つの型（一撃・範囲攻撃・鼓舞・守りの陣・手当て）にまとめた効果になります。未所持を含む全武将を掲載。部隊用・塔用の常時効果を別々に掲載。必殺技はウェーブ中に使用できます。得意兵種は効果が高まり、対象を選ぶ技はマップをタップして発動します。回復で戦死者は復活しません。"
             : "通常スキルはLv" + SQUAD_RULES.skillLevels.join("・Lv") + "で習得。固有スキルはLv" + SQUAD_RULES.uniqueLevel + "で" + Math.round(SQUAD_RULES.uniqueChance * 100) + "%の確率で習得し、最大" + SQUAD_RULES.maxSkills + "つまで。未実装のスキルは現在習得できません。";
           let cards;
           if (heroes) {
@@ -8563,7 +8957,7 @@
             cards = Object.entries(WARLORDS)
               .sort(([, a], [, b]) => order[a.rarity] - order[b.rarity])
               .filter(([, c]) => [c.name, c.rarity, c.passiveText, c.skill.name, c.skillText].join(" ").toLocaleLowerCase().includes(query))
-              .map(([id, c]) => '<article class="guide-card" data-guide-hero="' + id + '"><div class="guide-card-head">' + avatarHtml(id) + '<h3>' + rarityTag(id) + ' ' + esc(c.name) + '</h3></div><p class="guide-meta">' + esc(c.role) + (c.favorite ? '／得意：' + esc(SOLDIER_TYPES[c.favorite].name) : '／全兵種') + '</p><p><b>常時効果：</b>' + '部隊：' + esc(c.squadText) + '<br>塔：' + esc(c.towerText) + '</p><p><b>必殺技「' + esc(c.skill.name) + '」</b><br>' + esc(c.skillText) + '</p><p class="guide-meta">再使用まで ' + c.skill.cooldown + '秒（戦闘中のみ進行）</p></article>');
+              .map(([id, c]) => '<article class="guide-card" data-guide-hero="' + id + '"><div class="guide-card-head">' + avatarHtml(id) + '<h3>' + rarityTag(id) + ' ' + esc(c.name) + '</h3></div><p class="guide-meta">' + esc(c.role) + (c.favorite ? '／得意：' + esc(SOLDIER_TYPES[c.favorite].name) : '／全兵種') + '</p><p><b>常時効果：</b>' + '部隊：' + esc(c.squadText) + '<br>塔：' + esc(c.towerText) + '</p><p><b>必殺技「' + esc(c.skill.name) + '」</b><br>' + esc(c.skillText) + '</p><p><b>攻城戦：</b>' + esc(c.siegePassive.text.replace(/（.*）$/, '')) + '<br>必殺技は' + esc(SIEGE_SKILL[siegeSkillType(id)].name + '：' + SIEGE_SKILL[siegeSkillType(id)].text) + '</p><p class="guide-meta">再使用まで ' + c.skill.cooldown + '秒（戦闘中のみ進行）</p></article>');
           } else {
             cards = Object.entries(SOLDIER_SKILLS)
               .filter(([, c]) =>
@@ -8697,12 +9091,21 @@
         document.addEventListener("visibilitychange", () => {
           last = 0;
         });
+        let squadSig = "";
         function frame(now) {
           const dt = last ? (now - last) / 1000 : 0;
           last = now;
           tick(dt);
           animateVisuals(dt);
           draw();
+          // 部隊の状態（出陣・撤退・人数・Lv）が戦闘中に変わったら、部隊チップを描き直す
+          const sig = squads
+            .map((q) => q.id + q.state + (q.locked ? 1 : 0) + members(q).reduce((n, s) => n + "." + s.level, ""))
+            .join();
+          if (sig !== squadSig) {
+            squadSig = sig;
+            renderSquadUI();
+          }
           requestAnimationFrame(frame);
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
@@ -8746,6 +9149,9 @@
               disbandSquad,
               battle: () => battle,
               startBattle,
+              useSiegeSkill,
+              siegeSkillType,
+              SIEGE_SKILL,
               endBattle,
               retreatBattle,
               SIEGE_BATTLE,
