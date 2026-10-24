@@ -4,6 +4,8 @@ Tower Defense Game
 ブラウザで遊べるタワーディフェンス。配布物は画像込みの単一ファイル `index.html` です
 （GitHub Pages ではこのファイルをそのまま公開します）。
 
+開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
+
 ## 鉄砲兵・衛生兵（v15）
 
 - 兵士部隊に**鉄砲兵**（鉄砲隊・5人150G）と**衛生兵（陣中医）**（陣中医隊・5人120G）を追加。防衛塔の「鉄砲の塔」とは別。
