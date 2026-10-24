@@ -145,8 +145,8 @@ check(
   JSON.stringify(c.map((x) => x.text)),
 );
 check(
-  "チップに人数と平均Lv（第一部隊：Lv2・3・2・3・2 → 5人・Lv2）",
-  /5人 Lv2/.test(c[0].text) && /第一部隊（足軽）・待機中・5人・平均Lv2/.test(c[0].label),
+  "チップに人数と状態（平均Lvは読み上げ用の説明に。第一部隊：Lv2・3・2・3・2 → 5人・Lv2）",
+  /5人·待機/.test(c[0].text) && /第一部隊（足軽）・待機中・5人・平均Lv2/.test(c[0].label),
   JSON.stringify(c[0]),
 );
 check("チップに兵種の絵", (await page.$$('[data-chip="1"] img')).length === 1);

@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
     <title>WORLD DEFENSE</title>
     <style>
       * {
@@ -1004,6 +1004,246 @@
       .guide-card b {
         color: #ffe0a0;
       }
+      /* ===== スマートフォン向けの画面（v27） =====
+         --app-h：見えている高さ（Safariのアドレスバー・キーボードで変わる。visualViewport から JS で更新）
+         --dock-h：画面下に固定した塔・部隊のパネルの高さ（その分だけページの下に余白を足して、ボタンが隠れないようにする） */
+      :root {
+        --app-h: 100vh;
+        --vv-top: 0px;
+        --dock-h: 0px;
+      }
+      @supports (height: 100dvh) {
+        :root {
+          --app-h: 100dvh;
+        }
+      }
+      /* 横のはみ出しは切る（hidden だと上の帯の sticky が効かなくなるので clip） */
+      body {
+        overflow-x: clip;
+      }
+      .wrap {
+        padding-top: 0;
+        padding-left: max(8px, env(safe-area-inset-left));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-bottom: calc(16px + var(--dock-h) + env(safe-area-inset-bottom));
+      }
+      /* 上の帯：城HP・所持金・ウェーブ・配置数はいつも見えるように画面の上に止める */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        margin: 0 -8px;
+        padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
+        background: #10303acc;
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+        border-bottom: 1px solid #b8d6b533;
+      }
+      header .stats {
+        margin: 0;
+        gap: 5px;
+        flex-wrap: wrap; /* 375px 以上は1行。もっと狭い画面では2行に折り返す */
+        justify-content: center;
+        align-items: center;
+        min-width: 0;
+      }
+      header .stats span {
+        padding: 5px 7px;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      .wave-guide-controls {
+        gap: 5px;
+      }
+      #skillGuideOpen {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 4px 8px;
+        font-size: 14px;
+      }
+      canvas {
+        margin: 6px 0;
+      }
+      @media (max-width: 600px) {
+        /* タイトルは読み上げ用に残し、画面ではマップを広く使う */
+        h1 {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          white-space: nowrap;
+          margin: 0;
+        }
+        header {
+          justify-content: center;
+        }
+        header .stats span {
+          font-size: 13px;
+          padding: 5px 5px;
+        }
+        #skillGuideOpen .lbl {
+          display: none; /* スマホでは📖だけ（読み上げは aria-label） */
+        }
+        canvas {
+          border-width: 2px;
+          border-radius: 10px;
+          margin: 4px 0 6px;
+        }
+        .tools {
+          margin: 6px 0;
+        }
+      }
+      /* 部隊ボタン：横に1列（はみ出す分は横スクロール） */
+      .squad-chips {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+      .squad-chips::-webkit-scrollbar {
+        display: none;
+      }
+      .tools.unit-tools .squad-chip {
+        flex: 1 0 82px;
+        min-width: 82px;
+        min-height: 48px;
+        scroll-snap-align: start;
+      }
+      .squad-chip.active {
+        outline: 3px solid #ffe5a6;
+        outline-offset: -1px;
+      }
+      .unit-head .row-label {
+        font-size: 14px;
+        line-height: 1.3;
+        white-space: nowrap;
+        padding: 0;
+      }
+      /* 塔・部隊のパネル：画面の下から出るシート。見えている高さの6割まで、中身が多ければパネルの中だけスクロール */
+      .panel.dock {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 8;
+        width: min(560px, 100%);
+        margin: 0 auto;
+        max-height: calc(var(--app-h) * 0.6);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 16px 16px 0 0;
+        border-bottom: 0;
+        padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+        box-shadow: 0 -10px 30px #0610148c;
+      }
+      .panel.dock .panel-head {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #143c45;
+        padding: 8px 0 6px;
+      }
+      .panel.dock .panel-head .icon-btn {
+        min-height: 44px;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      .hero-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hero-row .hero-line {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+      }
+      .hero-row > button {
+        flex: none;
+        min-height: 44px;
+        font-size: 14px;
+        padding: 6px 10px;
+      }
+      .hero-pick {
+        margin: 6px 0;
+        padding: 6px;
+        border: 1px solid #e1bc77;
+        border-radius: 10px;
+        background: #0f2e35;
+      }
+      .hero-pick > p {
+        margin: 2px 0 6px;
+        font-size: 14px;
+      }
+      .pick-hero {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        border-top: 1px solid #719b8f44;
+      }
+      .pick-hero:first-of-type {
+        border-top: 0;
+      }
+      .pick-hero .avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+      }
+      .pick-hero .ph-text {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.35;
+        font-size: 14px;
+      }
+      .pick-hero .ph-text small {
+        display: block;
+        font-size: 14px;
+      }
+      .pick-hero button {
+        flex: none;
+        min-height: 44px;
+        min-width: 64px;
+        font-size: 14px;
+        padding: 6px 8px;
+      }
+      /* 待機中の部隊を配置するあいだは、パネルを小さくして道を隠さない */
+      .panel.dock.placing > :not(.panel-head):not(.place-hint) {
+        display: none;
+      }
+      .place-hint {
+        margin: 0 0 4px;
+        font-size: 14px;
+        line-height: 1.45;
+        color: #ffe3a0;
+      }
+      .more {
+        width: 100%;
+        min-height: 44px;
+        margin-top: 6px;
+        font-size: 14px;
+      }
+      /* ほかの画面（シート）：見えている高さに合わせる。キーボードが出ても入力欄・ボタンに届く */
+      .sheet-back {
+        inset: auto 0 auto 0;
+        top: var(--vv-top);
+        height: var(--app-h);
+      }
+      .sheet {
+        max-height: min(calc(var(--app-h) * 0.88), calc(var(--app-h) - 12px - env(safe-area-inset-top)));
+        overscroll-behavior: contain;
+      }
+      #skillGuideSheet .sheet {
+        max-height: min(calc(var(--app-h) * 0.88), calc(var(--app-h) - 12px - env(safe-area-inset-top)));
+      }
+      .toast {
+        z-index: 120;
+      }
     </style>
   </head>
   <body>
@@ -1013,14 +1253,15 @@
         <div class="stats">
           <span id="hp">❤️ 20</span><span id="gold">🪙 500G</span>
           <div class="wave-guide-controls">
-            <span id="wave">WAVE 0/20</span
+            <span id="wave">WAVE 0/20</span><span id="deployStat">配置 0/4</span
             ><button
               id="skillGuideOpen"
+              aria-label="スキル一覧"
               aria-haspopup="dialog"
               aria-expanded="false"
               aria-controls="skillGuideSheet"
             >
-              📖 スキル一覧
+              📖<b class="lbl"> スキル</b>
             </button>
           </div>
         </div>
@@ -1036,13 +1277,14 @@
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
         ><button id="pause">⏸ 停止</button>
       </div>
-      <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
+      <section id="towerPanel" class="panel dock" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
-          ><button id="tpClose" class="icon-btn" aria-label="塔の選択を解除">✕</button>
+          ><button id="tpClose" class="icon-btn" aria-label="塔の選択を解除">✕ 閉じる</button>
         </div>
         <div id="tpStats" class="tp-stats"></div>
         <div id="tpHero" class="tp-hero"></div>
+        <div id="tpHeroPick" class="hero-pick" hidden></div>
         <div class="panel-actions">
           <button id="upgrade">⬆ 強化</button><button id="sell">🪙 売却</button
           ><button id="assign">👤 武将配属</button>
@@ -1061,22 +1303,32 @@
         <div id="squadChips" class="squad-chips" aria-label="保有している部隊（タップして配置）"></div>
         <div id="hireRow" class="hire-row" aria-label="新しく雇う"></div>
       </div>
-      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
+      <section id="squadPanel" class="panel dock" hidden aria-label="選択中の部隊">
         <div class="panel-head">
           <strong id="sqTitle"></strong
-          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
+          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕ 閉じる</button>
         </div>
+        <p id="sqPlaceHint" class="place-hint" hidden>
+          📍 マップの道をタップすると配置します（やめるときは部隊のボタンをもう一度押すか「✕ 閉じる」）
+        </p>
         <div id="sqSummary" class="tp-stats"></div>
-        <div id="sqHeroLine" class="hero-line"></div>
-        <div id="sqMembers" class="members"></div>
-        <div id="soldierInfo" class="soldier-info"></div>
+        <div class="hero-row">
+          <div id="sqHeroLine" class="hero-line"></div>
+          <button id="sqHero" aria-expanded="false">👤 武将を選択</button>
+        </div>
+        <div id="sqHeroPick" class="hero-pick" hidden></div>
         <div class="panel-actions four">
           <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
-          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
+          ><button id="sqRecruit">＋ 補充</button><button id="sqOrganize">📋 兵士</button>
         </div>
         <button id="sqSkill" class="skill" hidden>
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
         </button>
+        <button id="sqMore" class="more" aria-expanded="false" aria-controls="sqDetail">▼ 兵士の詳細</button>
+        <div id="sqDetail" hidden>
+          <div id="sqMembers" class="members"></div>
+          <div id="soldierInfo" class="soldier-info"></div>
+        </div>
       </section>
       <div class="tools tower-tools" aria-label="防衛塔">
         <button data-t="arrow">
@@ -1096,13 +1348,13 @@
         </button>
       </div>
       <div class="tools menu-tools">
-        <button id="gacha">🎴 ガチャ</button><button id="roster">👥 武将</button
+        <button id="gacha">🎴 ガチャ</button><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v26（混成部隊・防衛戦と攻城戦で同じ4部隊）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v27（スマートフォンの画面を改善・混成部隊）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2567,7 +2819,9 @@
           selectedSquad = null,
           selectedSoldierId = null,
           selectedUnitType = null, // 雇用する兵種（null なら塔の建設モード）
-          placeSquadId = null; // 配置する待機中の部隊
+          placeSquadId = null, // 配置する待機中の部隊
+          heroPickFor = null, // パネルの中で武将を選んでいる塔・部隊
+          squadDetailOpen = false; // 部隊のパネルで兵士の詳細を開いているか
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         function updateUI() {
@@ -6290,26 +6544,32 @@
           // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
           const hitSquad = squadAt(x, y);
           if (hitSquad) {
+            if (selectedSquad !== hitSquad) heroPickFor = null;
             selectedSquad = hitSquad;
+            placeSquadId = null;
             const near = soldierNear(hitSquad, x, y);
             selectedSoldierId = near ? near.id : null;
             selectedTower = null;
-            msg(squadName(hitSquad) + "：兵士の戦歴・撤退・編成ができます。");
+            msg(squadName(hitSquad) + "：武将・撤退・治療・補充ができます。");
             updateUI();
             return;
           }
           const old = towers.find((t) => Math.hypot(t.x - x, t.y - y) < 38);
           if (old) {
+            if (selectedTower !== old) heroPickFor = null;
             selectedTower = old;
             selectedSquad = null;
+            placeSquadId = null;
             msg(towerLabel(old) + "：強化・売却・武将配属ができます。");
             updateUI();
             return;
           }
-          if (selectedTower || selectedSquad) {
+          if ((selectedTower || selectedSquad) && !placeSquadId) {
             // 選択中に空いている場所をタップしたときは、誤操作を防ぐため選択解除だけ行う
+            // （待機中の部隊を配置しようとしているときは、そのまま配置する）
             selectedTower = null;
             selectedSquad = null;
+            heroPickFor = null;
             msg(
               "選択を解除した。もう一度タップすると" +
                 (selectedUnitType || placeSquadId ? "部隊を配置" : "建設") +
@@ -6520,15 +6780,18 @@
           if (!q) return;
           selectedUnitType = null;
           selectedTower = null;
+          // どの部隊も、タップすると下に部隊のパネルが開く（武将の選択・治療・補充・撤退）
           if (onField(q)) {
             placeSquadId = null;
             selectedSquad = q;
-            msg(squadName(q) + "（" + squadStateText(q) + "）：撤退・治療ができます。");
+            msg(squadName(q) + "（" + squadStateText(q) + "）：武将・撤退・治療ができます。");
           } else if (placeSquadId === q.id) {
             placeSquadId = null;
+            selectedSquad = null;
             msg(squadName(q) + " の配置をやめた。");
           } else {
-            selectedSquad = null;
+            // 待機中の部隊：パネルを開き、そのまま道をタップすれば配置できる
+            selectedSquad = q;
             placeSquadId = null;
             if (q.locked) msg(squadName(q) + " は撤退したばかりです。次のウェーブから配置できます。");
             else if (!members(q).length) msg(squadName(q) + " には出られる兵士がいません。");
@@ -6538,6 +6801,7 @@
             }
             toast($("msg").textContent);
           }
+          heroPickFor = null;
           updateUI();
         });
         function chipHtml(q) {
@@ -6565,7 +6829,9 @@
             (UNIT_ASSETS[q.type] ? '<img alt="" src="' + UNIT_ASSETS[q.type] + '">' : c.icon) +
             slotShort(q) +
             '</span><span class="chip-sub">' +
-            (out ? (q.state === "retreating" ? "撤退中" : "出陣中") : list.length + "人 Lv" + lv) +
+            list.length +
+            "人·" +
+            (q.state === "retreating" ? "撤退中" : out ? "出陣中" : q.locked ? "休み" : "待機") +
             "</span></button>"
           );
         }
@@ -6578,18 +6844,20 @@
             const v = unitCostLabel(el.closest("[data-u]").dataset.u);
             if (el.textContent !== v) el.textContent = v;
           });
+          // 道に出せる上限と保有できる上限は別の数（どちらも設定から読む）
           setHtml(
             $("unitCount"),
             "配置 " +
               fieldSquads().length +
               "/" +
               SQUAD_RULES.maxDeployed +
-              "<small>保有 " +
+              "｜保有 " +
               squads.length +
               "/" +
-              SQUAD_RULES.maxSquads +
-              "</small>",
+              SQUAD_RULES.maxSquads,
           );
+          const ds = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
+          if ($("deployStat").textContent !== ds) $("deployStat").textContent = ds;
           const hireShown = hireOpen || !squads.length || !!selectedUnitType;
           $("hireRow").hidden = !hireShown;
           $("hireToggle").textContent = hireShown && squads.length ? "▲ 閉じる" : "＋ 雇う";
@@ -6609,17 +6877,22 @@
             );
           const q = selectedSquad,
             panel = $("squadPanel");
-          if (!q || !squads.includes(q) || !onField(q)) {
+          if (!q || !squads.includes(q)) {
             selectedSquad = null;
             panel.hidden = true;
+            if (heroPickFor && !towers.includes(heroPickFor)) heroPickFor = null;
             return;
           }
           panel.hidden = false;
+          const placing = placeSquadId === q.id;
+          panel.classList.toggle("placing", placing);
+          $("sqPlaceHint").hidden = !placing;
           const list = members(q);
           if (!list.some((s) => s.id === selectedSoldierId)) selectedSoldierId = list[0] ? list[0].id : null;
           const avg = list.reduce((n, s) => n + s.level, 0) / Math.max(1, list.length);
-          $("sqTitle").textContent =
-            SOLDIER_TYPES[q.type].icon + " " + squadName(q) + (q.state === "retreating" ? "（撤退中）" : "");
+          $("sqTitle").textContent = SOLDIER_TYPES[q.type].icon + " " + squadName(q) + "（" + squadStateText(q) + "）";
+          const hpNow = list.reduce((n, s) => n + Math.max(0, s.hp), 0),
+            hpMax = list.reduce((n, s) => n + soldierStats(s).maxHp, 0);
           setHtml(
             $("sqSummary"),
             "<span>生存 <b>" +
@@ -6628,6 +6901,12 @@
               q.fallen +
               "</b>人</span><span>平均 <b>Lv" +
               fmt(avg) +
+              "</b></span><span>HP <b" +
+              (hpNow < hpMax * 0.4 ? ' class="low"' : "") +
+              ">" +
+              Math.ceil(hpNow) +
+              "/" +
+              hpMax +
               "</b></span>" +
               (blockCap(q) || members(q).some((s) => SOLDIER_TYPES[s.type].block)
                 ? "<span>足止め <b>" + blockCount(q) + "/" + blockCap(q) + "</b></span>"
@@ -6696,8 +6975,23 @@
                 "</small>",
             );
           }
-          $("retreat").disabled = q.state !== "deployed";
-          $("retreat").textContent = playing ? "↩ 撤退" : "↩ 待機へ";
+          // 待機中の部隊は「配置」（押してから道をタップ）、道にいる部隊は「撤退」
+          if (q.state === "reserve") {
+            $("retreat").disabled = q.locked || !list.length;
+            $("retreat").textContent = placeSquadId === q.id ? "📍 道をタップ" : "📍 配置";
+            $("retreat").classList.toggle("active", placeSquadId === q.id);
+          } else {
+            $("retreat").disabled = q.state !== "deployed";
+            $("retreat").textContent = playing ? "↩ 撤退" : "↩ 待機へ";
+            $("retreat").classList.remove("active");
+          }
+          const rc = recruitCost(q),
+            full = roster(q).length >= SQUAD_RULES.squadSize;
+          setHtml(
+            $("sqRecruit"),
+            "＋ 補充<small>" + (full ? "満員" : playing ? "戦闘後" : rc + "G") + "</small>",
+          );
+          $("sqRecruit").disabled = full || playing || !!battle || gold < rc;
           const hc = healCost(q);
           setHtml(
             $("sqHeal"),
@@ -6717,9 +7011,16 @@
                   "<br><small>" +
                   passiveTextFor(hh.id, q) +
                   "</small>"
-              : "<small>武将なし（「武将」から配属できます）</small>",
+              : "<small>武将なし</small>",
           );
-          $("sqHero").textContent = hh ? "👤 武将変更" : "👤 武将";
+          const picking = heroPickFor === q;
+          $("sqHero").textContent = picking ? "▲ 閉じる" : hh ? "👤 武将を変更" : "👤 武将を選択";
+          $("sqHero").setAttribute("aria-expanded", String(picking));
+          $("sqHeroPick").hidden = !picking;
+          if (picking) setHtml($("sqHeroPick"), heroPickHtml(q));
+          $("sqDetail").hidden = !squadDetailOpen;
+          $("sqMore").textContent = squadDetailOpen ? "▲ 兵士の詳細を閉じる" : "▼ 兵士の詳細（" + list.length + "人）";
+          $("sqMore").setAttribute("aria-expanded", String(squadDetailOpen));
           renderSkillButton($("sqSkill"), $("sqSkillLabel"), $("sqSkillBar"), hh);
         }
         $("sqMembers").addEventListener("click", (ev) => {
@@ -6735,7 +7036,9 @@
           updateUI();
         });
         $("sqClose").onclick = () => {
+          if (selectedSquad && placeSquadId === selectedSquad.id) placeSquadId = null;
           selectedSquad = null;
+          heroPickFor = null;
           updateUI();
         };
         $("sqHeal").onclick = () => {
@@ -6746,8 +7049,26 @@
           updateUI();
         };
         $("retreat").onclick = () => {
-          if (selectedSquad) orderRetreat(selectedSquad);
-          if (selectedSquad && selectedSquad.state === "reserve") selectedSquad = null;
+          const q = selectedSquad;
+          if (!q) return;
+          if (q.state === "reserve") {
+            // 配置：このあと道をタップした場所に出る（もう一度押すとやめる）
+            placeSquadId = placeSquadId === q.id ? null : q.id;
+            if (placeSquadId) msg(squadName(q) + "：道をタップして配置しよう。");
+            toast($("msg").textContent);
+          } else orderRetreat(q);
+          updateUI();
+        };
+        $("sqRecruit").onclick = () => {
+          const q = selectedSquad,
+            c = q && recruitCost(q),
+            err = q ? recruitInto(q) : "部隊が見つかりません。";
+          msg(err || squadName(q) + " に新兵を1人補充した（" + c + "G）。兵種を選ぶときは「📋 兵士」から。");
+          toast($("msg").textContent);
+          updateUI();
+        };
+        $("sqMore").onclick = () => {
+          squadDetailOpen = !squadDetailOpen;
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
@@ -8810,8 +9131,11 @@
                   " 配属中<br><small>" +
                   passiveTextFor(h.id, t) +
                   "</small></p>"
-              : "<p><small>武将なし（「武将配属」から配属できます）</small></p>",
+              : "<p><small>武将なし</small></p>",
           );
+          const picking = heroPickFor === t;
+          $("tpHeroPick").hidden = !picking;
+          if (picking) setHtml($("tpHeroPick"), heroPickHtml(t));
           const maxed = t.level >= 5;
           $("upgrade").textContent = maxed ? "⬆ 最大Lv" : "⬆ 強化 " + upgradePrice(t) + "G";
           if (t.destroyed) {
@@ -8823,7 +9147,7 @@
           rb.disabled = playing || gold < rc;
           rb.textContent = playing ? "🔨 修理（ウェーブの合間に）" : "🔨 修理 " + rc + "G（耐久を全回復）";
           $("sell").textContent = "🪙 売却 " + Math.floor(t.spent * 0.7) + "G";
-          $("assign").textContent = h ? "👤 武将変更" : "👤 武将配属";
+          $("assign").textContent = picking ? "▲ 閉じる" : h ? "👤 武将変更" : "👤 武将配属";
           renderSkillButton($("skill"), $("skillLabel"), $("skillBar"), h);
         }
         // 必殺技ボタン（塔パネル・部隊パネル共通）
@@ -8891,6 +9215,69 @@
 
         // ===== 武将一覧・配属画面（配属先は塔または部隊） =====
         let sheetTarget = null;
+        // パネルの中の武将の選択欄：配属できる武将を先に、名前・レア度・★・配属先・負傷を出す
+        function heroPickHtml(t) {
+          const ids = ownedIds();
+          if (!ids.length)
+            return (
+              "<p>まだ武将がいません。ガチャ券で武将ガチャを引いてください。</p>" +
+              '<div class="card-actions"><button data-open-gacha>🎴 武将ガチャへ</button></div>'
+            );
+          const order = Object.keys(RARITY),
+            rank = (id) => {
+              const h = heroState[id];
+              if (injuryOf(id)) return 3;
+              if (h.tower === t || h.squad === t) return 2;
+              return h.tower || h.squad ? 1 : 0;
+            };
+          ids.sort(
+            (a, b) =>
+              rank(a) - rank(b) ||
+              order.indexOf(WARLORDS[a].rarity) - order.indexOf(WARLORDS[b].rarity) ||
+              stars(b) - stars(a),
+          );
+          return (
+            "<p>配属する武将を選ぶ（1か所に1人・同じ武将は1か所だけ）</p>" +
+            ids
+              .map((id) => {
+                const h = heroState[id],
+                  inj = injuryOf(id),
+                  here = h.tower === t || h.squad === t,
+                  where = inj
+                    ? '<span class="injured">🩹 負傷中：あと' + inj.left + "ウェーブ</span>"
+                    : here
+                      ? "ここに配属中"
+                      : h.tower || h.squad
+                        ? "配属先：" + esc(postLabel(h))
+                        : "未配属";
+                const btn = inj
+                  ? "<button disabled>負傷中</button>"
+                  : here
+                    ? '<button data-pick-off="' + id + '">外す</button>'
+                    : '<button data-pick-hero="' + id + '">' + (h.tower || h.squad ? "移す" : "配属") + "</button>";
+                return (
+                  '<div class="pick-hero' +
+                  (inj ? " injured-row" : "") +
+                  '">' +
+                  avatarHtml(id) +
+                  '<span class="ph-text">' +
+                  rarityTag(id) +
+                  " <b>" +
+                  WARLORDS[id].name +
+                  "</b>" +
+                  starText(id) +
+                  "<small>" +
+                  esc(WARLORDS[id].role) +
+                  "・" +
+                  where +
+                  "</small></span>" +
+                  btn +
+                  "</div>"
+                );
+              })
+              .join("")
+          );
+        }
         const targetValid = (t) => t && (towers.includes(t) || squads.includes(t));
         const targetLabel = (t) => (towers.includes(t) ? towerLabel(t) : squadName(t));
         function renderSheet() {
@@ -8999,11 +9386,41 @@
           if (ev.target === $("heroSheet")) closeSheet();
         });
         $("sheetClose").onclick = closeSheet;
-        $("assign").onclick = () => selectedTower && openSheet(selectedTower);
-        $("sqHero").onclick = () => selectedSquad && openSheet(selectedSquad);
+        // 塔・部隊のパネルの中で武将を選ぶ（別の画面を開かない）
+        $("assign").onclick = () => {
+          if (!selectedTower) return;
+          heroPickFor = heroPickFor === selectedTower ? null : selectedTower;
+          updateUI();
+        };
+        $("sqHero").onclick = () => {
+          if (!selectedSquad) return;
+          heroPickFor = heroPickFor === selectedSquad ? null : selectedSquad;
+          updateUI();
+        };
+        function onHeroPick(ev) {
+          const b = ev.target.closest("button");
+          if (!b || b.disabled) return;
+          const t = heroPickFor;
+          if (b.dataset.openGacha !== undefined) {
+            heroPickFor = null;
+            openGacha();
+          } else if (b.dataset.pickHero && targetValid(t)) {
+            assignHero(b.dataset.pickHero, t); // 配属の決まり（負傷・1か所だけ・前の配属先から外れる）は assignHero のまま
+            if (heroOn(t) === heroState[b.dataset.pickHero] || heroOnSquad(t) === heroState[b.dataset.pickHero])
+              heroPickFor = null;
+            toast($("msg").textContent);
+          } else if (b.dataset.pickOff) {
+            unassignHero(b.dataset.pickOff);
+            toast($("msg").textContent);
+          }
+          updateUI();
+        }
+        $("sqHeroPick").addEventListener("click", onHeroPick);
+        $("tpHeroPick").addEventListener("click", onHeroPick);
         $("roster").onclick = () => openSheet(null);
         $("tpClose").onclick = () => {
           selectedTower = null;
+          heroPickFor = null;
           updateUI();
         };
         $("skill").onclick = () => useSkillFrom(selectedTower && heroOn(selectedTower));
@@ -9418,6 +9835,31 @@
             },
           };
         }
+        // ===== 画面の大きさ（iPhone Safari） =====
+        // 見えている高さ（アドレスバーの出し入れ・キーボードで変わる）と、下に出した塔・部隊のパネルの高さを CSS に渡す
+        function syncViewport() {
+          const vv = window.visualViewport,
+            root = document.documentElement.style;
+          if (vv) {
+            root.setProperty("--app-h", Math.round(vv.height) + "px");
+            root.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
+          }
+          const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
+          root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
+        }
+        if (window.visualViewport) {
+          visualViewport.addEventListener("resize", syncViewport);
+          visualViewport.addEventListener("scroll", syncViewport);
+        }
+        window.addEventListener("resize", syncViewport);
+        if (window.ResizeObserver) {
+          const ro = new ResizeObserver(syncViewport);
+          ro.observe($("squadPanel"));
+          ro.observe($("towerPanel"));
+        }
+        new MutationObserver(syncViewport).observe($("squadPanel"), { attributes: true, attributeFilter: ["hidden"] });
+        new MutationObserver(syncViewport).observe($("towerPanel"), { attributes: true, attributeFilter: ["hidden"] });
+        syncViewport();
         updateUI();
         requestAnimationFrame(frame);
       })();
