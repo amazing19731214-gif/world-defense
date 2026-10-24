@@ -166,7 +166,8 @@
     "archer": "units/archer.png",
     "spearman": "units/spearman.png",
     "gunner": "units/gunner.png",
-    "cavalry": "units/cavalry.png"
+    "cavalry": "units/cavalry.png",
+    "medic": "units/medic.webp"
   },
   "enemies": {
     "ashigaru": {
@@ -242,6 +243,17 @@
       "death": [
         "enemies/general_death0.webp"
       ]
+    }
+  },
+  "unitFrames": {
+    "gunner": {
+      "idle": "units/frames/gunner_idle.webp",
+      "attack": "units/frames/gunner_attack.webp",
+      "death": "units/frames/gunner_death.webp"
+    },
+    "medic": {
+      "idle": "units/frames/medic_idle.webp",
+      "death": "units/frames/medic_death.webp"
     }
   }
 }

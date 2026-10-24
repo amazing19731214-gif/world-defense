@@ -746,7 +746,7 @@
         ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v15（鉄砲兵・衛生兵・攻城部隊編成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v15.1（鉄砲兵・衛生兵の画像）</small>
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -1485,6 +1485,8 @@
         };
         const ENEMY_ASSETS = /*@@ENEMY_ASSETS@@*/ {};
         const UNIT_ASSETS = /*@@UNIT_ASSETS@@*/ {};
+        // 兵士の動きのコマ { 兵種: { idle, attack, death } }（tools/build.mjs が埋め込む。無い兵種は1枚絵）
+        const UNIT_FRAMES = /*@@UNIT_FRAMES@@*/ {};
         const upper = [
             [0, 300],
             [140, 300],
@@ -2341,8 +2343,9 @@
             x: q.x + off[0],
             y: q.y + off[1],
             age: 0,
-            duration: 0.8,
+            duration: UNIT_FRAMES[s.type] && UNIT_FRAMES[s.type].death ? 1.4 : 0.8, // 戦死のコマは少し長く見せる
             scale: SQUAD_SCALE,
+            face: q.face || -1,
           });
           if (unitGhosts.length > 16) unitGhosts.shift();
           const alive = members(q);
@@ -3815,101 +3818,6 @@
           }
           heroBadge(h.id, bx, by, 14);
         }
-        // 衛生兵（陣中医）の仮画像：素材がまだ無いので、起動時にペイント調で描いて画像にする（右向き）。
-        // assets/units/medic.png を manifest に加えれば、そちらが優先される
-        function paintMedic() {
-          const cv = document.createElement("canvas");
-          cv.width = 132;
-          cv.height = 150;
-          const g = cv.getContext("2d");
-          if (!g) return null;
-          if (!g.roundRect) g.roundRect = (x, y, w, h) => g.rect(x, y, w, h); // 古いSafari向け
-          const line = "#2b1d14";
-          const shape = (fill, draw, w = 4) => {
-            g.beginPath();
-            draw();
-            g.fillStyle = fill;
-            g.fill();
-            g.lineWidth = w;
-            g.strokeStyle = line;
-            g.stroke();
-          };
-          const rr = (x, y, w, h, r) => () => g.roundRect(x, y, w, h, r);
-          const oval = (x, y, rx, ry) => () => g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-          // 背中の薬箱（左＝背中側）
-          shape("#8a5a2b", rr(12, 52, 44, 56, 6));
-          g.fillStyle = "#6b4220";
-          g.fillRect(16, 70, 36, 3);
-          g.fillRect(16, 88, 36, 3);
-          shape("#f4ead2", rr(22, 56, 24, 12, 2), 2);
-          g.fillStyle = "#9a2a1e";
-          g.font = "bold 11px serif";
-          g.textAlign = "center";
-          g.textBaseline = "middle";
-          g.fillText("薬", 34, 62.5);
-          shape("#c9a46b", rr(28, 44, 12, 10, 3), 3); // 箱の取っ手
-          // 足と草履
-          shape("#3c4566", rr(50, 112, 13, 22, 4));
-          shape("#3c4566", rr(70, 112, 13, 22, 4));
-          shape("#c9a46b", oval(57, 138, 10, 5), 3);
-          shape("#c9a46b", oval(78, 138, 10, 5), 3);
-          // 胴（生成りの小袖と緑の帯）、肩ひも
-          shape("#efe2c4", () => {
-            g.moveTo(44, 70);
-            g.lineTo(92, 70);
-            g.lineTo(96, 118);
-            g.lineTo(40, 118);
-            g.closePath();
-          });
-          g.fillStyle = "#4f7a55";
-          g.fillRect(42, 96, 52, 9);
-          g.strokeStyle = "#6b4220";
-          g.lineWidth = 5;
-          g.beginPath();
-          g.moveTo(50, 70);
-          g.lineTo(66, 100);
-          g.stroke();
-          // 前に出した腕と巻いた布（包帯）
-          shape("#efe2c4", oval(96, 92, 10, 8));
-          shape("#f3c9a0", oval(106, 92, 6, 6), 3);
-          shape("#ffffff", oval(112, 86, 9, 7), 3);
-          g.strokeStyle = "#9ad0a4";
-          g.lineWidth = 2;
-          g.beginPath();
-          g.moveTo(106, 86);
-          g.lineTo(118, 86);
-          g.stroke();
-          // 頭（大きめ）、髪、緑の鉢巻、目
-          shape("#f3c9a0", oval(72, 44, 26, 25));
-          shape("#2f241c", () => {
-            g.ellipse(70, 36, 27, 18, 0, Math.PI, Math.PI * 2);
-            g.closePath();
-          });
-          shape("#2f241c", oval(52, 22, 8, 6), 3); // 髷
-          shape("#4f7a55", rr(45, 32, 54, 8, 3), 3);
-          g.fillStyle = line;
-          g.beginPath();
-          g.ellipse(80, 50, 3, 4, 0, 0, Math.PI * 2);
-          g.ellipse(92, 50, 3, 4, 0, 0, Math.PI * 2);
-          g.fill();
-          g.fillStyle = "#e89a7a";
-          g.beginPath();
-          g.ellipse(94, 60, 4, 2.5, 0, 0, Math.PI * 2);
-          g.fill();
-          try {
-            return cv.toDataURL("image/png");
-          } catch (err) {
-            return null;
-          }
-        }
-        if (!UNIT_ASSETS.medic && typeof CanvasRenderingContext2D !== "undefined") {
-          try {
-            const src = paintMedic();
-            if (src) UNIT_ASSETS.medic = src;
-          } catch (err) {
-            console.warn("衛生兵の仮画像を作れません", err); // 仮アイコン（丸に「医」）で表示する
-          }
-        }
         // 兵士の画像は一度だけ読み込んで使い回す。失敗・未収録なら仮アイコン
         const unitSprites = Object.create(null);
         for (const [id, src] of Object.entries(UNIT_ASSETS)) {
@@ -3919,6 +3827,15 @@
           };
           im.onerror = () => console.warn("Unit image unavailable: " + id);
           im.src = src;
+        }
+        const unitFrameImgs = Object.create(null);
+        for (const [id, poses] of Object.entries(UNIT_FRAMES)) {
+          unitFrameImgs[id] = {};
+          for (const [pose, src] of Object.entries(poses)) {
+            const im = new Image();
+            im.onload = () => (unitFrameImgs[id][pose] = im);
+            im.src = src;
+          }
         }
         const UNIT_FOOT = 10; // 道の中心線から足元までのずれ（見た目のみ）
         const SQUAD_SCALE = 0.72; // 部隊の1人あたりの表示倍率（displayBox に対して）
@@ -3966,23 +3883,33 @@
             k0 = o.scale || 1,
             bw = c.displayBox[0] * k0,
             bh = c.displayBox[1] * k0,
-            im = unitSprites[type],
+            fr = unitFrameImgs[type],
             face = o.face || -1;
+          // コマがある兵種は idle を基準の大きさにし、攻撃・戦死のコマも同じ倍率で描く
+          let im = unitSprites[type],
+            ref = null;
+          if (fr && fr.idle) {
+            ref = fr.idle;
+            im = (o.pose && fr[o.pose]) || fr.idle;
+          } else if (o.pose === "death") return false; // 戦死のコマが無い兵種は呼び出し側が従来の演出で描く
           ctx.save();
           ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
           ctx.translate(x + (o.dx || 0), ground + (o.dy || 0));
           ctx.rotate(o.tilt || 0);
           if (im) {
-            const k = Math.min(bw / im.width, bh / im.height),
+            const base = ref || im,
+              k = Math.min(bw / base.width, bh / base.height),
               w = im.width * k,
-              h = im.height * k;
+              h = im.height * k,
+              // 攻撃のコマは前（右）に銃口の火などが伸びるので、体の位置（左端）をそろえる
+              left = ref && im !== ref && o.pose === "attack" ? (-ref.width * k) / 2 : -w / 2;
             ctx.scale(face < 0 ? -1 : 1, 1); // 素材は右向き。敵の来る左を向かせる
-            ctx.drawImage(im, -w / 2, -h, w, h);
+            ctx.drawImage(im, left, -h, w, h);
             if (o.flash) {
               ctx.globalCompositeOperation = "source-atop";
               ctx.globalAlpha = 0.5 * (o.alpha == null ? 1 : o.alpha);
               ctx.fillStyle = "#fff";
-              ctx.fillRect(-w / 2, -h, w, h);
+              ctx.fillRect(left, -h, w, h);
             }
           } else {
             const r = 12 * k0 + 3;
@@ -3997,6 +3924,7 @@
             ctx.fillText(c.mark, 0, -r - 1);
           }
           ctx.restore();
+          return true;
         }
         function drawSquad(q) {
           const c = SOLDIER_TYPES[q.type],
@@ -4036,6 +3964,7 @@
               dx: lunge * 4 * face,
               tilt: lunge * 0.14 * face,
               flash: s.hit > 0 && Math.floor(s.hit * 30) % 2 === 0,
+              pose: s.atk > 0 ? "attack" : null, // 攻撃のコマがある兵種だけ切り替わる
             });
             if (s.lvUp > 0) {
               ctx.save();
@@ -4105,7 +4034,17 @@
         }
         function drawUnitGhost(g) {
           const p = g.age / g.duration;
-          // 戦死は倒れて消え、生存本能の離脱は城の方へ下がって消える
+          // 戦死は倒れて消え（戦死のコマがあればそれを表示）、生存本能の離脱は城の方へ下がって消える
+          if (
+            !g.retreat &&
+            unitFigure(g.type, g.x, g.y + UNIT_FOOT, {
+              scale: g.scale,
+              alpha: p < 0.6 ? 1 : (1 - p) / 0.4,
+              face: g.face,
+              pose: "death",
+            })
+          )
+            return;
           unitFigure(g.type, g.x + (g.retreat ? 36 * p : 0), g.y + UNIT_FOOT, {
             scale: g.scale,
             alpha: 1 - p,
@@ -6154,7 +6093,7 @@
             stopSpawning: () => {
               spawned = spawnTotal;
             },
-            unitConfig: { SOLDIER_TYPES, SQUAD_RULES, TITLES, ENEMY_VS_UNIT },
+            unitConfig: { SOLDIER_TYPES, SQUAD_RULES, TITLES, ENEMY_VS_UNIT, UNIT_FRAMES },
             towerApi: { towerHp, towerMaxHp, damageTower, repairCost, TOWER_HP },
             towerStats,
             setGold: (g) => {
