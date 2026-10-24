@@ -166,7 +166,7 @@
     "archer": "units/archer.png",
     "spearman": "units/spearman.png",
     "gunner": "units/gunner.png",
-    "cavalry": "units/cavalry.png",
+    "cavalry": "units/frames/cavalry_idle.webp",
     "medic": "units/medic.webp"
   },
   "enemies": {
@@ -254,6 +254,11 @@
     "medic": {
       "idle": "units/frames/medic_idle.webp",
       "death": "units/frames/medic_death.webp"
+    },
+    "cavalry": {
+      "idle": "units/frames/cavalry_idle.webp",
+      "attack": "units/frames/cavalry_attack.webp",
+      "death": "units/frames/cavalry_death.webp"
     }
   }
 }

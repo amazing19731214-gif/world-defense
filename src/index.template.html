@@ -331,6 +331,32 @@
       .unit-tools {
         align-items: center;
       }
+      /* 兵種が増えても崩れないよう、4列にそろえる（1行目：部隊数と3兵種、2行目以降：残りの兵種と「編成」） */
+      .tools.unit-tools {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .unit-tools .row-label {
+        text-align: center;
+      }
+      .unit-tools button {
+        min-width: 0;
+        padding: 6px 4px;
+      }
+      .unit-tools .u-label {
+        line-height: 1.25;
+        white-space: nowrap;
+      }
+      .unit-tools .u-label span {
+        display: block; /* 兵種名と費用を2行に */
+      }
+      .tools.unit-tools button {
+        gap: 2px;
+      }
+      .tools.unit-tools button img {
+        width: 26px;
+        height: 26px;
+      }
       .unit-tools .row-label {
         flex: none;
         font-size: 14px;
@@ -746,7 +772,7 @@
         ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v15.1（鉄砲兵・衛生兵の画像）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v16（騎兵・鉄砲兵・衛生兵）</small>
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -1251,19 +1277,19 @@
         //   atk / guard（被ダメージ軽減）/ rangedGuard（遠距離の被ダメージ軽減）/ combo（追加攻撃の確率）
         //   vsBoss（大将への攻撃）/ haste（攻撃・回復の間隔の短縮）/ range（射程）/ instinct / unyielding / block
         //   healMul（衛生兵の回復量）
-        const ALL_UNITS = ["ashigaru", "spearman", "archer", "gunner", "medic"],
-          FIGHTERS = ["ashigaru", "spearman", "archer", "gunner"]; // 攻撃する兵種（衛生兵は攻撃しない）
+        const ALL_UNITS = ["ashigaru", "spearman", "archer", "gunner", "medic", "cavalry"],
+          FIGHTERS = ["ashigaru", "spearman", "archer", "gunner", "cavalry"]; // 攻撃する兵種（衛生兵は攻撃しない）
         const SOLDIER_SKILLS = {
           spearMaster: { name: "槍の達人", types: ["ashigaru", "spearman"], atk: 0.12, text: "攻撃力 +12%" },
           ironWall: {
             name: "鉄壁",
-            types: ["ashigaru", "spearman", "medic"],
+            types: ["ashigaru", "spearman", "medic", "cavalry"],
             guard: 0.1,
             text: "受けるダメージ -10%",
           },
           combo: {
             name: "連続攻撃",
-            types: ["ashigaru", "spearman", "archer"],
+            types: ["ashigaru", "spearman", "archer", "cavalry"],
             combo: 0.15,
             text: "15%の確率で追加攻撃",
           },
@@ -1283,6 +1309,18 @@
           rapidFire: { name: "速射", types: ["archer", "gunner"], haste: 0.1, text: "攻撃間隔 -10%" },
           longShot: { name: "遠矢", types: ["archer", "gunner"], range: 0.12, text: "射程 +12%" },
           preciseShot: { name: "精密射撃", types: ["gunner"], atk: 0.15, text: "攻撃力 +15%" },
+          chargeMaster: {
+            name: "突撃上手",
+            types: ["cavalry"],
+            chargeAdd: 0.5,
+            text: "突撃の一撃 ×2 → ×2.5",
+          },
+          horsemanship: {
+            name: "人馬一体",
+            types: ["cavalry"],
+            spearGuard: 0.5,
+            text: "槍兵から受ける追加ダメージを半分に",
+          },
           goodHealer: { name: "治療上手", types: ["medic"], healMul: 0.25, text: "回復量 +25%" },
           quickAid: { name: "早手当", types: ["medic"], haste: 0.15, text: "回復の間隔 -15%" },
           unyielding: {
@@ -1301,6 +1339,7 @@
           },
           sureShot: { name: "百発百中", unique: true, types: ["archer"], atk: 0.2, text: "攻撃力 +20%" },
           volley: { name: "三段撃ち", unique: true, types: ["gunner"], haste: 0.2, text: "攻撃間隔 -20%" },
+          ikkiTousen: { name: "一騎当千", unique: true, types: ["cavalry"], atk: 0.2, text: "攻撃力 +20%" },
           masterHealer: { name: "名医", unique: true, types: ["medic"], healMul: 0.4, text: "回復量 +40%" },
           siegeMaster: {
             name: "城攻め名人",
@@ -1406,7 +1445,31 @@
             text: "近くの味方を3秒ごとに回復（攻撃しない・自分は治せない）。味方の後ろに置こう",
           },
           // 以下は画像のみ用意済み・未実装（選択画面に出さない）
-          cavalry: { enabled: false, name: "騎馬兵", mark: "騎", color: "#2f5ca8", displayBox: [68, 64] },
+          // 騎兵：防衛戦では「敵の騎兵を止められる唯一の兵種」。新しい敵への最初の一撃が強い（突撃）・撤退が速い。
+          // 槍兵に弱い（敵の槍兵から受けるダメージ ×spearWeak）。march は攻城戦（Phase 4）での進軍の速さ（他の兵種は1）
+          cavalry: {
+            enabled: true,
+            name: "騎兵",
+            squadName: "騎馬隊",
+            icon: "🐎",
+            mark: "騎",
+            color: "#8a2f2a",
+            cost: 28, // 1人28G（5人の部隊で140G）
+            hp: 85,
+            atk: 11,
+            def: 6,
+            rate: 1.0,
+            range: 60,
+            block: 1,
+            blocksCavalry: true, // 敵の騎兵（ほかの兵種では止められない）も足止めできる
+            charge: 2, // 突撃：新しい敵への最初の一撃の倍率
+            spearWeak: 1.5, // 敵の槍兵から受けるダメージの倍率
+            retreatTime: 1.5, // 撤退が速い（通常は SQUAD_RULES.retreatTime）
+            march: 1.8,
+            grow: { hp: 9, atk: 1.6, def: 1 },
+            displayBox: [62, 62],
+            text: "敵の騎兵も止められる。最初の一撃が強い（突撃）。撤退が速いが槍兵に弱い",
+          },
         };
         // 称号：上から順に条件を満たした最も高いものになる。atk / def は能力への倍率ボーナス
         const TITLES = [
@@ -1419,7 +1482,7 @@
         // ===== 敵兵（戦国の兵）：調整用設定 =====
         // 内部ID（goblin など）は互換のため以前のまま。見た目と名前は戦国の兵。
         //   damage / rate … 兵士への攻撃と攻撃間隔、ranged … 遠距離攻撃の射程（兵士と塔を狙う）
-        //   unblockable … 足止めできない（騎兵は城への突破を優先）
+        //   unblockable … 足止めできない（城への突破を優先。味方の騎兵だけが止められる）
         //   tower … 塔への攻撃（damage と、道の上から届く距離 reach）。siege … 塔を攻撃する間は立ち止まる
         //   sprite / height … 画像（assets/enemies）と表示の高さ
         const ENEMY_VS_UNIT = {
@@ -2248,8 +2311,9 @@
         function assignBlocks() {
           for (const e of enemies) {
             if (e.gone || e.blockedBy || e.hp <= 0 || e.breakthrough > 0) continue;
-            if ((ENEMY_VS_UNIT[e.kind] || {}).unblockable) continue;
+            const fast = (ENEMY_VS_UNIT[e.kind] || {}).unblockable; // 敵の騎兵は騎兵でしか止められない
             for (const q of squads) {
+              if (fast && !SOLDIER_TYPES[q.type].blocksCavalry) continue;
               if (blockCount(q) >= blockCap(q) || dist(q, e) > SQUAD_RULES.blockRadius) continue;
               e.blockedBy = q;
               e.blockTime = 0;
@@ -2278,11 +2342,15 @@
         }
 
         // ===== 兵士部隊：被弾・戦死・撤退 =====
-        function damageSquad(q, raw, ranged) {
+        function damageSquad(q, raw, ranged, kind) {
           const front = members(q)[0];
           if (!front) return;
           const st = soldierStats(front),
-            guard = (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1);
+            weak = SOLDIER_TYPES[front.type].spearWeak,
+            // 騎兵は敵の槍兵（内部ID knight）に弱い。人馬一体で追加分を減らす
+            spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(front, "spearGuard")) : 1,
+            guard =
+              (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1) * spear;
           front.hp -= ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard;
           front.hit = 0.2;
           // 不屈：倒れるはずの攻撃を1ウェーブに1回だけ HP1 で耐える
@@ -2379,6 +2447,7 @@
                 : ""),
           );
         }
+        const retreatTimeOf = (q) => SOLDIER_TYPES[q.type].retreatTime || SQUAD_RULES.retreatTime;
         function orderRetreat(q) {
           if (!q || q.state !== "deployed") return;
           releaseBlocks(q);
@@ -2389,9 +2458,9 @@
           }
           // 戦闘中は撤退に時間がかかり、その間も攻撃を受ける（瞬間移動・無敵化しない）
           q.state = "retreating";
-          q.retreatLeft = SQUAD_RULES.retreatTime;
+          q.retreatLeft = retreatTimeOf(q);
           q.locked = true;
-          msg(squadName(q) + " が撤退を開始（" + SQUAD_RULES.retreatTime + "秒）。");
+          msg(squadName(q) + " が撤退を開始（" + retreatTimeOf(q) + "秒）。");
         }
 
         // ===== 兵士部隊：戦闘（共通のゲーム時間で進む） =====
@@ -2426,8 +2495,14 @@
               s.atk = 0.18;
               q.face = target.x < q.x ? -1 : 1;
               // 敵将狙い：大将への攻撃アップ。連続攻撃：一定確率でもう1回
-              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1);
-              target.hp -= hitDmg;
+              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1),
+                charge = SOLDIER_TYPES[q.type].charge;
+              // 突撃（騎兵）：新しい敵への最初の一撃だけ強い
+              if (charge && s.chargeTarget !== target) {
+                s.chargeTarget = target;
+                target.hp -= hitDmg * (charge + skillSum(s, "chargeAdd"));
+                burst(target.x - 6, target.y - 8, "#ffd9a0", "slash");
+              } else target.hp -= hitDmg;
               if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) {
                 target.hp -= hitDmg;
                 burst(target.x + 6, target.y - 6, "#ffe3a0", "slash");
@@ -2507,7 +2582,7 @@
               });
             }
             const scale = 1 + (wave - 1) * TOWER_HP.waveScale;
-            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged);
+            if (target) damageSquad(target, a.damage * (1 + (wave - 1) * 0.05), !!a.ranged, e.kind);
             else {
               damageTower(tower, a.tower.damage * scale);
               // 大将は塔の前で立ち止まって攻撃する（1回の進軍で最長 siegeMax 秒。永久には止まらない）
@@ -4751,11 +4826,11 @@
           b.dataset.u = type;
           b.innerHTML =
             (UNIT_ASSETS[type] ? '<img alt="" src="' + UNIT_ASSETS[type] + '">' : c.icon + " ") +
-            '<span class="u-label">' +
+            '<span class="u-label"><span>' +
             c.name +
-            " " +
+            "</span> <span>" +
             c.cost * SQUAD_RULES.squadSize +
-            "G</span>";
+            "G</span></span>";
           b.onclick = () => {
             selectedUnitType = type;
             placeSquadId = null;

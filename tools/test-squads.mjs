@@ -170,11 +170,10 @@ await page.evaluate(() => WD_DEBUG.setGold(5000));
 console.log("■ 兵種と雇用ボタン");
 const btns = await page.$$eval("[data-u]", (bs) => bs.map((b) => b.dataset.u));
 check(
-  "雇用できるのは足軽・槍兵・弓兵・鉄砲兵・衛生兵の5種類",
-  btns.join() === "ashigaru,spearman,archer,gunner,medic",
+  "雇用できるのは足軽・槍兵・弓兵・鉄砲兵・衛生兵・騎兵の6種類",
+  btns.join() === "ashigaru,spearman,archer,gunner,medic,cavalry",
   btns.join(),
 );
-check("未実装の兵種（騎馬兵）は表示しない", !/騎馬/.test(await page.textContent("#unitTools")));
 check("ボタンに部隊の費用（5人分）を表示", /足軽 75G/.test(await page.textContent('[data-u="ashigaru"]')));
 
 console.log("■ 雇用・配置");
