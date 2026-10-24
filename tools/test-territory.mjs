@@ -248,6 +248,83 @@ check(
 );
 await context.close();
 
+console.log("■ 領土の効果");
+({ page, errors, context } = await newContext());
+r = await page.evaluate(() => ({
+  gold: WD_DEBUG.state().gold,
+  label: document.querySelector('[data-u="ashigaru"]').textContent,
+}));
+check(
+  "領土が三河だけなら効果なし（開始ゴールド 500・足軽 75G）",
+  r.gold === 500 && /75G/.test(r.label),
+  JSON.stringify(r),
+);
+// 尾張（ウェーブの報酬）・遠江と駿河（開始ゴールド）・美濃（修理費）・信濃（雇用費）を領土にした保存データ
+await context.close();
+({ page, errors, context } = await newContext({
+  [CKEY]: JSON.stringify({
+    version: 1,
+    castles: Object.fromEntries(
+      ["kiyosu", "hikuma", "inabayama", "sunpu"].map((c) => [c, { captured: true }]),
+    ),
+  }),
+}));
+r = await page.evaluate(() => ({ gold: WD_DEBUG.state().gold, start: WD_DEBUG.squadApi.startGold() }));
+check("遠江・駿河で開始ゴールド +200（起動時から）", r.gold === 700 && r.start === 700, JSON.stringify(r));
+r = await page.evaluate(() => {
+  const s = WD_DEBUG.state(),
+    g0 = s.gold;
+  document.getElementById("start").click();
+  WD_DEBUG.stopSpawning();
+  WD_DEBUG.state().enemies.length = 0;
+  WD_DEBUG.step(0.1);
+  return WD_DEBUG.state().gold - g0;
+});
+check("尾張でウェーブクリアのゴールド +20%（58G → 70G）", r === Math.round(58 * 1.2), String(r));
+r = await page.evaluate(() => {
+  const s = WD_DEBUG.state(),
+    a = WD_DEBUG.squadApi;
+  s.towers.push({ id: 77, type: "arrow", x: 330, y: 300, level: 1, cd: 0, spent: 100 });
+  const t = s.towers[s.towers.length - 1];
+  t.hp = WD_DEBUG.towerApi.towerMaxHp(t) / 2;
+  return { cost: a.repairCost(t), base: Math.ceil(100 * 0.5 * 0.5) };
+});
+check("美濃で塔の修理費 -30%", r.cost === Math.ceil(100 * 0.5 * 0.7 * 0.5), JSON.stringify(r));
+r = await capture(page, "fukashi");
+r = await page.evaluate(() => ({
+  label: document.querySelector('[data-u="ashigaru"] .u-cost').textContent,
+  cost: WD_DEBUG.squadApi.unitCost("ashigaru"),
+}));
+check(
+  "信濃を取ると、すぐ雇用費 -15%（足軽 1人13G・部隊65G）",
+  r.cost === 13 && r.label === "65G",
+  JSON.stringify(r),
+);
+r = await page.evaluate(() => {
+  const a = WD_DEBUG.squadApi;
+  a.disbandSquad(WD_DEBUG.state().squads.find((q) => q.state === "reserve")); // 部隊の枠を1つ空ける
+  const g0 = WD_DEBUG.state().gold;
+  const q = a.hireSquad("ashigaru", 650, 300);
+  return { paid: g0 - WD_DEBUG.state().gold, ok: !!q };
+});
+check("雇用では割引後の費用を払う", r.ok && r.paid === 65, JSON.stringify(r));
+await page.tap("#battleClose").catch(() => {});
+await page.tap("#siege");
+await page.tap("#siegeTarget [data-provinces]");
+const list = await page.textContent("#siegePick");
+check(
+  "領土の一覧に各国の効果と、いま効いている効果を表示",
+  /✅ 楽市楽座：ウェーブクリアのゴールド \+20%/.test(list) &&
+    /取ると 甲州金/.test(list) &&
+    /領土の効果：楽市楽座/.test(list),
+  list.slice(0, 200),
+);
+await page.tap("#siegeClose");
+await page.tap("#reset");
+check("最初からやり直しても開始ゴールドに効果", (await page.evaluate(() => WD_DEBUG.state().gold)) === 700);
+check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
+await context.close();
+
 await browser.close();
 console.log(`\n結果: ${passes} 件成功 / ${failures} 件失敗`);
 process.exit(failures ? 1 : 0);
