@@ -4,6 +4,8 @@ Tower Defense Game
 ブラウザで遊べるタワーディフェンス。配布物は画像込みの単一ファイル `index.html` です
 （GitHub Pages ではこのファイルをそのまま公開します）。
 
+開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
+
 ## 攻城部隊編成（v14）
 
 - 「⚔️ 攻城編成」で第一〜第四部隊（並び順＝将来の攻城戦の出撃順）を編成する。攻城戦の戦闘処理・領土はまだない。
