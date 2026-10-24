@@ -60,6 +60,106 @@
       "icon": "heroes/keiji_icon.webp",
       "portrait": "heroes/keiji_portrait.webp",
       "skill": "heroes/keiji_skill.webp"
+    },
+    "motoyasu": {
+      "icon": "heroes/motoyasu_icon.webp",
+      "portrait": "heroes/motoyasu_portrait.webp",
+      "skill": "heroes/motoyasu_skill.webp"
+    },
+    "hideyoshi": {
+      "icon": "heroes/hideyoshi_icon.webp",
+      "portrait": "heroes/hideyoshi_portrait.webp",
+      "skill": "heroes/hideyoshi_skill.webp"
+    },
+    "mitsuhide": {
+      "icon": "heroes/mitsuhide_icon.webp",
+      "portrait": "heroes/mitsuhide_portrait.webp",
+      "skill": "heroes/mitsuhide_skill.webp"
+    },
+    "mitsunari": {
+      "icon": "heroes/mitsunari_icon.webp",
+      "portrait": "heroes/mitsunari_portrait.webp",
+      "skill": "heroes/mitsunari_skill.webp"
+    },
+    "yoshihiro": {
+      "icon": "heroes/yoshihiro_icon.webp",
+      "portrait": "heroes/yoshihiro_portrait.webp",
+      "skill": "heroes/yoshihiro_skill.webp"
+    },
+    "ujiyasu": {
+      "icon": "heroes/ujiyasu_icon.webp",
+      "portrait": "heroes/ujiyasu_portrait.webp",
+      "skill": "heroes/ujiyasu_skill.webp"
+    },
+    "motochika": {
+      "icon": "heroes/motochika_icon.webp",
+      "portrait": "heroes/motochika_portrait.webp",
+      "skill": "heroes/motochika_skill.webp"
+    },
+    "kiyomasa": {
+      "icon": "heroes/kiyomasa_icon.webp",
+      "portrait": "heroes/kiyomasa_portrait.webp",
+      "skill": "heroes/kiyomasa_skill.webp"
+    },
+    "masanori": {
+      "icon": "heroes/masanori_icon.webp",
+      "portrait": "heroes/masanori_portrait.webp",
+      "skill": "heroes/masanori_skill.webp"
+    },
+    "kansuke": {
+      "icon": "heroes/kansuke_icon.webp",
+      "portrait": "heroes/kansuke_portrait.webp",
+      "skill": "heroes/kansuke_skill.webp"
+    },
+    "hanbei": {
+      "icon": "heroes/hanbei_icon.webp",
+      "portrait": "heroes/hanbei_portrait.webp",
+      "skill": "heroes/hanbei_skill.webp"
+    },
+    "yoshiaki": {
+      "icon": "heroes/yoshiaki_icon.webp",
+      "portrait": "heroes/yoshiaki_portrait.webp",
+      "skill": "heroes/yoshiaki_skill.webp"
+    },
+    "yoshikage": {
+      "icon": "heroes/yoshikage_icon.webp",
+      "portrait": "heroes/yoshikage_portrait.webp",
+      "skill": "heroes/yoshikage_skill.webp"
+    },
+    "dosan": {
+      "icon": "heroes/dosan_icon.webp",
+      "portrait": "heroes/dosan_portrait.webp",
+      "skill": "heroes/dosan_skill.webp"
+    },
+    "yoshikata": {
+      "icon": "heroes/yoshikata_icon.webp",
+      "portrait": "heroes/yoshikata_portrait.webp",
+      "skill": "heroes/yoshikata_skill.webp"
+    },
+    "haruhisa": {
+      "icon": "heroes/haruhisa_icon.webp",
+      "portrait": "heroes/haruhisa_portrait.webp",
+      "skill": "heroes/haruhisa_skill.webp"
+    },
+    "sorin": {
+      "icon": "heroes/sorin_icon.webp",
+      "portrait": "heroes/sorin_portrait.webp",
+      "skill": "heroes/sorin_skill.webp"
+    },
+    "takanobu": {
+      "icon": "heroes/takanobu_icon.webp",
+      "portrait": "heroes/takanobu_portrait.webp",
+      "skill": "heroes/takanobu_skill.webp"
+    },
+    "muneshige": {
+      "icon": "heroes/muneshige_icon.webp",
+      "portrait": "heroes/muneshige_portrait.webp",
+      "skill": "heroes/muneshige_skill.webp"
+    },
+    "terumoto": {
+      "icon": "heroes/terumoto_icon.webp",
+      "portrait": "heroes/terumoto_portrait.webp",
+      "skill": "heroes/terumoto_skill.webp"
     }
   },
   "units": {

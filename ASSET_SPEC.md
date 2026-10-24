@@ -34,6 +34,27 @@
 | `motonari` | 毛利元就 | R | `heroes/motonari_*.png` |
 | `keiji` | 前田慶次 | R | `heroes/keiji_*.png` |
 
+第2弾の20人（v11）も同じ命名・同じサイズです（`heroes/<武将ID>_icon.webp` など）。
+
+| 武将ID | 名前 | レア度 | 武将ID | 名前 | レア度 |
+| --- | --- | --- | --- | --- | --- |
+| `motoyasu` | 松平元康 | SSR | `masanori` | 福島正則 | R |
+| `hideyoshi` | 羽柴秀吉 | SSR | `kansuke` | 山本勘助 | R |
+| `mitsuhide` | 明智光秀 | SR | `yoshiaki` | 最上義光 | R |
+| `mitsunari` | 石田三成 | SR | `yoshikage` | 朝倉義景 | R |
+| `yoshihiro` | 島津義弘 | SR | `dosan` | 斎藤道三 | R |
+| `motochika` | 長宗我部元親 | SR | `yoshikata` | 六角義賢 | R |
+| `kiyomasa` | 加藤清正 | SR | `haruhisa` | 尼子晴久 | R |
+| `muneshige` | 立花宗茂 | SR | `sorin` | 大友宗麟 | R |
+| `hanbei` | 竹中半兵衛 | SR | `takanobu` | 龍造寺隆信 | R |
+| `ujiyasu` | 北条氏康 | R | `terumoto` | 毛利輝元 | R |
+
+- 第2弾の元画像は「丸いアイコン＋カードのイラスト1枚」の形式でした。そのため次のように作っています。
+  - icon：丸いアイコンを切り出した
+  - skill：カードのうち、アイコンと重ならない右側を使った
+  - portrait：カードから顔まわりを正方形に切り出した
+- 容量を抑えるため、第2弾の60枚は WebP の品質72です（第1弾は88）。
+
 | 種類 | 推奨サイズ / 縦横比 | 背景透過 | 表情・ポーズ |
 | --- | --- | --- | --- |
 | `_icon` | 128×128 / 1:1 | **あり** | 顔のアップ（通常の表情）。兜の前立てなど見分けの付く特徴を入れる |

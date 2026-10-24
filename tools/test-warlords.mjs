@@ -453,6 +453,125 @@ check(
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
+console.log("■ 武将30人（第2弾の20人を含む）");
+{
+  const ALL = await (async () => {
+    const r = await newPage();
+    const ids = await r.page.evaluate(() => Object.keys(WD_DEBUG.config.WARLORDS));
+    await r.context.close();
+    return ids;
+  })();
+  const owned = Object.fromEntries(ALL.map((id) => [id, 1]));
+  ({ page, errors, context } = await newPage(JSON.stringify({ owned, tickets: 0, history: [] })));
+  const info = await page.evaluate(() => {
+    const W = WD_DEBUG.config.WARLORDS;
+    const count = { SSR: 0, SR: 0, R: 0 };
+    for (const w of Object.values(W)) count[w.rarity]++;
+    return { n: Object.keys(W).length, count, names: Object.values(W).map((w) => w.name) };
+  });
+  check(
+    "武将は30人（SSR 5・SR 11・R 14）",
+    info.n === 30 && info.count.SSR === 5 && info.count.SR === 11 && info.count.R === 14,
+    JSON.stringify(info.count),
+  );
+  check(
+    "第2弾の武将（松平元康・羽柴秀吉・明智光秀・石田三成・島津義弘 ほか）を含む",
+    [
+      "松平元康",
+      "羽柴秀吉",
+      "明智光秀",
+      "石田三成",
+      "島津義弘",
+      "長宗我部元親",
+      "加藤清正",
+      "立花宗茂",
+      "竹中半兵衛",
+      "北条氏康",
+      "福島正則",
+      "山本勘助",
+      "最上義光",
+      "朝倉義景",
+      "斎藤道三",
+      "六角義賢",
+      "尼子晴久",
+      "大友宗麟",
+      "龍造寺隆信",
+      "毛利輝元",
+    ].every((n) => info.names.includes(n)),
+  );
+  check("名前の重複なし", new Set(info.names).size === 30);
+  await page.tap("#roster");
+  const roster = await page.evaluate(() => ({
+    hint: document.getElementById("sheetHint").textContent,
+    cards: document.querySelectorAll("#heroList .hero-card").length,
+    withImg: [...document.querySelectorAll("#heroList .avatar")].filter((a) =>
+      /url\(/.test(a.style.backgroundImage),
+    ).length,
+  }));
+  check(
+    "武将一覧に30人・全員の画像",
+    roster.cards === 30 && roster.withImg === 30 && /所持 30\/30/.test(roster.hint),
+    JSON.stringify(roster),
+  );
+  await page.tap("#sheetClose");
+  // 全員をガチャで引ける（各武将を狙った乱数で抽選）
+  const drawable = await page.evaluate(() => {
+    const { WARLORDS, GACHA } = WD_DEBUG.config,
+      api = WD_DEBUG.heroApi,
+      keys = Object.keys(GACHA.rates);
+    const got = new Set();
+    for (const [id, w] of Object.entries(WARLORDS)) {
+      let lo = 0;
+      for (const k of keys) {
+        if (k === w.rarity) break;
+        lo += GACHA.rates[k];
+      }
+      const pool = Object.keys(WARLORDS).filter((x) => WARLORDS[x].rarity === w.rarity);
+      const seq = [lo + GACHA.rates[w.rarity] / 2, (pool.indexOf(id) + 0.5) / pool.length];
+      let i = 0;
+      got.add(api.rollWarlord(() => seq[i++]));
+    }
+    return got.size;
+  });
+  check("30人全員がガチャの抽選対象", drawable === 30, String(drawable));
+  // 全員を塔と部隊に配属して必殺技を使ってもエラーにならない
+  const run = await page.evaluate(() => {
+    const api = WD_DEBUG.heroApi,
+      sq = WD_DEBUG.squadApi,
+      s = WD_DEBUG.state();
+    WD_DEBUG.setGold(1e6);
+    document.getElementById("start").click();
+    WD_DEBUG.stopSpawning();
+    s.enemies.length = 0;
+    WD_DEBUG.addEnemy({ kind: "knight", d: 0, hp: 1e12, speed: 0, holder: true });
+    WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 40, hp: 1e12, speed: 0 });
+    const q = sq.hireSquad("spearman", 650, 300);
+    const used = [];
+    for (const id of Object.keys(WD_DEBUG.config.WARLORDS)) {
+      for (const target of ["tower", "squad"]) {
+        const st = WD_DEBUG.state();
+        if (target === "tower") {
+          if (!st.towers.length) {
+            // 道の外の草地に塔を1基
+            st.towers.push({ id: 99, x: 650, y: 225, type: "cannon", level: 1, cd: 0, spent: 180 });
+          }
+          api.assignHero(id, st.towers[0]);
+        } else api.assignHero(id, q);
+        const h = api.heroState()[id];
+        h.cd = 0;
+        api.useSkill(h);
+        WD_DEBUG.step(1.2);
+        used.push(h.cd > 0);
+      }
+      api.unassignHero(id);
+    }
+    return { ok: used.every(Boolean), n: used.length };
+  });
+  check("30人全員の必殺技を塔・部隊の両方で発動できる", run.ok && run.n === 60, JSON.stringify(run));
+  check("第2弾の確認でエラーなし", errors.length === 0, errors.join(" / "));
+  await context.close();
+}
+
 console.log("■ モバイル表示（390px）");
 ({ page, errors, context } = await newPage(
   JSON.stringify({ owned: { nobunaga: 1 }, tickets: 5, history: [] }),
