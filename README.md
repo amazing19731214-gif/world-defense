@@ -6,6 +6,14 @@ Tower Defense Game
 
 開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
 
+## 奪い返し（NPCの反撃・v21）
+
+- 攻城戦で新しい国を取ると、50%の確率で**隣の敵国が反撃**してくる。狙われるのは境目の領土（自国以外で、まだ取っていない国と隣り合う国）。
+- 反撃中は画面上部にお知らせ（あと何ウェーブ）を出す。**防衛戦でウェーブ10までクリア**すれば撃退（🎴 ガチャ券 +1）。
+  その前に**ゲームオーバー**になるとその国を奪われ、特産の効果も消える（また攻略できる国に戻る）。
+- 「最初から」でやり直しても反撃は続く（奪われもせず、撃退にもならない）。反撃中は新しい国を攻められない（演習はできる）。
+- 反撃は `worldDefense.conquest.v1` の `counter` に保存。数値は `COUNTER`（確率・守るウェーブ数・報酬）。
+
 ## 領土の効果（v20）
 
 - 領土にした国の特産が防衛戦に効く（同じ種類は足し合わせる）。数値は `PROVINCE_BONUS`。
@@ -218,6 +226,7 @@ Tower Defense Game
 | `tools/test-soldiers.mjs` | 動作確認：兵士の育成・スキル・命名・保存・英霊名鑑・武将の負傷 |
 | `tools/test-formation.mjs` | 動作確認：攻城部隊編成（4部隊・10人・武将・重複禁止・保存） |
 | `tools/test-units.mjs` | 動作確認：鉄砲兵・衛生兵（攻撃・回復・成長・保存・攻城編成） |
+| `tools/test-counter.mjs` | 動作確認：奪い返し（反撃・防衛で守る／奪われる・保存） |
 | `tools/test-territory.mjs` | 動作確認：領土（隣の国・目標の選択・城の強さ・統一・保存） |
 | `tools/test-castle.mjs` | 動作確認：NPC城の攻略（攻略目標・占領・報酬・演習・保存） |
 | `tools/test-battle.mjs` | 動作確認：攻城戦（出撃・進軍・戦闘・勝敗・経験値・戦死・負傷・撤退） |
@@ -243,6 +252,7 @@ node tools/test-limits.mjs      # 部隊の保有上限・解散の動作確認
 node tools/test-battle.mjs      # 攻城戦の動作確認
 node tools/test-castle.mjs      # NPC城の攻略の動作確認
 node tools/test-territory.mjs   # 領土（7か国）の動作確認
+node tools/test-counter.mjs     # 奪い返し（NPCの反撃）の動作確認
 ```
 
 iPhone から更新する場合は、生成済みの `index.html` をそのままアップロードすれば動きます。

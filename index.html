@@ -538,6 +538,15 @@
         padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
         font-size: 15px;
       }
+      .counter-banner {
+        margin: 8px 0 0;
+        padding: 8px 12px;
+        border: 1px solid #ef6a58;
+        border-radius: 10px;
+        background: #5a1f1acc;
+        color: #ffe3d8;
+        line-height: 1.45;
+      }
       .target-card {
         margin: 8px 0 2px;
         padding: 8px 10px;
@@ -862,6 +871,7 @@
           </div>
         </div>
       </header>
+      <p id="counterBanner" class="counter-banner" role="status" hidden></p>
       <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
@@ -928,7 +938,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v20（領土の効果・7か国・攻城戦）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v21（奪い返し・領土の効果・7か国）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1820,6 +1830,23 @@
           renderTowerPanel();
           renderSquadUI();
           renderBattleBar();
+          renderCounterBanner();
+        }
+        function renderCounterBanner() {
+          const c = territoryReady ? activeCounter() : null,
+            el = $("counterBanner");
+          el.hidden = !c;
+          if (!c) return;
+          const left = Math.max(0, COUNTER.waves - wave);
+          const t =
+            "⚠ 反撃：" +
+            counterText(c) +
+            "！ 防衛戦でウェーブ" +
+            COUNTER.waves +
+            "まで守り抜こう" +
+            (left ? "（あと" + left + "ウェーブ）" : "") +
+            "。";
+          if (el.textContent !== t) el.textContent = t;
         }
         const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
         const towerLabel = (t) =>
@@ -3332,6 +3359,16 @@
             over = true;
             playing = false;
             msg("ゲームオーバー！ 最初から挑戦しよう。");
+            const lost = counterFailed();
+            if (lost)
+              $("msg").textContent +=
+                " " +
+                PROVINCES[lost.province].name +
+                "（" +
+                NPC_CASTLES[PROVINCES[lost.province].castle].name +
+                "）を" +
+                PROVINCES[lost.from].name +
+                "の軍勢に奪われた…";
           } else if (spawned >= spawnTotal && enemies.length === 0) {
             playing = false;
             squadsWaveEnd();
@@ -3342,6 +3379,16 @@
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (wave === 20) over = true;
+            const held = counterWaveCleared();
+            if (held) {
+              $("msg").textContent +=
+                " " +
+                PROVINCES[held.from].name +
+                "の反撃を退け、" +
+                PROVINCES[held.province].name +
+                "を守り抜いた！";
+              grantTickets(COUNTER.tickets, "反撃を撃退", true);
+            }
             const back = healInjuries();
             if (back.length) $("msg").textContent += " 武将 " + back.join("・") + " が負傷から復帰した。";
             if (wave % GACHA.ticketWaveInterval === 0)
@@ -5879,6 +5926,7 @@
             TC = NPC_CASTLES[tid],
             done = conquest[tid].captured;
           $("siegeTarget").className = "target-card" + (done ? " done" : "");
+          const cc = activeCounter();
           setHtml(
             $("siegeTarget"),
             (done ? "🏯 占領済み：" : "🎯 攻略目標：") +
@@ -5899,6 +5947,13 @@
                   ? "・初めて攻め落とすと 🎴 ガチャ券 +" + TC.reward.tickets
                   : "") +
               "</small>" +
+              (cc
+                ? '<br><span class="injured">⚠ ' +
+                  counterText(cc) +
+                  "。防衛戦でウェーブ" +
+                  COUNTER.waves +
+                  "まで守るまで、新しい国は攻められません。</span>"
+                : "") +
               '<div class="card-actions"><button data-provinces>🗾 領土 ' +
               ownedCount() +
               "/" +
@@ -5936,7 +5991,10 @@
               state = "🏠 自国";
               btn = "<button disabled>自国</button>";
             } else if (own) {
-              state = "🏯 領土（演習できる）";
+              state =
+                activeCounter() && activeCounter().province === p
+                  ? "⚠ 反撃を受けている（防衛戦で守る）"
+                  : "🏯 領土（演習できる）";
               btn = isTarget
                 ? "<button disabled>目標</button>"
                 : '<button data-target="' + P.castle + '">演習</button>';
@@ -6274,9 +6332,15 @@
           }
           conquestMeta.target = d && NPC_CASTLES[d.target] ? d.target : null;
           conquestMeta.unified = !!(d && d.unified === true);
+          // 反撃：{ province: 狙われた国, from: 攻めてきた国 }（中身の確認は activeCounter で行う）
+          const c = d && d.counter;
+          conquestMeta.counter =
+            c && typeof c === "object" && PROVINCES[c.province] && PROVINCES[c.from]
+              ? { province: c.province, from: c.from }
+              : null;
           return out;
         }
-        const conquestMeta = { target: null, unified: false };
+        const conquestMeta = { target: null, unified: false, counter: null };
         const conquest = loadConquest();
         function persistConquest() {
           try {
@@ -6287,6 +6351,7 @@
                 castles: conquest,
                 target: conquestMeta.target,
                 unified: conquestMeta.unified,
+                counter: conquestMeta.counter,
               }),
             );
             return true;
@@ -6306,6 +6371,59 @@
         }
         territoryReady = true;
         const startGold = () => 500 + territoryBonus("startGold");
+        // ===== 奪い返し（NPCの反撃） =====
+        // 攻城戦で新しい国を取ると、chance の確率で隣の敵国が境目の領土（自国以外で敵国と接している国）へ反撃してくる。
+        // 反撃中は防衛戦がその国の防衛になる：ウェーブ waves までクリアすれば撃退（報酬）、その前にゲームオーバーなら奪われる。
+        // 「最初から」でやり直しても反撃は続く（奪われもしないし、撃退にもならない）。反撃中は新しい国を攻められない（演習はできる）
+        const COUNTER = { chance: 0.5, waves: 10, tickets: 1 };
+        let counterRng = Math.random; // テストで差し替え可能
+        function activeCounter() {
+          const c = conquestMeta.counter;
+          if (!c || PROVINCES[c.province].home || !ownsProvince(c.province)) return null;
+          return c;
+        }
+        // 境目の領土：自国以外の領土で、まだ取っていない国と隣り合っている国
+        const borderProvinces = () =>
+          PROVINCE_ORDER.filter(
+            (p) => !PROVINCES[p].home && ownsProvince(p) && PROVINCES[p].adj.some((a) => !ownsProvince(a)),
+          );
+        function maybeCounter() {
+          if (activeCounter() || counterRng() >= COUNTER.chance) return null;
+          const list = borderProvinces();
+          if (!list.length) return null;
+          const province = list[Math.min(list.length - 1, Math.floor(counterRng() * list.length))],
+            enemies = PROVINCES[province].adj.filter((a) => !ownsProvince(a)),
+            from = enemies[Math.min(enemies.length - 1, Math.floor(counterRng() * enemies.length))];
+          conquestMeta.counter = { province, from };
+          persistConquest();
+          return conquestMeta.counter;
+        }
+        const counterText = (c) =>
+          PROVINCES[c.from].name +
+          "の軍勢が" +
+          PROVINCES[c.province].name +
+          "（" +
+          NPC_CASTLES[PROVINCES[c.province].castle].name +
+          "）に攻めてきた";
+        // 防衛戦のウェーブクリア：waves まで守り抜けば撃退
+        function counterWaveCleared() {
+          const c = activeCounter();
+          if (!c || wave < COUNTER.waves) return null;
+          conquestMeta.counter = null;
+          persistConquest();
+          return c;
+        }
+        // 防衛戦のゲームオーバー：waves より前なら国を奪われる
+        function counterFailed() {
+          const c = activeCounter();
+          if (!c || wave >= COUNTER.waves) return null;
+          const castle = PROVINCES[c.province].castle;
+          conquest[castle].captured = false;
+          conquestMeta.counter = null;
+          if (conquestMeta.target === castle) conquestMeta.target = null;
+          persistConquest();
+          return c;
+        }
         // 起動したときの開始ゴールドにも領土の効果を足す（まだ何もしていないゲームだけ）
         if (wave === 0 && !towers.length && gold === 500) gold = startGold();
         const bonusList = () =>
@@ -6348,6 +6466,14 @@
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
           if (battle) return "攻城戦の最中です。";
           if (!battleRoster().some((l) => l.length)) return "攻城編成に兵士がいません。";
+          const c = activeCounter();
+          if (c && !ownsProvince(provinceOf(targetCastleId())))
+            return (
+              PROVINCES[c.province].name +
+              "への反撃を退けるまで、新しい国は攻められません（防衛戦でウェーブ" +
+              COUNTER.waves +
+              "まで守り抜こう。演習はできます）。"
+            );
           return null;
         }
         function startBattle() {
@@ -6829,6 +6955,7 @@
             }
           }
           persistConquest();
+          if (B.captured && !B.unified) B.counter = maybeCounter(); // 隣の敵国の反撃
           shots = [];
           showBattleResult(B);
           if (B.captured) {
@@ -6870,6 +6997,13 @@
               : "") +
             (B.unified
               ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
+              : "") +
+            (B.counter
+              ? '<p class="injured">⚠ ' +
+                counterText(B.counter) +
+                "！ 防衛戦でウェーブ" +
+                COUNTER.waves +
+                "まで守り抜こう（その前に負けると奪われます）。</p>"
               : "") +
             "<p>経過 " +
             Math.floor(B.t) +
@@ -7658,6 +7792,11 @@
               targetCastleId,
               ownsProvince,
               canAttackProvince,
+              activeCounter,
+              maybeCounter,
+              borderProvinces,
+              setCounterRng: (f) => (counterRng = f || Math.random),
+              COUNTER,
               territoryBonus,
               startGold,
               unitCost,

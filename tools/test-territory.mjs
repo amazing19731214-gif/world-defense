@@ -79,6 +79,7 @@ const api = (page, fn, ...args) => page.evaluate(([fn, args]) => WD_DEBUG.squadA
 const capture = (page, castle) =>
   page.evaluate((castle) => {
     const a = WD_DEBUG.squadApi;
+    a.setCounterRng(() => 0.99); // 反撃（奪い返し）は起こさない（test-counter で確認）
     const err = castle ? a.setTarget(castle) : null;
     if (err) return { err };
     const e = a.startBattle();
