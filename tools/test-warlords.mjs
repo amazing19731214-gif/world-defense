@@ -351,7 +351,9 @@ await page.evaluate(() => {
 hs = await H(page);
 check(
   "解除・再配属しても再使用待ちはリセットされない",
-  near(hs.yukimura.cd, cdMid, 0.01) && hs.yukimura.active === 0,
+  // リセットされていなければ、再使用待ちは増えず、その間に経過したわずかな時間だけ減っている
+  hs.yukimura.cd <= cdMid + 0.001 && hs.yukimura.cd > cdMid - 0.5 && hs.yukimura.active === 0,
+  JSON.stringify({ cdMid, now: hs.yukimura }),
 );
 check(
   "再使用待ち中は使えない",
@@ -574,7 +576,7 @@ console.log("■ 武将30人（第2弾の20人を含む）");
         if (target === "tower") {
           if (!st.towers.length) {
             // 道の外の草地に塔を1基
-            st.towers.push({ id: 99, x: 650, y: 225, type: "cannon", level: 1, cd: 0, spent: 180 });
+            st.towers.push({ id: 99, x: 650, y: 225, type: "cannon", level: 1, cd: 0, spent: 180, hp: 1e9 }); // 敵に壊されないように
           }
           api.assignHero(id, st.towers[0]);
         } else api.assignHero(id, q);

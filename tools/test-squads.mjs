@@ -554,17 +554,25 @@ check(
 
 console.log("■ 遠距離の敵・止められない敵");
 await startHeldWave(page);
+// 遠距離の敵兵（弓兵＝内部ID dragon）は塔を射る。騎兵（wolf）は足止めできない
+const towerHp0 = await page.evaluate(() => {
+  const t = WD_DEBUG.state().towers[0];
+  return WD_DEBUG.towerApi.towerHp(t);
+});
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "dragon", d: 694 - 20, hp: 1e6, speed: 0, r: 16 }));
 await step(page, 1.5);
 const ranged = await page.evaluate(() => {
   const s = WD_DEBUG.state();
-  return {
-    stunned: s.towers.some((t) => t.stun > 0 || t.cd > 0.5),
-    blocked: s.enemies.some((e) => e.kind === "dragon" && e.blockedBy),
-  };
+  return { hp: WD_DEBUG.towerApi.towerHp(s.towers[0]) };
 });
-check("遠距離の敵（ドラゴン）は塔を攻撃できる（一時停止）", ranged.stunned);
-check("ドラゴンは足止めされない", !ranged.blocked);
+check("遠距離の敵兵（弓兵）は塔を攻撃して耐久を減らす", ranged.hp < towerHp0, `${towerHp0} → ${ranged.hp}`);
+await clearEnemies(page);
+await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "wolf", d: 694 + 40, hp: 1e6, speed: 0, r: 10 }));
+await step(page, 0.5);
+check(
+  "騎兵は足止めされない（城への突破を優先）",
+  await page.evaluate(() => !WD_DEBUG.state().enemies.some((e) => e.kind === "wolf" && e.blockedBy)),
+);
 await clearEnemies(page);
 // 下の道の弓兵隊(#4 @300,440)の手前
 await page.evaluate(() =>

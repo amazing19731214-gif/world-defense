@@ -500,6 +500,7 @@ for (const t of st.towers) {
   await page.evaluate((id) => {
     const t = WD_DEBUG.state().towers.find((t) => t.id === id);
     while (t.level < 5) t.level++;
+    t.hp = WD_DEBUG.towerApi.towerMaxHp(t); // 強化ボタンと同じく最大耐久も Lv5 に
   }, t.id);
 }
 await deselect(page);
@@ -523,7 +524,8 @@ for (let w = 1; w <= 20; w++) {
 }
 st = await S(page);
 check("20ウェーブを最後まで進行できる", waveOk && st.wave === 20 && st.over, `wave=${st.wave} hp=${st.hp}`);
-check("勝利メッセージ", (await page.textContent("#msg")).includes("20ウェーブクリア"));
+const winMsg = await page.textContent("#msg");
+check("勝利メッセージ", winMsg.includes("20ウェーブクリア"), winMsg);
 check("上下の分岐ルートの両方を敵が通る", routes.has("north") && routes.has("south"));
 check("回帰テスト中エラーなし", errors.length === 0, errors.join(" / "));
 
