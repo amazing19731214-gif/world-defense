@@ -538,6 +538,27 @@
         padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
         font-size: 15px;
       }
+      .toast {
+        position: fixed;
+        left: 50%;
+        top: calc(10px + env(safe-area-inset-top));
+        transform: translateX(-50%);
+        width: min(92vw, 520px);
+        z-index: 20;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: #143c45f2;
+        border: 1px solid #e1bc77;
+        box-shadow: 0 6px 18px #0008;
+        font-size: 15px;
+        line-height: 1.45;
+        pointer-events: none;
+      }
+      .unit-tools .row-label small {
+        display: block;
+        font-size: 14px;
+        color: #b9d4c6;
+      }
       .tabs {
         display: flex;
         gap: 6px;
@@ -771,8 +792,9 @@
         ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
         ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
       </div>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v16（騎兵・鉄砲兵・衛生兵）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v16.1（騎兵・鉄砲兵・衛生兵）</small>
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -1965,6 +1987,15 @@
         function msg(s) {
           $("msg").textContent = s;
         }
+        // 地図をタップした結果を画面の上に少しだけ表示する（iPhone では下のメッセージ欄が画面外になりやすい）
+        let toastTimer = 0;
+        function toast(s) {
+          const el = $("toast");
+          el.textContent = s;
+          el.hidden = false;
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => (el.hidden = true), 2600);
+        }
         function pathAt(path, d) {
           for (let i = 1; i < path.length; i++) {
             const a = path[i - 1],
@@ -2269,7 +2300,14 @@
           const r = placeCheck(x, y);
           if (r.error) return (msg(r.error), null);
           if (squads.length >= SQUAD_RULES.maxSquads)
-            return (msg("保有できる部隊は " + SQUAD_RULES.maxSquads + " 部隊までです。"), null);
+            return (
+              msg(
+                "保有できる部隊は " +
+                  SQUAD_RULES.maxSquads +
+                  " 部隊までです。「編成」から待機中の部隊を配置するか、解散して枠を空けてください。",
+              ),
+              null
+            );
           if (gold < cost) return (msg("資金が足りません（" + c.squadName + " " + cost + "G）。"), null);
           gold -= cost;
           const q = newSquad(type);
@@ -2691,6 +2729,23 @@
             squads = squads.filter((q) => q !== from);
             if (selectedSquad === from) selectedSquad = null;
           }
+          return null;
+        }
+        // 解散：待機中の部隊の兵士を除隊させる（戦死ではないので英霊名鑑には残らない。保存データからも外す）
+        function disbandSquad(q) {
+          if (playing) return "ウェーブ中は解散できません。";
+          if (!q || !squads.includes(q)) return "部隊が見つかりません。";
+          if (q.state !== "reserve") return "道に出ている部隊は解散できません。先に撤退させてください。";
+          const ids = new Set(roster(q).map((s) => s.id));
+          releaseHeroFromSquad(q);
+          soldiers = soldiers.filter((s) => !ids.has(s.id));
+          squads = squads.filter((x) => x !== q);
+          if (selectedSquad === q) selectedSquad = null;
+          if (placeSquadId === q.id) placeSquadId = null;
+          soldierSave.soldiers = soldierSave.soldiers.filter((v) => !ids.has(v.id));
+          soldierSave.squads = soldierSave.squads.filter((v) => v.id !== q.id);
+          writeSoldierSave();
+          refreshSiege();
           return null;
         }
         function recruitInto(q) {
@@ -4680,17 +4735,27 @@
           }
           if (placeSquadId) {
             if (deployReserve(squadById(placeSquadId), x, y)) placeSquadId = null;
+            toast($("msg").textContent);
             updateUI();
             return;
           }
           if (selectedUnitType) {
-            hireSquad(selectedUnitType, x, y);
+            // 保有できる部隊がいっぱいなら、同じ兵種の待機中の部隊をそこへ出す
+            const spare =
+              squads.length >= SQUAD_RULES.maxSquads &&
+              squads.find(
+                (q) => q.type === selectedUnitType && q.state === "reserve" && !q.locked && members(q).length,
+              );
+            if (spare) deployReserve(spare, x, y);
+            else hireSquad(selectedUnitType, x, y);
+            toast($("msg").textContent);
             updateUI();
             return;
           }
           const p = types[selectedType];
           if (gold < p.cost) {
             msg("資金が足りません。");
+            toast($("msg").textContent);
           } else if (
             x < 38 ||
             x > 825 ||
@@ -4701,6 +4766,7 @@
             towers.some((t) => Math.hypot(t.x - x, t.y - y) < 65)
           ) {
             msg("そこには建設できません。草地の広い場所を選んでね。");
+            toast($("msg").textContent);
           } else {
             gold -= p.cost;
             const nt = { id: ++towerSeq, x, y, type: selectedType, level: 1, cd: 0, spent: p.cost };
@@ -4851,7 +4917,18 @@
           $("unitTools").insertBefore(b, $("organize"));
         }
         function renderSquadUI() {
-          $("unitCount").textContent = "部隊 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
+          setHtml(
+            $("unitCount"),
+            "配置 " +
+              fieldSquads().length +
+              "/" +
+              SQUAD_RULES.maxDeployed +
+              "<small>保有 " +
+              squads.length +
+              "/" +
+              SQUAD_RULES.maxSquads +
+              "</small>",
+          );
           document
             .querySelectorAll("[data-u]")
             .forEach((b) => b.classList.toggle("active", b.dataset.u === selectedUnitType));
@@ -5044,6 +5121,8 @@
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
               if (!playing && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-recruit="' + q.id + '">新兵補充 ' + c.cost + "G</button>";
+              if (!playing && q.state === "reserve")
+                acts += '<button data-disband="' + q.id + '">解散</button>';
               if (!playing && healCost(q))
                 acts += '<button data-heal="' + q.id + '">🩹 治療 ' + healCost(q) + "G</button>";
             }
@@ -5142,6 +5221,23 @@
           } else if (d.recruit) {
             err = recruitInto(squadById(+d.recruit));
             if (!err) msg("新兵を補充した。");
+          } else if (d.disband) {
+            const q = squadById(+d.disband),
+              named = q ? roster(q).filter((s) => s.name) : [];
+            if (
+              q &&
+              confirm(
+                squadName(q) +
+                  "（" +
+                  roster(q).length +
+                  "人）を解散しますか？ 兵士は除隊して名簿から消えます（元に戻せません）。" +
+                  (named.length ? "\n名前付きの兵士：" + named.map((s) => s.name).join("・") : ""),
+              )
+            ) {
+              const name = squadName(q);
+              err = disbandSquad(q);
+              if (!err) msg(name + " を解散した。");
+            }
           } else if (d.heal) {
             const q = squadById(+d.heal),
               c = q ? healCost(q) : 0;
@@ -6119,6 +6215,7 @@
               nameSoldier,
               healSquad,
               healCost,
+              disbandSquad,
               siege: () => siegeUnits,
               siegeAdd,
               siegeRemove,
