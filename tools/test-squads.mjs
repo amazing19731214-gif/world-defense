@@ -21,6 +21,11 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -177,7 +182,7 @@ check(
 check("ボタンに部隊の費用（5人分）を表示", /足軽 75G/.test(await page.textContent('[data-u="ashigaru"]')));
 
 console.log("■ 雇用・配置");
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(page, 650, 322);
 let st = await S(page);
 check("道をタップで5人の部隊を雇用・配置", st.squads.length === 1 && sq(st, 1).alive.length === 5);
@@ -199,9 +204,9 @@ for (const [label, xy, re] of [
   const m = await msgText(page);
   check(`${label}には配置できない`, st.squads.length === 1 && re.test(m), m);
 }
-await page.tap('[data-u="spearman"]');
+await tapHire(page, "spearman");
 await tapMap(page, ...M2);
-await page.tap('[data-u="archer"]');
+await tapHire(page, "archer");
 await tapMap(page, ...U1);
 await tapMap(page, ...L1);
 await tapMap(page, ...U2);
@@ -434,7 +439,7 @@ await endWave(page);
 // 弓兵隊#3を待機させて枠を空け、新しい槍兵隊を作って編入
 await deselect(page);
 await page.evaluate(() => WD_DEBUG.squadApi.orderRetreat(WD_DEBUG.state().squads.find((q) => q.id === 3)));
-await page.tap('[data-u="spearman"]');
+await tapHire(page, "spearman");
 await tapMap(page, ...U1);
 st = await S(page);
 const ns = st.squads.find((q) => q.type === "spearman" && q.id !== 2);
@@ -681,7 +686,7 @@ console.log("■ フレームレートに依存しない");
 async function fpsRun(h) {
   const r = await newPage();
   await r.page.evaluate(() => WD_DEBUG.setGold(5000));
-  await r.page.tap('[data-u="ashigaru"]');
+  await tapHire(r.page, "ashigaru");
   await tapMap(r.page, ...M1);
   await startHeldWave(r.page);
   await r.page.evaluate(() => WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 150, hp: 1e6, speed: 0 }));
@@ -739,11 +744,11 @@ await page.evaluate(() => {
   for (const t of WD_DEBUG.state().towers) t.level = 5;
 });
 await deselect(page);
-await page.tap('[data-u="spearman"]');
+await tapHire(page, "spearman");
 await tapMap(page, ...M1);
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(page, ...M2);
-await page.tap('[data-u="archer"]');
+await tapHire(page, "archer");
 await tapMap(page, ...U2);
 await tapMap(page, ...L1);
 let ok = true,
@@ -787,7 +792,7 @@ await context.close();
 
 console.log("■ モバイル表示（390px）");
 ({ page, errors, context } = await newPage());
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(page, ...M1);
 await tapMap(page, 650, 280);
 const layout = await page.evaluate(() => {

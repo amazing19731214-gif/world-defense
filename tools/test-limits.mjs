@@ -21,6 +21,11 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 
 let failures = 0,
   passes = 0;
+// 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+async function tapHire(page, type) {
+  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
+  await page.tap(`[data-u="${type}"]`);
+}
 function check(name, cond, detail = "") {
   if (cond) passes++;
   else failures++;
@@ -91,7 +96,7 @@ let text = await page.textContent("#unitCount");
 check("配置中の部隊数と保有数（待機中を含む）を表示", /配置 0\/4/.test(text) && /保有 8\/8/.test(text), text);
 
 console.log("■ 上限のときに道をタップ");
-await page.tap('[data-u="medic"]');
+await tapHire(page, "medic");
 await tapMap(650, 300);
 let r = await counts();
 const toast = await ev(() => {
@@ -110,7 +115,7 @@ check(
   JSON.stringify(toast),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "l1-toast.png") });
-await page.tap('[data-u="ashigaru"]');
+await tapHire(page, "ashigaru");
 await tapMap(650, 300);
 r = await counts();
 check(
@@ -158,7 +163,7 @@ check(
 check("解散は戦死ではない（英霊名鑑に載らない）", r.fallen === 0);
 check("攻城編成からも外れる", r.siege.join() === "1", r.siege.join());
 await page.tap("#squadClose");
-await page.tap('[data-u="medic"]');
+await tapHire(page, "medic");
 await tapMap(740, 300);
 r = await counts();
 check("枠が空けば新しい部隊を雇える", r.all === 8 && r.out === 2, JSON.stringify(r));

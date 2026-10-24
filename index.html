@@ -331,10 +331,90 @@
       .unit-tools {
         align-items: center;
       }
-      /* 兵種が増えても崩れないよう、4列にそろえる（1行目：部隊数と3兵種、2行目以降：残りの兵種と「編成」） */
+      /* あまり使わない画面切り替えは下にまとめる */
+      .tools.menu-tools {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .tools.menu-tools button {
+        min-width: 0;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
+      .tools.play-tools {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        margin-top: 0;
+      }
+      .tools.play-tools #start {
+        min-height: 56px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #fff8e8;
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+      }
+      .tools.play-tools #start:disabled {
+        background: #3a4a44;
+        border-color: #6f7f78;
+        color: #c9d3cc;
+      }
+      /* 1行目：部隊数・「雇う」・「編成」、2行目以降：保有している部隊のチップ（4列）、雇用ボタン（3列・畳める） */
       .tools.unit-tools {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .unit-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 6px;
+        align-items: center;
+      }
+      .squad-chips {
+        display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .squad-chips:empty {
+        display: none;
+      }
+      .hire-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .hire-row[hidden] {
+        display: none;
+      }
+      .tools.unit-tools .squad-chip {
+        flex-direction: column;
+        gap: 0;
+        padding: 4px 2px;
+        min-height: 52px;
+        line-height: 1.2;
+      }
+      .squad-chip .chip-top {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .tools.unit-tools .squad-chip img {
+        width: 24px;
+        height: 24px;
+      }
+      .squad-chip .chip-sub {
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      /* 出陣中の部隊は緑の枠、配置できない部隊（撤退直後・撤退中・兵士なし）は薄く */
+      .squad-chip.out {
+        border-color: #7fd18b;
+        background: #24412f;
+      }
+      .squad-chip.wait {
+        opacity: 0.55;
       }
       .unit-tools .row-label {
         text-align: center;
@@ -878,6 +958,10 @@
         <div id="battleInfo" class="battle-info"></div>
         <button id="battleRetreat" class="retreat">↩ 全軍撤退</button>
       </section>
+      <div class="tools play-tools" aria-label="ウェーブ">
+        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
+        ><button id="pause">⏸ 停止</button>
+      </div>
       <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
@@ -892,6 +976,32 @@
         <button id="repair" class="repair" hidden>🔨 修理</button>
         <button id="skill" class="skill" hidden>
           <span id="skillLabel"></span><span class="bar"><i id="skillBar"></i></span>
+        </button>
+      </section>
+      <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
+        <div class="unit-head">
+          <span class="row-label" id="unitCount">部隊 0/4</span
+          ><button id="hireToggle" aria-expanded="false">＋ 雇う</button
+          ><button id="organize">📋 編成</button>
+        </div>
+        <div id="squadChips" class="squad-chips" aria-label="保有している部隊（タップして配置）"></div>
+        <div id="hireRow" class="hire-row" aria-label="新しく雇う"></div>
+      </div>
+      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
+        <div class="panel-head">
+          <strong id="sqTitle"></strong
+          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
+        </div>
+        <div id="sqSummary" class="tp-stats"></div>
+        <div id="sqHeroLine" class="hero-line"></div>
+        <div id="sqMembers" class="members"></div>
+        <div id="soldierInfo" class="soldier-info"></div>
+        <div class="panel-actions four">
+          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
+          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
+        </div>
+        <button id="sqSkill" class="skill" hidden>
+          <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
         </button>
       </section>
       <div class="tools tower-tools" aria-label="防衛塔">
@@ -911,35 +1021,14 @@
           <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
         </button>
       </div>
-      <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
-        <span class="row-label" id="unitCount">部隊 0/4</span><button id="organize">📋 編成</button>
-      </div>
-      <section id="squadPanel" class="panel" hidden aria-label="選択中の部隊">
-        <div class="panel-head">
-          <strong id="sqTitle"></strong
-          ><button id="sqClose" class="icon-btn" aria-label="部隊の選択を解除">✕</button>
-        </div>
-        <div id="sqSummary" class="tp-stats"></div>
-        <div id="sqHeroLine" class="hero-line"></div>
-        <div id="sqMembers" class="members"></div>
-        <div id="soldierInfo" class="soldier-info"></div>
-        <div class="panel-actions four">
-          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
-          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
-        </div>
-        <button id="sqSkill" class="skill" hidden>
-          <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
-        </button>
-      </section>
-      <div class="tools">
-        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
-        ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
-        ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
+      <div class="tools menu-tools">
+        <button id="gacha">🎴 ガチャ</button><button id="roster">👥 武将</button
+        ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
+        ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v22（役割別武将スキル・奪い返し・領土の効果）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v23（部隊ボタンですぐ配置・操作ボタンの並び替え）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -6142,7 +6231,7 @@
           msg(
             "新しいゲームを開始。塔を建てよう！" +
               (startGold() > 500 ? " 領土の効果で開始ゴールド " + startGold() + "G。" : "") +
-              (kept ? " 育てた兵士 " + kept + " 人が待機中（「編成」から配置）。" : ""),
+              (kept ? " 育てた兵士 " + kept + " 人が待機中（下の部隊ボタン → 道をタップで配置）。" : ""),
           );
           updateUI();
         };
@@ -6176,7 +6265,71 @@
             );
             updateUI();
           };
-          $("unitTools").insertBefore(b, $("organize"));
+          $("hireRow").appendChild(b);
+        }
+        // 雇用ボタンは畳んでおく（部隊がまだ無いときは開いたまま）
+        let hireOpen = false;
+        $("hireToggle").onclick = () => {
+          hireOpen = !hireOpen;
+          if (!hireOpen && selectedUnitType) selectedUnitType = null;
+          updateUI();
+        };
+        // 部隊チップ：待機中の部隊はタップ→道をタップで配置、出陣中の部隊はパネルを開く
+        $("squadChips").addEventListener("click", (ev) => {
+          const b = ev.target.closest("[data-chip]"),
+            q = b && squadById(+b.dataset.chip);
+          if (!q) return;
+          selectedUnitType = null;
+          selectedTower = null;
+          if (onField(q)) {
+            placeSquadId = null;
+            selectedSquad = q;
+            msg(squadName(q) + "（" + squadStateText(q) + "）：撤退・治療ができます。");
+          } else if (placeSquadId === q.id) {
+            placeSquadId = null;
+            msg(squadName(q) + " の配置をやめた。");
+          } else {
+            selectedSquad = null;
+            placeSquadId = null;
+            if (q.locked) msg(squadName(q) + " は撤退したばかりです。次のウェーブから配置できます。");
+            else if (!members(q).length) msg(squadName(q) + " には出られる兵士がいません。");
+            else {
+              placeSquadId = q.id;
+              msg(squadName(q) + "：道をタップして配置しよう。");
+            }
+            toast($("msg").textContent);
+          }
+          updateUI();
+        });
+        function chipHtml(q) {
+          const c = SOLDIER_TYPES[q.type],
+            list = members(q),
+            lv = list.length ? Math.round(list.reduce((n, s) => n + s.level, 0) / list.length) : 0,
+            out = onField(q),
+            wait = !out && (q.locked || !list.length);
+          return (
+            '<button class="squad-chip' +
+            (out ? " out" : "") +
+            (wait ? " wait" : "") +
+            (placeSquadId === q.id || selectedSquad === q ? " active" : "") +
+            '" data-chip="' +
+            q.id +
+            '" aria-label="' +
+            squadName(q) +
+            "・" +
+            squadStateText(q) +
+            "・" +
+            list.length +
+            "人・平均Lv" +
+            lv +
+            '"><span class="chip-top">' +
+            (UNIT_ASSETS[q.type] ? '<img alt="" src="' + UNIT_ASSETS[q.type] + '">' : c.icon) +
+            "#" +
+            q.id +
+            '</span><span class="chip-sub">' +
+            (out ? (q.state === "retreating" ? "撤退中" : "出陣中") : list.length + "人 Lv" + lv) +
+            "</span></button>"
+          );
         }
         function unitCostLabel(type) {
           return unitCost(type) * SQUAD_RULES.squadSize + "G";
@@ -6199,6 +6352,12 @@
               SQUAD_RULES.maxSquads +
               "</small>",
           );
+          const hireShown = hireOpen || !squads.length || !!selectedUnitType;
+          $("hireRow").hidden = !hireShown;
+          $("hireToggle").textContent = hireShown && squads.length ? "▲ 閉じる" : "＋ 雇う";
+          $("hireToggle").setAttribute("aria-expanded", String(hireShown));
+          $("hireToggle").disabled = !squads.length; // 部隊が無いうちは開いたまま
+          setHtml($("squadChips"), squads.map(chipHtml).join(""));
           document
             .querySelectorAll("[data-u]")
             .forEach((b) => b.classList.toggle("active", b.dataset.u === selectedUnitType));
@@ -8694,12 +8853,21 @@
         document.addEventListener("visibilitychange", () => {
           last = 0;
         });
+        let squadSig = "";
         function frame(now) {
           const dt = last ? (now - last) / 1000 : 0;
           last = now;
           tick(dt);
           animateVisuals(dt);
           draw();
+          // 部隊の状態（出陣・撤退・人数・Lv）が戦闘中に変わったら、部隊チップを描き直す
+          const sig = squads
+            .map((q) => q.id + q.state + (q.locked ? 1 : 0) + members(q).reduce((n, s) => n + "." + s.level, ""))
+            .join();
+          if (sig !== squadSig) {
+            squadSig = sig;
+            renderSquadUI();
+          }
           requestAnimationFrame(frame);
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
