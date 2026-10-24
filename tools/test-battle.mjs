@@ -134,7 +134,7 @@ check(
 );
 check(
   "攻城戦の状況（時間・城・各部隊）を表示",
-  (await page.isVisible("#battleBar")) && /攻城戦/.test(await page.textContent("#battleInfo")),
+  (await page.isVisible("#battleBar")) && /清洲城/.test(await page.textContent("#battleInfo")),
 );
 check("出陣中は防衛のウェーブ開始ボタンを押せない", await page.isDisabled("#start"));
 r = await page.evaluate(() => {
