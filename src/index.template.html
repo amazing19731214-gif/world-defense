@@ -522,6 +522,72 @@
         min-height: 40px;
         font-size: 15px;
       }
+      .tabs.four button {
+        padding: 4px 2px;
+        line-height: 1.2;
+        font-size: 14px;
+      }
+      .tabs.four small {
+        display: block;
+        font-size: 13px;
+      }
+      .saved {
+        min-height: 20px;
+        margin: 4px 0;
+        color: #9fe0a8;
+        font-size: 14px;
+      }
+      .saved.warn {
+        color: #ffb3a7;
+      }
+      .unit-box {
+        padding: 8px 10px;
+        border: 1px solid #719b8f88;
+        border-radius: 10px;
+        background: #0f2c33;
+      }
+      .unit-box h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+      .unit-box p {
+        margin: 2px 0;
+        line-height: 1.45;
+      }
+      .pick-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        border-top: 1px solid #719b8f44;
+        line-height: 1.35;
+      }
+      .pick-row > span {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .pick-row.named b {
+        color: #ffd77d;
+      }
+      .pick-row button {
+        flex: none;
+        min-width: 72px;
+        min-height: 44px;
+        font-size: 15px;
+        padding: 6px 10px;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 8px 0 4px;
+      }
+      .filters button {
+        min-height: 40px;
+        padding: 4px 12px;
+        font-size: 14px;
+      }
       .s-card {
         padding: 10px 0;
         border-top: 1px solid #719b8f55;
@@ -677,11 +743,11 @@
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
         ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
         ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
-        ><button id="reset">↻ 最初から</button>
+        ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <small
-        >GitHub Pages / Safari対応・ペイント調・個別素材版 v13（兵士の育成・命名・スキル・英霊名鑑）</small
+        >GitHub Pages / Safari対応・ペイント調・個別素材版 v14（攻城部隊編成・兵士の育成・英霊名鑑）</small
       >
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
@@ -706,6 +772,18 @@
         </div>
         <p id="soldierHint" class="muted" style="margin: 6px 0"></p>
         <div id="soldierList"></div>
+      </div>
+    </div>
+    <div id="siegeSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="siegeTitle">
+        <div class="panel-head">
+          <strong id="siegeTitle">⚔️ 攻城部隊編成</strong
+          ><button id="siegeClose" class="icon-btn" aria-label="閉じる">✕</button>
+        </div>
+        <div id="siegeTabs" class="tabs four" role="tablist"></div>
+        <p id="siegeSaved" class="saved" aria-live="polite"></p>
+        <div id="siegeUnit"></div>
+        <div id="siegePick"></div>
       </div>
     </div>
     <div id="gachaSheet" class="sheet-back" hidden>
@@ -2613,6 +2691,7 @@
         // 戦死：保存データから外し、名前付きの兵士は英霊名鑑に記録する
         function recordDeath(s) {
           soldierSave.soldiers = soldierSave.soldiers.filter((x) => x.id !== s.id);
+          refreshSiege(); // 攻城編成からも外す
           if (s.name) {
             soldierSave.fallen.unshift({
               id: s.id,
@@ -4493,6 +4572,7 @@
           placeSquadId = null;
           closeSquadSheet();
           closeSoldierSheet();
+          closeSiege();
           resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
           cutin = null;
           closeSheet();
@@ -5010,6 +5090,391 @@
           renderSoldierSheet();
           updateUI();
         });
+        // ===== 攻城部隊編成（将来の攻城戦用。戦闘処理はまだない） =====
+        // 第一〜第四部隊（配列の順＝出撃順）。各部隊に兵士 maxSoldiers 人・武将1人まで。
+        // 保存するのは兵士・武将のIDと並び順だけ（能力・経験値は兵士の保存データを参照し、コピーしない）。
+        // 選べる兵士は「兵士の保存データにいる生存兵」（ウェーブをクリアして保存された兵士）。
+        // 防衛側の配属（塔・部隊）とは別の計画なので、防衛で使用中の武将も選べる。負傷中の武将は選べない。
+        const SIEGE_KEY = "worldDefense.siege.v1";
+        const SIEGE_RULES = {
+          names: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
+          maxSoldiers: 10,
+        };
+        const siegeEmpty = () => SIEGE_RULES.names.map(() => ({ soldiers: [], hero: null }));
+        const savedSoldierIds = () => new Set(soldierSave.soldiers.map((v) => v.id));
+        // 編成できる兵士：保存済みの生存兵（戦死・未保存・データ削除された兵士は対象外）
+        const siegeEligible = (id) => {
+          const s = soldierById(id);
+          return !!(s && s.alive && savedSoldierIds().has(id));
+        };
+        // 編成を検査して、使えない兵士（戦死など）・所持していない武将・重複を取り除く
+        function cleanSiege(units) {
+          const out = siegeEmpty(),
+            seen = new Set(),
+            heroes = new Set();
+          (Array.isArray(units) ? units : []).slice(0, out.length).forEach((u, i) => {
+            if (!u || typeof u !== "object") return;
+            for (const id of Array.isArray(u.soldiers) ? u.soldiers : []) {
+              if (!Number.isInteger(id) || seen.has(id) || !siegeEligible(id)) continue;
+              if (out[i].soldiers.length >= SIEGE_RULES.maxSoldiers) break;
+              seen.add(id);
+              out[i].soldiers.push(id);
+            }
+            if (
+              typeof u.hero === "string" &&
+              WARLORDS[u.hero] &&
+              heroSave.owned[u.hero] &&
+              !heroes.has(u.hero)
+            ) {
+              heroes.add(u.hero);
+              out[i].hero = u.hero;
+            }
+          });
+          return out;
+        }
+        function loadSiege() {
+          let raw = null;
+          try {
+            raw = localStorage.getItem(SIEGE_KEY);
+          } catch (err) {
+            return siegeEmpty();
+          }
+          if (!raw) return siegeEmpty();
+          try {
+            const d = JSON.parse(raw);
+            return cleanSiege(d && d.units);
+          } catch (err) {
+            console.warn("攻城編成の保存データを読み込めないため初期化します", err);
+            return siegeEmpty();
+          }
+        }
+        let siegeUnits = loadSiege(),
+          siegeSaveOk = true;
+        function persistSiege() {
+          try {
+            localStorage.setItem(SIEGE_KEY, JSON.stringify({ version: 1, units: siegeUnits }));
+            siegeSaveOk = true;
+          } catch (err) {
+            siegeSaveOk = false;
+          }
+          return siegeSaveOk;
+        }
+        // 兵士の戦死などで編成が変わったときに呼ぶ（変わったときだけ保存）
+        function refreshSiege() {
+          const next = cleanSiege(siegeUnits);
+          if (JSON.stringify(next) !== JSON.stringify(siegeUnits)) {
+            siegeUnits = next;
+            persistSiege();
+          }
+        }
+        const siegeUnitOf = (id) => siegeUnits.findIndex((u) => u.soldiers.includes(id));
+        const siegeHeroUnit = (id) => siegeUnits.findIndex((u) => u.hero === id);
+        // 兵士を部隊に加える。move=true なら別の部隊から移す（同じ兵士は1部隊だけ）
+        function siegeAdd(i, id, move) {
+          const u = siegeUnits[i];
+          if (!u) return "部隊が見つかりません。";
+          if (!siegeEligible(id))
+            return soldierById(id) && !soldierById(id).alive
+              ? "戦死した兵士は編成できません。"
+              : "その兵士は編成できません（ウェーブをクリアして保存された生存兵から選びます）。";
+          const from = siegeUnitOf(id);
+          if (from === i) return null;
+          if (u.soldiers.length >= SIEGE_RULES.maxSoldiers)
+            return SIEGE_RULES.names[i] + " は満員です（" + SIEGE_RULES.maxSoldiers + "人まで）。";
+          if (from >= 0) {
+            if (!move) return "この兵士は " + SIEGE_RULES.names[from] + " にいます。";
+            siegeUnits[from].soldiers = siegeUnits[from].soldiers.filter((x) => x !== id);
+          }
+          u.soldiers.push(id);
+          persistSiege();
+          return null;
+        }
+        function siegeRemove(i, id) {
+          const u = siegeUnits[i];
+          if (!u || !u.soldiers.includes(id)) return "その兵士はこの部隊にいません。";
+          u.soldiers = u.soldiers.filter((x) => x !== id);
+          persistSiege();
+          return null;
+        }
+        // 武将を部隊に置く（null で外す）。同じ武将は1部隊だけ・負傷中は不可
+        function siegeSetHero(i, id, move) {
+          const u = siegeUnits[i];
+          if (!u) return "部隊が見つかりません。";
+          if (id === null) {
+            u.hero = null;
+            persistSiege();
+            return null;
+          }
+          if (!WARLORDS[id] || !heroSave.owned[id]) return "その武将は所持していません。";
+          const inj = injuryOf(id);
+          if (inj) return WARLORDS[id].name + " は負傷中です（あと" + inj.left + "ウェーブで復帰）。";
+          const from = siegeHeroUnit(id);
+          if (from === i) return null;
+          if (from >= 0) {
+            if (!move) return WARLORDS[id].name + " は " + SIEGE_RULES.names[from] + " にいます。";
+            siegeUnits[from].hero = null;
+          }
+          u.hero = id;
+          persistSiege();
+          return null;
+        }
+        // 部隊の要約（兵士数・兵種の内訳・平均Lv・武将）
+        function siegeSummary(i) {
+          const u = siegeUnits[i],
+            list = u.soldiers.map(soldierById).filter(Boolean),
+            types = {};
+          for (const s of list) types[s.type] = (types[s.type] || 0) + 1;
+          return {
+            count: list.length,
+            types,
+            avg: list.length ? list.reduce((n, s) => n + s.level, 0) / list.length : 0,
+            hero: u.hero,
+            heroInjured: !!(u.hero && injuryOf(u.hero)),
+          };
+        }
+        // 兵種名（将来の兵種が増えても SOLDIER_TYPES に足すだけで表示できる）
+        const typeLabel = (t) => (SOLDIER_TYPES[t] ? SOLDIER_TYPES[t].name : t);
+        const typeIcon = (t) => (SOLDIER_TYPES[t] && (SOLDIER_TYPES[t].icon || SOLDIER_TYPES[t].mark)) || "";
+
+        let siegeTab = 0,
+          siegeFilter = "all",
+          siegeHeroPick = false,
+          siegeNote = "";
+        function renderSiege() {
+          $("siegeTabs").innerHTML = SIEGE_RULES.names
+            .map(
+              (n, i) =>
+                '<button role="tab" data-unit="' +
+                i +
+                '" class="' +
+                (i === siegeTab ? "active" : "") +
+                '" aria-selected="' +
+                (i === siegeTab) +
+                '">' +
+                n.replace("部隊", "") +
+                "<small>" +
+                siegeUnits[i].soldiers.length +
+                "/" +
+                SIEGE_RULES.maxSoldiers +
+                (siegeUnits[i].hero ? "・将" : "") +
+                "</small></button>",
+            )
+            .join("");
+          const el = $("siegeSaved");
+          el.textContent = siegeNote;
+          el.className = "saved" + (siegeSaveOk ? "" : " warn");
+          const i = siegeTab,
+            u = siegeUnits[i],
+            sum = siegeSummary(i);
+          const typeText = Object.keys(sum.types).length
+            ? Object.entries(sum.types)
+                .map(([t, n]) => typeLabel(t) + n)
+                .join("・")
+            : "なし";
+          let html =
+            '<div class="unit-box"><h3>' +
+            SIEGE_RULES.names[i] +
+            ' <small class="muted">出撃順 ' +
+            (i + 1) +
+            "番目</small></h3><p>兵士 <b>" +
+            sum.count +
+            "/" +
+            SIEGE_RULES.maxSoldiers +
+            "</b>人・平均 <b>Lv" +
+            fmt(sum.avg) +
+            "</b><br>兵種 " +
+            typeText +
+            "</p><p>武将 " +
+            (u.hero
+              ? rarityTag(u.hero) +
+                " <b>" +
+                WARLORDS[u.hero].name +
+                "</b>" +
+                (sum.heroInjured ? ' <span class="injured">（負傷中・出撃不可）</span>' : "")
+              : '<span class="muted">なし</span>') +
+            "</p>" +
+            '<div class="card-actions"><button data-hero-pick>' +
+            (u.hero ? "👤 武将を変更" : "👤 武将を配置") +
+            "</button>" +
+            (u.hero ? "<button data-hero-off>武将を外す</button>" : "") +
+            "</div>";
+          if (u.soldiers.length)
+            html += u.soldiers
+              .map((id) => {
+                const s = soldierById(id);
+                return (
+                  '<div class="pick-row' +
+                  (s.name ? " named" : "") +
+                  '"><span><b>' +
+                  esc(soldierName(s)) +
+                  "</b> " +
+                  typeIcon(s.type) +
+                  typeLabel(s.type) +
+                  " Lv" +
+                  s.level +
+                  "<br><small>" +
+                  (s.skills.length ? s.skills.map((k) => SOLDIER_SKILLS[k].name).join("・") : "スキルなし") +
+                  '</small></span><button data-remove="' +
+                  id +
+                  '">外す</button></div>'
+                );
+              })
+              .join("");
+          else html += '<p class="muted">兵士がいません。下の一覧から追加してください。</p>';
+          $("siegeUnit").innerHTML = html + "</div>";
+          $("siegePick").innerHTML = siegeHeroPick ? siegeHeroHtml(i) : siegeSoldierHtml(i);
+        }
+        function siegeSoldierHtml(i) {
+          const ids = savedSoldierIds();
+          const pool = soldiers.filter((s) => s.alive && ids.has(s.id));
+          const kinds = Object.keys(SOLDIER_TYPES).filter((t) => pool.some((s) => s.type === t));
+          if (siegeFilter !== "all" && !kinds.includes(siegeFilter)) siegeFilter = "all";
+          const list = pool
+            .filter((s) => siegeFilter === "all" || s.type === siegeFilter)
+            .sort((a, b) => !!b.name - !!a.name || b.level - a.level || b.xp - a.xp || a.id - b.id);
+          const full = siegeUnits[i].soldiers.length >= SIEGE_RULES.maxSoldiers;
+          let html =
+            '<h3 style="margin:12px 0 0;font-size:16px">兵士を追加</h3>' +
+            '<div class="filters">' +
+            ["all", ...kinds]
+              .map(
+                (t) =>
+                  '<button data-filter="' +
+                  t +
+                  '" class="' +
+                  (siegeFilter === t ? "active" : "") +
+                  '">' +
+                  (t === "all" ? "すべて" : typeIcon(t) + typeLabel(t)) +
+                  "</button>",
+              )
+              .join("") +
+            "</div>";
+          if (!pool.length)
+            return (
+              html +
+              '<p class="muted">編成できる兵士がいません。防衛戦でウェーブをクリアすると、生き残った兵士が保存され、ここで選べます。</p>'
+            );
+          html += list
+            .map((s) => {
+              const where = siegeUnitOf(s.id),
+                q = squadById(s.squadId);
+              let btn;
+              if (where === i) btn = '<button data-remove="' + s.id + '">外す</button>';
+              else if (full) btn = "<button disabled>満員</button>";
+              else if (where >= 0) btn = '<button data-move="' + s.id + '">移す</button>';
+              else btn = '<button data-add="' + s.id + '">＋追加</button>';
+              return (
+                '<div class="pick-row' +
+                (s.name ? " named" : "") +
+                '"><span><b>' +
+                esc(soldierName(s)) +
+                "</b> " +
+                typeIcon(s.type) +
+                typeLabel(s.type) +
+                " Lv" +
+                s.level +
+                "<br><small>" +
+                (s.skills.length ? s.skills.map((k) => SOLDIER_SKILLS[k].name).join("・") : "スキルなし") +
+                "／攻城 " +
+                (where >= 0 ? SIEGE_RULES.names[where] : "未所属") +
+                "・防衛 " +
+                (q ? squadName(q) : "なし") +
+                "</small></span>" +
+                btn +
+                "</div>"
+              );
+            })
+            .join("");
+          return html;
+        }
+        function siegeHeroHtml(i) {
+          const ids = ownedIds();
+          let html =
+            '<h3 style="margin:12px 0 0;font-size:16px">武将を選ぶ</h3>' +
+            '<p class="muted">各部隊に1人まで。同じ武将は1部隊だけ。負傷中の武将は配置できません（防衛での配属はそのまま）。</p>' +
+            '<div class="card-actions"><button data-hero-cancel>兵士の一覧に戻る</button></div>';
+          if (!ids.length) return html + '<p class="muted">武将がいません。武将ガチャで仲間にできます。</p>';
+          return (
+            html +
+            ids
+              .map((id) => {
+                const inj = injuryOf(id),
+                  where = siegeHeroUnit(id),
+                  h = heroState[id];
+                let btn;
+                if (inj) btn = "<button disabled>負傷中</button>";
+                else if (where === i) btn = "<button disabled>配置中</button>";
+                else if (where >= 0) btn = '<button data-hero-move="' + id + '">移す</button>';
+                else btn = '<button data-hero="' + id + '">配置</button>';
+                return (
+                  '<div class="pick-row"><span>' +
+                  rarityTag(id) +
+                  " <b>" +
+                  WARLORDS[id].name +
+                  "</b>" +
+                  starText(id) +
+                  "<br><small>" +
+                  (inj
+                    ? '<span class="injured">負傷中：あと' + inj.left + "ウェーブで復帰</span>"
+                    : "攻城 " +
+                      (where >= 0 ? SIEGE_RULES.names[where] : "未配置") +
+                      (h && (h.tower || h.squad) ? "・防衛 " + esc(postLabel(h)) : "")) +
+                  "</small></span>" +
+                  btn +
+                  "</div>"
+                );
+              })
+              .join("")
+          );
+        }
+        function openSiege() {
+          refreshSiege();
+          siegeHeroPick = false;
+          siegeNote = "";
+          renderSiege();
+          $("siegeSheet").hidden = false;
+          $("siegeClose").focus();
+        }
+        const closeSiege = () => ($("siegeSheet").hidden = true);
+        $("siege").onclick = openSiege;
+        $("siegeClose").onclick = closeSiege;
+        $("siegeSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("siegeSheet")) return closeSiege();
+          const b = ev.target.closest("button");
+          if (!b || b.id === "siegeClose" || b.disabled) return;
+          const d = b.dataset,
+            i = siegeTab;
+          let err = null,
+            changed = true;
+          if (d.unit !== undefined) {
+            siegeTab = +d.unit;
+            siegeHeroPick = false;
+            changed = false;
+          } else if (d.filter) {
+            siegeFilter = d.filter;
+            changed = false;
+          } else if (d.add) err = siegeAdd(i, +d.add, false);
+          else if (d.move) err = siegeAdd(i, +d.move, true);
+          else if (d.remove) err = siegeRemove(i, +d.remove);
+          else if (d.heroPick !== undefined) {
+            siegeHeroPick = true;
+            changed = false;
+          } else if (d.heroCancel !== undefined) {
+            siegeHeroPick = false;
+            changed = false;
+          } else if (d.heroOff !== undefined) err = siegeSetHero(i, null);
+          else if (d.hero || d.heroMove) {
+            err = siegeSetHero(i, d.hero || d.heroMove, !!d.heroMove);
+            if (!err) siegeHeroPick = false;
+          } else changed = false;
+          if (err) siegeNote = "⚠ " + err;
+          else if (changed)
+            siegeNote = siegeSaveOk
+              ? "✓ " + SIEGE_RULES.names[i] + " の編成を保存しました"
+              : "⚠ 保存できませんでした（この端末では保存が使えません）";
+          else siegeNote = "";
+          renderSiege();
+        });
         // ===== 塔パネル・武将配属画面 =====
         const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
         const esc = (s) =>
@@ -5428,6 +5893,14 @@
               nameSoldier,
               healSquad,
               healCost,
+              siege: () => siegeUnits,
+              siegeAdd,
+              siegeRemove,
+              siegeSetHero,
+              siegeSummary,
+              siegeEligible,
+              refreshSiege,
+              SIEGE_RULES,
               learnSkill,
               damageSquad,
               withdrawSoldier,
