@@ -302,8 +302,8 @@ let hs = await H(page);
 check("真田幸村を足軽隊#1に配属", hs.yukimura.squad === 1 && hs.yukimura.tower === null);
 const withY = (await soldiersOf(page, 1))[0];
 check(
-  "幸村の低HP効果は満タン時には上乗せしない",
-  near(withY.atk, base.atk) && near(withY.def, base.def),
+  "幸村の配属で最大HP+30%・防御+20%、現在HPは増やさない",
+  near(withY.atk, base.atk) && near(withY.def, base.def * 1.2) && withY.maxHp === Math.round(base.maxHp * 1.3) && withY.hp === base.hp,
 );
 check("部隊パネルに武将名", /真田幸村/.test(await page.textContent("#sqHeroLine")));
 check("必殺技ボタンを部隊パネルに表示", await page.isVisible("#sqSkill"));
@@ -337,8 +337,8 @@ hs = await H(page);
 const sk = (await soldiersOf(page, 1))[0];
 check("日本一の兵：効果8秒・再使用40秒", near(hs.yukimura.active, 8, 0.2) && near(hs.yukimura.cd, 40, 0.2));
 check(
-  "決死中は攻撃×1.6、防御値と攻撃間隔は変えない",
-  near(sk.atk, base.atk * 1.6) && near(sk.def, base.def) && near(sk.rate, base.rate),
+  "日本一の兵は被ダメージ半減、攻撃力と攻撃間隔は維持",
+  near(sk.atk, base.atk) && near(sk.def, base.def * 1.2) && near(sk.rate, base.rate) && near(await page.evaluate(() => {const D=WD_DEBUG;return D.heroApi.heroGuard(D.squadApi.members(D.state().squads[0])[0],false);}), 0.5),
 );
 await step(page, 3);
 const cdMid = (await H(page)).yukimura.cd;
