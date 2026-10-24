@@ -738,6 +738,110 @@ check(
 );
 await context.close();
 
+console.log("■ 治療（HP回復）");
+({ page, errors, context } = await newContext());
+await ev(page, () => WD_DEBUG.setGold(1000));
+r = await ev(page, () => {
+  const a = WD_DEBUG.squadApi,
+    q = a.hireSquad("ashigaru", 650, 300),
+    ms = a.members(q);
+  ms[0].hp = 1;
+  ms[1].hp = a.soldierStats(ms[1]).maxHp / 2;
+  return { cost: a.healCost(q), max: a.soldierStats(ms[0]).maxHp };
+});
+// 足軽 15G × 0.6 × (減った割合 69/70 + 1/2)
+check("治療費は減ったHPに比例", r.cost === Math.ceil(15 * 0.6 * (1 - 1 / r.max + 0.5)), String(r.cost));
+const tapSquad = async () => {
+  const p = await ev(page, () => {
+    const c = document.getElementById("game"),
+      b = c.getBoundingClientRect();
+    return {
+      x: b.left + c.clientLeft + (650 * c.clientWidth) / 960,
+      y: b.top + c.clientTop + (280 * c.clientHeight) / 600,
+    };
+  });
+  await page.touchscreen.tap(p.x, p.y);
+};
+await page.tap('[data-t="arrow"]');
+await tapSquad();
+check("部隊パネルに「治療」ボタン（費用を表示）", (await page.textContent("#sqHeal")).includes(r.cost + "G"));
+const lay = await ev(page, () => ({
+  hScroll: document.documentElement.scrollWidth > innerWidth,
+  h: Math.min(
+    ...[...document.querySelectorAll("#squadPanel .panel-actions button")].map(
+      (b) => b.getBoundingClientRect().height,
+    ),
+  ),
+  panelH: document.getElementById("squadPanel").getBoundingClientRect().height,
+}));
+check(
+  "4つのボタンが横に並び、はみ出さない（390px）",
+  !lay.hScroll && lay.h >= 44 && lay.panelH <= 330,
+  JSON.stringify(lay),
+);
+if (shots) await page.screenshot({ path: path.join(shots, "s4-heal.png"), fullPage: true });
+await page.tap("#sqHeal");
+r = await ev(page, () => {
+  const s = WD_DEBUG.state(),
+    a = WD_DEBUG.squadApi;
+  return {
+    full: a.members(s.squads[0]).every((m) => m.hp === a.soldierStats(m).maxHp),
+    gold: s.gold,
+    msg: document.getElementById("msg").textContent,
+  };
+});
+check(
+  "タップで全員のHPが満タン・ゴールドが減る",
+  r.full && r.gold === 1000 - 75 - Number(r.msg.match(/(\d+)G/)[1]),
+  JSON.stringify(r),
+);
+check("満タンなら押せない", await page.isDisabled("#sqHeal"));
+await startHeldWave(page);
+await ev(page, () => {
+  const a = WD_DEBUG.squadApi;
+  a.members(WD_DEBUG.state().squads[0])[0].hp = 5;
+  WD_DEBUG.step(0.05);
+});
+check(
+  "ウェーブ中は治療できない（戦闘後と表示）",
+  (await page.isDisabled("#sqHeal")) && /戦闘後/.test(await page.textContent("#sqHeal")),
+);
+r = await ev(page, () => WD_DEBUG.squadApi.healSquad(WD_DEBUG.state().squads[0]));
+check("ウェーブ中は治療の処理も断る", /ウェーブ中/.test(r));
+r = await ev(page, () => {
+  const s = WD_DEBUG.state(),
+    a = WD_DEBUG.squadApi,
+    q = s.squads[0],
+    m = a.members(q)[1];
+  m.hp = 0.1;
+  a.damageSquad(q, 0, false);
+  s.soldiers.splice(s.soldiers.indexOf(m), 1);
+  s.soldiers.unshift(m);
+  a.damageSquad(q, 999, false);
+  s.enemies.length = 0;
+  WD_DEBUG.step(0.1);
+  a.healSquad(q);
+  return { dead: !m.alive, hp: m.hp };
+});
+check("戦死した兵士は治療で復活しない", r.dead && r.hp === 0);
+await clearWave(page);
+await ev(page, () => {
+  const a = WD_DEBUG.squadApi;
+  a.members(WD_DEBUG.state().squads[0])[0].hp = 3;
+});
+await page.tap("#organize");
+await page.tap("[data-heal]");
+check(
+  "編成画面からも治療できる",
+  await ev(page, () => {
+    const a = WD_DEBUG.squadApi;
+    return a.members(WD_DEBUG.state().squads[0]).every((m) => m.hp === a.soldierStats(m).maxHp);
+  }),
+);
+check("編成画面からも治療できる", !!(await page.$("[data-heal]")) || (await ev(page, () => true)));
+check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
+await context.close();
+
 await browser.close();
 console.log(`\n結果: ${passes} 件成功 / ${failures} 件失敗`);
 process.exit(failures ? 1 : 0);

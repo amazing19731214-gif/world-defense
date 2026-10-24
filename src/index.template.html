@@ -350,6 +350,18 @@
         object-fit: contain;
         transform: scaleX(-1);
       }
+      .panel-actions.four {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .panel-actions.four button {
+        padding: 6px 2px;
+        line-height: 1.2;
+      }
+      .panel-actions small {
+        display: block;
+        font-size: 14px;
+        color: #ffe3a0;
+      }
       .panel-actions.two {
         grid-template-columns: repeat(2, 1fr);
       }
@@ -653,9 +665,9 @@
         <div id="sqHeroLine" class="hero-line"></div>
         <div id="sqMembers" class="members"></div>
         <div id="soldierInfo" class="soldier-info"></div>
-        <div class="panel-actions">
-          <button id="retreat">↩ 撤退</button><button id="sqHero">👤 武将</button
-          ><button id="sqOrganize">📋 編成</button>
+        <div class="panel-actions four">
+          <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
+          ><button id="sqHero">👤 武将</button><button id="sqOrganize">📋 編成</button>
         </div>
         <button id="sqSkill" class="skill" hidden>
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
@@ -1148,6 +1160,7 @@
           elite: { atk: 0.05, def: 0.05 }, // 精鋭兵の能力ボーナス
           instinctHp: 0.3, // 生存本能：HPがこの割合を下回ると撤退を試みる
           instinctChance: 0.6, // 生存本能：撤退の成功率（1ウェーブに1回だけ試す）
+          healRate: 0.6, // 治療費 = 雇用費 × この割合 × 減ったHPの割合（1人あたり。ウェーブの合間だけ）
           fallenMax: 100, // 英霊名鑑に残す最大人数
           lastSurvivor: { atk: 0.08, def: 0.08 }, // 「最後の生存者」の士気ボーナス
         };
@@ -2427,6 +2440,28 @@
           if (gold < c.cost) return "資金が足りません（" + c.name + " " + c.cost + "G）。";
           gold -= c.cost;
           newSoldier(q.type, q.id);
+          return null;
+        }
+        // 治療：ウェーブの合間にゴールドで部隊の生存兵を全回復する（戦死者は対象外＝復活しない）
+        const healCost = (q) =>
+          Math.ceil(
+            roster(q).reduce(
+              (n, s) =>
+                n +
+                SOLDIER_TYPES[s.type].cost *
+                  SQUAD_RULES.healRate *
+                  Math.max(0, 1 - s.hp / soldierStats(s).maxHp),
+              0,
+            ),
+          );
+        function healSquad(q) {
+          if (playing) return "ウェーブ中は治療できません。";
+          if (!q || !squads.includes(q)) return "部隊が見つかりません。";
+          const c = healCost(q);
+          if (!c) return squadName(q) + " は全員元気です。";
+          if (gold < c) return "資金が足りません（治療 " + c + "G）。";
+          gold -= c;
+          for (const s of roster(q)) s.hp = soldierStats(s).maxHp;
           return null;
         }
         // ===== 兵士の保存（個別の成長・名前・英霊名鑑） =====
@@ -4610,7 +4645,13 @@
             );
           }
           $("retreat").disabled = q.state !== "deployed";
-          $("retreat").textContent = playing ? "↩ 撤退（" + SQUAD_RULES.retreatTime + "秒）" : "↩ 待機へ";
+          $("retreat").textContent = playing ? "↩ 撤退" : "↩ 待機へ";
+          const hc = healCost(q);
+          setHtml(
+            $("sqHeal"),
+            "🩹 治療<small>" + (playing ? "戦闘後" : hc ? hc + "G" : "満タン") + "</small>",
+          );
+          $("sqHeal").disabled = playing || !hc || gold < hc;
           const hh = heroOnSquad(q);
           setHtml(
             $("sqHeroLine"),
@@ -4643,6 +4684,13 @@
         });
         $("sqClose").onclick = () => {
           selectedSquad = null;
+          updateUI();
+        };
+        $("sqHeal").onclick = () => {
+          const q = selectedSquad,
+            c = q ? healCost(q) : 0,
+            err = healSquad(q);
+          msg(err || squadName(q) + " の兵士を治療した（" + c + "G）。");
           updateUI();
         };
         $("retreat").onclick = () => {
@@ -4688,6 +4736,8 @@
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
               if (!playing && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-recruit="' + q.id + '">新兵補充 ' + c.cost + "G</button>";
+              if (!playing && healCost(q))
+                acts += '<button data-heal="' + q.id + '">🩹 治療 ' + healCost(q) + "G</button>";
             }
             html +=
               '<div class="squad-card"><h3>' +
@@ -4784,6 +4834,11 @@
           } else if (d.recruit) {
             err = recruitInto(squadById(+d.recruit));
             if (!err) msg("新兵を補充した。");
+          } else if (d.heal) {
+            const q = squadById(+d.heal),
+              c = q ? healCost(q) : 0;
+            err = healSquad(q);
+            if (!err) msg(squadName(q) + " の兵士を治療した（" + c + "G）。");
           } else if (d.retreat) orderRetreat(squadById(+d.retreat));
           else if (d.place) {
             placeSquadId = +d.place;
@@ -5371,6 +5426,8 @@
               gainXp,
               roster,
               nameSoldier,
+              healSquad,
+              healCost,
               learnSkill,
               damageSquad,
               withdrawSoldier,
