@@ -186,7 +186,8 @@ await tapHire(page, "ashigaru");
 await tapMap(page, 650, 322);
 let st = await S(page);
 check("道をタップで5人の部隊を雇用・配置", st.squads.length === 1 && sq(st, 1).alive.length === 5);
-check("中心線へ補正（y=322 → 300）", near(sq(st, 1).y, 300) && near(sq(st, 1).x, 650, 0.5));
+// x はタップ位置（画面の1px ≒ マップの2.6）の丸めの分だけずれる
+check("中心線へ補正（y=322 → 300）", near(sq(st, 1).y, 300) && near(sq(st, 1).x, 650, 1.5), JSON.stringify([sq(st, 1).x, sq(st, 1).y]));
 check("雇用費用 15G × 5人", st.gold === 5000 - 75);
 check(
   "兵士は個別のIDと能力を持つ",
@@ -224,6 +225,8 @@ check("部隊をタップすると部隊パネル", await page.isVisible("#squad
 check("塔パネルは同時に出さない", !(await page.isVisible("#towerPanel")));
 const summary = await page.textContent("#sqSummary");
 check("生存数と戦死数を表示", /生存 5人/.test(summary) && /戦死 0人/.test(summary), summary);
+check("最初は兵士の詳細を畳んでいる（マップを広く見せる）", !(await page.isVisible("#sqMembers")));
+await page.tap("#sqMore");
 check("兵士5人を押しやすいボタンで表示", (await page.$$("#sqMembers [data-soldier]")).length === 5);
 await page.tap("#sqMembers [data-soldier]:nth-child(3)");
 const info = await page.textContent("#soldierInfo");

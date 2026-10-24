@@ -101,8 +101,8 @@ const S = (page) =>
 const tid = (st, id) => st.towers.find((t) => t.id === id);
 async function assignVia(page, towerXY, heroId) {
   await tapMap(page, ...towerXY);
-  await page.tap("#assign");
-  await page.tap(`[data-assign="${heroId}"]`);
+  await page.tap("#assign"); // 塔のパネルの中に武将の選択欄が開く
+  await page.tap(`#tpHeroPick [data-pick-hero="${heroId}"]`);
 }
 async function deselect(page) {
   if (await page.isVisible("#towerPanel")) await page.tap("#tpClose");
@@ -148,10 +148,11 @@ check("選択中に草地タップ → 選択解除のみ（誤建設しない�
 console.log("■ 配属・解除・再配属");
 await tapMap(page, ...A);
 await page.tap("#assign");
-check("配属画面が開く", await page.isVisible("#heroSheet"));
-const sheetText = await page.textContent("#heroList");
-check("能力と配属先が表示される", sheetText.includes("連続攻撃") && sheetText.includes("未配属"));
-await page.tap('[data-assign="kanbei"]');
+check("塔のパネルの中に武将の選択欄が開く（別の画面を開かない）", (await page.isVisible("#tpHeroPick")) && !(await page.isVisible("#heroSheet")));
+const sheetText = await page.textContent("#tpHeroPick");
+check("役割と配属先が表示される", sheetText.includes("標的指定") && sheetText.includes("未配属"), sheetText.slice(0, 120));
+await page.tap('#tpHeroPick [data-pick-hero="kanbei"]');
+check("配属すると選択欄は閉じる", !(await page.isVisible("#tpHeroPick")));
 st = await S(page);
 check("黒田官兵衛を塔#1に配属", st.heroes.kanbei.tower === 1);
 check("官兵衛の連続攻撃効果は射程を変えない", near(tid(st, 1).st.range, 155), String(tid(st, 1).st.range));
@@ -188,8 +189,7 @@ check(
   st.heroes.kenshin.tower === 2 && st.heroes.kanbei.tower === null,
 );
 await page.tap("#assign");
-await page.tap('[data-unassign="kenshin"]');
-await page.tap("#sheetClose");
+await page.tap('#tpHeroPick [data-pick-off="kenshin"]');
 st = await S(page);
 check("解除できる", st.heroes.kenshin.tower === null && near(tid(st, 2).st.damage, 18));
 
@@ -386,7 +386,7 @@ await page.tap('[data-t="arrow"]');
 await tapMap(page, ...A);
 await tapMap(page, ...A);
 await page.tap("#assign");
-await page.tap('[data-assign="kanbei"]');
+await page.tap('#tpHeroPick [data-pick-hero="kanbei"]');
 const layout = await page.evaluate(() => {
   const vis = (el) => el.offsetParent !== null;
   const btns = [...document.querySelectorAll("#towerPanel button, .tools button")].filter(vis);
@@ -404,11 +404,14 @@ check("横スクロールが出ない (390px)", !layout.hScroll);
 check("ボタンの高さ 44px 以上", layout.minBtnH >= 44, String(layout.minBtnH));
 check("塔パネルの文字 14px 以上", layout.minPanelFont >= 14, String(layout.minPanelFont));
 check("塔パネルがマップに重ならない", !layout.overlap);
-await page.tap("#assign");
+await page.tap("#tpClose");
+await page.tap("#roster");
 const sheet = await page.evaluate(() => {
   const r = document.querySelector("#heroSheet .sheet").getBoundingClientRect();
   return {
-    h: r.height / innerHeight,
+    top: r.top,
+    bottom: r.bottom,
+    ih: innerHeight,
     minBtn: Math.min(
       ...[...document.querySelectorAll("#heroSheet .sheet button")].map(
         (b) => b.getBoundingClientRect().height,
@@ -416,8 +419,8 @@ const sheet = await page.evaluate(() => {
     ),
   };
 });
-check("配属画面は画面の72%以下", sheet.h <= 0.73, sheet.h.toFixed(2));
-check("配属画面のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
+check("武将一覧は画面の中に収まる（上下とも切れない）", sheet.top >= 0 && sheet.bottom <= sheet.ih + 0.5, JSON.stringify(sheet));
+check("武将一覧のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
 if (shots) await page.screenshot({ path: path.join(shots, "4-sheet.png") });
 await page.tap("#heroSheet", { position: { x: 20, y: 20 } });
 check("背景タップで配属画面を閉じる", !(await page.isVisible("#heroSheet")));

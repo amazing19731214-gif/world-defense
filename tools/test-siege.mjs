@@ -110,6 +110,16 @@ await page.tap('[data-t="magic"]');
 await tapMap(page, 700, 380); // #3 鉄砲：道から80
 await page.tap('[data-t="ice"]');
 await tapMap(page, 560, 520); // #4 水攻め：下の道から離れた位置
+// タップ位置は画面の1px単位に丸められる（マップの約2.6）。距離の境目を試すので、塔を狙った位置にそろえる
+await page.evaluate(() => {
+  const at = [
+    [650, 228], // 道（y=300）から72。騎兵が届く距離（74）の内側
+    [330, 300],
+    [700, 380],
+    [560, 520],
+  ];
+  WD_DEBUG.state().towers.forEach((t, i) => at[i] && ([t.x, t.y] = at[i]));
+});
 let t = await T(page);
 check(
   "4種類の塔に耐久（弓220・大砲300・鉄砲260・水攻め240）",
@@ -324,6 +334,11 @@ await page.evaluate(() => {
   m[0].hp = 0;
 });
 await tapMap(page, 640, 285);
+check(
+  "部隊パネルの「＋ 補充」ボタンに費用（槍兵 24G）",
+  (await page.isVisible("#sqRecruit")) && /24G/.test(await page.textContent("#sqRecruit")),
+);
+if (!(await page.isVisible("#sqMembers"))) await page.tap("#sqMore"); // 兵士の詳細を開く
 check("空き枠があれば「＋補充」を表示", await page.isVisible("[data-recruit-chip]"));
 check("「＋補充」に費用（槍兵 24G）", /24G/.test(await page.textContent("[data-recruit-chip]")));
 const r0 = await page.evaluate(() => ({
@@ -342,8 +357,8 @@ await page.evaluate(() => {
   WD_DEBUG.setGold(9999);
   while (a.roster(q).length < 10) if (a.recruitInto(q)) break;
 });
-await page.tap("#hireToggle"); // 画面を描き直す（部隊の選択はそのまま）
-await page.tap("#hireToggle");
+await page.tap("#sqMore"); // 画面を描き直す（部隊の選択はそのまま。兵士の詳細を閉じて開く）
+await page.tap("#sqMore");
 check(
   "10人そろうと「＋補充」は消える",
   (await page.isVisible("#squadPanel")) && !(await page.isVisible("[data-recruit-chip]")),

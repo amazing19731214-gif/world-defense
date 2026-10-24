@@ -298,11 +298,16 @@ const base = (await soldiersOf(page, 1))[0];
 await tapMap(page, 650, 280);
 await page.tap("#sqHero");
 check(
-  "部隊パネルから武将配属画面",
-  (await page.isVisible("#heroSheet")) && /第一部隊（足軽）/.test(await page.textContent("#sheetTitle")),
+  "部隊パネルの中に武将の選択欄が開く（別の画面を開かない）",
+  (await page.isVisible("#sqHeroPick")) &&
+    !(await page.isVisible("#heroSheet")) &&
+    /第一部隊（足軽）/.test(await page.textContent("#sqTitle")),
 );
-check("配属ボタンは「この部隊に配属」", /この部隊に配属/.test(await page.textContent("#heroList")));
-await page.tap('[data-assign="yukimura"]');
+check(
+  "未配属の武将には「配属」ボタン",
+  /配属/.test(await page.textContent('#sqHeroPick [data-pick-hero="yukimura"]')),
+);
+await page.tap('#sqHeroPick [data-pick-hero="yukimura"]');
 let hs = await H(page);
 check("真田幸村を足軽隊#1に配属", hs.yukimura.squad === 1 && hs.yukimura.tower === null);
 const withY = (await soldiersOf(page, 1))[0];
@@ -319,7 +324,11 @@ await page.tap('[data-t="arrow"]');
 await tapMap(page, 650, 225);
 await tapMap(page, 650, 225);
 await page.tap("#assign");
-await page.tap('[data-assign="yukimura"]');
+check(
+  "部隊に配属中の武将は、塔の選択欄では「移す」",
+  /移す/.test(await page.textContent('#tpHeroPick [data-pick-hero="yukimura"]')),
+);
+await page.tap('#tpHeroPick [data-pick-hero="yukimura"]');
 hs = await H(page);
 check(
   "同じ武将を塔へ配属すると部隊からは外れる（1か所だけ）",
