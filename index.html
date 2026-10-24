@@ -331,6 +331,35 @@
       .unit-tools {
         align-items: center;
       }
+      /* あまり使わない画面切り替えは下にまとめる */
+      .tools.menu-tools {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .tools.menu-tools button {
+        min-width: 0;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
+      .tools.play-tools {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        margin-top: 0;
+      }
+      .tools.play-tools #start {
+        min-height: 56px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #fff8e8;
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+      }
+      .tools.play-tools #start:disabled {
+        background: #3a4a44;
+        border-color: #6f7f78;
+        color: #c9d3cc;
+      }
       /* 1行目：部隊数・「雇う」・「編成」、2行目以降：保有している部隊のチップ（4列）、雇用ボタン（3列・畳める） */
       .tools.unit-tools {
         display: grid;
@@ -929,6 +958,10 @@
         <div id="battleInfo" class="battle-info"></div>
         <button id="battleRetreat" class="retreat">↩ 全軍撤退</button>
       </section>
+      <div class="tools play-tools" aria-label="ウェーブ">
+        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
+        ><button id="pause">⏸ 停止</button>
+      </div>
       <section id="towerPanel" class="panel" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
@@ -945,23 +978,6 @@
           <span id="skillLabel"></span><span class="bar"><i id="skillBar"></i></span>
         </button>
       </section>
-      <div class="tools tower-tools" aria-label="防衛塔">
-        <button data-t="arrow">
-          <img class="t-img" data-sprite="arrow" alt="" /><span class="t-text"
-            >弓<small>100G</small></span
-          ></button
-        ><button data-t="cannon">
-          <img class="t-img" data-sprite="cannon" alt="" /><span class="t-text"
-            >大砲<small>180G</small></span
-          ></button
-        ><button data-t="magic">
-          <img class="t-img" data-sprite="magic" alt="" /><span class="t-text"
-            >鉄砲<small>220G</small></span
-          ></button
-        ><button data-t="ice">
-          <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
-        </button>
-      </div>
       <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
         <div class="unit-head">
           <span class="row-label" id="unitCount">部隊 0/4</span
@@ -988,15 +1004,31 @@
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
         </button>
       </section>
-      <div class="tools">
-        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button><button id="gacha">🎴 ガチャ</button
-        ><button id="roster">👥 武将</button><button id="soldiers">🪖 兵士</button
-        ><button id="siege">⚔️ 攻城編成</button><button id="reset">↻ 最初から</button>
+      <div class="tools tower-tools" aria-label="防衛塔">
+        <button data-t="arrow">
+          <img class="t-img" data-sprite="arrow" alt="" /><span class="t-text"
+            >弓<small>100G</small></span
+          ></button
+        ><button data-t="cannon">
+          <img class="t-img" data-sprite="cannon" alt="" /><span class="t-text"
+            >大砲<small>180G</small></span
+          ></button
+        ><button data-t="magic">
+          <img class="t-img" data-sprite="magic" alt="" /><span class="t-text"
+            >鉄砲<small>220G</small></span
+          ></button
+        ><button data-t="ice">
+          <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
+        </button>
+      </div>
+      <div class="tools menu-tools">
+        <button id="gacha">🎴 ガチャ</button><button id="roster">👥 武将</button
+        ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
+        ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v23（部隊ボタンですぐ配置・役割別武将スキル・奪い返し）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v23（部隊ボタンですぐ配置・操作ボタンの並び替え）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section

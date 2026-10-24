@@ -108,6 +108,36 @@ await context.close();
 
 console.log("■ 保有している部隊のチップ");
 ({ page, errors, context } = await newContext(JSON.stringify(save)));
+const order = await page.evaluate(() => {
+  const top = (sel) => document.querySelector(sel).getBoundingClientRect(),
+    map = top("#game"),
+    start = top("#start");
+  return {
+    startTop: start.top,
+    startLeft: start.left,
+    startH: start.height,
+    mapBottom: map.bottom,
+    mapLeft: map.left,
+    fits: start.bottom <= innerHeight,
+    units: top("#unitTools").top,
+    towers: top(".tower-tools").top,
+    menu: top("#gacha").top,
+  };
+});
+check(
+  "「ウェーブ開始」はマップのすぐ下の左端に大きく（スクロールしなくても見える）",
+  order.startTop > order.mapBottom &&
+    order.startTop - order.mapBottom < 40 &&
+    Math.abs(order.startLeft - order.mapLeft) < 4 &&
+    order.startH >= 52 &&
+    order.fits,
+  JSON.stringify(order),
+);
+check(
+  "並び順：ウェーブ開始 → 部隊 → 塔 → その他の画面",
+  order.startTop < order.units && order.units < order.towers && order.towers < order.menu,
+  JSON.stringify(order),
+);
 c = await chips(page);
 check(
   "保有している8部隊すべてをチップで表示",
@@ -215,7 +245,11 @@ check("ウェーブ中でもチップから配置できる", (await squadState(p
 console.log("■ 画面（390px）");
 if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle");
 const lay = await page.evaluate(() => {
-  const els = [...document.querySelectorAll("[data-chip], [data-u], #hireToggle, #organize")];
+  const els = [
+    ...document.querySelectorAll(
+      "[data-chip], [data-u], #hireToggle, #organize, #start, #speed, #pause, .menu-tools button, [data-t]",
+    ),
+  ];
   return {
     hScroll: document.documentElement.scrollWidth > innerWidth,
     minH: Math.min(...els.map((b) => b.getBoundingClientRect().height)),
@@ -225,13 +259,15 @@ const lay = await page.evaluate(() => {
         .filter((e) => e.textContent.trim() && e.tagName !== "IMG")
         .map((e) => parseFloat(getComputedStyle(e).fontSize)),
     ),
-    overflow: [...document.querySelectorAll("[data-chip]")].some((b) => b.scrollWidth > b.clientWidth + 1),
+    overflow: [...document.querySelectorAll("[data-chip], .menu-tools button, .play-tools button")].some(
+      (b) => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().height > 60,
+    ),
   };
 });
 check("横スクロールなし", !lay.hScroll);
 check("ボタンは押しやすい大きさ（高さ44px以上）", lay.minH >= 44 && lay.minW >= 60, JSON.stringify(lay));
 check("文字は14px以上", lay.minFont >= 14, JSON.stringify(lay));
-check("チップの文字がはみ出さない", !lay.overflow);
+check("ボタンの文字がはみ出さない・折り返さない", !lay.overflow);
 if (shots) await page.screenshot({ path: path.join(shots, "q2-open.png"), fullPage: true });
 check("エラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
