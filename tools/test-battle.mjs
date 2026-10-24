@@ -181,8 +181,9 @@ if (shots) await page.screenshot({ path: path.join(shots, "b1-march.png"), fullP
 
 console.log("■ 戦闘");
 await page.evaluate(() => {
-  for (let i = 0; i < 300 && WD_DEBUG.squadApi.battle(); i++) {
-    WD_DEBUG.step(0.1);
+  // 1コマ（0.05秒）ごとに見る：守備兵がすぐ倒れると、戦う状態が1コマで終わることがある
+  for (let i = 0; i < 600 && WD_DEBUG.squadApi.battle(); i++) {
+    WD_DEBUG.step(0.05);
     const b = WD_DEBUG.squadApi.battle();
     if (b && b.groups.some((g) => g.state === "fight")) break;
   }

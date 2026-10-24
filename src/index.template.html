@@ -1363,6 +1363,37 @@
         margin: 0 0 6px;
         border-color: #e1bc77;
       }
+      /* 転職 */
+      #jobSheet {
+        z-index: 12; /* 主人公・兵士名簿の画面の上に開く */
+      }
+      .job-card {
+        padding: 8px 0;
+        border-top: 1px solid #719b8f55;
+      }
+      .job-card.cur {
+        border-left: 3px solid #ffd34d;
+        padding-left: 8px;
+      }
+      .job-card h3 {
+        margin: 0 0 2px;
+        font-size: 16px;
+      }
+      .job-card p {
+        margin: 2px 0 6px;
+        line-height: 1.45;
+      }
+      .job-card .up {
+        color: #8fe39a;
+      }
+      .job-card .down {
+        color: #ff9a8a;
+      }
+      .job-card button {
+        width: 100%;
+        min-height: 44px;
+        font-size: 15px;
+      }
     </style>
   </head>
   <body>
@@ -1479,7 +1510,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v29（修練場・主人公・無限育成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v30（転職・修練場・主人公）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1564,6 +1595,15 @@
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="jobSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="jobTitle">
+        <div class="panel-head hg-head">
+          <strong id="jobTitle">🔄 転職</strong
+          ><button id="jobClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="jobBody"></div>
       </div>
     </div>
     <div id="siegeSheet" class="sheet-back" hidden>
@@ -2733,6 +2773,51 @@
           volley: { name: "三段撃ち", unique: true, types: ["gunner"], haste: 0.2, text: "攻撃間隔 -20%" },
           ikkiTousen: { name: "一騎当千", unique: true, types: ["cavalry"], atk: 0.2, text: "攻撃力 +20%" },
           masterHealer: { name: "名医", unique: true, types: ["medic"], healMul: 0.4, text: "回復量 +40%" },
+          // ----- 職業スキル（job）：その職業の熟練度で習得する。習得したら、どの職業でも装備できる -----
+          fightOn: { name: "奮戦", job: "ashigaru", types: ALL_UNITS, atk: 0.08, text: "攻撃力 +8%" },
+          intercept: { name: "迎え撃ち", job: "spearman", types: ALL_UNITS, guard: 0.08, text: "受けるダメージ -8%" },
+          renSha: { name: "連射", job: "archer", types: ALL_UNITS, haste: 0.08, text: "攻撃の間隔 -8%" },
+          pierceShot: {
+            name: "貫通射撃",
+            job: "gunner",
+            types: ALL_UNITS,
+            armorPierce: 0.3,
+            text: "敵の防御の30%を無視",
+          },
+          assault: { name: "突撃", job: "cavalry", types: ALL_UNITS, chargeAdd: 0.3, text: "騎兵の突撃の一撃 +30%（騎兵の動きのときだけ）" },
+          quickFix: { name: "応急処置", job: "medic", types: ALL_UNITS, healMul: 0.15, text: "回復量 +15%" },
+          iai: {
+            name: "居合斬り",
+            job: "samurai",
+            types: ALL_UNITS,
+            iai: 0.6,
+            text: "新しい敵への最初の一撃 +60%（敵1体に1回）",
+          },
+          guardStance: { name: "防御の構え", job: "samurai", types: ALL_UNITS, guard: 0.08, text: "受けるダメージ -8%" },
+          shadowRun: { name: "影走り", job: "ninja", types: ALL_UNITS, haste: 0.12, text: "攻撃の間隔 -12%" },
+          evasion: {
+            name: "回避術",
+            job: "ninja",
+            types: ALL_UNITS,
+            evade: 0.15,
+            text: "15%の確率で攻撃をかわす（かわした後2秒は発動しない）",
+          },
+          issen: {
+            name: "一閃",
+            job: "kensei",
+            types: ALL_UNITS,
+            issen: 1.5,
+            text: "4回に1回の攻撃が ×2.5",
+          },
+          vitalStrike: { name: "急所攻撃", job: "kensei", types: ALL_UNITS, vsBoss: 0.35, text: "大将・中ボスへの攻撃力 +35%" },
+          goho: { name: "護法", job: "sohei", types: ALL_UNITS, guard: 0.1, text: "受けるダメージ -10%" },
+          prayer: {
+            name: "治癒の祈り",
+            job: "sohei",
+            types: ALL_UNITS,
+            prayer: 0.06,
+            text: "6秒ごとに、自分の部隊でいちばん傷ついた兵士のHPを最大HPの6%回復",
+          },
           siegeMaster: {
             name: "城攻め名人",
             future: true,
@@ -2862,6 +2947,62 @@
             displayBox: [62, 62],
             text: "敵の騎兵も止められる。最初の一撃が強い（突撃）。撤退が速いが槍兵に弱い",
           },
+        };
+        // ===== 職業（転職） =====
+        // 兵士は1人ずつ職業（job）を持つ。戦い方（近接・遠距離・治療・足止め・画像）は職業の「もとの兵種」（base）のもので、
+        // 職業ごとの能力補正（mods）と職業スキルで違いを出す。基本職（兵種と同じ6つ）と上級職（侍・忍者・剣豪・僧兵）。
+        // 職業スキルはその職業の熟練度（戦闘で得た経験値）で習得し、習得したスキルはどの職業でも装備できる
+        const JOBS = {
+          ashigaru: { name: "足軽", base: "ashigaru", icon: "🗡", text: "基本職。バランス型", mods: {}, skills: [["fightOn", 3]] },
+          spearman: { name: "槍兵", base: "spearman", icon: "🔱", text: "防御・迎撃型。敵を3体まで足止め", mods: {}, skills: [["intercept", 3]] },
+          archer: { name: "弓兵", base: "archer", icon: "🏹", text: "遠距離攻撃型", mods: {}, skills: [["renSha", 3]] },
+          gunner: { name: "鉄砲兵", base: "gunner", icon: "💥", text: "高火力・低連射の遠距離型", mods: {}, skills: [["pierceShot", 3]] },
+          cavalry: { name: "騎兵", base: "cavalry", icon: "🐎", text: "高速移動・突撃型。敵の騎兵を止められる", mods: {}, skills: [["assault", 3]] },
+          medic: { name: "衛生兵", base: "medic", icon: "🩹", text: "治療支援型（攻撃しない）", mods: {}, skills: [["quickFix", 3]] },
+          samurai: {
+            name: "侍",
+            base: "ashigaru",
+            icon: "⚔️",
+            advanced: true,
+            text: "攻撃・防御の両立（近接）",
+            mods: { atk: 1.15, def: 1.15, hp: 1.1 },
+            skills: [["iai", 3], ["guardStance", 6]],
+          },
+          ninja: {
+            name: "忍者",
+            base: "cavalry",
+            icon: "🥷",
+            advanced: true,
+            text: "高速・回避・奇襲（騎兵の動き）",
+            mods: { rate: 0.85, def: 0.9 },
+            skills: [["shadowRun", 3], ["evasion", 6]],
+          },
+          kensei: {
+            name: "剣豪",
+            base: "ashigaru",
+            icon: "🗡️",
+            advanced: true,
+            text: "単体への高火力（近接）",
+            mods: { atk: 1.35, def: 0.9 },
+            skills: [["issen", 3], ["vitalStrike", 6]],
+          },
+          sohei: {
+            name: "僧兵",
+            base: "spearman",
+            icon: "📿",
+            advanced: true,
+            text: "防御・回復支援（槍兵の動き・足止め）",
+            mods: { def: 1.25, hp: 1.15, atk: 0.85 },
+            skills: [["goho", 3], ["prayer", 6]],
+          },
+        };
+        const JOB_RULES = {
+          unlockLevel: 30, // このレベルから転職できる（一度なった職業には、いつでも戻れる）
+          profMax: 10, // 熟練度の上限
+          // 熟練度 n に上がるのに必要な、その職業で得た経験値の合計（n=1〜10）
+          profXp: (n) => 150 * (n * (n + 1)) / 2,
+          profBonus: 0.01, // 熟練度1ごとに、その職業のときの攻撃・防御 +1%（控えめ）
+          histMax: 20, // 転職履歴を残す数
         };
         // 称号：上から順に条件を満たした最も高いものになる。atk / def は能力への倍率ボーナス
         const TITLES = [
@@ -3237,7 +3378,7 @@
         }
         const rawMaxHp = (s) => {
           const c = SOLDIER_TYPES[s.type], lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
-          return Math.round((c.hp + c.grow.hp * lv) * (squadPassive(squadById(s.squadId)).hpMul || 1));
+          return Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (squadPassive(squadById(s.squadId)).hpMul || 1));
         };
         const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
@@ -3373,6 +3514,7 @@
             if (t && h.id === "motonari" && e.lastTowerId !== undefined && e.lastTowerId !== t.id && combatClock - e.lastTowerAt <= 1) damage *= 1.2;
             if (q && h.id === "sorin") ignore = Math.max(ignore, favorite(h, q) ? 0.4 : 0.2);
           }
+          if (s) ignore = Math.max(ignore, skillSum(s, "armorPierce")); // 貫通射撃
           const focus = ownedHeroes().some((v) => activeKind(v, "focus") && v.skillTarget === e);
           const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
           const armor = Math.max(0, e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0);
@@ -4324,7 +4466,7 @@
         // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
         // 主人公には 👑 を付ける
         const soldierName = (s) =>
-          (isHeroSoldier(s) ? "👑" : "") + (s.name ? "🎖" + s.name : SOLDIER_TYPES[s.type].name + " #" + s.id);
+          (isHeroSoldier(s) ? "👑" : "") + (s.name ? "🎖" + s.name : jobName(s) + " #" + s.id);
         const unitGhosts = []; // 戦死・撤退の退場演出（見た目のみ）
         function rankTitle(s) {
           let t = TITLES[0];
@@ -4382,11 +4524,14 @@
           // 部隊に配属された武将の効果（武将は1か所だけなので重複しない）
           const hm = (!ignoreHero && squadHeroMods(squadById(s.squadId))) || { atk: 1, def: 1, range: 1, speed: 1 };
           const support = ignoreHero ? { heal: 1, range: 1, interval: 1 } : medicSupport(squadById(s.squadId));
+          // 職業の補正（上級職）と熟練度（今の職業のとき、熟練度1ごとに攻撃・防御 +1%）
+          const jm = JOBS[jobOf(s)].mods,
+            pf = 1 + JOB_RULES.profBonus * profLv(s);
           return {
-            maxHp: ignoreHero ? Math.round(c.hp + c.grow.hp * lv) : rawMaxHp(s),
-            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
-            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def) * (1 + pointBonus(s, "def")) * hm.def,
-            rate: (c.rate * (1 - skillSum(s, "haste"))) / (1 + pointBonus(s, "spd")) / hm.speed * support.interval,
+            maxHp: ignoreHero ? Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1)) : rawMaxHp(s),
+            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * (jm.atk || 1) * pf * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
+            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
+            rate: ((c.rate * (1 - skillSum(s, "haste"))) / (1 + pointBonus(s, "spd"))) * (jm.rate || 1) / hm.speed * support.interval,
             range: c.range * (1 + skillSum(s, "range")) * (1 + pointBonus(s, "rng")) * hm.range * support.range,
             // 衛生兵の回復量（ほかの兵種は 0）
             heal: ((c.heal || 0) + ((c.grow && c.grow.heal) || 0) * lv) * (1 + skillSum(s, "healMul")) * support.heal,
@@ -4423,6 +4568,10 @@
             learned: [], // 習得したスキル（数の上限なし。将来の秘伝書・武将カードからの習得もここへ足す）
             skillLv: {}, // スキルのレベル（将来の成長用。今は使わない）
             pts: emptyPoints(), // 振ったステータスポイント
+            job: type, // 職業（最初は兵種と同じ）
+            jobs: [type], // なったことのある職業（最初が初期職）
+            jobHist: [], // 転職の履歴
+            prof: {}, // 職業ごとの熟練度（その職業で得た経験値の合計）
             deaths: 0, // 主人公として戦死した回数
             bestLevel: 1, // 過去最高レベル
             name: null,
@@ -4487,6 +4636,7 @@
             r[tag === "clear" ? "clear" : "battle"] += n;
           }
           s.xp += n;
+          addProf(s, n);
           while (s.level < SQUAD_RULES.maxLevel && s.xp >= SQUAD_RULES.xpToLevel(s.level)) {
             s.xp -= SQUAD_RULES.xpToLevel(s.level);
             s.level++;
@@ -4507,7 +4657,7 @@
         function learnSkill(s, unique) {
           const pool = Object.keys(SOLDIER_SKILLS).filter((id) => {
             const k = SOLDIER_SKILLS[id];
-            return !k.future && !!k.unique === !!unique && k.types.includes(s.type) && !learnedOf(s).includes(id);
+            return !k.future && !k.job && !!k.unique === !!unique && k.types.includes(s.type) && !learnedOf(s).includes(id);
           });
           if (!pool.length) return null;
           const id = pool[Math.min(pool.length - 1, Math.floor(skillRng() * pool.length))];
@@ -4561,6 +4711,109 @@
           patchSavedSoldier(s, { name: s.name });
           return null;
         }
+        // ===== 職業：熟練度・転職 =====
+        const jobOf = (s) => (s && s.job && JOBS[s.job] ? s.job : s.type);
+        const jobsOf = (s) => s.jobs || (s.jobs = [jobOf(s)]); // なったことのある職業（最初が初期職）
+        const jobName = (s) => JOBS[jobOf(s)].name;
+        function profLv(s, j = jobOf(s)) {
+          const x = (s.prof && s.prof[j]) || 0;
+          let n = 0;
+          while (n < JOB_RULES.profMax && x >= JOB_RULES.profXp(n + 1)) n++;
+          return n;
+        }
+        // 熟練度：今の職業で経験値を得たときだけ増える（転職するだけでは増えない）。上がったら職業スキルを習得
+        function addProf(s, n) {
+          const j = jobOf(s),
+            before = profLv(s, j);
+          if (!s.prof) s.prof = {};
+          s.prof[j] = Math.min(JOB_RULES.profXp(JOB_RULES.profMax), (s.prof[j] || 0) + n);
+          const after = profLv(s, j);
+          if (after <= before) return;
+          logHistory(s, JOBS[j].name + "の熟練度 " + after + " に上がった");
+          for (const [id, need] of JOBS[j].skills) {
+            if (after < need || learnedOf(s).includes(id) || !SOLDIER_SKILLS[id]) continue;
+            learnedOf(s).push(id);
+            if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(id);
+            logHistory(s, "職業スキル「" + SOLDIER_SKILLS[id].name + "」を習得");
+            msg(soldierName(s) + "：" + JOBS[j].name + "の職業スキル「" + SOLDIER_SKILLS[id].name + "」を習得！");
+          }
+        }
+        // 職業スキルの一撃の倍率：居合斬り（新しい敵への最初の一撃）・一閃（4回に1回）。防衛戦・攻城戦・修練場で共通
+        function skillHitMul(s, target) {
+          let m = 1;
+          const iai = skillSum(s, "iai");
+          if (iai && s.iaiTarget !== target) {
+            s.iaiTarget = target;
+            m *= 1 + iai;
+          }
+          const issen = skillSum(s, "issen");
+          if (issen) {
+            s.issenN = (s.issenN || 0) + 1;
+            if (s.issenN >= 4) {
+              s.issenN = 0;
+              m *= 1 + issen;
+            }
+          }
+          return m;
+        }
+        // 待ち時間の残り（防衛戦と攻城戦は時計が別なので、待ち時間より長く残っていたら古い値として無視する）
+        const coolLeft = (until, now, len) => (until > now && until - now <= len ? until - now : 0);
+        // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
+        function evadeHit(s, now) {
+          const p = skillSum(s, "evade");
+          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= p) return false;
+          s.evadeUntil = now + 2;
+          return true;
+        }
+        // 治癒の祈り：6秒ごとに、同じ部隊でいちばん傷ついた兵士を回復（自分も含む。満タンなら何もしない）
+        function prayerTick(s, list, now) {
+          const p = skillSum(s, "prayer");
+          if (!p || coolLeft(s.prayerAt || 0, now, 6)) return;
+          let best = null,
+            ratio = 1;
+          for (const m of list) {
+            const r = m.hp / soldierStats(m).maxHp;
+            if (r < ratio) {
+              ratio = r;
+              best = m;
+            }
+          }
+          if (!best) return;
+          s.prayerAt = now + 6;
+          const max = soldierStats(best).maxHp,
+            before = best.hp;
+          best.hp = Math.min(max, best.hp + max * p);
+          earnXp(s, "heal", best.hp - before, max);
+        }
+        // 転職できるか（理由を返す。できるなら null）
+        function jobChangeError(s, j) {
+          if (!s || !s.alive) return "その兵士は転職できません。";
+          if (!JOBS[j]) return "その職業はありません。";
+          if (battle) return "攻城戦の最中は転職できません。";
+          if (training) return "修練場で挑戦中は転職できません。";
+          if (playing) return "戦闘中（ウェーブ中）は転職できません。ウェーブの合間に転職しよう。";
+          if (jobOf(s) === j) return "すでに" + JOBS[j].name + "です。";
+          if (!jobsOf(s).includes(j) && s.level < JOB_RULES.unlockLevel)
+            return "Lv" + JOB_RULES.unlockLevel + "から新しい職業に転職できます（一度なった職業にはいつでも戻れます）。";
+          return null;
+        }
+        // 転職：同じ兵士（ID・レベル・経験値・名前・戦歴・ポイント・スキル）のまま、職業と戦い方だけ変わる
+        function changeJob(s, j) {
+          const err = jobChangeError(s, j);
+          if (err) return err;
+          const from = jobOf(s);
+          s.job = j;
+          s.type = JOBS[j].base;
+          if (!jobsOf(s).includes(j)) s.jobs.push(j);
+          s.jobHist = (s.jobHist || []).concat({ from, to: j, lv: s.level }).slice(-JOB_RULES.histMax);
+          logHistory(s, JOBS[from].name + " から " + JOBS[j].name + " に転職");
+          const q = squadById(s.squadId);
+          if (q) refreshSquadType(q);
+          s.hp = Math.min(s.hp, soldierStats(s).maxHp);
+          s.iaiTarget = null;
+          patchSavedSoldier(s, pickSaved(s));
+          return null;
+        }
         // ===== 主人公 =====
         // 兵士の中から一人を主人公にする（保存データの heroId に兵士のIDだけを持つ。複製はしない）。
         // 主人公は戦死しても消えず、Lv1から再出発する（名前・戦歴・習得したスキルと装備は残る）
@@ -4587,7 +4840,9 @@
           s.level = 1;
           s.xp = 0;
           s.pts = emptyPoints(); // ステータスポイントと能力は初期値へ（スキル・スキルのレベル・装備・名前・戦歴は残す）
-          // ジョブ（未実装）を追加したときは、ここで初期職へ戻す
+          // 職業は初期職へ（なったことのある職業・熟練度・転職履歴は残るので、いつでも戻れる）
+          s.job = jobsOf(s)[0];
+          s.type = JOBS[s.job].base;
           s.waveXp = Infinity; // このウェーブ（攻城戦・修練場）では、もう経験値を得ない
           if (training) training.heroFell = soldierName(s);
           s.inWave = false; // ウェーブを生き延びた報酬も受け取らない
@@ -4760,6 +5015,7 @@
         function damageSquad(q, raw, ranged, kind, enemy = null) {
           const front = members(q)[0];
           if (!front) return;
+          if (evadeHit(front, combatClock)) return; // 回避術
           const st = soldierStats(front),
             weak = SOLDIER_TYPES[front.type].spearWeak,
             // 騎兵は敵の槍兵（内部ID knight）に弱い。人馬一体で追加分を減らす
@@ -4916,6 +5172,7 @@
           for (const q of squads) {
             if (q.state !== "deployed" || activeKind(heroOnSquad(q), "rest")) continue;
             for (const s of members(q)) {
+              prayerTick(s, members(q), combatClock);
               s.cd -= dt;
               if (s.cd > 0) continue;
               const ct = SOLDIER_TYPES[s.type]; // 兵士ごとの兵種（混成部隊）
@@ -4935,7 +5192,7 @@
               s.atk = 0.18;
               q.face = target.x < q.x ? -1 : 1;
               // 敵将狙い：大将への攻撃アップ。連続攻撃：一定確率でもう1回
-              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1),
+              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) * skillHitMul(s, target),
                 charge = ct.charge;
               // 突撃（騎兵）：新しい敵への最初の一撃だけ強い
               if (charge && s.chargeTarget !== target) {
@@ -5232,15 +5489,18 @@
           "pts",
           "deaths",
           "bestLevel",
+          "job",
+          "jobs",
+          "jobHist",
+          "prof",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         const intIn = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
         function cleanSkills(list, type) {
           if (!Array.isArray(list)) return [];
           const out = [];
-          for (const id of list)
-            if (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id].types.includes(type) && !out.includes(id))
-              out.push(id);
+          // 職業を変えて覚えたスキルもあるので、兵種では絞らない（存在するスキルだけ・重複なし）
+          for (const id of list) if (SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future && !out.includes(id)) out.push(id);
           return out.slice(0, SQUAD_RULES.maxSkills);
         }
         function cleanSkillLv(v, learned) {
@@ -5252,8 +5512,24 @@
         function cleanLearned(list, type) {
           const out = [];
           for (const id of Array.isArray(list) ? list : [])
-            if (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id].types.includes(type) && !out.includes(id)) out.push(id);
+            if (SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future && !out.includes(id)) out.push(id);
           return out;
+        }
+        // 職業：以前の保存データは兵種が初期職。職業のもとの兵種と兵種がずれていたら、職業を兵種に合わせる
+        function cleanJob(v) {
+          let job = JOBS[v.job] && JOBS[v.job].base === v.type ? v.job : v.type;
+          const jobs = [];
+          for (const j of Array.isArray(v.jobs) ? v.jobs : []) if (JOBS[j] && !jobs.includes(j)) jobs.push(j);
+          if (!jobs.length) jobs.push(job);
+          if (!jobs.includes(job)) jobs.push(job);
+          const prof = {};
+          if (v.prof && typeof v.prof === "object")
+            for (const j of Object.keys(JOBS)) if (v.prof[j] != null) prof[j] = intIn(v.prof[j], 0, JOB_RULES.profXp(JOB_RULES.profMax), 0);
+          const jobHist = (Array.isArray(v.jobHist) ? v.jobHist : [])
+            .filter((h) => h && JOBS[h.from] && JOBS[h.to])
+            .map((h) => ({ from: h.from, to: h.to, lv: intIn(h.lv, 1, SQUAD_RULES.maxLevel, 1) }))
+            .slice(-JOB_RULES.histMax);
+          return { job, jobs, prof, jobHist };
         }
         // 振ったポイント：0以上の整数。合計が得たポイントを超える（壊れた・改ざんされた）ときは振り直し
         function cleanPoints(v, level) {
@@ -5342,6 +5618,7 @@
                 pts: cleanPoints(v.pts, level),
                 deaths: intIn(v.deaths, 0, 1e9, 0),
                 bestLevel: best,
+                ...cleanJob(v),
                 // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す
                 name: best >= SQUAD_RULES.nameLevel ? cleanName(v.name) || null : null,
                 battles: intIn(v.battles, 0, 1e6, 0),
@@ -8124,7 +8401,9 @@
             "<div><h3>" +
             esc(soldierName(s)) +
             "</h3><p>" +
-            c.name +
+            JOBS[jobOf(s)].icon +
+            jobName(s) +
+            (JOBS[jobOf(s)].advanced ? "（" + c.name + "の動き）" : "") +
             "・" +
             (q ? esc(squadName(q)) : "所属なし") +
             "<br><b>Lv" +
@@ -8202,7 +8481,12 @@
             "</b>回・過去最高 <b>Lv" +
             Math.max(s.bestLevel || 1, s.level) +
             "</b></p>" +
-            '<div class="card-actions"><button data-hg-change>👑 主人公を変える</button></div>';
+            '<div class="card-actions"><button data-hg-job>🔄 転職（' +
+            JOBS[jobOf(s)].icon +
+            jobName(s) +
+            "・熟練度 " +
+            profLv(s) +
+            '）</button><button data-hg-change>👑 主人公を変える</button></div>';
           $("hgBody").innerHTML = html;
         }
         function openHeroGrowth() {
@@ -8229,7 +8513,8 @@
               heroPicking = false;
               hgNote = soldierName(heroSoldier()) + " を主人公にしました。";
             }
-          } else if (d.hgChange !== undefined) heroPicking = true;
+          } else if (d.hgJob !== undefined && s) return openJobSheet(s.id);
+          else if (d.hgChange !== undefined) heroPicking = true;
           else if (d.hgCancel !== undefined) heroPicking = false;
           else if (d.hgAdd) err = addPoint(s, d.hgAdd, 1);
           else if (d.hgAdd10) err = addPoint(s, d.hgAdd10, 10);
@@ -8237,6 +8522,178 @@
           else if (d.hgOff) err = unequipSkill(s, d.hgOff);
           if (err) hgNote = "⚠ " + err;
           renderHeroGrowth();
+          updateUI();
+        });
+        // ===== 転職の画面 =====
+        let jobSoldierId = null,
+          jobNote = "";
+        const pctText = (v) => (v > 1 ? "+" : "") + Math.round((v - 1) * 100) + "%";
+        function jobModsText(j) {
+          const m = JOBS[j].mods,
+            out = [];
+          if (m.atk) out.push("攻撃" + pctText(m.atk));
+          if (m.def) out.push("防御" + pctText(m.def));
+          if (m.hp) out.push("HP" + pctText(m.hp));
+          if (m.rate) out.push("攻撃の速さ" + pctText(1 / m.rate));
+          return out.length ? out.join("・") : "補正なし（兵種のまま）";
+        }
+        // 転職したときの能力（武将の効果を除いた、本人の能力）
+        function statsAsJob(s, j) {
+          return soldierStats(Object.assign({}, s, { job: j, type: JOBS[j].base }), true);
+        }
+        function jobStatText(st, base) {
+          return (
+            (SOLDIER_TYPES[base].heal ? "回復" + fmt(st.heal) : "攻撃" + fmt(st.atk)) +
+            "・防御" +
+            fmt(st.def) +
+            "・HP" +
+            st.maxHp +
+            "・間隔" +
+            fmt(st.rate) +
+            "秒・射程" +
+            Math.round(st.range)
+          );
+        }
+        // 今の能力 → 転職後の能力（上がる ▲・下がる ▼。間隔は短いほど良い）
+        function jobCompareText(now, after, base) {
+          const row = (label, a, b, unit = "", lowGood = false, f = fmt) => {
+            const d = b - a,
+              good = lowGood ? d < 0 : d > 0,
+              mark = Math.abs(d) < 0.05 ? "" : good ? '<b class="up">▲</b>' : '<b class="down">▼</b>';
+            return label + f(a) + "→" + f(b) + unit + mark;
+          };
+          return [
+            SOLDIER_TYPES[base].heal ? row("回復", now.heal, after.heal) : row("攻撃", now.atk, after.atk),
+            row("防御", now.def, after.def),
+            row("HP", now.maxHp, after.maxHp, "", false, (v) => String(v)),
+            row("間隔", now.rate, after.rate, "秒", true),
+            row("射程", now.range, after.range, "", false, (v) => String(Math.round(v))),
+          ].join("・");
+        }
+        function renderJobSheet() {
+          const s = soldierById(jobSoldierId);
+          if (!s || !s.alive) {
+            $("jobBody").innerHTML = '<p class="muted">兵士が見つかりません。</p>';
+            return;
+          }
+          const cur = jobOf(s),
+            now = soldierStats(s, true),
+            fighting = playing || !!battle || !!training;
+          let html =
+            (jobNote ? '<p class="saved">' + esc(jobNote) + "</p>" : "") +
+            "<p><b>" +
+            esc(soldierName(s)) +
+            "</b> Lv" +
+            s.level +
+            "<br>今の職業：<b>" +
+            JOBS[cur].icon +
+            JOBS[cur].name +
+            "</b>（熟練度 " +
+            profLv(s) +
+            "/" +
+            JOB_RULES.profMax +
+            "）<br><small>今の能力：" +
+            jobStatText(now, s.type) +
+            "</small></p>" +
+            '<p class="muted">Lv' +
+            JOB_RULES.unlockLevel +
+            "から新しい職業に転職できます（無料・何度でも）。一度なった職業には、レベルに関係なくいつでも戻れます。レベル・経験値・名前・戦歴・ステータスポイント・習得したスキルはそのまま。熟練度は戦闘の経験で上がります。" +
+            (fighting ? '<br><span class="injured">戦闘中は転職できません（ウェーブの合間に）。</span>' : "") +
+            "</p>";
+          for (const j of Object.keys(JOBS)) {
+            const J = JOBS[j],
+              been = jobsOf(s).includes(j),
+              err = jobChangeError(s, j),
+              lv = profLv(s, j),
+              x = (s.prof && s.prof[j]) || 0,
+              next = lv < JOB_RULES.profMax ? JOB_RULES.profXp(lv + 1) : null,
+              locked = !been && s.level < JOB_RULES.unlockLevel;
+            html +=
+              '<div class="job-card' +
+              (j === cur ? " cur" : "") +
+              '" data-job="' +
+              j +
+              '"><h3>' +
+              J.icon +
+              " " +
+              J.name +
+              " <small>" +
+              (j === cur ? "（今の職業）" : been ? "（なったことがある）" : J.advanced ? "（上級職）" : "") +
+              "</small></h3><p>" +
+              esc(J.text) +
+              "<br><small>能力補正：" +
+              jobModsText(j) +
+              "（熟練度1ごとに攻撃・防御+" +
+              Math.round(JOB_RULES.profBonus * 100) +
+              "%）<br>熟練度 <b>" +
+              lv +
+              "/" +
+              JOB_RULES.profMax +
+              "</b>" +
+              (next ? "（経験 " + Math.floor(x) + "/" + next + "）" : "（最大）") +
+              "<br>職業スキル：" +
+              J.skills
+                .map(
+                  ([id, need]) =>
+                    (learnedOf(s).includes(id) ? "✅" : "熟練度" + need + "で") +
+                    "「" +
+                    SOLDIER_SKILLS[id].name +
+                    "」",
+                )
+                .join("・") +
+              (j !== cur ? "<br>転職すると：" + jobCompareText(now, statsAsJob(s, j), J.base) : "") +
+              "</small></p>" +
+              (j === cur
+                ? ""
+                : '<button data-job-to="' +
+                  j +
+                  '"' +
+                  (err ? " disabled" : "") +
+                  ">" +
+                  (locked && !fighting ? "🔒 Lv" + JOB_RULES.unlockLevel + "で解放" : J.name + "に転職") +
+                  "</button>") +
+              "</div>";
+          }
+          const hist = s.jobHist || [];
+          html +=
+            '<h3 class="hg-h">転職の履歴</h3>' +
+            (hist.length
+              ? '<p class="job-hist"><small>' +
+                hist
+                  .slice()
+                  .reverse()
+                  .map((h) => "Lv" + h.lv + "：" + JOBS[h.from].name + " → " + JOBS[h.to].name)
+                  .join("<br>") +
+                "</small></p>"
+              : '<p class="muted job-hist">まだ転職していません。</p>');
+          $("jobBody").innerHTML = html;
+        }
+        function openJobSheet(id) {
+          jobSoldierId = id;
+          jobNote = "";
+          renderJobSheet();
+          $("jobSheet").hidden = false;
+          $("jobClose").focus();
+        }
+        function closeJobSheet() {
+          $("jobSheet").hidden = true;
+          // 開いていた画面（主人公・兵士名簿）を新しい職業で描き直す
+          if (!$("heroGrowthSheet").hidden) renderHeroGrowth();
+          if (!$("soldierSheet").hidden) renderSoldierSheet();
+          updateUI();
+        }
+        $("jobClose").onclick = closeJobSheet;
+        $("jobSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("jobSheet")) return closeJobSheet();
+          const b = ev.target.closest("[data-job-to]");
+          if (!b || b.disabled) return;
+          const s = soldierById(jobSoldierId),
+            j = b.dataset.jobTo,
+            err = changeJob(s, j);
+          jobNote = err ? "⚠ " + err : soldierName(s) + " は " + JOBS[j].name + " になった。";
+          msg(jobNote);
+          renderJobSheet();
+          $("jobSheet").querySelector(".sheet").scrollTop = 0; // 結果と今の職業を見せる
           updateUI();
         });
         // ===== 兵士名簿（在籍の兵士・英霊名鑑） =====
@@ -8279,6 +8736,7 @@
               (s.name ? "✏️ 名前を変える" : "✏️ 名前を付ける") +
               "</button>";
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
+          act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
           if (act) act = '<div class="card-actions">' + act + "</div>";
           return (
             '<div class="s-card' +
@@ -8286,7 +8744,8 @@
             '"><h3>' +
             esc(soldierName(s)) +
             " <small>" +
-            SOLDIER_TYPES[s.type].name +
+            JOBS[jobOf(s)].icon +
+            jobName(s) +
             "・Lv" +
             s.level +
             " " +
@@ -8390,6 +8849,8 @@
         $("tabFallen").onclick = () => openSoldierSheet("fallen");
         $("soldierSheet").addEventListener("click", (ev) => {
           if (ev.target === $("soldierSheet")) return closeSoldierSheet();
+          const jo = ev.target.closest("[data-job-open]");
+          if (jo) return openJobSheet(+jo.dataset.jobOpen);
           const mh = ev.target.closest("[data-make-hero]");
           if (mh) {
             const err = setHeroSoldier(+mh.dataset.makeHero);
@@ -9415,6 +9876,7 @@
           const alive = groupAlive(g),
             s = alive[0];
           if (!s) return;
+          if (evadeHit(s, battle.t)) return; // 回避術
           const st = battleStats(g, s),
             weak = SOLDIER_TYPES[s.type].spearWeak,
             spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) : 1;
@@ -9524,6 +9986,7 @@
           for (const g of B.groups) {
             if (!groupActive(g)) continue;
             for (const s of groupAlive(g)) {
+              prayerTick(s, groupAlive(g), B.t);
               s.cd -= dt;
               if (s.cd > 0) continue;
               const st = battleStats(g, s),
@@ -9591,8 +10054,8 @@
               }
               s.cd += st.rate;
               s.atk = 0.18;
-              let dmg = st.atk * (target && target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1);
               const key = target || tower || "castle";
+              let dmg = st.atk * (target && target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) * skillHitMul(s, key);
               if (c.charge && s.chargeTarget !== key) {
                 s.chargeTarget = key;
                 dmg *= c.charge + skillSum(s, "chargeAdd");
@@ -10537,8 +11000,8 @@
                 [
                   c.name,
                   c.text,
-                  c.unique ? "固有" : c.future ? "未実装" : "通常",
-                  ...c.types.map((id) => SOLDIER_TYPES[id].name),
+                  c.job ? "職業" : c.unique ? "固有" : c.future ? "未実装" : "通常",
+                  ...(c.job ? [JOBS[c.job].name] : c.types.map((id) => SOLDIER_TYPES[id].name)),
                 ]
                   .join(" ")
                   .toLocaleLowerCase()
@@ -10551,11 +11014,13 @@
                   '"><h3>' +
                   esc(c.name) +
                   " <small>［" +
-                  (c.future ? "未実装・習得不可" : c.unique ? "固有" : "通常") +
+                  (c.future ? "未実装・習得不可" : c.job ? "職業スキル" : c.unique ? "固有" : "通常") +
                   "］</small></h3><p>" +
                   esc(c.text) +
-                  '</p><p class="guide-meta">対象：' +
-                  c.types.map((id) => esc(SOLDIER_TYPES[id].name)).join("・") +
+                  '</p><p class="guide-meta">' +
+                  (c.job
+                    ? "職業：" + esc(JOBS[c.job].name) + "（熟練度 " + JOBS[c.job].skills.find((x) => x[0] === id)[1] + " で習得。習得後はどの職業でも装備できる）"
+                    : "対象：" + c.types.map((id) => esc(SOLDIER_TYPES[id].name)).join("・")) +
                   "</p></article>",
               );
           }
@@ -10655,6 +11120,12 @@
           }
         });
         document.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Escape" || $("jobSheet").hidden) return;
+          ev.preventDefault();
+          ev.stopImmediatePropagation(); // 下の画面は閉じない
+          closeJobSheet();
+        });
+        document.addEventListener("keydown", (ev) => {
           if (ev.key === "Escape" && !$("heroSheet").hidden) closeSheet();
           if (ev.key === "Escape" && !$("squadSheet").hidden) closeSquadSheet();
           if (ev.key === "Escape" && !$("gachaSheet").hidden) closeGacha();
@@ -10715,6 +11186,7 @@
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
             },
+            jobApi: { JOBS, JOB_RULES, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
               members,
               squadName,
