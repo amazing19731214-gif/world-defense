@@ -142,6 +142,27 @@ check(
   ls.tickets === 2 && ls.owned[first.id] === 1 && ls.history[0].id === first.id,
 );
 check("結果カード（レア度・名前・NEW）", /NEW!/.test(await page.textContent("#gachaResult")));
+{
+  // ガチャ画面には、今引いた1人以外の武将名を出さない（全体の人数だけ）
+  const g = await page.evaluate(() => {
+    const { WARLORDS } = WD_DEBUG.config,
+      text = document.getElementById("gachaSheet").textContent,
+      pulled = WD_DEBUG.heroApi.save().history[0].id;
+    return {
+      others: Object.entries(WARLORDS)
+        .filter(([id, w]) => id !== pulled && text.includes(w.name))
+        .map(([, w]) => w.name),
+      total: /登場する武将は全30人（所持 1人）/.test(text),
+      recent: text.includes("最近の結果"),
+    };
+  });
+  check(
+    "ガチャ画面に他の武将名・最近の結果を出さない",
+    g.others.length === 0 && !g.recent,
+    JSON.stringify(g),
+  );
+  check("ガチャ画面に「全30人・所持数」だけ表示", g.total);
+}
 if (shots) await page.screenshot({ path: path.join(shots, "w1-gacha.png") });
 await page.reload();
 await page.waitForFunction(() => window.WD_DEBUG);

@@ -578,7 +578,9 @@
         ><button id="roster">👥 武将</button><button id="reset">↻ 最初から</button>
       </div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v11（武将30人・戦国の防衛塔・兵士部隊）</small>
+      <small
+        >GitHub Pages / Safari対応・ペイント調・個別素材版 v11.1（武将30人・戦国の防衛塔・兵士部隊）</small
+      >
     </main>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
@@ -4359,14 +4361,13 @@
                 : '<p class="warn">この環境では保存できませんでした（再読み込みで失われます）</p>') +
               "</div></div>";
           }
-          if (heroSave.history.length)
-            html +=
-              '<p class="muted">最近の結果：' +
-              heroSave.history
-                .slice(0, 10)
-                .map((r) => WARLORDS[r.id].rarity + " " + WARLORDS[r.id].name)
-                .join("、") +
-              "</p>";
+          // 誰が出るかは見せない（人数と所持数だけ）。引いた履歴は保存データにだけ残す
+          html +=
+            '<p class="muted">登場する武将は全' +
+            Object.keys(WARLORDS).length +
+            "人（所持 " +
+            ownedIds().length +
+            "人）</p>";
           $("gachaResult").innerHTML = html;
         }
         function openGacha() {
