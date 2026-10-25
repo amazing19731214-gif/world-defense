@@ -2157,7 +2157,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v43（途中保存・再開）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v44（WAVE1000対応）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4219,7 +4219,8 @@ OFF</button>
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         // 目標ウェーブの選択肢。21ウェーブ目からも敵の数・強さは今までと同じ式で増えていく（20までは変わらない）
-        const WAVE_GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100];
+        const WAVE_GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+        const MAX_WAVE = WAVE_GOALS[WAVE_GOALS.length - 1];
         function updateUI() {
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
@@ -7604,7 +7605,7 @@ OFF</button>
             const won = wave >= waveGoal;
             msg(
               won
-                ? "🎉 " + wave + "ウェーブクリア！ 勝利！" + (wave < WAVE_GOALS[WAVE_GOALS.length - 1] ? "（上の「WAVE」から目標を延ばすと続けて戦える）" : "")
+                ? "🎉 " + wave + "ウェーブクリア！ 勝利！" + (wave < MAX_WAVE ? "（上の「WAVE」から目標を延ばすと続けて戦える）" : "")
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (won) over = true;
@@ -9438,7 +9439,7 @@ OFF</button>
         }
         function renderGoal() {
           $("goalBody").innerHTML =
-            '<p class="goal-note">防衛戦を何ウェーブまで戦うか、最大100まで選べます。21ウェーブ目からも敵はさらに増え、強くなります。ウェーブクリア時に自動保存し、再読み込み後は続きから再開できます。<br>今 WAVE ' +
+            '<p class="goal-note">防衛戦を何ウェーブまで戦うか、最大' + MAX_WAVE + 'まで選べます。21ウェーブ目からも敵はさらに増え、強くなります。ウェーブクリア時に自動保存し、再読み込み後は続きから再開できます。<br>今 WAVE ' +
             wave +
             "。" +
             (goalWon() ? "勝利しました。目標を延ばすと続けて戦えます。" : "今より先のウェーブを選べます。") +
@@ -16267,7 +16268,7 @@ OFF</button>
           const d = heroSave.defense;
           if (!d) return false;
           const finite = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
-          const valid = d.version === 1 && Number.isInteger(d.wave) && finite(d.wave,0,100) && WAVE_GOALS.includes(d.waveGoal) && d.wave <= d.waveGoal
+          const valid = d.version === 1 && Number.isInteger(d.wave) && finite(d.wave,0,MAX_WAVE) && WAVE_GOALS.includes(d.waveGoal) && d.wave <= d.waveGoal
             && finite(d.gold,0,1e12) && finite(d.hp,1,20) && typeof d.runId === "string" && d.runId.length <= 100
             && finite(d.clock,0,1e12) && Array.isArray(d.towers) && d.towers.length <= 300 && Array.isArray(d.squads)
             && d.squads.length <= 16 && Array.isArray(d.soldiers) && d.soldiers.length <= 160 && Array.isArray(d.heroes) && d.heroes.length <= 30
@@ -16313,7 +16314,7 @@ OFF</button>
           }
           playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;
           $("pause").textContent = "▶ 再開"; $("speed").textContent = "⏩ x" + speed;
-          msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < 100 ? "目標達成済みです。WAVEから目標を延ばせます。" : "全100ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
+          msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < MAX_WAVE ? "目標達成済みです。WAVEから目標を延ばせます。" : "全" + MAX_WAVE + "ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
           return true;
         }
         $("checkpointSave").onclick = () => {
