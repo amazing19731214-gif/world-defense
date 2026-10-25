@@ -129,13 +129,13 @@ check(
   JSON.stringify(r.counter),
 );
 check(
-  "狙われるのは境目の国：遠江に駿河の軍勢",
-  r.counter.province === "totomi" && r.counter.from === "suruga",
+  "狙われるのは境目の国：尾張に伊勢の軍勢（全国の国から）",
+  r.counter.province === "owari" && r.counter.from === "ise",
   JSON.stringify(r.counter),
 );
 check(
   "結果画面で反撃を知らせる",
-  /駿河の軍勢が遠江（曳馬城）に攻めてきた/.test(r.body) && /ウェーブ10まで守り抜こう/.test(r.body),
+  /伊勢の軍勢が尾張（清洲城）に攻めてきた/.test(r.body) && /ウェーブ10まで守り抜こう/.test(r.body),
   r.body.slice(0, 160),
 );
 await page.tap("#battleClose");
@@ -143,7 +143,7 @@ check(
   "画面上部に反撃中のお知らせ（あと何ウェーブ）",
   (await page.isVisible("#counterBanner")) && /あと10ウェーブ/.test(await page.textContent("#counterBanner")),
 );
-check("反撃を保存", (await stored(page, CKEY)).counter.province === "totomi");
+check("反撃を保存", (await stored(page, CKEY)).counter.province === "owari");
 if (shots) await page.screenshot({ path: path.join(shots, "k1-banner.png") });
 
 console.log("■ 反撃中の攻城戦");
@@ -164,7 +164,7 @@ check("攻城編成の画面にも反撃を表示", /攻めてきた/.test(await
 await page.tap("#siegeTarget [data-provinces]");
 check(
   "領土の一覧で狙われた国に表示",
-  /遠江（曳馬城）⚠ 反撃を受けている/.test(await page.textContent("#siegePick")),
+  /尾張（清洲城）⚠ 反撃を受けている/.test(await page.textContent("#siegePick")),
 );
 await page.tap("#siegeClose");
 
@@ -196,11 +196,11 @@ await clearWaves(page, 1);
 r = await page.evaluate(() => ({
   counter: WD_DEBUG.squadApi.activeCounter(),
   msg: document.getElementById("msg").textContent,
-  owned: WD_DEBUG.squadApi.ownsProvince("totomi"),
+  owned: WD_DEBUG.squadApi.ownsProvince("owari"),
 }));
 check(
-  "ウェーブ10までクリアすると撃退（遠江は守られる）",
-  !r.counter && r.owned && /駿河の反撃を退け、遠江を守り抜いた/.test(r.msg),
+  "ウェーブ10までクリアすると撃退（尾張は守られる）",
+  !r.counter && r.owned && /伊勢の反撃を退け、尾張を守り抜いた/.test(r.msg),
   r.msg,
 );
 const t1 = (await stored(page, WKEY)).tickets;

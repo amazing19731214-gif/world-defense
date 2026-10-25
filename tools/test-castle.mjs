@@ -141,7 +141,7 @@ await page.tap("#siege");
 text = await page.textContent("#siegeTarget");
 check(
   "清洲城を取ると、次の攻略目標は隣の国の城（曳馬城・遠江）",
-  /攻略目標：曳馬城（遠江）/.test(text) && /領土 2\/7/.test(text),
+  /攻略目標：曳馬城（遠江）/.test(text) && /領土 2\/68/.test(text),
   text,
 );
 await page.tap("#siegeTarget [data-provinces]");
