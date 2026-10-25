@@ -113,8 +113,8 @@ check(
 await page.tap("#siege");
 let text = await page.textContent("#siegeTarget");
 check(
-  "最初の攻略目標は清洲城（尾張）・領土 1/7",
-  /攻略目標：清洲城（尾張）/.test(text) && /領土 1\/7/.test(text),
+  "最初の攻略目標は清洲城（尾張）・領土 1/68（全国）",
+  /攻略目標：清洲城（尾張）/.test(text) && /領土 1\/68/.test(text),
   text,
 );
 await page.tap("#siegeTarget [data-provinces]");
@@ -179,8 +179,8 @@ check(
 console.log("■ 占領で領土が広がる");
 r = await capture(page, "hikuma");
 check(
-  "遠江（曳馬城）を占領すると領土 2/7",
-  r.id === "hikuma" && /曳馬城（遠江）を占領した/.test(r.body) && /領土 2\/7/.test(r.body),
+  "遠江（曳馬城）を占領すると領土 2/68",
+  r.id === "hikuma" && /曳馬城（遠江）を占領した/.test(r.body) && /領土 2\/68/.test(r.body),
   r.err || r.body.slice(0, 80),
 );
 check("遠江を取ると隣の駿河が攻められるようになる", (await open(page)).includes("suruga"));
@@ -188,8 +188,10 @@ check("占領した城を選んでいた場合、目標は次の国へ", (await 
 await page.tap("#battleClose");
 for (const c of ["kiyosu", "inabayama", "sunpu", "fukashi"]) await capture(page, c);
 check(
-  "甲斐（躑躅ヶ崎館）は駿河か信濃を取ると攻められる",
-  (await open(page)).join() === "kai",
+  "甲斐（躑躅ヶ崎館）は駿河か信濃を取ると攻められる（ほかに最初の7か国の外の隣国も）",
+  (await open(page)).includes("kai") &&
+    (await open(page)).sort().join() ===
+      "echigo,echizen,etchu,hida,ise,izu,kai,kozuke,musashi,omi,sagami",
   (await open(page)).join(),
 );
 const before = await page.evaluate(
@@ -214,7 +216,12 @@ check(
   !/統一した/.test(r.body) && !/占領した/.test(r.body) && r.tickets === before + 15,
 );
 r = await page.evaluate(() => JSON.parse(localStorage.getItem("worldDefense.conquest.v1")));
-check("占領・統一を保存", r.unified === true && Object.values(r.castles).every((c) => c.captured));
+check(
+  "占領・統一（最初の7か国）を保存",
+  r.unified === true &&
+    ["kiyosu", "hikuma", "inabayama", "sunpu", "fukashi", "tsutsujigasaki"].every((c) => r.castles[c].captured) &&
+    !r.castles.kannonji.captured,
+);
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 check("再読み込みしても7か国のまま", (await owned(page)).length === 7);

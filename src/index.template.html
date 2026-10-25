@@ -1544,6 +1544,164 @@
         align-items: center;
         cursor: pointer;
       }
+      /* 全国 */
+      .tools.menu-tools #reset {
+        grid-column: 2 / -1;
+      }
+      .map-progress {
+        margin: 6px 0;
+      }
+      .map-progress .bar {
+        display: block;
+        height: 8px;
+        border-radius: 4px;
+        background: #0e1a16;
+        margin-top: 4px;
+        overflow: hidden;
+      }
+      .map-progress .bar i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #5cc46b, #ffd34d);
+      }
+      .map-tabs {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .map-tabs button {
+        min-height: 44px;
+        font-size: 13px;
+      }
+      /* 五畿七道をおおよその位置に並べた簡易地図 */
+      .road-map {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-areas:
+          ". . hoku tosan"
+          "sanin kinai toka toka"
+          "sanyo nankai . ."
+          "saikai . . .";
+        gap: 5px;
+        margin: 6px 0 4px;
+      }
+      .road-map .road {
+        min-height: 52px;
+        padding: 4px 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        border: 2px solid #4a6a5e;
+        background: #22332c;
+      }
+      .road-map .road small {
+        font-size: 11px;
+      }
+      .road-map .road.some {
+        border-color: #5cc46b;
+      }
+      .road-map .road.open {
+        border-color: #f0a24f;
+      }
+      .road-map .road.all {
+        border-color: #ffd34d;
+        background: #3a3a22;
+      }
+      .road-map .road.sel {
+        outline: 2px solid #fff;
+      }
+      .r-hokurikudo {
+        grid-area: hoku;
+      }
+      .r-tosando {
+        grid-area: tosan;
+      }
+      .r-san_indo {
+        grid-area: sanin;
+      }
+      .r-kinai {
+        grid-area: kinai;
+      }
+      .r-tokaido {
+        grid-area: toka;
+      }
+      .r-sanyodo {
+        grid-area: sanyo;
+      }
+      .r-nankaido {
+        grid-area: nankai;
+      }
+      .r-saikaido {
+        grid-area: saikai;
+      }
+      .prov-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        min-height: 48px;
+        margin: 4px 0 0;
+        text-align: left;
+        border-left: 5px solid #6c7a74;
+      }
+      .prov-row.s-own {
+        border-left-color: #5cc46b;
+      }
+      .prov-row.s-open {
+        border-left-color: #f0a24f;
+      }
+      .prov-row.s-lock {
+        opacity: 0.8;
+      }
+      .prov-row.sel {
+        outline: 2px solid #ffd34d;
+      }
+      .prov-detail {
+        border: 1px solid #719b8f55;
+        border-top: 0;
+        border-radius: 0 0 8px 8px;
+        padding: 6px 8px;
+        background: #1a2a24;
+      }
+      .prov-detail p {
+        margin: 2px 0 6px;
+        line-height: 1.45;
+      }
+      .prov-detail button,
+      .secret-card button {
+        width: 100%;
+        min-height: 44px;
+      }
+      .secret-card,
+      .secret-found {
+        border: 1px solid #b07ad8;
+        border-radius: 10px;
+        padding: 6px 10px;
+        margin: 6px 0;
+        background: #2a2036;
+      }
+      .secret-card.lock {
+        border-color: #4a5a54;
+        background: #1c2622;
+      }
+      .tenka {
+        border: 2px solid #f0c24f;
+        border-radius: 12px;
+        text-align: center;
+        padding: 6px;
+        margin: 6px 0;
+        background: #3a3320;
+      }
+      .tenka-title {
+        font-size: 22px;
+        font-weight: bold;
+        color: #f0c24f;
+        margin: 4px 0;
+      }
+      #mapSheet {
+        z-index: 12;
+      }
     </style>
   </head>
   <body>
@@ -1657,11 +1815,11 @@
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
-        ><button id="reset">↻ 最初から</button>
+        ><button id="mapOpen">🗾 全国</button><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v31（秘伝錬成・装備・転職）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v32（全国制覇・秘伝錬成・装備）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1746,6 +1904,15 @@
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="mapSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
+        <div class="panel-head hg-head">
+          <strong id="mapTitle">🗾 全国</strong
+          ><button id="mapClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="mapBody"></div>
       </div>
     </div>
     <div id="forgeSheet" class="sheet-back" hidden>
@@ -10417,14 +10584,18 @@
             "/" +
             PROVINCE_ORDER.length +
             "か国</h3>" +
-            '<p class="muted">領土の隣の国だけ攻められます。7か国の統一を目指そう（統一の報酬 🎴 ガチャ券 +' +
+            '<p class="muted">領土の隣の国だけ攻められます。まず最初の7か国（三河〜甲斐）の統一（🎴 ガチャ券 +' +
             UNIFY_TICKETS +
-            "）。</p>" +
+            "）、その先は全国" +
+            PROVINCE_ORDER.length +
+            "か国の制覇（天下統一 🎴 ガチャ券 +" +
+            TENKA_TICKETS +
+            "）を目指そう。ここには最初の7か国と、領土・攻略できる国を出します。</p>" +
             '<p class="muted">領土の効果：' +
             (bonusList().join("・") || "まだありません（国を取ると防衛戦が有利になります）") +
             "</p>" +
-            '<div class="card-actions"><button data-provinces-close>部隊に戻る</button></div>';
-          for (const p of PROVINCE_ORDER) {
+            '<div class="card-actions"><button data-map-open>🗾 全国の地図・一覧</button><button data-provinces-close>部隊に戻る</button></div>';
+          for (const p of PROVINCE_ORDER.filter((p) => STAGE1.includes(p) || ownsProvince(p) || canAttackProvince(p))) {
             const P = PROVINCES[p],
               C = P.castle && NPC_CASTLES[P.castle],
               own = ownsProvince(p),
@@ -10462,7 +10633,7 @@
               "）<br><small>" +
               state +
               (C && !P.home
-                ? "・強さ " + "★".repeat(Math.round((C.power - 1) * 5) + 1) + "・城の耐久 " + C.hp
+                ? "・強さ " + "★".repeat(Math.min(5, Math.round((C.power - 1) * 5) + 1)) + "・推奨Lv" + recLevel(C) + "・城の耐久 " + C.hp
                 : "") +
               (PROVINCE_BONUS[p]
                 ? "<br>" +
@@ -10569,6 +10740,238 @@
           startBattle();
         };
         $("siegeClose").onclick = closeSiege;
+        // ===== 全国（地方の簡易地図・国の一覧・秘境） =====
+        // 正確な日本地図の素材はないので、五畿七道をおおよその位置に並べた簡易地図と、地方ごとの国の一覧で表す
+        let mapRoad = null, // 開いている地方
+          mapProv = null, // 詳しく見ている国
+          mapTab = "map", // map：地方 / open：攻略できる国 / secret：秘境
+          mapNote = "";
+        const provState = (p) => (ownsProvince(p) ? "own" : canAttackProvince(p) ? "open" : "lock");
+        const PROV_STATE_TEXT = { own: "🏯 制圧済み", open: "⚔️ 攻略可能", lock: "🔒 未攻略" };
+        const roadProvinces = (r) => PROVINCE_ORDER.filter((p) => PROVINCES[p].road === r);
+        function provinceDetail(p) {
+          const P = PROVINCES[p],
+            C = P.castle && NPC_CASTLES[P.castle],
+            st = provState(p),
+            cc = activeCounter();
+          let html =
+            '<div class="prov-detail"><p><b>' +
+            P.name +
+            "</b>（" +
+            ROADS[P.road] +
+            "）" +
+            PROV_STATE_TEXT[P.home ? "own" : st] +
+            "<br><small>城：" +
+            (P.home ? P.homeCastle + "（自国）" : C.name) +
+            "・勢力：" +
+            esc(P.lord) +
+            "</small></p>";
+          if (C) {
+            html +=
+              "<p><small>強さ " +
+              C.power.toFixed(2) +
+              "・推奨 Lv" +
+              recLevel(C) +
+              "（目安・制限なし）<br>城の耐久 " +
+              C.hp +
+              "・防衛塔 " +
+              C.towers.length +
+              "基・守備兵 " +
+              C.garrison.reduce((n, g) => n + g.n, 0) +
+              "人" +
+              (P.styles && P.styles.length ? "・特色：" + P.styles.map((k) => KUNI_STYLE[k].name).join("・") : "") +
+              "<br>報酬：初めて制圧すると 🎴 ガチャ券 +" +
+              C.reward.tickets +
+              (PROVINCE_BONUS[p] ? "・領土の効果「" + PROVINCE_BONUS[p].name + "」" + PROVINCE_BONUS[p].text : "") +
+              "</small></p>";
+          }
+          html +=
+            "<p><small>隣の国：" +
+            P.adj
+              .map(
+                (q) =>
+                  (ownsProvince(q) ? "🏯" : canAttackProvince(q) ? "⚔️" : "🔒") +
+                  PROVINCES[q].name +
+                  (P.routes[q] ? "（⛵" + P.routes[q] + "）" : ""),
+              )
+              .join("・") +
+            "</small></p>";
+          if (!P.home) {
+            const err = targetError(P.castle),
+              blocked = cc && !ownsProvince(p);
+            html +=
+              '<button data-map-go="' +
+              P.castle +
+              '"' +
+              (err || blocked || battle ? " disabled" : "") +
+              ">" +
+              (st === "own" ? "⚔️ 演習に出陣（攻城編成へ）" : st === "open" ? "⚔️ 出陣（攻城編成へ）" : "🔒 隣の国を取ると攻められる") +
+              "</button>" +
+              (blocked && !err ? '<p class="injured"><small>反撃を退けるまで新しい国は攻められません。</small></p>' : "");
+          }
+          return html + "</div>";
+        }
+        function provinceRows(list) {
+          return list
+            .map((p) => {
+              const P = PROVINCES[p],
+                C = P.castle && NPC_CASTLES[P.castle],
+                st = P.home ? "own" : provState(p);
+              return (
+                '<button class="prov-row s-' +
+                st +
+                (mapProv === p ? " sel" : "") +
+                '" data-map-prov="' +
+                p +
+                '" aria-expanded="' +
+                (mapProv === p) +
+                '"><span>' +
+                (C && conquestMeta.target === P.castle ? "🎯" : "") +
+                P.name +
+                " <small>" +
+                (P.home ? P.homeCastle : C.name) +
+                "</small></span><small>" +
+                (P.home ? "🏠 自国" : PROV_STATE_TEXT[st] + "・推奨Lv" + recLevel(C)) +
+                "</small></button>" +
+                (mapProv === p ? provinceDetail(p) : "")
+              );
+            })
+            .join("");
+        }
+        function renderMap() {
+          const n = ownedCount(),
+            all = PROVINCE_ORDER.length,
+            tenka = isTenka();
+          let html =
+            (mapNote ? '<p class="saved">' + esc(mapNote) + "</p>" : "") +
+            '<p class="map-progress"><b>制圧 ' +
+            n +
+            "/" +
+            all +
+            "か国</b>" +
+            (tenka ? "・🎌 天下統一" : "") +
+            '<span class="bar"><i style="width:' +
+            Math.round((n / all) * 100) +
+            '%"></i></span></p>' +
+            '<p class="muted"><small>三河から、領土の隣の国へ攻め込もう（海峡・島へは ⛵航路で渡れる）。全国' +
+            all +
+            "か国の制覇で天下統一（🎴 ガチャ券 +" +
+            TENKA_TICKETS +
+            "）。推奨レベルは目安で、制限はありません。地図は位置をおおまかに表した簡略図です。</small></p>" +
+            '<div class="forge-kinds map-tabs" role="group" aria-label="表示">' +
+            [
+              ["map", "🗾 地方"],
+              ["open", "⚔️ 攻略可能 " + PROVINCE_ORDER.filter(canAttackProvince).length],
+              ["secret", "🗻 秘境 " + Object.keys(conquestMeta.secrets).length + "/" + Object.keys(SECRETS).length],
+            ]
+              .map((t) => '<button data-map-tab="' + t[0] + '" aria-pressed="' + (mapTab === t[0]) + '">' + t[1] + "</button>")
+              .join("") +
+            "</div>";
+          if (mapTab === "map") {
+            html += '<div class="road-map">';
+            for (const r of Object.keys(ROADS)) {
+              const list = roadProvinces(r),
+                own = list.filter(ownsProvince).length,
+                open = list.filter(canAttackProvince).length;
+              html +=
+                '<button class="road r-' +
+                r +
+                (own === list.length ? " all" : open ? " open" : own ? " some" : "") +
+                (mapRoad === r ? " sel" : "") +
+                '" data-map-road="' +
+                r +
+                '"><b>' +
+                ROADS[r] +
+                "</b><small>" +
+                own +
+                "/" +
+                list.length +
+                (open ? "・⚔️" + open : "") +
+                "</small></button>";
+            }
+            html += "</div>";
+            const r = mapRoad || PROVINCES[provinceOf(targetCastleId()) || "mikawa"].road;
+            html +=
+              '<h3 class="hg-h">' +
+              ROADS[r] +
+              "（" +
+              roadProvinces(r).filter(ownsProvince).length +
+              "/" +
+              roadProvinces(r).length +
+              "）</h3>" +
+              provinceRows(roadProvinces(r));
+          } else if (mapTab === "open") {
+            const list = PROVINCE_ORDER.filter(canAttackProvince);
+            html += list.length
+              ? provinceRows(list)
+              : '<p class="muted">' + (tenka ? "全国を制覇しました。演習は各国から選べます。" : "攻略できる国がありません。") + "</p>";
+          } else {
+            for (const [id, S] of Object.entries(SECRETS)) {
+              const found = conquestMeta.secrets[id];
+              html += found
+                ? '<div class="secret-card"><p><b>🗻 ' +
+                  S.name +
+                  "</b><br><small>" +
+                  S.text +
+                  "<br>主：" +
+                  S.boss +
+                  "・推奨 Lv" +
+                  S.lv +
+                  "（目安）・発見の条件：" +
+                  S.need.map((p) => PROVINCES[p].name).join("・") +
+                  "を制圧</small></p><button disabled>討伐戦は次の更新で実装します</button></div>"
+                : '<div class="secret-card lock"><p><b>？？？</b><br><small>まだ見つかっていない秘境。ある国々を制圧すると、道が開けるという…</small></p></div>';
+            }
+          }
+          $("mapBody").innerHTML = html;
+          $("mapTitle").textContent = "🗾 全国 " + n + "/" + all;
+        }
+        function openMap() {
+          mapNote = "";
+          mapProv = null;
+          // 発見したのにまだお知らせを見ていない秘境（途中で閉じた場合など）は、ここで1回だけ知らせる
+          const unseen = unseenSecrets();
+          if (unseen.length) {
+            mapNote = "🗻 秘境を発見：" + unseen.map((id) => SECRETS[id].name).join("・") + "（「秘境」で確認できます）";
+            markSecretsSeen(unseen);
+          }
+          renderMap();
+          $("mapSheet").hidden = false;
+          $("mapClose").focus();
+        }
+        const closeMap = () => ($("mapSheet").hidden = true);
+        $("mapOpen").onclick = openMap;
+        $("mapClose").onclick = closeMap;
+        $("mapSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("mapSheet")) return closeMap();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "mapClose") return;
+          const d = b.dataset;
+          mapNote = "";
+          if (d.mapTab) {
+            mapTab = d.mapTab;
+            mapProv = null;
+          } else if (d.mapRoad) {
+            mapRoad = d.mapRoad;
+            mapProv = null;
+          } else if (d.mapProv) mapProv = mapProv === d.mapProv ? null : d.mapProv;
+          else if (d.mapGo) {
+            const err = setTarget(d.mapGo);
+            if (err) mapNote = "⚠ " + err;
+            else {
+              closeMap();
+              openSiege();
+              siegeNote = "🎯 攻略目標を " + NPC_CASTLES[d.mapGo].name + " にしました。「出陣」で攻め込もう";
+              renderSiege();
+              return;
+            }
+          }
+          renderMap();
+          if (d.mapProv) {
+            const el = $("mapBody").querySelector(".prov-detail");
+            if (el) el.scrollIntoView({ block: "nearest" });
+          }
+        });
         $("siegeSheet").addEventListener("click", (ev) => {
           if (ev.target === $("siegeSheet")) return closeSiege();
           const b = ev.target.closest("button");
@@ -10585,6 +10988,10 @@
           } else if (d.provinces !== undefined) {
             siegeProvinces = true;
             changed = false;
+          } else if (d.mapOpen !== undefined) {
+            closeSiege();
+            openMap();
+            return;
           } else if (d.provincesClose !== undefined) {
             siegeProvinces = false;
             changed = false;
@@ -10708,7 +11115,324 @@
           shinano: { name: "山国の兵", hire: 0.15, text: "兵士の雇用・補充費 -15%" },
           kai: { name: "甲州金", waveGold: 0.2, text: "ウェーブクリアのゴールド +20%" },
         };
-        const PROVINCE_ORDER = Object.keys(PROVINCES); // 一覧の並び（おおよそ攻めやすい順）
+        // ===== 全国（旧国68か国） =====
+        // 五畿七道の旧国66か国＋壱岐・対馬＝68か国（戦国時代の「六十余州」）。蝦夷・琉球は含めない。
+        // 城・勢力は戦国時代中ごろをもとにしたゲーム上の設定。最初の7か国（三河〜甲斐）の国ID・城IDはこれまでと同じ
+        // （旧ID → 新ID の対応表は LEGACY_PROVINCE_IDS。同じIDなので、保存データの占領はそのまま引き継ぐ）
+        const ROADS = {
+          kinai: "畿内",
+          tokaido: "東海道",
+          tosando: "東山道",
+          hokurikudo: "北陸道",
+          san_indo: "山陰道",
+          sanyodo: "山陽道",
+          nankaido: "南海道",
+          saikaido: "西海道",
+        };
+        // [国ID, 国名, 道, 城ID（自国は null）, 城名, 勢力, 特色]
+        //   特色：spear 槍衾・archer 弓隊・gun 鉄砲隊・cavalry 騎馬隊・sea 水軍・fortress 堅城・warlord 名将（大将が増える）
+        const KUNI = [
+          ["yamashiro", "山城", "kinai", "nijo", "二条御所", "足利将軍家", ["fortress", "archer"]],
+          ["yamato", "大和", "kinai", "shigisan", "信貴山城", "松永家", ["gun", "fortress"]],
+          ["kawachi", "河内", "kinai", "iimoriyama", "飯盛山城", "三好家", ["spear", "archer"]],
+          ["izumi", "和泉", "kinai", "kishiwada", "岸和田城", "松浦家", ["gun"]],
+          ["settsu", "摂津", "kinai", "ishiyama", "石山本願寺", "本願寺", ["fortress", "gun"]],
+          ["iga", "伊賀", "tokaido", "maruyama", "丸山城", "伊賀惣国一揆", ["cavalry", "archer"]],
+          ["ise", "伊勢", "tokaido", "okochi", "大河内城", "北畠家", ["spear"]],
+          ["shima", "志摩", "tokaido", "nakiri", "波切城", "九鬼家", ["sea"]],
+          ["owari", "尾張", "tokaido", "kiyosu", "清洲城", "織田家", []],
+          ["mikawa", "三河", "tokaido", null, "岡崎城", "松平家", []],
+          ["totomi", "遠江", "tokaido", "hikuma", "曳馬城", "今川家", []],
+          ["suruga", "駿河", "tokaido", "sunpu", "駿府城", "今川家", []],
+          ["kai", "甲斐", "tokaido", "tsutsujigasaki", "躑躅ヶ崎館", "武田家", []],
+          ["izu", "伊豆", "tokaido", "nirayama", "韮山城", "北条家", ["sea", "spear"]],
+          ["sagami", "相模", "tokaido", "odawara", "小田原城", "北条家", ["fortress", "warlord"]],
+          ["musashi", "武蔵", "tokaido", "kawagoe", "河越城", "北条家", ["cavalry", "spear"]],
+          ["awaBoso", "安房", "tokaido", "okamoto", "岡本城", "里見家", ["sea"]],
+          ["kazusa", "上総", "tokaido", "kururi", "久留里城", "里見家", ["archer", "spear"]],
+          ["shimosa", "下総", "tokaido", "motosakura", "本佐倉城", "千葉家", ["cavalry"]],
+          ["hitachi", "常陸", "tokaido", "ota", "太田城", "佐竹家", ["spear", "warlord"]],
+          ["omi", "近江", "tosando", "kannonji", "観音寺城", "六角家", ["fortress", "archer"]],
+          ["mino", "美濃", "tosando", "inabayama", "稲葉山城", "斎藤家", []],
+          ["hida", "飛騨", "tosando", "matsukura", "松倉城", "三木家", ["archer"]],
+          ["shinano", "信濃", "tosando", "fukashi", "深志城", "小笠原家", []],
+          ["kozuke", "上野", "tosando", "minowa", "箕輪城", "長野家", ["cavalry", "fortress"]],
+          ["shimotsuke", "下野", "tosando", "utsunomiya", "宇都宮城", "宇都宮家", ["spear"]],
+          ["mutsu", "陸奥", "tosando", "kurokawa", "黒川城", "蘆名家", ["cavalry", "warlord"]],
+          ["dewa", "出羽", "tosando", "yamagata", "山形城", "最上家", ["cavalry", "archer"]],
+          ["wakasa", "若狭", "hokurikudo", "nochiseyama", "後瀬山城", "若狭武田家", ["sea"]],
+          ["echizen", "越前", "hokurikudo", "ichijodani", "一乗谷城", "朝倉家", ["fortress", "spear"]],
+          ["kaga", "加賀", "hokurikudo", "oyama", "尾山御坊", "加賀一向一揆", ["fortress", "archer"]],
+          ["noto", "能登", "hokurikudo", "nanao", "七尾城", "畠山家", ["fortress"]],
+          ["etchu", "越中", "hokurikudo", "toyama", "富山城", "神保家", ["spear"]],
+          ["echigo", "越後", "hokurikudo", "kasugayama", "春日山城", "上杉家", ["fortress", "warlord", "cavalry"]],
+          ["sado", "佐渡", "hokurikudo", "kawarada", "河原田城", "本間家", ["sea"]],
+          ["tanba", "丹波", "san_indo", "yakami", "八上城", "波多野家", ["fortress"]],
+          ["tango", "丹後", "san_indo", "tatebeyama", "建部山城", "一色家", ["sea"]],
+          ["tajima", "但馬", "san_indo", "konosumi", "此隅山城", "山名家", ["spear"]],
+          ["inaba", "因幡", "san_indo", "tottori", "鳥取城", "山名家", ["fortress", "archer"]],
+          ["hoki", "伯耆", "san_indo", "uejishi", "羽衣石城", "南条家", ["spear"]],
+          ["izumo", "出雲", "san_indo", "gassantoda", "月山富田城", "尼子家", ["fortress", "warlord"]],
+          ["iwami", "石見", "san_indo", "sanbonmatsu", "三本松城", "吉見家", ["archer", "gun"]],
+          ["oki", "隠岐", "san_indo", "kofuo", "国府尾城", "隠岐家", ["sea"]],
+          ["harima", "播磨", "sanyodo", "himeji", "姫路城", "小寺家", ["archer", "spear"]],
+          ["mimasaka", "美作", "sanyodo", "takada", "高田城", "三浦家", ["cavalry"]],
+          ["bizen", "備前", "sanyodo", "tenjinyama", "天神山城", "浦上家", ["spear", "gun"]],
+          ["bitchu", "備中", "sanyodo", "bitchumatsuyama", "備中松山城", "三村家", ["fortress"]],
+          ["bingo", "備後", "sanyodo", "kannabe", "神辺城", "杉原家", ["archer"]],
+          ["aki", "安芸", "sanyodo", "koriyama", "吉田郡山城", "毛利家", ["fortress", "warlord", "gun"]],
+          ["suo", "周防", "sanyodo", "konomine", "高嶺城", "大内家", ["sea", "archer"]],
+          ["nagato", "長門", "sanyodo", "katsuyama", "且山城", "大内家", ["sea", "spear"]],
+          ["kii", "紀伊", "nankaido", "saika", "雑賀城", "雑賀衆", ["gun", "sea"]],
+          ["awaji", "淡路", "nankaido", "sumoto", "洲本城", "安宅家", ["sea"]],
+          ["awaShikoku", "阿波", "nankaido", "shozui", "勝瑞城", "三好家", ["spear", "gun"]],
+          ["sanuki", "讃岐", "nankaido", "sogo", "十河城", "十河家", ["spear"]],
+          ["iyo", "伊予", "nankaido", "yuzuki", "湯築城", "河野家", ["sea", "archer"]],
+          ["tosa", "土佐", "nankaido", "oko", "岡豊城", "長宗我部家", ["spear", "warlord"]],
+          ["chikuzen", "筑前", "saikaido", "tachibana", "立花山城", "立花家", ["fortress", "archer"]],
+          ["chikugo", "筑後", "saikaido", "yanagawa", "柳川城", "蒲池家", ["fortress"]],
+          ["buzen", "豊前", "saikaido", "kawara", "香春岳城", "城井家", ["archer"]],
+          ["bungo", "豊後", "saikaido", "funai", "府内館", "大友家", ["gun", "warlord"]],
+          ["hizen", "肥前", "saikaido", "muranaka", "村中城", "龍造寺家", ["spear", "warlord"]],
+          ["higo", "肥後", "saikaido", "hitoyoshi", "人吉城", "相良家", ["archer", "cavalry"]],
+          ["hyuga", "日向", "saikaido", "tonokori", "都於郡城", "伊東家", ["cavalry"]],
+          ["osumi", "大隅", "saikaido", "koyama", "高山城", "肝付家", ["archer"]],
+          ["satsuma", "薩摩", "saikaido", "uchijo", "内城", "島津家", ["gun", "warlord", "fortress"]],
+          ["iki", "壱岐", "saikaido", "kameoka", "亀丘城", "波多家", ["sea"]],
+          ["tsushima", "対馬", "saikaido", "kaneishi", "金石城", "宗家", ["sea", "archer"]],
+        ];
+        // 陸続きの隣国（国ID: 隣の国ID…）。左右どちらからも書いてある（テストで確認）
+        const KUNI_LAND = `
+          yamashiro: omi tanba settsu kawachi yamato iga
+          yamato: yamashiro iga ise kii kawachi
+          kawachi: yamashiro yamato kii izumi settsu
+          izumi: kawachi kii settsu
+          settsu: yamashiro kawachi izumi tanba harima
+          iga: yamashiro omi ise yamato
+          ise: iga omi mino owari shima kii yamato
+          shima: ise
+          owari: ise mino mikawa
+          mikawa: owari mino shinano totomi
+          totomi: mikawa shinano suruga
+          suruga: totomi shinano kai sagami izu
+          kai: suruga shinano musashi sagami
+          izu: suruga sagami
+          sagami: izu suruga kai musashi
+          musashi: sagami kai shinano kozuke shimotsuke shimosa
+          awaBoso: kazusa
+          kazusa: awaBoso shimosa
+          shimosa: kazusa musashi shimotsuke hitachi
+          hitachi: shimosa shimotsuke mutsu
+          omi: yamashiro iga ise mino echizen wakasa tanba
+          mino: omi ise owari mikawa shinano hida echizen
+          hida: mino shinano etchu kaga echizen
+          shinano: mino mikawa totomi suruga kai musashi kozuke echigo etchu hida
+          kozuke: shinano musashi shimotsuke echigo mutsu
+          shimotsuke: kozuke musashi shimosa hitachi mutsu
+          mutsu: hitachi shimotsuke kozuke echigo dewa
+          dewa: mutsu echigo
+          wakasa: echizen omi tanba tango
+          echizen: wakasa omi mino hida kaga
+          kaga: echizen hida etchu noto
+          noto: kaga etchu
+          etchu: noto kaga hida shinano echigo
+          echigo: etchu shinano kozuke mutsu dewa
+          sado:
+          tanba: tango wakasa omi yamashiro settsu harima tajima
+          tango: tanba wakasa tajima
+          tajima: tango tanba harima inaba
+          inaba: tajima harima mimasaka hoki
+          hoki: inaba mimasaka bitchu bingo izumo
+          izumo: hoki bingo iwami
+          iwami: izumo bingo aki suo nagato
+          oki:
+          harima: settsu tanba tajima inaba mimasaka bizen
+          mimasaka: harima inaba hoki bitchu bizen
+          bizen: harima mimasaka bitchu
+          bitchu: bizen mimasaka hoki bingo
+          bingo: bitchu hoki izumo iwami aki
+          aki: bingo iwami suo
+          suo: aki iwami nagato
+          nagato: suo iwami
+          kii: izumi kawachi yamato ise
+          awaji:
+          awaShikoku: sanuki iyo tosa
+          sanuki: awaShikoku iyo
+          iyo: sanuki awaShikoku tosa
+          tosa: awaShikoku iyo
+          chikuzen: buzen bungo chikugo hizen
+          chikugo: chikuzen hizen higo bungo
+          buzen: chikuzen bungo
+          bungo: buzen chikuzen chikugo higo hyuga
+          hizen: chikuzen chikugo
+          higo: chikugo bungo hyuga osumi satsuma
+          hyuga: bungo higo osumi satsuma
+          osumi: hyuga higo satsuma
+          satsuma: higo osumi hyuga
+          iki:
+          tsushima:
+        `;
+        // 航路：海峡・島へ渡る道（陸続きではないが、ゲームでは隣の国として攻められる）
+        const SEA_ROUTES = [
+          ["echigo", "sado", "佐渡航路"],
+          ["izumo", "oki", "隠岐航路"],
+          ["hoki", "oki", "隠岐航路"],
+          ["settsu", "awaji", "大坂湾の航路"],
+          ["harima", "awaji", "明石海峡"],
+          ["awaji", "awaShikoku", "鳴門海峡"],
+          ["kii", "awaShikoku", "紀伊水道"],
+          ["bizen", "sanuki", "備讃瀬戸"],
+          ["aki", "iyo", "芸予の島々"],
+          ["iyo", "bungo", "豊予海峡"],
+          ["nagato", "buzen", "関門海峡"],
+          ["nagato", "chikuzen", "響灘の航路"],
+          ["chikuzen", "iki", "玄界灘の航路"],
+          ["hizen", "iki", "壱岐水道"],
+          ["iki", "tsushima", "対馬海峡"],
+          ["sagami", "awaBoso", "浦賀水道"],
+        ];
+        const LEGACY_PROVINCE_IDS = {
+          mikawa: "mikawa",
+          owari: "owari",
+          totomi: "totomi",
+          mino: "mino",
+          suruga: "suruga",
+          shinano: "shinano",
+          kai: "kai",
+        };
+        // 全国の国・城を作る。最初の7か国の城・領土の効果はそのまま（隣の国だけ全国のデータで作り直す）
+        // 城の強さ：三河からの距離（航路も1つ）で強くなり（1つ遠いごとに ×1.24）、特色で守備兵・塔・耐久が変わる（体力だけを増やさない）。
+        // 一番遠い国（対馬）は 強さ 7.6 ほど＝育成 Lv100 くらいで勝てる（模擬：4部隊×10人・兵種いろいろ）
+        const KUNI_STYLE = {
+          spear: { name: "槍衾", garrison: [{ path: "lower", d: 560, kind: "knight", n: 3 }] },
+          archer: {
+            name: "弓隊",
+            garrison: [{ path: "upper", d: 600, kind: "dragon", n: 3 }],
+            towers: [{ type: "arrow", x: 600, y: 170, damage: 12 }],
+          },
+          gun: {
+            name: "鉄砲隊",
+            garrison: [{ path: "lower", d: 640, kind: "dragon", n: 2 }],
+            towers: [{ type: "magic", x: 600, y: 430, damage: 20 }],
+          },
+          cavalry: {
+            name: "騎馬隊",
+            garrison: [
+              { path: "upper", d: 520, kind: "wolf", n: 3 },
+              { path: "lower", d: 520, kind: "wolf", n: 3 },
+            ],
+          },
+          sea: {
+            name: "水軍",
+            garrison: [{ path: "lower", d: 420, kind: "goblin", n: 3 }],
+            towers: [{ type: "ice", x: 340, y: 300, damage: 10 }],
+          },
+          fortress: { name: "堅城", hp: 1.25, towerLevel: 1, towers: [{ type: "cannon", x: 880, y: 190, damage: 24 }] },
+          warlord: { name: "名将", power: 1.08, garrison: [{ path: "upper", d: 900, kind: "boss", n: 1 }] },
+        };
+        // 新しい国の領土の効果（小さめ。合計には上限 BONUS_CAPS）
+        const KUNI_BONUS = {
+          sea: { name: "港", waveGold: 0.04, text: "ウェーブクリアのゴールド +4%" },
+          fortress: { name: "城普請", repair: 0.05, text: "塔の修理費 -5%" },
+          cavalry: { name: "馬産地", hire: 0.03, text: "兵士の雇用・補充費 -3%" },
+          other: { name: "米どころ", startGold: 20, text: "開始ゴールド +20" },
+        };
+        const BONUS_CAPS = { waveGold: 1.5, repair: 0.6, hire: 0.5 };
+        const STAGE1 = ["mikawa", "owari", "totomi", "mino", "suruga", "shinano", "kai"]; // 最初の舞台（7か国の統一）
+        (() => {
+          const land = {};
+          for (const line of KUNI_LAND.trim().split("\n")) {
+            const [k, v] = line.split(":");
+            land[k.trim()] = v.trim() ? v.trim().split(/\s+/) : [];
+          }
+          for (const [id, name, road, castle, castleName, lord, styles] of KUNI) {
+            const P = PROVINCES[id] || (PROVINCES[id] = { name, castle });
+            Object.assign(P, { road, lord, styles, castleName, adj: land[id].slice(), routes: {} });
+          }
+          for (const [a, b, name] of SEA_ROUTES) {
+            PROVINCES[a].adj.push(b);
+            PROVINCES[b].adj.push(a);
+            PROVINCES[a].routes[b] = PROVINCES[b].routes[a] = name;
+          }
+          // 三河からの距離（国の数）
+          const dist = { mikawa: 0 },
+            queue = ["mikawa"];
+          while (queue.length) {
+            const p = queue.shift();
+            for (const q of PROVINCES[p].adj)
+              if (!(q in dist)) {
+                dist[q] = dist[p] + 1;
+                queue.push(q);
+              }
+          }
+          for (const [id, name, , castle, castleName, , styles] of KUNI) {
+            const P = PROVINCES[id];
+            P.dist = dist[id];
+            if (!castle || NPC_CASTLES[castle]) continue; // 自国と、最初の7か国の城はこれまでのまま
+            const st = styles.map((k) => KUNI_STYLE[k]),
+              power = Math.round(1.1 * 1.24 ** P.dist * st.reduce((n, s) => n * (s.power || 1), 1) * 100) / 100,
+              hp = Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
+              tickets = 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0);
+            const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
+            C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
+            C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
+            NPC_CASTLES[castle] = C;
+            const b = KUNI_BONUS[styles.find((k) => KUNI_BONUS[k]) || "other"];
+            PROVINCE_BONUS[id] = Object.assign({}, b, { name: name + "の" + b.name });
+          }
+        })();
+        // 一覧の並び：最初の7か国 → 三河から近い順（同じ距離は道の順）
+        const PROVINCE_ORDER = STAGE1.concat(
+          KUNI.map((k) => k[0])
+            .filter((p) => !STAGE1.includes(p))
+            .sort(
+              (a, b) =>
+                PROVINCES[a].dist - PROVINCES[b].dist ||
+                Object.keys(ROADS).indexOf(PROVINCES[a].road) - Object.keys(ROADS).indexOf(PROVINCES[b].road),
+            ),
+        );
+        // 推奨レベル（目安。入場の制限ではない）：城の強さから
+        // 模擬（4部隊×10人）で勝てたレベル：強さ 1.6 → Lv10、4 → Lv35、6 → Lv65、8 → Lv100（その間は直線でつなぐ）
+        const RECLV_POINTS = [
+          [1, 1],
+          [1.6, 10],
+          [4, 35],
+          [6, 65],
+          [8, 100],
+        ];
+        function recLevel(C) {
+          const pts = RECLV_POINTS,
+            p = C.power;
+          for (let i = 1; i < pts.length; i++)
+            if (p <= pts[i][0])
+              return Math.round(pts[i - 1][1] + ((p - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0])) * (pts[i][1] - pts[i - 1][1]));
+          return Math.round(100 + (p - 8) * 17.5);
+        }
+        // 秘境（隠しルート）：条件の国をすべて領土にすると発見。発見は保存し、反撃で国を失っても残る。討伐戦は次の更新で
+        const SECRETS = {
+          hiei: {
+            name: "比叡山の封印",
+            boss: "雷獣・白虎",
+            lv: 200,
+            need: ["omi"],
+            text: "近江の北、比叡の山中に古い封印が見つかった。雷をまとう白い獣が眠っているという。",
+          },
+          yomi: {
+            name: "黄泉の洞窟",
+            boss: "冥龍・八岐",
+            lv: 500,
+            need: ["izumo"],
+            text: "出雲の山奥に、黄泉へ通じるという洞窟が口を開けた。八つの首を持つ龍の気配がする。",
+          },
+          fuji: {
+            name: "富士地下遺跡",
+            boss: "零式・天魔機神",
+            lv: 1000,
+            need: ["kai", "suruga", "sagami"],
+            text: "甲斐・駿河・相模を結ぶ富士の地下に、見たこともない鋼の遺跡が眠っていた。",
+          },
+        };
+        const TENKA_TICKETS = 30; // 全国68か国の制覇（天下統一）の報酬（1回だけ）
         const CASTLE_ORDER = PROVINCE_ORDER.map((p) => PROVINCES[p].castle).filter(Boolean);
         const UNIFY_TICKETS = 10; // 7か国を統一したときの報酬（1回だけ）
         // 占領の記録（保存キー worldDefense.conquest.v1）
@@ -10733,6 +11457,15 @@
           }
           conquestMeta.target = d && NPC_CASTLES[d.target] ? d.target : null;
           conquestMeta.unified = !!(d && d.unified === true);
+          conquestMeta.tenka = !!(d && d.tenka === true);
+          // 秘境：発見済み（領土からも計算し直す）と、発見のお知らせを見たか（別に持つ）
+          const flags = (o) => {
+            const out = {};
+            if (o && typeof o === "object") for (const id of Object.keys(SECRETS)) if (o[id] === true) out[id] = true;
+            return out;
+          };
+          conquestMeta.secrets = flags(d && d.secrets);
+          conquestMeta.secretSeen = flags(d && d.secretSeen);
           // 反撃：{ province: 狙われた国, from: 攻めてきた国 }（中身の確認は activeCounter で行う）
           const c = d && d.counter;
           conquestMeta.counter =
@@ -10741,18 +11474,21 @@
               : null;
           return out;
         }
-        const conquestMeta = { target: null, unified: false, counter: null };
+        const conquestMeta = { target: null, unified: false, counter: null, tenka: false, secrets: {}, secretSeen: {} };
         const conquest = loadConquest();
         function persistConquest() {
           try {
             localStorage.setItem(
               CONQUEST_KEY,
               JSON.stringify({
-                version: 1,
+                version: 2, // 2：全国68か国（城IDは同じなので、1 の占領はそのまま読める）
                 castles: conquest,
                 target: conquestMeta.target,
                 unified: conquestMeta.unified,
                 counter: conquestMeta.counter,
+                tenka: conquestMeta.tenka,
+                secrets: conquestMeta.secrets,
+                secretSeen: conquestMeta.secretSeen,
               }),
             );
             return true;
@@ -10768,9 +11504,28 @@
           let n = 0;
           for (const p of PROVINCE_ORDER)
             if (PROVINCE_BONUS[p] && ownsProvince(p)) n += PROVINCE_BONUS[p][key] || 0;
-          return n;
+          return key in BONUS_CAPS ? Math.min(BONUS_CAPS[key], n) : n;
         }
         territoryReady = true;
+        // 全国制覇（天下統一）：今、全部の国を領土にしているか（反撃で失えば外れる。お祝いと報酬は1回だけ）
+        const isTenka = () => PROVINCE_ORDER.every(ownsProvince);
+        // 秘境の発見：条件の国をすべて領土にしたら発見（1回発見したら残る）。新しく見つけた秘境を返す
+        function checkSecrets() {
+          const found = [];
+          for (const [id, S] of Object.entries(SECRETS))
+            if (!conquestMeta.secrets[id] && S.need.every(ownsProvince)) {
+              conquestMeta.secrets[id] = true;
+              found.push(id);
+            }
+          if (found.length) persistConquest();
+          return found;
+        }
+        checkSecrets(); // 保存データの領土からも計算し直す
+        const unseenSecrets = () => Object.keys(SECRETS).filter((id) => conquestMeta.secrets[id] && !conquestMeta.secretSeen[id]);
+        function markSecretsSeen(ids) {
+          for (const id of ids) conquestMeta.secretSeen[id] = true;
+          if (ids.length) persistConquest();
+        }
         const startGold = () => 500 + territoryBonus("startGold");
         // ===== 奪い返し（NPCの反撃） =====
         // 攻城戦で新しい国を取ると、chance の確率で隣の敵国が境目の領土（自国以外で敵国と接している国）へ反撃してくる。
@@ -11507,14 +12262,22 @@
               rec.captured = true;
               B.captured = true;
               if (conquestMeta.target === B.castleId) conquestMeta.target = null; // 次の国を目標に
-              if (ownedCount() === PROVINCE_ORDER.length && !conquestMeta.unified) {
+              if (STAGE1.every(ownsProvince) && !conquestMeta.unified) {
                 conquestMeta.unified = true;
                 B.unified = true;
+              }
+              if (isTenka() && !conquestMeta.tenka) {
+                conquestMeta.tenka = true;
+                B.tenka = true;
               }
             }
           }
           persistConquest();
-          if (B.captured && !B.unified) B.counter = maybeCounter(); // 隣の敵国の反撃
+          if (B.captured) {
+            B.secrets = checkSecrets(); // 秘境の発見（お知らせは結果画面で1回だけ）
+            markSecretsSeen(B.secrets);
+          }
+          if (B.captured && !B.unified && !B.tenka) B.counter = maybeCounter(); // 隣の敵国の反撃
           shots = [];
           showBattleResult(B);
           if (B.captured) {
@@ -11522,6 +12285,7 @@
             if (r && r.tickets) grantTickets(r.tickets, B.castleName + "を攻略", true);
           }
           if (B.unified) grantTickets(UNIFY_TICKETS, "7か国を統一", true);
+          if (B.tenka) grantTickets(TENKA_TICKETS, "天下統一", true);
           battle = null;
           updateUI();
         }
@@ -11557,6 +12321,27 @@
             (B.unified
               ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
               : "") +
+            (B.tenka
+              ? '<div class="tenka"><p class="tenka-title">🎌 天下統一！</p><p>全国' +
+                PROVINCE_ORDER.length +
+                "か国を制覇した！ 🎴 ガチャ券 +" +
+                TENKA_TICKETS +
+                "</p></div>"
+              : "") +
+            (B.secrets || [])
+              .map(
+                (id) =>
+                  '<div class="secret-found"><p>🗻 秘境を発見：<b>' +
+                  SECRETS[id].name +
+                  "</b></p><p><small>" +
+                  SECRETS[id].text +
+                  "<br>主：" +
+                  SECRETS[id].boss +
+                  "（推奨 Lv" +
+                  SECRETS[id].lv +
+                  "）・討伐戦は次の更新で実装します。🗾 全国の「秘境」で確認できます。</small></p></div>",
+              )
+              .join("") +
             (B.heroFell
               ? '<p class="injured">👑 主人公が戦死しました。Lv1から再出発します（' + esc(B.heroFell) + "）。</p>"
               : "") +
@@ -12414,7 +13199,8 @@
         });
         document.addEventListener("keydown", (ev) => {
           if (ev.key !== "Escape") return;
-          if (!$("forgeSheet").hidden) closeForge();
+          if (!$("mapSheet").hidden) closeMap();
+          else if (!$("forgeSheet").hidden) closeForge();
           else if (!$("gearSheet").hidden) closeGear();
           else return;
           ev.preventDefault();
@@ -12564,6 +13350,17 @@
               conquest: () => conquest,
               conquestMeta: () => conquestMeta,
               PROVINCES,
+              KUNI,
+              SEA_ROUTES,
+              ROADS,
+              STAGE1,
+              SECRETS,
+              PROVINCE_ORDER,
+              LEGACY_PROVINCE_IDS,
+              recLevel,
+              isTenka,
+              checkSecrets,
+              openMap,
               setTarget,
               targetCastleId,
               ownsProvince,
