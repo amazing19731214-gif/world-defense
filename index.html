@@ -1601,14 +1601,16 @@
         font-size: 13px;
       }
       /* 目標ウェーブ */
-      #wave {
+      #wave, #hp {
         cursor: pointer;
         text-decoration: underline dotted #ffd34d99;
         text-underline-offset: 3px;
       }
-      #goalSheet {
-        z-index: 12;
-      }
+      #goalSheet, #heartSheet { z-index: 12; }
+      #hp { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+      #heartBuy { width: 100%; min-height: 48px; font-size: 16px; white-space: normal; }
+      #heartBody p { margin: 10px 0; }
+      #heartClose { min-height: 44px; }
       .goal-list {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2043,7 +2045,7 @@
       <header>
         <h1>⚔️ WORLD DEFENSE</h1>
         <div class="stats">
-          <span id="hp">❤️ 20</span><span id="gold">🪙 500G</span>
+          <span id="hp" role="button" tabindex="0" aria-haspopup="dialog" aria-label="城のハートをゴールドで回復">❤️ 20</span><span id="gold">🪙 500G</span>
           <div class="wave-guide-controls">
             <span id="wave" role="button" tabindex="0" aria-haspopup="dialog" aria-label="目標ウェーブを選ぶ">WAVE 0/20</span><span id="deployStat">配置 0/4</span
             ><button
@@ -2157,7 +2159,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v44（WAVE1000対応）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v45（ゴールドでハート回復）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2242,6 +2244,15 @@ OFF</button>
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="heartSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="heartTitle">
+        <div class="panel-head hg-head">
+          <strong id="heartTitle">❤️ 城のハート回復</strong><button id="heartClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="heartBody"></div>
+        <button id="heartBuy"></button>
       </div>
     </div>
     <div id="goalSheet" class="sheet-back" hidden>
@@ -4189,6 +4200,7 @@ OFF</button>
           ];
         let gold = 500,
           hp = 20,
+          heartPurchases = 0,
           wave = 0,
           selectedType = "arrow",
           selectedTower = null,
@@ -4221,6 +4233,7 @@ OFF</button>
         // 目標ウェーブの選択肢。21ウェーブ目からも敵の数・強さは今までと同じ式で増えていく（20までは変わらない）
         const WAVE_GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
         const MAX_WAVE = WAVE_GOALS[WAVE_GOALS.length - 1];
+        const HEART_RULES = { maxHp: 20, basePrice: 1000, maxPurchases: 32 }; // 購入回数の上限は保存・数値の安全用（実際の軍資金上限より十分高価）
         function updateUI() {
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
@@ -4242,6 +4255,8 @@ OFF</button>
           renderTrainBar();
           renderCounterBanner();
           renderDefenseSave();
+          $("hp").setAttribute("aria-label", "城のハート " + hp + "/" + HEART_RULES.maxHp + "。ゴールドで回復");
+          renderHearts();
         }
         function renderCounterBanner() {
           const c = territoryReady ? activeCounter() : null,
@@ -9558,6 +9573,8 @@ OFF</button>
           combatClock = 0;
           gold = startGold();
           hp = 20;
+          heartPurchases = 0;
+          closeHearts();
           wave = 0;
           selectedTower = null;
           towers = [];
@@ -16201,6 +16218,7 @@ OFF</button>
               }
             },
             defenseApi: { save: saveDefenseCheckpoint, restore: restoreDefenseCheckpoint },
+            heartApi: { buy: buyHeart, price: heartPrice, state: () => ({ purchases: heartPurchases, price: heartPrice(), maxHp: HEART_RULES.maxHp }) },
             config: { WARLORDS, HERO_RULES, GACHA },
             heroApi: {
               save: () => heroSave,
@@ -16225,11 +16243,60 @@ OFF</button>
             },
           };
         }
+        // ===== 城のハート回復（軍資金G。1回ごとに値上がりし、無制限の回復で難易度を消さない） =====
+        function heartPrice() { return HEART_RULES.basePrice * 2 ** heartPurchases; }
+        function heartError() {
+          if (training || battle) return "通常の防衛戦だけで購入できます。";
+          if (hp <= 0) return "ゲームオーバー後は回復できません。「最初から」で挑戦しよう。";
+          if (playing) return "ウェーブの合間に購入できます。戦闘が終わるまで待とう。";
+          if (hp >= HEART_RULES.maxHp) return "ハートは満タンです（上限 ❤️" + HEART_RULES.maxHp + "）。";
+          if (heartPurchases >= HEART_RULES.maxPurchases) return "この防衛戦ではこれ以上購入できません。";
+          if (gold < heartPrice()) return "軍資金が足りません。";
+          return null;
+        }
+        function renderHearts() {
+          if ($("heartSheet").hidden) return;
+          const cost = heartPrice(), error = heartError();
+          $("heartBody").innerHTML = '<p>城のハート：<b>❤️ ' + hp + ' / ' + HEART_RULES.maxHp + '</b><br>軍資金：' + Math.floor(gold).toLocaleString("ja-JP") + 'G</p>'
+            + '<p>1回で ❤️1 回復。最初は1,000G、購入するたびに価格が2倍になります。ウェーブの合間のみ購入できます。</p>'
+            + '<p class="muted">回復後は自動保存され、再読み込みしても価格は戻りません。「最初から」で価格が戻ります。</p>'
+            + (error ? '<p class="injured">' + error + '</p>' : '');
+          $("heartBuy").textContent = "❤️ 1回復する（" + cost.toLocaleString("ja-JP") + "G）";
+          $("heartBuy").disabled = !!error;
+        }
+        function buyHeart() {
+          const error = heartError();
+          if (error) return error;
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return "未保存の進行があります。先に途中保存をやり直してください。";
+          const before = { gold, hp, count: heartPurchases, defense: heroSave.defense, batch: gameSaveBatch, active: gameSaveBatchActive };
+          const cost = heartPrice();
+          gold -= cost; hp++; heartPurchases++;
+          if (!saveDefenseCheckpoint()) {
+            // 確定ログを保存できなければ支払も回復も取り消す。未確定の購入が後から保存されないようバッチも戻す。
+            gold = before.gold; hp = before.hp; heartPurchases = before.count; heroSave.defense = before.defense;
+            gameSaveBatch = before.batch; gameSaveBatchActive = before.active;
+            updateUI();
+            return "保存できなかったため購入しませんでした。空き容量を確認してください。";
+          }
+          msg("❤️ 城のハートが1回復した！ " + cost.toLocaleString("ja-JP") + "Gを使いました。");
+          updateUI();
+          return null;
+        }
+        function openHearts() {
+          $("heartSheet").hidden = false; renderHearts(); $("heartClose").focus();
+        }
+        function closeHearts() { $("heartSheet").hidden = true; $("hp").focus({preventScroll:true}); }
+        $("hp").onclick = openHearts;
+        $("hp").onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openHearts(); } };
+        $("heartBuy").onclick = () => { const error = buyHeart(); if (error) { msg(error); toast(error); renderHearts(); } };
+        $("heartClose").onclick = closeHearts;
+        $("heartSheet").addEventListener("click", ev => { if (ev.target === $("heartSheet")) closeHearts(); });
+        document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("heartSheet").hidden) closeHearts(); });
         // ===== 防衛戦の途中保存（ウェーブの合間のみ） =====
         function defenseSnapshot() {
           const old = heroSave.defense;
           return {
-            version: 1, wave, waveGoal, gold, hp, speed, runId, clock: combatClock,
+            version: 1, wave, waveGoal, gold, hp, heartPurchases, speed, runId, clock: combatClock,
             bossRewardThrough: old && old.runId === runId ? old.bossRewardThrough || 0 : 0,
             towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
             squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
@@ -16269,6 +16336,7 @@ OFF</button>
           if (!d) return false;
           const finite = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
           const valid = d.version === 1 && Number.isInteger(d.wave) && finite(d.wave,0,MAX_WAVE) && WAVE_GOALS.includes(d.waveGoal) && d.wave <= d.waveGoal
+            && (d.heartPurchases === undefined || (Number.isInteger(d.heartPurchases) && finite(d.heartPurchases,0,HEART_RULES.maxPurchases)))
             && finite(d.gold,0,1e12) && finite(d.hp,1,20) && typeof d.runId === "string" && d.runId.length <= 100
             && finite(d.clock,0,1e12) && Array.isArray(d.towers) && d.towers.length <= 300 && Array.isArray(d.squads)
             && d.squads.length <= 16 && Array.isArray(d.soldiers) && d.soldiers.length <= 160 && Array.isArray(d.heroes) && d.heroes.length <= 30
@@ -16283,7 +16351,7 @@ OFF</button>
             defenseSaveMessage = "⚠ 途中保存を読み込めませんでした。武将・装備・兵士の保存データは維持して、新しく始めます。";
             return false;
           }
-          wave = d.wave; gold = d.gold; hp = d.hp; speed = d.speed === 2 ? 2 : 1;
+          wave = d.wave; gold = d.gold; hp = d.hp; heartPurchases = d.heartPurchases || 0; speed = d.speed === 2 ? 2 : 1;
           waveGoal = WAVE_GOALS.includes(settings.waveGoal) && settings.waveGoal >= wave ? settings.waveGoal : d.waveGoal;
           runId = d.runId; combatClock = d.clock;
           towers = d.towers.map(t => ({...t})); towerSeq = Math.max(0, ...towers.map(t=>t.id));
