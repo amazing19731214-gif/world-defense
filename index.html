@@ -1798,6 +1798,16 @@
         padding: 0 6px;
         width: 100%;
       }
+      .koban {
+        margin: 4px 0 6px;
+        font-size: 16px;
+        color: #ffe7a0;
+        overflow-wrap: anywhere;
+      }
+      .koban small {
+        color: #c9d3cc;
+        font-size: 12px;
+      }
       .sell-tools {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1957,7 +1967,7 @@ OFF</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v35（AUTO・装備の整理・裏ボス）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v36（小判・AUTO・装備の整理）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2192,6 +2202,7 @@ OFF</button>
           maxItems: 300, // 倉庫に入る装備の数
           maxBooks: 99, // 同じ書を持てる数
         };
+        const KOBAN_MAX = 1e12; // 小判の上限（保存データの範囲チェック用）
         const GRADES = [
           null,
           { name: "並", color: "#9fb3a8" },
@@ -3995,6 +4006,7 @@ OFF</button>
           return {
             bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
+            koban: int(o.koban, KOBAN_MAX), // 小判（両）：装備の売却で増える永続の通貨（以前の保存データは 0 から）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -5858,8 +5870,11 @@ OFF</button>
           return null;
         }
         // ----- ロック・売却 -----
-        // 売値（品質ごと。伝説・裏ボスの装備は売れない）。売ったゴールドは今のゲームの資金に入る（資金は今までどおり保存しない）
+        // 売値（品質ごと・単位は両。伝説・裏ボスの装備は売れない）。売ると小判が増える。
+        // 小判は戦闘の軍資金（G・保存しない）とは別の通貨で、装備と同じ保存データに残る（読み込み直し・「最初から」でも消えない）。
+        // いずれ装備の店・強化に使う予定（今はためるだけ）
         const SELL_PRICE = { 1: 50, 2: 150, 3: 500 };
+        const kobanText = (n) => Math.floor(n).toLocaleString("ja-JP") + "両";
         const sellPrice = (it) => SELL_PRICE[GEAR[it.id].grade] || 0;
         function sellError(it) {
           if (!it) return "その装備はありません（もう売ったかもしれません）。";
@@ -5876,7 +5891,8 @@ OFF</button>
           persistHeroes();
           return null;
         }
-        // 売る：先に倉庫から消して保存し、その後で資金に足す。同じ装備は二度と見つからないので、二重には売れない
+        // 売る：倉庫から消すことと小判を足すことを、同じ保存データに1回で書く。
+        // 保存できなかったら元に戻して売らない（装備だけ消える・小判だけ増えることはない）。同じ装備は二度と見つからないので、二重には売れない
         function sellItems(uids) {
           const busy = gearBusy();
           if (busy) return { error: busy.replace("装備を変更", "装備を売ることは") };
@@ -5888,13 +5904,18 @@ OFF</button>
             if (err) return { error: (it ? GEAR[it.id].name + "：" : "") + err };
           }
           const total = list.reduce((n, it) => n + sellPrice(it), 0),
-            F = forgeSave();
+            F = forgeSave(),
+            before = { items: F.items, sold: F.sold, koban: F.koban };
           F.items = F.items.filter((it) => !ids.includes(it.uid));
           F.sold = (F.sold || 0) + list.length;
+          F.koban = Math.min(KOBAN_MAX, (F.koban || 0) + total);
           gearMap = null;
-          persistHeroes();
-          gold += total;
-          return { n: list.length, total };
+          if (!persistHeroes()) {
+            Object.assign(F, before); // 保存できなかった：売らなかったことにする
+            gearMap = null;
+            return { error: "保存できなかったので売却をやめました（装備と小判は元のまま）。" };
+          }
+          return { n: list.length, total, koban: F.koban };
         }
         // 並び替え・絞り込み（攻撃・防御は装備の「攻撃 +％」「防御 +％」の値で比べる。特殊効果は数えない。同じなら手に入れた順）
         const GEAR_SORTS = {
@@ -10194,6 +10215,9 @@ OFF</button>
             '">📜 スキルの書 <small>' +
             Object.values(F.books).reduce((a, b) => a + b, 0) +
             "冊</small></button></div>" +
+            '<p class="koban" aria-label="小判の残高">🪙 小判 <b>' +
+            kobanText(F.koban || 0) +
+            "</b> <small>（装備の売却で増える・保存される）</small></p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
           if (gearTab === "gear" && sellConfirm) {
             // 売却の確認：数・一覧・合計・元に戻せないこと
@@ -10204,9 +10228,9 @@ OFF</button>
               list.length +
               "個の装備を売却します</b>（合計 <b>" +
               total +
-              "G</b>）</p><ul>" +
-              list.map((it) => "<li>" + gearName(it.id) + " … " + sellPrice(it) + "G</li>").join("") +
-              '</ul><p class="injured">売却した装備は元に戻せません。ゴールドは今のゲームの資金に入ります。</p>' +
+              "両</b>）</p><ul>" +
+              list.map((it) => "<li>" + gearName(it.id) + " … " + kobanText(sellPrice(it)) + "</li>").join("") +
+              '</ul><p class="injured">売却した装備は元に戻せません。売値は小判（両）で受け取り、保存されます。</p>' +
               '<div class="card-actions"><button data-sell-go>🪙 売却する</button><button data-sell-cancel>キャンセル</button></div></div>';
           } else if (gearTab === "gear") {
             const o = settings.gear,
@@ -10240,7 +10264,7 @@ OFF</button>
               " / 全 " +
               F.items.length +
               "個" +
-              (sellMode ? "・売値：並 " + SELL_PRICE[1] + "G・良 " + SELL_PRICE[2] + "G・名品 " + SELL_PRICE[3] + "G（伝説は売れない）" : "") +
+              (sellMode ? "・売値：並 " + SELL_PRICE[1] + "両・良 " + SELL_PRICE[2] + "両・名品 " + SELL_PRICE[3] + "両（伝説は売れない）" : "") +
               "</small></p>";
             if (sellMode) {
               const picked = [...sellPick].map(itemByUid).filter(Boolean),
@@ -10252,7 +10276,7 @@ OFF</button>
                 picked.length +
                 "</b>個・合計 <b>" +
                 total +
-                'G</b></span><button data-sell-ask' +
+                '両</b></span><button data-sell-ask' +
                 (picked.length && !busy ? "" : " disabled") +
                 ">売却する…</button></div>";
             }
@@ -10274,7 +10298,7 @@ OFF</button>
                           GEAR[it.id].name +
                           "・" +
                           sellPrice(it) +
-                          "G）</button>";
+                          "両）</button>";
                     else
                       act =
                         (gearPickUid === it.uid
@@ -10289,7 +10313,7 @@ OFF</button>
                         '">' +
                         (it.lock ? "🔒 ロック中（外す）" : "🔓 ロックする") +
                         "</button>" +
-                        (why ? "" : '<button data-sell-one="' + it.uid + '"' + (busy ? " disabled" : "") + ">🪙 売却 " + sellPrice(it) + "G</button>") +
+                        (why ? "" : '<button data-sell-one="' + it.uid + '"' + (busy ? " disabled" : "") + ">🪙 売却 " + sellPrice(it) + "両</button>") +
                         "</div>";
                     return gearItemCard(it, act);
                   })
@@ -10383,7 +10407,7 @@ OFF</button>
             if (r.error) err = r.error;
             else {
               sellPick.clear();
-              gearNote = "🪙 " + r.n + "個の装備を売却して " + r.total + "G を得ました。";
+              gearNote = "🪙 " + r.n + "個の装備を売却して 小判 " + kobanText(r.total) + " を得ました（所持 " + kobanText(r.koban) + "）。";
               msg(gearNote);
             }
           } else if (d.gearPick) gearPickUid = +d.gearPick;
@@ -14985,6 +15009,7 @@ OFF</button>
               refreshGear: () => (gearMap = null),
               toggleLock,
               sellItems,
+              koban: () => heroSave.forge.koban,
               sellError,
               sellPrice,
               SELL_PRICE,
