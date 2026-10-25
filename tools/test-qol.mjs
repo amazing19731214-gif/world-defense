@@ -200,7 +200,10 @@ check(
   JSON.stringify(r),
 );
 await reload(page);
-check("AUTO OFF も保存される（読み込み直しても OFF）", /AUTO\s*OFF/.test(await page.textContent("#autoWave")));
+check(
+  "AUTO OFF も保存される（読み込み直しても OFF）",
+  /AUTO\s*OFF/.test(await page.textContent("#autoWave")),
+);
 await page.tap("#autoWave");
 await reload(page);
 check("AUTO ON は次に起動しても ON", /AUTO\s*ON/.test(await page.textContent("#autoWave")));
@@ -451,22 +454,25 @@ check(
   JSON.stringify(r.ok),
 );
 check(
-  "売値：並 50G・良 150G・名品 500G",
+  "売値：並 50両・良 150両・名品 500両",
   r.prices.join() === "50,150,500" && JSON.stringify(r.table) === JSON.stringify({ 1: 50, 2: 150, 3: 500 }),
   JSON.stringify(r),
 );
 r = await page.evaluate(() => {
   const F = WD_DEBUG.forgeApi,
-    g0 = WD_DEBUG.state().gold,
+    gold0 = WD_DEBUG.state().gold,
+    g0 = F.koban(),
     res = F.sellItems([2, 4, 6, 4]), // 同じ装備を二度選んでも1回だけ
-    g1 = WD_DEBUG.state().gold,
+    g1 = F.koban(),
     again = F.sellItems([2]),
-    g2 = WD_DEBUG.state().gold,
+    g2 = F.koban(),
     mixed = F.sellItems([10, 12]), // 装備中が混ざっていたら何も売らない
-    g3 = WD_DEBUG.state().gold;
+    g3 = F.koban();
   return {
     res,
     gain: g1 - g0,
+    goldSame: WD_DEBUG.state().gold === gold0,
+    savedKoban: JSON.parse(localStorage.getItem("worldDefense.warlords.v1")).forge.koban,
     again: again.error,
     same: g2 === g1,
     mixed: mixed.error,
@@ -480,8 +486,8 @@ r = await page.evaluate(() => {
   };
 });
 check(
-  "まとめて売ると合計のゴールド（50+150+500=700G）",
-  r.res.n === 3 && r.res.total === 700 && r.gain === 700,
+  "まとめて売ると合計の小判（50+150+500=700両）・軍資金Gは増えない",
+  r.res.n === 3 && r.res.total === 700 && r.gain === 700 && r.goldSame && r.savedKoban === 700,
   JSON.stringify(r),
 );
 check(
@@ -490,7 +496,7 @@ check(
   JSON.stringify(r),
 );
 check(
-  "同じ装備は二度売れない（ゴールドも増えない）",
+  "同じ装備は二度売れない（小判も増えない）",
   /もう売った/.test(r.again || "") && r.same,
   JSON.stringify(r),
 );
@@ -526,6 +532,96 @@ check("戦闘中は売れない", /戦闘中/.test(r || ""), r);
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
+console.log("■ 小判（永続の通貨）");
+({ page, errors, context } = await newContext());
+r = await page.evaluate(() => ({ koban: WD_DEBUG.forgeApi.koban(), gold: WD_DEBUG.state().gold }));
+check("以前の保存データ（小判の項目なし）は 0両 から", r.koban === 0, JSON.stringify(r));
+r = await page.evaluate(() => {
+  const F = WD_DEBUG.forgeApi;
+  return { res: F.sellItems([1, 2]), koban: F.koban(), gold: WD_DEBUG.state().gold };
+});
+check(
+  "売ると小判が増える（並2つ = 100両）・軍資金Gはそのまま",
+  r.res.total === 100 && r.koban === 100 && r.gold === 500,
+  JSON.stringify(r),
+);
+await reload(page);
+r = await page.evaluate(() => ({
+  koban: WD_DEBUG.forgeApi.koban(),
+  gold: WD_DEBUG.state().gold,
+  n: WD_DEBUG.forgeApi.save().items.length,
+}));
+check(
+  "読み込み直しても小判は残る（軍資金Gは今までどおり開始の額）",
+  r.koban === 100 && r.gold === 500 && r.n === 10,
+  JSON.stringify(r),
+);
+r = await page.evaluate(() => {
+  document.getElementById("start").click();
+  WD_DEBUG.stopSpawning();
+  WD_DEBUG.state().enemies.length = 0;
+  WD_DEBUG.step(0.1);
+  const g1 = WD_DEBUG.state().gold;
+  document.getElementById("reset").click();
+  return { g1, koban: WD_DEBUG.forgeApi.koban(), gold: WD_DEBUG.state().gold, wave: WD_DEBUG.state().wave };
+});
+check(
+  "「最初から」でも小判は残る（軍資金Gとウェーブは元に戻る）",
+  r.koban === 100 && r.gold === 500 && r.wave === 0 && r.g1 > 500,
+  JSON.stringify(r),
+);
+r = await page.evaluate(() => {
+  // 保存に失敗したら売らない（装備も小判も元のまま）
+  const F = WD_DEBUG.forgeApi,
+    set = Storage.prototype.setItem,
+    before = {
+      n: F.save().items.length,
+      koban: F.koban(),
+      saved: localStorage.getItem("worldDefense.warlords.v1"),
+    };
+  Storage.prototype.setItem = function () {
+    throw new Error("quota");
+  };
+  const res = F.sellItems([4, 5]);
+  Storage.prototype.setItem = set;
+  return {
+    error: res.error,
+    n: F.save().items.length,
+    koban: F.koban(),
+    has4: F.save().items.some((it) => it.uid === 4),
+    before,
+    savedSame: localStorage.getItem("worldDefense.warlords.v1") === before.saved,
+  };
+});
+check(
+  "保存に失敗したら売却をやめる（エラー・装備も小判も元のまま）",
+  /保存できなかった/.test(r.error || "") &&
+    r.n === r.before.n &&
+    r.koban === r.before.koban &&
+    r.has4 &&
+    r.savedSame,
+  JSON.stringify(r),
+);
+r = await page.evaluate(() => {
+  const F = WD_DEBUG.forgeApi;
+  const res = F.sellItems([4, 5]);
+  return { res, koban: F.koban() };
+});
+check(
+  "保存できるようになれば、同じ装備を売れる（二重にはならない）",
+  r.res.total === 300 && r.koban === 400,
+  JSON.stringify(r),
+);
+check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
+await context.close();
+({ page, errors, context } = await newContext({
+  [WKEY]: JSON.stringify(
+    Object.assign({}, warlords, { forge: Object.assign({}, warlords.forge, { koban: -50 }) }),
+  ),
+}));
+check("壊れた小判の値は 0 に直す", (await page.evaluate(() => WD_DEBUG.forgeApi.koban())) === 0);
+await context.close();
+
 console.log("■ 画面（375×667）");
 ({ page, errors, context } = await newContext({}, 375, 667));
 await page.tap("#gearOpen");
@@ -554,7 +650,7 @@ await page.tap('[data-sell-one="2"]');
 text = await page.textContent(".sell-confirm");
 check(
   "個別の売却も確認画面（数・一覧・合計・元に戻せない）",
-  /1個の装備を売却/.test(text) && /胴丸/.test(text) && /合計 50G/.test(text) && /元に戻せません/.test(text),
+  /1個の装備を売却/.test(text) && /胴丸/.test(text) && /合計 50両/.test(text) && /元に戻せません/.test(text),
   text,
 );
 await page.tap("[data-sell-cancel]");
@@ -564,7 +660,7 @@ await page.tap("[data-sell-all]");
 text = await page.textContent(".sell-bar");
 check(
   "売却モード：表示中の売れる装備をすべて選ぶ（並4・良2・名品2 = 50×4+150×2+500×2）",
-  /選択 8個・合計 1500G/.test(text),
+  /選択 8個・合計 1500両/.test(text),
   text,
 );
 r = await page.evaluate(() =>
@@ -573,10 +669,10 @@ r = await page.evaluate(() =>
 check("装備中・ロック中・伝説は選べない（理由を表示）", /装備中/.test(r) && /伝説/.test(r), r);
 await page.tap("[data-sell-none]");
 await page.tap('[data-sell-grade="1"]');
-check("品質ごとに選ぶ（並をすべて：50×4）", /選択 4個・合計 200G/.test(await page.textContent(".sell-bar")));
+check("品質ごとに選ぶ（並をすべて：50×4）", /選択 4個・合計 200両/.test(await page.textContent(".sell-bar")));
 await page.tap('[data-sell-toggle="2"]');
-check("1つずつ選択を外せる", /選択 3個・合計 150G/.test(await page.textContent(".sell-bar")));
-const g0 = await page.evaluate(() => WD_DEBUG.state().gold);
+check("1つずつ選択を外せる", /選択 3個・合計 150両/.test(await page.textContent(".sell-bar")));
+const g0 = await page.evaluate(() => ({ koban: WD_DEBUG.forgeApi.koban(), gold: WD_DEBUG.state().gold }));
 await page.tap("[data-sell-ask]");
 text = await page.textContent(".sell-confirm");
 check(
@@ -585,7 +681,7 @@ check(
     /素槍/.test(text) &&
     /お守り/.test(text) &&
     /打刀/.test(text) &&
-    /合計 150G/.test(text),
+    /合計 150両/.test(text),
   text,
 );
 r = await page.evaluate(() => {
@@ -608,13 +704,18 @@ if (shots) await page.screenshot({ path: path.join(shots, "q1-confirm.png") });
 await page.tap("[data-sell-go]");
 r = await page.evaluate(() => ({
   gold: WD_DEBUG.state().gold,
+  koban: WD_DEBUG.forgeApi.koban(),
   n: WD_DEBUG.forgeApi.save().items.length,
   note: document.getElementById("gearBody").textContent,
 }));
 check(
-  "売却：装備が消えてゴールドが増える",
-  r.n === 9 && r.gold - g0 === 150 && /3個の装備を売却して 150G/.test(r.note),
-  JSON.stringify({ g: r.gold - g0, n: r.n }),
+  "売却：装備が消えて小判が増える（軍資金Gはそのまま）・残高を表示",
+  r.n === 9 &&
+    r.koban - g0.koban === 150 &&
+    r.gold === g0.gold &&
+    /3個の装備を売却して 小判 150両/.test(r.note) &&
+    new RegExp("🪙 小判 " + r.koban.toLocaleString("ja-JP") + "両").test(r.note),
+  JSON.stringify(r),
 );
 r = await page.evaluate(() => {
   const sh = document.querySelector("#gearSheet .sheet"),
@@ -644,7 +745,7 @@ await page.tap("[data-sell-mode]");
 r = await page.evaluate(() => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
   names: [...document.querySelectorAll("[data-sell-toggle]")].every((b) =>
-    /（.+・\d+G）/.test(b.textContent),
+    /（.+・\d+両）/.test(b.textContent),
   ),
 }));
 check("390×844：横にはみ出さない・選ぶボタンに装備名と売値", !r.hScroll && r.names, JSON.stringify(r));
