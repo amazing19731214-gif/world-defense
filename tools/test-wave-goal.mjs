@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 目標ウェーブ（20〜100）の確認：既定は20（今までどおり）、WAVE の表示から選ぶ、保存・「最初から」でも残る、
-// 今より前は選べない、勝利のあとに延ばして続ける、AUTO は目標で止まる、21ウェーブ以降の敵、100の敵・報酬・勝利、画面
+// 目標ウェーブ（20〜1000）の確認：既定は20（今までどおり）、WAVE の表示から選ぶ、保存・「最初から」でも残る、
+// 今より前は選べない、勝利のあとに延ばして続ける、AUTO は目標で止まる、21ウェーブ以降の敵、100・1000の敵・報酬・勝利、画面
 //   node tools/test-wave-goal.mjs
 //   SCREENSHOTS=dir node tools/test-wave-goal.mjs … 画面写真も保存
 import { createRequire } from "node:module";
@@ -20,7 +20,7 @@ const url = pathToFileURL(path.join(root, "index.html")).href + "?debug";
 const shots = process.env.SCREENSHOTS;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
-const GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100];
+const GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 let failures = 0,
   passes = 0;
 function check(name, cond, detail = "") {
@@ -88,7 +88,7 @@ let r = await page.evaluate(() => ({
 }));
 check("WAVE を押すと目標ウェーブの画面が開く", r.open && /何ウェーブまで戦うか/.test(r.text), r.text);
 check(
-  "従来の20〜40と50〜100から選べる（今は20）",
+  "従来の20〜100と200〜1000から選べる（今は20）",
   r.goals.join() === GOALS.join() && r.pressed === "20",
   JSON.stringify(r),
 );
@@ -107,6 +107,13 @@ check(
   box.inView && !box.hScroll && box.fit && box.minH >= 44,
   JSON.stringify(box),
 );
+for (const [width,height] of [[320,568],[390,844]]) {
+  await page.setViewportSize({width,height});
+  await page.waitForFunction(() => Math.abs(document.getElementById("goalSheet").getBoundingClientRect().height - innerHeight) < 1);
+  const layout=await page.evaluate(()=>{const sh=document.querySelector('#goalSheet .sheet').getBoundingClientRect(),bs=[...document.querySelectorAll('#goalSheet button')].map(b=>b.getBoundingClientRect());return {fit:sh.top>=0&&sh.bottom<=innerHeight+0.5&&document.documentElement.scrollWidth<=innerWidth&&bs.every(b=>b.right<=innerWidth+0.5&&b.height>=44)};});
+  check(width+'pxでも目標1000の一覧が収まりボタン44px以上', layout.fit, JSON.stringify(layout));
+}
+await page.setViewportSize({width:375,height:667});
 if (shots) await page.screenshot({ path: path.join(shots, "g1-sheet.png") });
 await page.tap('[data-goal="30"]');
 check(
@@ -252,16 +259,48 @@ r = await page.evaluate(() => {
 check("100では308体が両分岐に出現し、最後の1体が大将", r.count === 308 && r.paths === 2 && r.bosses === 1 && r.last.kind === "boss", JSON.stringify(r));
 check("100のHPは既存の式どおりで有限", r.finite && r.goblin && Math.abs(r.goblin.hp - 45 * (1 + 99 * 0.19)) < 0.001, JSON.stringify(r));
 check("100クリアの基本軍資金850Gとガチャ券1枚", r.gold === 850 && r.tickets === 1, JSON.stringify(r));
-check("100で勝利し、延長案内は出さない", r.wave === 100 && r.over && /100ウェーブクリア！ 勝利！/.test(r.msg) && !/目標を延ばす/.test(r.msg), JSON.stringify(r));
+check("目標100で勝利し、1000への延長案内を出す", r.wave === 100 && r.over && /100ウェーブクリア！ 勝利！/.test(r.msg) && /目標を延ばす/.test(r.msg), JSON.stringify(r));
 await page.evaluate(() => { WD_DEBUG.step(10); document.getElementById("start").click(); });
 check("AUTOでも手動でも101へ進まない", (await waveText()) === "WAVE 100/100" && !(await page.evaluate(() => WD_DEBUG.state().playing)));
 if (shots) await page.screenshot({ path: path.join(shots, "g2-victory100.png") });
 
+console.log("■ 1000まで続ける");
+await page.tap("#wave");
+await page.tap('[data-goal="1000"]');
+check("100勝利から1000へ延長できる", (await waveText()) === "WAVE 100/1000" && !(await page.evaluate(() => WD_DEBUG.state().over)));
+r = await advance(899);
+check("999クリアでも継続できる", r.wave === 999 && !r.over, JSON.stringify(r));
+r = await page.evaluate(() => {
+  const D=WD_DEBUG;
+  D.step(6);
+  const start = {wave:D.state().wave,playing:D.state().playing};
+  const enemies=[], paths=new Set(), gold=D.state().gold, tickets=D.heroApi.save().tickets;
+  const capture=()=>{for(const e of D.state().enemies){enemies.push({kind:e.kind,hp:e.max});paths.add(JSON.stringify(e.path));}D.state().enemies.length=0;};
+  capture();
+  const random=Math.random;let seq=0;Math.random=()=> (++seq%7)/7;
+  try{for(let i=0;i<11000 && D.state().playing;i++){D.step(0.1);capture();}}finally{Math.random=random;}
+  const s=D.state();
+  return {start,count:enemies.length,paths:paths.size,bosses:enemies.filter(e=>e.kind==='boss').length,last:enemies.at(-1),
+    finite:enemies.every(e=>Number.isFinite(e.hp)&&e.hp>0),goblin:enemies.find(e=>e.kind==='goblin'),
+    gold:s.gold-gold,tickets:D.heroApi.save().tickets-tickets,wave:s.wave,over:s.over,msg:document.getElementById('msg').textContent};
+});
+check("AUTOで999から1000へ進む", r.start.wave === 1000 && r.start.playing, JSON.stringify(r.start));
+check("1000では3008体が両分岐に出現し、最後が大将", r.count === 3008 && r.paths === 2 && r.bosses === 1 && r.last.kind === 'boss', JSON.stringify(r));
+check("1000のHPが既存の式どおりで有限", r.finite && r.goblin && Math.abs(r.goblin.hp-45*(1+999*0.19))<0.001, JSON.stringify(r));
+check("1000クリアで基本8050Gとガチャ券1枚", r.gold === 8050 && r.tickets === 1, JSON.stringify(r));
+check("1000で勝利して延長案内は出さない", r.wave === 1000 && r.over && /1000ウェーブクリア！ 勝利！/.test(r.msg) && !/目標を延ばす/.test(r.msg), JSON.stringify(r));
+await page.evaluate(()=>{WD_DEBUG.step(10);document.getElementById('start').click();});
+check("AUTOでも手動でも1001へ進まない", (await waveText()) === "WAVE 1000/1000" && !(await page.evaluate(()=>WD_DEBUG.state().playing)));
+await reload();
+check("1000の勝利状態を途中保存から復元", (await waveText()) === "WAVE 1000/1000" && await page.evaluate(()=>WD_DEBUG.state().over && !WD_DEBUG.state().playing));
+check("再開時も最大1000の案内を表示", /全1000ウェーブ達成済み/.test(await page.locator('#msg').textContent()));
+if (shots) await page.screenshot({path:path.join(shots,"g3-victory1000.png")});
+
 console.log("■ 保存・最初から・敗北");
 await page.evaluate(() => document.getElementById("reset").click());
-check("最初からでも目標100を保持", (await waveText()) === "WAVE 0/100");
+check("最初からでも目標1000を保持", (await waveText()) === "WAVE 0/1000");
 await reload();
-check("読み込み直しでも目標100を保持", (await waveText()) === "WAVE 0/100");
+check("読み込み直しでも目標1000を保持", (await waveText()) === "WAVE 0/1000");
 await page.tap("#wave");
 await page.tap('[data-goal="20"]');
 check("従来の目標20に戻せる", (await waveText()) === "WAVE 0/20");
