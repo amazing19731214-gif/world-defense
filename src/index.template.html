@@ -858,6 +858,14 @@
       .s-card.named {
         background: linear-gradient(90deg, #e1bc7722, transparent 70%);
       }
+      .s-card.famed {
+        border-color: #ffd34d;
+        box-shadow: inset 3px 0 0 #ffd34d;
+      }
+      .famed-skill {
+        color: #ffe6a0;
+        font-size: 13px;
+      }
       .s-card p {
         margin: 2px 0;
       }
@@ -1591,12 +1599,19 @@
         background: linear-gradient(90deg, #5cc46b, #ffd34d);
       }
       .zk-tabs {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
       }
       .zk-tabs button {
         min-height: 52px;
-        font-size: 13px;
+        font-size: 12px;
         padding: 2px;
+        min-width: 0;
+        line-height: 1.2;
+      }
+      .zk-icon.zk-famed {
+        background: var(--c);
+        box-shadow: 0 0 0 2px #ffd34d;
       }
       .zk-grid {
         display: grid;
@@ -2081,7 +2096,7 @@ OFF</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v37（戦国図鑑）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v38（ネームド兵士）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -3920,6 +3935,42 @@ OFF</button>
           profBonus: 0.01, // 熟練度1ごとに、その職業のときの攻撃・防御 +1%（控えめ）
           histMax: 20, // 転職履歴を残す数
         };
+        // ===== ネームド兵士（戦国の有名人物）=====
+        // 通常の兵士を雇うとき（新しい部隊の雇用・新兵補充）、1人ごとに chance の確率で、その兵種の人物が仕官する。
+        // 費用・成長・戦死は通常の兵士と同じ（Lv1から。戦死すれば失われ、のちの雇用でまた現れることがある）。同じ人物は同時に1人まで。
+        // 武将ガチャの30人とは別の人物。skill は人物ごとの固有スキル（効果のキーは兵士のスキルと同じ。控えめな値）。
+        // type は雇うときの兵種（初期職）。忍者は上級職（雇えない）なので、忍びの3人は足軽で現れ、Lv30 で忍者に転職できる
+        const NAMED_RULES = {
+          chance: 0.02, // 兵士1人を雇うごとの出現確率
+        };
+        const NAMED_SOLDIERS = {
+          magoichi: { name: "雑賀孫市", type: "gunner", color: "#d8443a", skill: { name: "雑賀撃ち", atk: 0.06, text: "攻撃力 +6%" } },
+          narimasa: { name: "佐々成政", type: "gunner", color: "#3f6fc7", skill: { name: "鉄砲の備え", range: 0.06, text: "射程 +6%" } },
+          nobuharu: { name: "馬場信春", type: "cavalry", color: "#c23b2c", skill: { name: "不死身の鬼美濃", guard: 0.06, text: "受けるダメージ -6%" } },
+          masakage: { name: "山県昌景", type: "cavalry", color: "#e04a2a", skill: { name: "赤備え", chargeAdd: 0.15, text: "騎兵の突撃の一撃 +15%" } },
+          ujitsuna: { name: "北条氏綱", type: "spearman", color: "#4f8a5b", skill: { name: "勝って兜の緒を締めよ", def: 0.06, text: "防御 +6%" } },
+          sakon: { name: "島左近", type: "spearman", color: "#8a5bc2", skill: { name: "鬼左近", atk: 0.06, text: "攻撃力 +6%" } },
+          saizo: { name: "可児才蔵", type: "spearman", color: "#6aa84f", skill: { name: "笹の才蔵", vsBoss: 0.15, text: "大将への攻撃力 +15%" } },
+          dosetsu: { name: "立花道雪", type: "spearman", color: "#e8c547", skill: { name: "雷切", crit: 0.04, text: "会心率 +4%（会心：一撃 ×1.5）" } },
+          nagayoshi: { name: "森長可", type: "spearman", color: "#b8323f", skill: { name: "鬼武蔵", combo: 0.06, text: "6%の確率で追加攻撃" } },
+          danemon: { name: "塙団右衛門", type: "spearman", color: "#c77a2e", skill: { name: "夜討ちの札", haste: 0.05, text: "攻撃の間隔 -5%" } },
+          hanzo: { name: "服部半蔵", type: "ashigaru", color: "#3a3f58", skill: { name: "伊賀の頭領", evade: 0.05, text: "5%の確率で攻撃をかわす" } },
+          kotaro: { name: "風魔小太郎", type: "ashigaru", color: "#4b5e3a", skill: { name: "風魔の夜襲", haste: 0.06, text: "攻撃の間隔 -6%" } },
+          sasuke: { name: "猿飛佐助", type: "ashigaru", color: "#d9822b", skill: { name: "猿飛の術", rangedGuard: 0.15, text: "遠距離攻撃のダメージ -15%" } },
+          takakage: { name: "小早川隆景", type: "archer", color: "#2f8f8a", skill: { name: "智将の采配", range: 0.06, text: "射程 +6%" } },
+          motoharu: { name: "吉川元春", type: "ashigaru", color: "#9c2f2f", skill: { name: "鬼吉川", atk: 0.06, text: "攻撃力 +6%" } },
+        };
+        // 人物どうしのゆかり（将来、同時に在籍すると特別な効果を起こすためのデータ。今回は図鑑に表示するだけで効果はない）
+        //   named … ネームド兵士、warlords … 武将ガチャの武将（ゆかりの相手として）
+        const NAMED_BONDS = [
+          { id: "ryosen", name: "毛利両川", named: ["takakage", "motoharu"], warlords: ["motonari", "terumoto"], text: "毛利家を支えた小早川・吉川の兄弟" },
+          { id: "shimeishin", name: "武田の名臣", named: ["nobuharu", "masakage"], warlords: ["shingen", "kansuke"], text: "武田家を支えた重臣たち" },
+          { id: "ninja", name: "忍びの者", named: ["hanzo", "kotaro", "sasuke"], warlords: [], text: "伊賀・風魔・甲賀の忍び" },
+          { id: "hojo", name: "北条家", named: ["ujitsuna"], warlords: ["ujiyasu"], text: "小田原の北条家（氏綱と子の氏康）" },
+          { id: "tachibana", name: "立花家", named: ["dosetsu"], warlords: ["muneshige"], text: "雷神・道雪と養子の宗茂" },
+          { id: "sekigahara", name: "石田家の重臣", named: ["sakon"], warlords: ["mitsunari"], text: "「三成に過ぎたるもの」島左近" },
+          { id: "oda", name: "織田家の猛将", named: ["nagayoshi", "narimasa"], warlords: ["nobunaga"], text: "信長に仕えた森長可・佐々成政" },
+        ];
         // 称号：上から順に条件を満たした最も高いものになる。atk / def は能力への倍率ボーナス
         const TITLES = [
           { id: "recruit", name: "新兵", waves: 0, kills: 0, atk: 0, def: 0 },
@@ -4194,7 +4245,7 @@ OFF</button>
         // 記録は増えるだけで、錬成・売却・戦死・「最初から」でも消えない。
         // 記録するのは実際に持っている・持っていた記録があるものだけ（所持・ガチャ履歴・錬成履歴・英霊名鑑・転職履歴）。推測では登録しない
         const ZUKAN_KEY = "worldDefense.zukan.v1";
-        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs"];
+        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs", "named"];
         function loadZukan() {
           let d = null;
           try {
@@ -4216,7 +4267,7 @@ OFF</button>
           try {
             localStorage.setItem(
               ZUKAN_KEY,
-              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs }),
+              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs, named: zukan.named }),
             );
           } catch (err) {
             // 保存できない環境でも遊べる
@@ -4245,12 +4296,14 @@ OFF</button>
             for (const j of s.jobs || []) job(j);
             job(s.job && JOBS[s.job] ? s.job : s.type);
             for (const h of s.jobHist || []) if (h) (job(h.from), job(h.to));
+            if (NAMED_SOLDIERS[s.named]) add("named", s.named); // ネームド兵士：雇ったら発見（戦死しても残る）
           };
           for (const s of soldiers) person(s); // 戦死した兵士も、戦死するまでに覚えた・就いたもの
           for (const v of soldierSave.soldiers) person(v);
           for (const f of soldierSave.fallen) {
             for (const k of f.skills || []) skill(k);
             job(f.type);
+            if (NAMED_SOLDIERS[f.named]) add("named", f.named);
           }
           if (n) persistZukan();
           return n;
@@ -5002,7 +5055,14 @@ OFF</button>
         }
         const canUseSkill = (h) =>
           h && heroPos(h) && h.cd <= 0 && h.active <= 0 && playing && !battle && !paused && !over;
+        let namedNews = []; // 雇ったばかりのネームド兵士（次のお知らせに一言だけ添える）
         function msg(s) {
+          if (namedNews.length) {
+            const t = "⭐ " + namedNews.join("・") + " が仕官した！";
+            namedNews = [];
+            s = t + " " + s;
+            toast(t);
+          }
           $("msg").textContent = s;
         }
         // 地図をタップした結果を画面の上に少しだけ表示する（iPhone では下のメッセージ欄が画面外になりやすい）
@@ -5495,7 +5555,7 @@ OFF</button>
         // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
         // 主人公には 👑 を付ける
         const soldierName = (s) =>
-          (isHeroSoldier(s) ? "👑" : "") + (s.name ? "🎖" + s.name : jobName(s) + " #" + s.id);
+          (isHeroSoldier(s) ? "👑" : "") + (s.named ? "⭐" + s.name : s.name ? "🎖" + s.name : jobName(s) + " #" + s.id);
         const unitGhosts = []; // 戦死・撤退の退場演出（見た目のみ）
         function rankTitle(s) {
           let t = TITLES[0];
@@ -5518,6 +5578,7 @@ OFF</button>
         function skillSum(s, key) {
           let n = 0;
           for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
+          if (s.named && NAMED_SOLDIERS[s.named]) n += NAMED_SOLDIERS[s.named].skill[key] || 0; // ネームド兵士の固有スキル
           const g = s.id != null && gearOf(s.id);
           if (g) for (const d of g) n += d.fx[key] || 0;
           return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
@@ -5581,7 +5642,19 @@ OFF</button>
           s.history.push("W" + wave + " " + text);
           if (s.history.length > 10) s.history.shift();
         }
-        function newSoldier(type, squadId) {
+        let namedRng = Math.random; // ネームド兵士の抽選の乱数（テストで差し替え可能）
+        // 兵士を1人雇うときの抽選：当たれば、その兵種で今いない人物を1人選ぶ（同じ人物は同時に1人まで）
+        function rollNamed(type) {
+          if (!(namedRng() < NAMED_RULES.chance)) return null;
+          const pool = Object.keys(NAMED_SOLDIERS).filter(
+            (id) => NAMED_SOLDIERS[id].type === type && !soldiers.some((s) => s.alive && s.named === id),
+          );
+          if (!pool.length) return null;
+          return pool[Math.min(pool.length - 1, Math.floor(namedRng() * pool.length))];
+        }
+        // recruit … プレイヤーが雇ったとき（新しい部隊・新兵補充）だけネームド兵士を抽選する
+        function newSoldier(type, squadId, recruit = false) {
+          const named = recruit ? rollNamed(type) : null;
           const s = {
             id: ++soldierSeq,
             type,
@@ -5607,7 +5680,8 @@ OFF</button>
             prof: {}, // 職業ごとの熟練度（その職業で得た経験値の合計）
             deaths: 0, // 主人公として戦死した回数
             bestLevel: 1, // 過去最高レベル
-            name: null,
+            name: named ? NAMED_SOLDIERS[named].name : null,
+            named, // ネームド兵士の人物（通常の兵士は null）
             waveXp: 0, // このウェーブの戦闘で得た経験値（上限 xpWaveCap）
             xpClaim: null, // ウェーブ終了の経験値を受け取ったウェーブ（二重取得の防止）
             cd: 0,
@@ -5615,8 +5689,9 @@ OFF</button>
             hit: 0,
           };
           s.hp = soldierStats(s).maxHp;
-          logHistory(s, "新兵として雇用");
+          logHistory(s, named ? "ネームド兵士として仕官" : "新兵として雇用");
           soldiers.push(s);
+          if (named) namedNews.push(NAMED_SOLDIERS[named].name + "（" + SOLDIER_TYPES[type].name + "）");
           zukanSync(); // 雇った兵士の職業（初期職）を図鑑へ
           return s;
         }
@@ -5737,6 +5812,7 @@ OFF</button>
         function nameSoldier(id, value) {
           const s = soldierById(id);
           if (!s || !s.alive) return "戦死した兵士には名前を付けられません。";
+          if (s.named) return "ネームド兵士の名前は変えられません。";
           if (Math.max(s.level, s.bestLevel || 1) < SQUAD_RULES.nameLevel)
             return "Lv" + SQUAD_RULES.nameLevel + "から名前を付けられます。";
           const name = cleanName(value);
@@ -5848,6 +5924,7 @@ OFF</button>
           s.hp = Math.min(s.hp, soldierStats(s).maxHp);
           s.iaiTarget = null;
           patchSavedSoldier(s, pickSaved(s));
+          zukanSync(); // まだ保存されていない兵士（このウェーブで雇った）の転職も、すぐ職業図鑑へ
           return null;
         }
         // ===== 秘伝錬成 =====
@@ -6305,7 +6382,7 @@ OFF</button>
           if (gold < cost) return (msg("資金が足りません（" + c.squadName + " " + cost + "G）。"), null);
           gold -= cost;
           const q = newSquad(type);
-          for (let i = 0; i < SQUAD_RULES.hireSize; i++) newSoldier(type, q.id);
+          for (let i = 0; i < SQUAD_RULES.hireSize; i++) newSoldier(type, q.id, true);
           putOnRoad(q, r.point);
           msg(
             squadName(q) +
@@ -6822,7 +6899,7 @@ OFF</button>
           const price = recruitCost(q, type);
           if (gold < price) return "資金が足りません（" + c.name + " " + price + "G）。";
           gold -= price;
-          newSoldier(type, q.id);
+          newSoldier(type, q.id, true);
           refreshSquadType(q);
           return null;
         }
@@ -6878,6 +6955,7 @@ OFF</button>
           "jobs",
           "jobHist",
           "prof",
+          "named",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         const intIn = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
@@ -6923,6 +7001,13 @@ OFF</button>
           const sum = POINT_KEYS.reduce((n, k) => n + p[k], 0);
           return sum <= (level - 1) * SQUAD_RULES.statPoints ? p : emptyPoints();
         }
+        // 保存されたネームド兵士が正しいか（人物が存在し、初期職が人物の兵種と合い、同じ人物がまだ読み込まれていない）
+        // 転職すると兵種（type）は職業の動きに変わる（忍者なら騎兵）ので、初期職（jobs の最初）でも確かめる
+        const namedOk = (v, list) =>
+          typeof v.named === "string" &&
+          !!NAMED_SOLDIERS[v.named] &&
+          (NAMED_SOLDIERS[v.named].type === v.type || (Array.isArray(v.jobs) && v.jobs[0] === NAMED_SOLDIERS[v.named].type)) &&
+          !list.some((x) => x.named === v.named);
         function cleanFallen(f) {
           if (!f || typeof f !== "object" || !SOLDIER_TYPES[f.type]) return null;
           const name = cleanName(f.name);
@@ -6936,6 +7021,7 @@ OFF</button>
             battles: intIn(f.battles, 0, 1e6, 0),
             kills: intIn(f.kills, 0, 1e6, 0),
             wave: intIn(f.wave, 0, 999, 0),
+            named: typeof f.named === "string" && NAMED_SOLDIERS[f.named] ? f.named : null,
           };
         }
         // 古い保存データ（5人×最大8部隊）を10人の部隊にまとめる。同じ兵種の部隊どうしを、前の部隊から満員になるまで詰める。
@@ -7004,8 +7090,10 @@ OFF</button>
                 deaths: intIn(v.deaths, 0, 1e9, 0),
                 bestLevel: best,
                 ...cleanJob(v),
-                // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す
-                name: best >= SQUAD_RULES.nameLevel ? cleanName(v.name) || null : null,
+                // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す。ネームド兵士は人物の名前
+                ...(namedOk(v, list)
+                  ? { named: v.named, name: NAMED_SOLDIERS[v.named].name }
+                  : { named: null, name: best >= SQUAD_RULES.nameLevel ? cleanName(v.name) || null : null }),
                 battles: intIn(v.battles, 0, 1e6, 0),
                 kills: intIn(v.kills, 0, 1e6, 0),
                 wavesSurvived: intIn(v.wavesSurvived, 0, 1e6, 0),
@@ -7099,6 +7187,7 @@ OFF</button>
               battles: s.battles,
               kills: s.kills,
               wave: wave,
+              named: s.named || null,
             });
             soldierSave.fallen.length = Math.min(soldierSave.fallen.length, SQUAD_RULES.fallenMax);
           }
@@ -8304,6 +8393,27 @@ OFF</button>
             1.5,
           );
         }
+        // ネームド兵士の目印：足元の金色の輪と、頭の上の星（人物の色・金の縁。主人公の冠と重ならないよう少し上）
+        function namedMark(s, x, ground) {
+          const p = NAMED_SOLDIERS[s.named];
+          if (!p) return;
+          ctx.save();
+          ctx.strokeStyle = "#ffd34dcc";
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.ellipse(x + 1, ground, 12, 4.2, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+          const b = reduced ? 0 : Math.sin(visualTime * 3 + s.id) * 1.2,
+            cy = ground - (isHeroSoldier(s) ? 54 : 44) + b,
+            pts = [];
+          for (let i = 0; i < 10; i++) {
+            const r = i % 2 ? 4 : 9.5,
+              a = -Math.PI / 2 + (i * Math.PI) / 5;
+            pts.push([x + Math.cos(a) * r, cy + Math.sin(a) * r]);
+          }
+          poly(pts, p.color, "#ffd34d", 1.6);
+        }
         function drawSquad(q) {
           const list = members(q),
             c = { range: Math.max(0, ...list.map((s) => SOLDIER_TYPES[s.type].range)) }, // 一番遠くまで届く兵士の射程
@@ -8345,6 +8455,7 @@ OFF</button>
               pose: s.atk > 0 ? "attack" : null, // 攻撃のコマがある兵種だけ切り替わる
             });
             if (isHeroSoldier(s)) heroMark(q.x + o[0], ground - 40);
+            if (s.named) namedMark(s, q.x + o[0], ground);
             if (s.lvUp > 0) {
               ctx.save();
               ctx.globalAlpha = Math.min(1, s.lvUp * 2);
@@ -10661,6 +10772,7 @@ OFF</button>
             skills, // 未実装のスキル（城攻め名人）は入れない
             items: Object.keys(GEAR).map((id) => ({ key: id })),
             jobs: Object.keys(JOBS).map((id) => ({ key: id })),
+            named: Object.keys(NAMED_SOLDIERS).map((id) => ({ key: id })),
           };
           return zukanLists;
         }
@@ -10670,7 +10782,10 @@ OFF</button>
           const list = zukanEntries()[cat];
           return { found: list.filter((e) => zukanFound(cat, e)).length, total: list.length };
         }
-        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業" };
+        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業", named: "⭐ ネームド" };
+        const ZUKAN_TITLES = { warlords: "武将", skills: "スキル", items: "アイテム", jobs: "職業", named: "ネームド兵士" };
+        const namedIcon = (id) =>
+          '<span class="zk-icon zk-famed" style="--c:' + NAMED_SOLDIERS[id].color + '">' + SOLDIER_TYPES[NAMED_SOLDIERS[id].type].icon + "</span>";
         const WEAPON_ICON = { katana: "🗡️", yari: "🔱", yumi: "🏹", teppo: "🔫" };
         const gearIcon = (g) => (g.slot === "weapon" ? WEAPON_ICON[g.wtype] : g.slot === "armor" ? "🛡️" : "📿");
         let zukanTab = "warlords",
@@ -10772,6 +10887,41 @@ OFF</button>
               "個</small></p>"
             );
           }
+          if (cat === "named") {
+            const p = NAMED_SOLDIERS[e.key],
+              now = soldiers.find((x) => x.alive && x.named === e.key),
+              bonds = NAMED_BONDS.filter((b) => b.named.includes(e.key)),
+              who = (ids, book, names) => ids.map((id) => (book[id] ? names[id].name : "???"));
+            return (
+              '<div class="zk-head">' +
+              namedIcon(e.key) +
+              "<p><b>" +
+              esc(p.name) +
+              "</b>（ネームド兵士）<br><small>兵種：" +
+              SOLDIER_TYPES[p.type].name +
+              "<br>" +
+              (now ? "在籍中・Lv" + now.level + "（" + esc(squadName(squadById(now.squadId)) || "") + "）" : "今はいない（戦死・未在籍）。また雇えば現れることがある") +
+              "</small></p></div><p><small><b>固有スキル「" +
+              esc(p.skill.name) +
+              "」</b>：" +
+              esc(p.skill.text) +
+              "<br>出会い方：" +
+              SOLDIER_TYPES[p.type].name +
+              "を雇うと、ときどき仕官する（費用は通常の兵士と同じ）" +
+              bonds
+                .map(
+                  (b) =>
+                    "<br>ゆかり「" +
+                    esc(b.name) +
+                    "」：" +
+                    [...who(b.named.filter((id) => id !== e.key), zukan.named, NAMED_SOLDIERS), ...who(b.warlords, zukan.warlords, WARLORDS)]
+                      .map(esc)
+                      .join("・"),
+                )
+                .join("") +
+              "</small></p>"
+            );
+          }
           const J = JOBS[e.key],
             c = SOLDIER_TYPES[J.base],
             weapons = Object.values(WEAPON_TYPES)
@@ -10842,7 +10992,7 @@ OFF</button>
                 '" aria-pressed="' +
                 (zukanTab === c) +
                 '">' +
-                ZUKAN_TABS[c] +
+                ZUKAN_TABS[c].replace(" ", "<br>") + // アイコンと名前を2行に（5つ並べても名前が途中で折れない）
                 "<small>" +
                 n.found +
                 "/" +
@@ -10854,7 +11004,7 @@ OFF</button>
           const n = zukanCount(zukanTab);
           html +=
             '<p class="zk-progress">' +
-            ZUKAN_TABS[zukanTab].replace(/^\S+ /, "") +
+            ZUKAN_TITLES[zukanTab] +
             "図鑑 <b>" +
             n.found +
             "/" +
@@ -10897,6 +11047,9 @@ OFF</button>
               const g = GEAR[e.key];
               icon = '<span class="zk-icon g' + g.grade + '">' + gearIcon(g) + "</span>";
               name = g.name;
+            } else if (zukanTab === "named") {
+              icon = namedIcon(e.key);
+              name = NAMED_SOLDIERS[e.key].name;
             } else {
               icon = '<span class="zk-icon">' + JOBS[e.key].icon + "</span>";
               name = JOBS[e.key].name;
@@ -11144,7 +11297,7 @@ OFF</button>
             need = SQUAD_RULES.xpToLevel(s.level),
             st = soldierStats(s);
           let act = "";
-          if (Math.max(s.level, s.bestLevel || 1) >= SQUAD_RULES.nameLevel)
+          if (!s.named && Math.max(s.level, s.bestLevel || 1) >= SQUAD_RULES.nameLevel)
             act +=
               '<button data-name="' +
               s.id +
@@ -11158,6 +11311,7 @@ OFF</button>
           return (
             '<div class="s-card' +
             (s.name ? " named" : "") +
+            (s.named ? " famed" : "") +
             '"><h3>' +
             esc(soldierName(s)) +
             " <small>" +
@@ -11178,7 +11332,15 @@ OFF</button>
             st.maxHp +
             statText(s, st) +
             (SOLDIER_TYPES[s.type].heal ? "・治療 " + (s.heals || 0) + "回" : "") +
-            "</small><p>スキル " +
+            "</small>" +
+            (s.named
+              ? '<p class="famed-skill">⭐ ネームド兵士・固有「' +
+                esc(NAMED_SOLDIERS[s.named].skill.name) +
+                "」" +
+                esc(NAMED_SOLDIERS[s.named].skill.text) +
+                "</p>"
+              : "") +
+            "<p>スキル " +
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p><p><small>出陣 " +
@@ -11192,7 +11354,7 @@ OFF</button>
             (isHeroSoldier(s)
               ? "<br>👑 主人公・戦死 " + (s.deaths || 0) + "回・過去最高 Lv" + Math.max(s.bestLevel || 1, s.level)
               : "") +
-            (s.level < SQUAD_RULES.nameLevel ? "・Lv" + SQUAD_RULES.nameLevel + "で命名可" : "") +
+            (!s.named && s.level < SQUAD_RULES.nameLevel ? "・Lv" + SQUAD_RULES.nameLevel + "で命名可" : "") +
             "</small></p>" +
             act +
             "</div>"
@@ -14722,6 +14884,7 @@ OFF</button>
                     pose: s.atk > 0 ? "attack" : null,
                   });
                   if (isHeroSoldier(s)) heroMark(g.x + o[0], ground - 40);
+                  if (s.named) namedMark(s, g.x + o[0], ground);
                 },
               });
             });
@@ -15446,6 +15609,7 @@ OFF</button>
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
         if (/[?&]debug\b/.test(location.search)) {
+          namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             state: () => ({
               gold,
@@ -15479,6 +15643,14 @@ OFF</button>
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            namedApi: {
+              NAMED_RULES,
+              NAMED_SOLDIERS,
+              NAMED_BONDS,
+              rollNamed,
+              soldierName,
+              setRng: (f) => (namedRng = f || Math.random),
             },
             forgeApi: {
               FORGE,
