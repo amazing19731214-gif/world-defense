@@ -1577,6 +1577,43 @@
       .tools.menu-tools #reset {
         grid-column: 2 / -1;
       }
+      /* 目標ウェーブ */
+      #wave {
+        cursor: pointer;
+        text-decoration: underline dotted #ffd34d99;
+        text-underline-offset: 3px;
+      }
+      #goalSheet {
+        z-index: 12;
+      }
+      .goal-list {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+        margin: 8px 0;
+      }
+      .goal-list button {
+        min-height: 56px;
+        min-width: 0;
+        font-size: 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2px;
+      }
+      .goal-list button small {
+        font-size: 10px;
+        opacity: 0.8;
+      }
+      .goal-list button[aria-pressed="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
+      .goal-note {
+        font-size: 13px;
+        margin: 4px 0;
+      }
       /* 戦国図鑑 */
       #zukanSheet {
         z-index: 12;
@@ -1985,7 +2022,7 @@
         <div class="stats">
           <span id="hp">❤️ 20</span><span id="gold">🪙 500G</span>
           <div class="wave-guide-controls">
-            <span id="wave">WAVE 0/20</span><span id="deployStat">配置 0/4</span
+            <span id="wave" role="button" tabindex="0" aria-haspopup="dialog" aria-label="目標ウェーブを選ぶ">WAVE 0/20</span><span id="deployStat">配置 0/4</span
             ><button
               id="skillGuideOpen"
               aria-label="スキル一覧"
@@ -2096,7 +2133,7 @@ OFF</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v38（ネームド兵士）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v39（目標ウェーブ）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2181,6 +2218,15 @@ OFF</button>
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="goalSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="goalTitle">
+        <div class="panel-head hg-head">
+          <strong id="goalTitle">🎯 目標ウェーブ</strong
+          ><button id="goalClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="goalBody"></div>
       </div>
     </div>
     <div id="zukanSheet" class="sheet-back" hidden>
@@ -4084,6 +4130,7 @@ OFF</button>
           spawnTotal = 0,
           last = 0,
           over = false,
+          waveGoal = 20, // 防衛戦の目標ウェーブ（WAVE_GOALS から選ぶ。設定に保存）
           towerSeq = 0,
           squads = [],
           soldiers = [], // 雇用したすべての兵士（戦死者も記録として残る）
@@ -4098,12 +4145,14 @@ OFF</button>
           squadDetailOpen = false; // 部隊のパネルで兵士の詳細を開いているか
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        // 目標ウェーブの選択肢。21ウェーブ目からも敵の数・強さは今までと同じ式で増えていく（20までは変わらない）
+        const WAVE_GOALS = [20, 25, 30, 35, 40];
         function updateUI() {
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
           $("wave").textContent = training
             ? "修練 " + wave + (training.D.endless ? "" : "/" + TRAINING.waves)
-            : "WAVE " + wave + "/20";
+            : "WAVE " + wave + "/" + waveGoal;
           $("start").disabled = playing || over || !!battle;
           renderAuto();
           $("upgrade").disabled =
@@ -7417,13 +7466,14 @@ OFF</button>
               return;
             }
             gold += Math.round((50 + wave * 8) * (1 + territoryBonus("waveGold"))); // 領土の効果で増える
+            const won = wave >= waveGoal;
             msg(
-              wave === 20
-                ? "🎉 20ウェーブクリア！ 勝利！"
+              won
+                ? "🎉 " + wave + "ウェーブクリア！ 勝利！" + (wave < WAVE_GOALS[WAVE_GOALS.length - 1] ? "（上の「WAVE」から目標を延ばすと続けて戦える）" : "")
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
-            if (wave === 20) over = true;
-            autoArm(); // AUTO ON なら次のウェーブまで数える（ウェーブ20では数えない）
+            if (won) over = true;
+            autoArm(); // AUTO ON なら次のウェーブまで数える（目標ウェーブのクリア後は数えない）
             const held = counterWaveCleared();
             if (held) {
               $("msg").textContent +=
@@ -9169,7 +9219,7 @@ OFF</button>
         );
         // ===== ウェーブの自動開始（通常の防衛戦だけ） =====
         // AUTO ON：ウェーブをクリアすると5秒数えて、いつもの「ウェーブ開始」を押したのと同じ処理で次のウェーブを始める。
-        // 一時停止中・ほかの画面（シート）を開いている間は数えない。ウェーブ20・ゲームオーバー・攻城戦・修練場・討伐戦では始めない
+        // 一時停止中・ほかの画面（シート）を開いている間は数えない。目標ウェーブのクリア後・ゲームオーバー・攻城戦・修練場・討伐戦では始めない
         const SETTINGS_KEY = "worldDefense.settings.v1";
         const AUTO_DELAY = 5;
         function loadSettings() {
@@ -9182,6 +9232,7 @@ OFF</button>
           const g = d && typeof d.gear === "object" && d.gear ? d.gear : {};
           return {
             auto: !!(d && d.auto === true),
+            waveGoal: d && WAVE_GOALS.includes(d.waveGoal) ? d.waveGoal : 20, // 以前の設定は 20
             gear: {
               sort: typeof g.sort === "string" ? g.sort : "grade-desc",
               type: typeof g.type === "string" ? g.type : "all",
@@ -9191,6 +9242,7 @@ OFF</button>
           };
         }
         const settings = loadSettings();
+        waveGoal = settings.waveGoal;
         function saveSettings() {
           try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign({ version: 1 }, settings)));
@@ -9199,7 +9251,7 @@ OFF</button>
           }
         }
         let autoLeft = null; // 次のウェーブまでの残り秒数（数えていないときは null）
-        const autoCanRun = () => settings.auto && !playing && !over && !battle && !training && wave >= 1 && wave < 20;
+        const autoCanRun = () => settings.auto && !playing && !over && !battle && !training && wave >= 1 && wave < waveGoal;
         function autoArm() {
           autoLeft = autoCanRun() ? AUTO_DELAY : null;
           renderAuto();
@@ -9230,6 +9282,65 @@ OFF</button>
           if (counting) st.textContent = "▶ 次のWAVEまで\n" + Math.ceil(autoLeft) + "秒";
           else if (st.textContent !== "▶ ウェーブ開始") st.textContent = "▶ ウェーブ開始";
         }
+        // ===== 目標ウェーブ（WAVE の表示を押して選ぶ） =====
+        // 今より先のウェーブだけ選べる（ウェーブ中は今のウェーブも可）。勝利のあとに延ばすと、そのまま続けて戦える
+        const goalOk = (n) => n > wave || (playing && n === wave);
+        const goalWon = () => over && hp > 0 && wave >= waveGoal;
+        function setWaveGoal(n) {
+          if (!WAVE_GOALS.includes(n)) return "その目標は選べません。";
+          if (training) return "修練場では選べません。";
+          if (!goalOk(n)) return "今のウェーブ（" + wave + "）より先の目標を選んでください。";
+          const resume = goalWon() && n > wave;
+          if (over && !resume) return "ゲームオーバーのあとは「最初から」で始めてください。";
+          waveGoal = settings.waveGoal = n;
+          saveSettings();
+          if (resume) over = false; // 勝利のあと：目標を延ばして続ける
+          msg("目標を " + n + " ウェーブにした。" + (resume ? "続けて戦おう！ 次は WAVE " + (wave + 1) + "。" : ""));
+          autoArm();
+          updateUI();
+          return null;
+        }
+        function renderGoal() {
+          $("goalBody").innerHTML =
+            '<p class="goal-note">防衛戦を何ウェーブまで戦うか選べます。21ウェーブ目からも敵はさらに増え、強くなります。<br>今 WAVE ' +
+            wave +
+            "。" +
+            (goalWon() ? "勝利しました。目標を延ばすと続けて戦えます。" : "今より先のウェーブを選べます。") +
+            '</p><div class="goal-list">' +
+            WAVE_GOALS.map(
+              (n) =>
+                '<button data-goal="' +
+                n +
+                '" aria-pressed="' +
+                (n === waveGoal) +
+                '"' +
+                (n !== waveGoal && (!goalOk(n) || (over && !goalWon())) ? " disabled" : "") +
+                ">" +
+                n +
+                "<small>ウェーブ</small></button>",
+            ).join("") +
+            "</div>";
+        }
+        function openGoal() {
+          if (training || battle) return (msg("修練場・攻城戦の最中は目標ウェーブを変えられません。"), toast($("msg").textContent));
+          renderGoal();
+          $("goalSheet").hidden = false;
+          $("goalClose").focus();
+        }
+        const closeGoal = () => ($("goalSheet").hidden = true);
+        $("wave").onclick = openGoal;
+        $("wave").onkeydown = (ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), openGoal());
+        $("goalClose").onclick = closeGoal;
+        $("goalSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("goalSheet")) return closeGoal();
+          const b = ev.target.closest("[data-goal]");
+          if (!b || b.disabled) return;
+          const n = +b.dataset.goal;
+          if (n === waveGoal) return closeGoal();
+          const err = setWaveGoal(n);
+          if (err) return (msg(err), renderGoal());
+          closeGoal();
+        });
         $("autoWave").onclick = () => {
           settings.auto = !settings.auto;
           saveSettings();
@@ -15568,7 +15679,8 @@ OFF</button>
         });
         document.addEventListener("keydown", (ev) => {
           if (ev.key !== "Escape") return;
-          if (!$("zukanSheet").hidden) closeZukan();
+          if (!$("goalSheet").hidden) closeGoal();
+          else if (!$("zukanSheet").hidden) closeZukan();
           else if (!$("mapSheet").hidden) closeMap();
           else if (!$("forgeSheet").hidden) closeForge();
           else if (!$("gearSheet").hidden) closeGear();
