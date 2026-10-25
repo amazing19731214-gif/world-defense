@@ -1575,7 +1575,29 @@
       }
       /* 全国 */
       .tools.menu-tools #reset {
-        grid-column: 2 / -1;
+        grid-column: auto;
+      }
+      /* まとめて移籍 */
+      .bulk-bar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #17312b;
+        border: 1px solid #ffd34d88;
+        border-radius: 10px;
+        padding: 6px 8px;
+        margin-bottom: 8px;
+      }
+      .bulk-bar p {
+        margin: 0 0 4px;
+      }
+      .soldier-row button.pick.on {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
+      /* データを全部消す */
+      .tools.menu-tools #wipeData {
+        font-size: 13px;
       }
       /* 目標ウェーブ */
       #wave {
@@ -2129,11 +2151,11 @@ OFF</button>
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="mapOpen">🗾 全国</button><button id="zukanOpen">📖 図鑑</button
-        ><button id="reset">↻ 最初から</button>
+        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v39（目標ウェーブ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v40（まとめて移籍・データ消去）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -6916,6 +6938,31 @@ OFF</button>
           }
           return null;
         }
+        // まとめて移籍：選んだ兵士を順に同じ部隊へ移す（"new" は1人目で新しい部隊を作り、残りもそこへ）。
+        // 移す先が満員になったら、入りきらなかった兵士はそのまま残す
+        function transferMany(ids, target) {
+          const list = ids.map(soldierById).filter((s) => s && s.alive);
+          if (!list.length) return { moved: 0, left: 0, err: "移籍する兵士を選んでください。", to: null };
+          let to = target,
+            moved = 0,
+            left = 0,
+            err = null;
+          for (const s of list) {
+            if (to !== "new" && s.squadId === to) continue; // もう移す先にいる
+            if (to !== "new" && squadById(to) && roster(squadById(to)).length >= SQUAD_RULES.squadSize) {
+              left++;
+              continue;
+            }
+            const e = transferSoldier(s.id, to);
+            if (e) {
+              err = e;
+              break;
+            }
+            moved++;
+            if (to === "new") to = s.squadId; // 2人目からは作った部隊へ
+          }
+          return { moved, left, err, to: squadById(to) || null };
+        }
         // 解散：待機中の部隊の兵士を除隊させる（戦死ではないので英霊名鑑には残らない。保存データからも外す）
         function disbandSquad(q) {
           if (battle) return "攻城戦の最中はできません。";
@@ -9456,6 +9503,35 @@ OFF</button>
           );
           updateUI();
         };
+        // ===== データを全部消す =====
+        // 「最初から」と違い、武将・兵士・装備・小判・全国・図鑑・修練場・設定など、このゲームの保存データ（worldDefense.*）をすべて消して読み込み直す。
+        // 元に戻せないので2回確かめる
+        const SAVE_PREFIX = "worldDefense.";
+        function wipeAllData() {
+          const keys = [];
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith(SAVE_PREFIX)) keys.push(k);
+            }
+            for (const k of keys) localStorage.removeItem(k);
+          } catch (err) {
+            return "保存データを消せませんでした（この環境では保存が使えません）。";
+          }
+          return null;
+        }
+        $("wipeData").onclick = () => {
+          if (
+            !confirm(
+              "保存データをすべて消しますか？\n武将・ガチャ券・装備・小判・育てた兵士・全国の領土・図鑑・修練場の記録・設定がすべて消え、最初の状態に戻ります。\n（「↻ 最初から」はウェーブだけをやり直し、データは消しません）",
+            )
+          )
+            return;
+          if (!confirm("本当に消しますか？ 消したデータは元に戻せません。")) return;
+          const err = wipeAllData();
+          if (err) return (msg(err), toast(err));
+          location.reload();
+        };
         // ===== 兵士部隊：雇用ボタン・部隊パネル・編成画面 =====
         // 有効な兵種だけボタンを作る（未実装の兵種は表示しない）
         for (const type of enabledUnitTypes()) {
@@ -9795,7 +9871,8 @@ OFF</button>
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
         let movingSoldierId = null,
-          recruitPick = null; // 新兵補充で兵種を選んでいる部隊
+          recruitPick = null, // 新兵補充で兵種を選んでいる部隊
+          bulkPick = null; // まとめて移籍で選んでいる兵士の ID（選ぶモードでないときは null）
         function squadStateText(q) {
           return q.state === "deployed"
             ? "配置中"
@@ -9808,22 +9885,59 @@ OFF</button>
         function renderSquadSheet() {
           const moving = soldierById(movingSoldierId);
           if (moving && !moving.alive) movingSoldierId = null;
-          $("squadHint").textContent = movingSoldierId
+          if (bulkPick && (playing || battle)) bulkPick = null;
+          if (bulkPick) bulkPick = bulkPick.filter((id) => soldierById(id) && soldierById(id).alive);
+          const bulk = !!bulkPick,
+            picked = bulk ? bulkPick.length : 0;
+          $("squadHint").textContent = bulk
+            ? "移籍する兵士を選んで（部隊ごとに「全員を選ぶ」も可）、下の移す先を押してください。選択中 " + picked + "人"
+            : movingSoldierId
             ? soldierName(moving) + " の編入先を選んでください。"
             : playing
               ? "ウェーブ中は配置・撤退のみ。補充と移籍はウェーブの合間にできます。"
               : "補充（兵種を選んで雇用）と移籍ができます。兵種を混ぜた混成部隊もOK。1部隊" + SQUAD_RULES.squadSize + "人まで。";
           let html = "";
-          if (movingSoldierId)
+          if (bulk) {
+            // 移す先：選んだ兵士を受け入れられる部隊（空きのある部隊）と新しい部隊
+            const dests = squads
+              .filter((q) => roster(q).length < SQUAD_RULES.squadSize && bulkPick.some((id) => soldierById(id).squadId !== q.id))
+              .map(
+                (q) =>
+                  '<button data-bulk-to="' +
+                  q.id +
+                  '"' +
+                  (picked ? "" : " disabled") +
+                  ">" +
+                  esc(squadName(q)) +
+                  "へ（空き" +
+                  (SQUAD_RULES.squadSize - roster(q).length) +
+                  "）</button>",
+              )
+              .join("");
+            html +=
+              '<div class="bulk-bar"><p><b>☑ まとめて移籍</b>：選択中 ' +
+              picked +
+              '人</p><div class="card-actions">' +
+              dests +
+              (squads.length < SQUAD_RULES.maxSquads
+                ? '<button data-bulk-to="new"' + (picked ? "" : " disabled") + ">新しい部隊へ</button>"
+                : "") +
+              "<button data-bulk-cancel>やめる</button></div></div>";
+          } else if (movingSoldierId)
             html +=
               '<div class="card-actions"><button data-move-to="new">新しい部隊へ</button><button data-cancel-move>取消</button></div>';
+          else if (!playing && !battle && soldiers.some((x) => x.alive))
+            html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button></div>';
           if (!squads.length)
             html += '<p class="muted">部隊がありません。兵種を選んで道をタップすると雇用できます。</p>';
           for (const q of squads) {
             const list = roster(q),
               c = SOLDIER_TYPES[q.type];
             let acts = "";
-            if (moving) {
+            if (bulk) {
+              const all = list.length && list.every((s) => bulkPick.includes(s.id));
+              if (list.length) acts += '<button data-bulk-all="' + q.id + '">' + (all ? "全員を外す" : "全員を選ぶ") + "</button>";
+            } else if (moving) {
               if (q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
             } else {
@@ -9868,13 +9982,25 @@ OFF</button>
                     "・生存" +
                     s.wavesSurvived +
                     "W</small></span>" +
-                    (!playing && !moving ? '<button data-move="' + s.id + '">移籍</button>' : "") +
+                    (bulk
+                      ? '<button class="pick' +
+                        (bulkPick.includes(s.id) ? " on" : "") +
+                        '" data-bulk-pick="' +
+                        s.id +
+                        '" aria-pressed="' +
+                        bulkPick.includes(s.id) +
+                        '">' +
+                        (bulkPick.includes(s.id) ? "☑ 選択中" : "☐ 選ぶ") +
+                        "</button>"
+                      : !playing && !moving
+                        ? '<button data-move="' + s.id + '">移籍</button>'
+                        : "") +
                     "</div>",
                 )
                 .join("") +
               (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
               // 新兵補充：兵種を選ぶ（ほかの操作と分けて並べる）
-              (!moving && !playing && recruitPick === q.id && list.length < SQUAD_RULES.squadSize
+              (!bulk && !moving && !playing && recruitPick === q.id && list.length < SQUAD_RULES.squadSize
                 ? '<div class="recruit-pick"><p>補充する兵種を選ぶ（1人ずつ・あと' +
                   (SQUAD_RULES.squadSize - list.length) +
                   "人）</p><div class=\"recruit-grid\">" +
@@ -9929,12 +10055,14 @@ OFF</button>
         function openSquadSheet() {
           movingSoldierId = null;
           recruitPick = null;
+          bulkPick = null;
           renderSquadSheet();
           $("squadSheet").hidden = false;
           $("squadClose").focus();
         }
         function closeSquadSheet() {
           movingSoldierId = null;
+          bulkPick = null;
           $("squadSheet").hidden = true;
         }
         $("organize").onclick = openSquadSheet;
@@ -9946,7 +10074,34 @@ OFF</button>
           if (!b || b.id === "squadClose") return;
           const d = b.dataset;
           let err = null;
-          if (d.move) movingSoldierId = +d.move;
+          if (d.bulkStart !== undefined) {
+            bulkPick = [];
+            movingSoldierId = null;
+            recruitPick = null;
+          } else if (d.bulkCancel !== undefined) bulkPick = null;
+          else if (d.bulkPick) {
+            const id = +d.bulkPick;
+            bulkPick = bulkPick.includes(id) ? bulkPick.filter((x) => x !== id) : bulkPick.concat(id);
+          } else if (d.bulkAll) {
+            const ids = roster(squadById(+d.bulkAll)).map((s) => s.id),
+              all = ids.every((id) => bulkPick.includes(id));
+            bulkPick = all ? bulkPick.filter((id) => !ids.includes(id)) : bulkPick.concat(ids.filter((id) => !bulkPick.includes(id)));
+          } else if (d.bulkTo) {
+            const r = transferMany(bulkPick, d.bulkTo === "new" ? "new" : +d.bulkTo);
+            err = r.err;
+            if (r.moved)
+              msg(
+                r.moved +
+                  "人を " +
+                  (r.to ? squadName(r.to) : "部隊") +
+                  " に移籍した。" +
+                  (r.left ? "（満員のため " + r.left + "人は元の部隊のまま）" : "") +
+                  (err ? " " + err : ""),
+              );
+            else if (!err && r.left) err = "移す先が満員です。";
+            if (r.moved) err = null;
+            bulkPick = null;
+          } else if (d.move) movingSoldierId = +d.move;
           else if (d.cancelMove !== undefined) movingSoldierId = null;
           else if (d.moveTo) {
             err = transferSoldier(movingSoldierId, d.moveTo === "new" ? "new" : +d.moveTo);
@@ -15809,6 +15964,7 @@ OFF</button>
             jobApi: { JOBS, JOB_RULES, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
               members,
+              transferMany,
               squadName,
               setHeroSoldier,
               heroSoldier,
