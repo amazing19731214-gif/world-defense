@@ -353,24 +353,59 @@ r = await ev(
 check("外れでも錬成の欠片を1個獲得", r.res.tier === "miss" && r.s1 === r.s0 + 1, JSON.stringify(r));
 r = await ev(page, () => {
   const F = WD_DEBUG.forgeApi,
-    S = F.save();
-  S.shards = 99;
-  const e1 = F.tradeShards("kongo");
-  S.shards = 250;
-  const e2 = F.tradeShards("goriki"); // 上級ではない
-  const e3 = F.tradeShards("kongo");
-  return { e1, e2, e3, shards: S.shards, n: S.books.kongo };
+    S = F.save(),
+    out = { need: F.FORGE.shardTrade };
+  S.shards = 19;
+  out.e19 = F.tradeShards("kongo");
+  out.s19 = S.shards;
+  out.b19 = S.books.kongo || 0;
+  S.shards = 20;
+  out.e20 = F.tradeShards("kongo");
+  out.s20 = S.shards;
+  S.shards = 21;
+  out.e21 = F.tradeShards("kongo");
+  out.s21 = S.shards;
+  S.shards = 40;
+  out.e40 = [F.tradeShards("kongo"), F.tradeShards("saihai"), F.tradeShards("kongo")];
+  out.s40 = S.shards;
+  S.shards = 50;
+  out.eNot = F.tradeShards("goriki"); // 上級ではない
+  out.sNot = S.shards;
+  S.shards = 45;
+  out.e45 = F.tradeShards("jinjutsu");
+  out.books = Object.assign({}, S.books);
+  out.shards = S.shards;
+  return out;
 });
-check("欠片が100個ないと交換できない", /足りません/.test(r.e1 || ""), JSON.stringify(r));
-check("交換できるのは上級（名品）のスキルの書だけ", /上級/.test(r.e2 || ""));
+check("交換に必要な欠片は20個（定数 FORGE.shardTrade）", r.need === 20, String(r.need));
 check(
-  "100個で上級スキルの書1冊と交換（欠片は交換したときだけ減る）",
-  r.e3 === null && r.shards === 150 && r.n === 1,
+  "欠片19個では交換できない（欠片・書は変わらない）",
+  /足りません（19\/20）/.test(r.e19 || "") && r.s19 === 19 && r.b19 === 0,
+  JSON.stringify(r),
+);
+check("欠片20個で交換できる（0個になる）", r.e20 === null && r.s20 === 0, JSON.stringify(r));
+check("欠片21個で交換すると1個残る", r.e21 === null && r.s21 === 1, JSON.stringify(r));
+check(
+  "欠片40個なら2回交換できる（3回目はできない）",
+  r.e40[0] === null && r.e40[1] === null && /足りません/.test(r.e40[2] || "") && r.s40 === 0,
+  JSON.stringify(r.e40),
+);
+check(
+  "交換できるのは上級（名品）のスキルの書だけ（欠片は減らない）",
+  /上級/.test(r.eNot || "") && r.sNot === 50,
+);
+check(
+  "交換した書を受け取る（金剛3冊・采配1冊・仁術1冊、欠片45 → 25）",
+  r.e45 === null && r.books.kongo === 3 && r.books.saihai === 1 && r.books.jinjutsu === 1 && r.shards === 25,
   JSON.stringify(r),
 );
 await reload(page);
 r = await ev(page, () => WD_DEBUG.forgeApi.save());
-check("欠片・書を保存", r.shards === 150 && r.books.kongo === 1, JSON.stringify({ s: r.shards, b: r.books }));
+check(
+  "交換後に再読み込みしても欠片の数と書が正しい",
+  r.shards === 25 && r.books.kongo === 3 && r.books.saihai === 1 && r.books.jinjutsu === 1,
+  JSON.stringify({ s: r.shards, b: r.books }),
+);
 check("エラーなし", errors.length === 0, errors.join(" / "));
 
 console.log("■ 装備");
@@ -1045,8 +1080,14 @@ check(
     /所持 3枚・使える 2枚/.test(text) &&
     !/織田信長/.test(text) &&
     /大当たり/.test(text) &&
-    /錬成の欠片 0\/100/.test(text),
+    /錬成の欠片 0\/20/.test(text),
   text.slice(0, 300),
+);
+check(
+  "交換ボタンに必要な欠片（20）を表示・足りないと押せない",
+  /交換（欠片20）/.test(await page.textContent('[data-forge-trade="kongo"]')) &&
+    (await page.isDisabled('[data-forge-trade="kongo"]')) &&
+    /欠片20個で/.test(text),
 );
 r = await ev(page, () =>
   [...document.querySelectorAll(".forge-rates tr")].map((tr) => tr.textContent).join("|"),
