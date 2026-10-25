@@ -3573,6 +3573,29 @@ OFF</button>
 };
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
         const SAVE_KEY = "worldDefense.warlords.v1";
+        // スキル習得と書の消費を1回の書き込みで確定する先行ログ。
+        // 片方の保存が失敗しても、このログから両方を復元する。
+        const BOOK_TX_KEY = "worldDefense.bookTransaction.v1";
+        function pendingBookTransaction() {
+          const raw = localStorage.getItem(BOOK_TX_KEY);
+          if (!raw) return null;
+          const tx = JSON.parse(raw);
+          if (typeof tx.heroes !== "string" || typeof tx.soldiers !== "string") throw new Error("invalid book transaction");
+          return tx;
+        }
+        function flushBookTransaction() {
+          const tx = pendingBookTransaction();
+          if (!tx) return;
+          localStorage.setItem(SAVE_KEY, tx.heroes);
+          localStorage.setItem("worldDefense.soldiers.v1", tx.soldiers);
+          localStorage.removeItem(BOOK_TX_KEY);
+        }
+        function readGameSave(key) {
+          const tx = pendingBookTransaction();
+          if (tx) return key === SAVE_KEY ? tx.heroes : tx.soldiers;
+          return localStorage.getItem(key);
+        }
+
 
         // ===== 兵士部隊：調整用設定 =====
         // 塔に配属する「武将」とは別のシステム。兵士は1人ずつ個別に管理し、HPが0になると永久に死亡する。
@@ -4237,7 +4260,8 @@ OFF</button>
               // ロック：保存されていなければ（以前の保存データ）、伝説・裏ボスの装備はロックして守る
               lock: typeof it.lock === "boolean" ? it.lock : GEAR[it.id].grade >= 4,
             });
-            if (items.length >= FORGE.maxItems) break;
+            // 初回限定報酬は通常の倉庫枠とは別に保持する（満杯でも消さない）。
+            if (items.filter((v) => !GEAR[v.id].boss).length > FORGE.maxItems && !GEAR[it.id].boss) items.pop();
           }
           const books = {};
           if (o.books && typeof o.books === "object")
@@ -4249,6 +4273,14 @@ OFF</button>
           const bossRewards = {};
           if (o.bossRewards && typeof o.bossRewards === "object")
             for (const id of ["hiei", "yomi", "fuji"]) if (o.bossRewards[id] === true) bossRewards[id] = true;
+          // 旧版で「受領済み」だけ残り、上限処理で消えた限定報酬も復元する。
+          for (const boss of Object.keys(bossRewards)) {
+            const reward = Object.keys(GEAR).find((id) => GEAR[id].boss === boss);
+            if (reward && !items.some((it) => it.id === reward)) {
+              const uid = Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0) + 1;
+              items.push({ uid, id: reward, owner: null, lock: true });
+            }
+          }
           return {
             bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
@@ -4274,7 +4306,7 @@ OFF</button>
           });
           let raw = null;
           try {
-            raw = localStorage.getItem(SAVE_KEY);
+            raw = readGameSave(SAVE_KEY);
           } catch (err) {
             return fresh();
           }
@@ -4384,6 +4416,7 @@ OFF</button>
         let saveOk = true;
         function persistHeroes() {
           try {
+            flushBookTransaction();
             localStorage.setItem(
               SAVE_KEY,
               JSON.stringify({
@@ -4585,7 +4618,7 @@ OFF</button>
           if (!h) return null;
           const out = { atk: starMul(h.id), def: 1, range: 1, speed: 1 };
           if (h.id === "nobunaga" && !SOLDIER_TYPES[q.type].heal) out.speed = 1 / (favorite(h, q) ? 0.82 : 0.92);
-          if (h.id === "shingen") out.def *= 1 + members(q).length * (favorite(h, q) ? 0.06 : 0.04);
+          if (h.id === "shingen") out.def *= 1 + Math.min(5, members(q).length) * (favorite(h, q) ? 0.06 : 0.04);
           if (h.id === "keiji" && !fieldSquads().some((o) => o !== q && dist(o, q) < 120)) {
             out.atk *= favorite(h, q) ? 1.25 : 1.15;
             out.def *= favorite(h, q) ? 1.3 : 1.2;
@@ -5689,7 +5722,7 @@ OFF</button>
             el = s.level >= SQUAD_RULES.eliteLevel ? SQUAD_RULES.elite : { atk: 0, def: 0 };
           // 部隊に配属された武将の効果（武将は1か所だけなので重複しない）
           const hm = (!ignoreHero && squadHeroMods(squadById(s.squadId))) || { atk: 1, def: 1, range: 1, speed: 1 };
-          const support = ignoreHero ? { heal: 1, range: 1, interval: 1 } : medicSupport(squadById(s.squadId));
+          const support = ignoreHero || s.type !== "medic" ? { heal: 1, range: 1, interval: 1 } : medicSupport(squadById(s.squadId));
           // 職業の補正（上級職）と熟練度（今の職業のとき、熟練度1ごとに攻撃・防御 +1%）
           const jm = JOBS[jobOf(s)].mods,
             pf = 1 + JOB_RULES.profBonus * profLv(s);
@@ -6200,15 +6233,34 @@ OFF</button>
           const err = useBookError(s, skillId);
           if (err) return err;
           const k = SOLDIER_SKILLS[skillId];
-          // 先に兵士を保存してから書を減らす（途中で止まっても、習得したのに書だけ消えることはない）
-          learnedOf(s).push(skillId);
-          if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(skillId);
-          logHistory(s, "スキルの書で「" + k.name + "」を習得");
-          patchSavedSoldier(s, pickSaved(s));
-          const F = forgeSave();
-          F.books[skillId]--;
-          if (F.books[skillId] <= 0) delete F.books[skillId];
-          persistHeroes();
+          const F = forgeSave(), before = pickSaved(s), oldBooks = { ...F.books };
+          const saved = savedSoldier(s.id), beforeSaved = { ...saved };
+          try {
+            flushBookTransaction(); // 前の処理を確定できない間は次の書を使わない
+            learnedOf(s).push(skillId);
+            if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(skillId);
+            logHistory(s, "スキルの書で「" + k.name + "」を習得");
+            Object.assign(saved, pickSaved(s));
+            F.books[skillId]--;
+            if (F.books[skillId] <= 0) delete F.books[skillId];
+            const heroes = JSON.stringify({
+              version: 1, owned: heroSave.owned, tickets: heroSave.tickets,
+              history: heroSave.history, lastHero: heroSave.lastHero,
+              injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
+              forge: F,
+            });
+            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
+              heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
+            }));
+          } catch (err) {
+            Object.assign(s, before);
+            Object.assign(saved, beforeSaved);
+            F.books = oldBooks;
+            return "保存できなかったため、書は使いませんでした。空き容量を確認してください。";
+          }
+          // ここからはログが正本。書き込み途中で停止しても次回の読み込みで復元する。
+          try { flushBookTransaction(); } catch (err) { /* ログを残して再試行 */ }
+          zukanSync();
           return null;
         }
         // ----- ロック・売却 -----
@@ -7141,7 +7193,7 @@ OFF</button>
           const fresh = { seq: 0, squadSeq: 0, squads: [], soldiers: [], fallen: [], heroId: null };
           let raw = null;
           try {
-            raw = localStorage.getItem(SOLDIER_SAVE_KEY);
+            raw = readGameSave(SOLDIER_SAVE_KEY);
           } catch (err) {
             return fresh;
           }
@@ -7227,6 +7279,7 @@ OFF</button>
         let soldierSaveOk = true;
         function writeSoldierSave() {
           try {
+            flushBookTransaction();
             localStorage.setItem(
               SOLDIER_SAVE_KEY,
               JSON.stringify(Object.assign({ version: 1 }, soldierSave)),
