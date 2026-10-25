@@ -344,12 +344,33 @@
       /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
       .tools.play-tools {
         display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
+        grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
         margin-top: 0;
+      }
+      .tools.play-tools #start.counting {
+        font-size: clamp(12px, 3.6vw, 15px);
+        white-space: pre-line;
+        line-height: 1.2;
+      }
+      .tools.play-tools button {
+        min-width: 0; /* 4つ並べても狭い画面からはみ出さない */
+      }
+      .tools.play-tools #autoWave {
+        font-size: 14px;
+        font-weight: 800;
+        padding: 0 2px;
+        white-space: pre-line;
+        line-height: 1.1;
+      }
+      .tools.play-tools #autoWave[aria-pressed="true"] {
+        background: linear-gradient(#3f8f5a, #2a6a40);
+        border-color: #a8f0b8;
+        color: #fff;
       }
       .tools.play-tools #start {
         min-height: 56px;
-        font-size: 18px;
+        font-size: clamp(13px, 4.2vw, 18px); /* AUTO ボタンを並べても1行に収める */
+        white-space: nowrap;
         font-weight: 800;
         color: #fff8e8;
         background: linear-gradient(#d9542f, #a8331b);
@@ -1754,6 +1775,69 @@
         font-weight: bold;
         font-size: 14px;
       }
+      /* 装備倉庫の並び替え・絞り込み・売却 */
+      .gear-tools {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .gear-tools label {
+        display: flex;
+        flex-direction: column;
+        font-size: 12px;
+        gap: 2px;
+      }
+      .gear-tools select {
+        min-height: 44px;
+        font-size: 15px;
+        border-radius: 8px;
+        background: #22332c;
+        color: #f2f0e6;
+        border: 1px solid #719b8f;
+        padding: 0 6px;
+        width: 100%;
+      }
+      .sell-tools {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .sell-tools button {
+        min-height: 44px;
+        font-size: 13px;
+      }
+      .sell-tools button:first-child {
+        grid-column: 1 / -1;
+      }
+      .sell-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0;
+        padding: 8px;
+        border-radius: 10px;
+        background: #1a2a24;
+        border: 1px solid #ffd34d88;
+      }
+      .sell-bar button {
+        min-height: 44px;
+        min-width: 110px;
+      }
+      .sell-confirm ul {
+        max-height: 40vh;
+        overflow-y: auto;
+        padding-left: 18px;
+        margin: 6px 0;
+      }
+      .gear-card [data-sell-toggle][aria-pressed="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
     </style>
   </head>
   <body>
@@ -1789,7 +1873,9 @@
       </section>
       <div class="tools play-tools" aria-label="ウェーブ">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button>
+        ><button id="pause">⏸ 停止</button
+        ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める">AUTO
+OFF</button>
       </div>
       <section id="towerPanel" class="panel dock" hidden aria-label="選択中の塔">
         <div class="panel-head">
@@ -1871,7 +1957,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v34（裏ボスの絵・秘境討伐・全国制覇）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v35（AUTO・装備の整理・裏ボス）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -3834,6 +3920,7 @@
             ? "修練 " + wave + (training.D.endless ? "" : "/" + TRAINING.waves)
             : "WAVE " + wave + "/20";
           $("start").disabled = playing || over || !!battle;
+          renderAuto();
           $("upgrade").disabled =
             !selectedTower || gold < upgradePrice(selectedTower) || selectedTower.level >= 5;
           $("sell").disabled = !selectedTower || !!training;
@@ -3886,7 +3973,13 @@
           for (const it of Array.isArray(o.items) ? o.items : []) {
             if (!it || !GEAR[it.id] || !Number.isInteger(it.uid) || it.uid < 1 || uids.has(it.uid)) continue;
             uids.add(it.uid);
-            items.push({ uid: it.uid, id: it.id, owner: Number.isInteger(it.owner) ? it.owner : null });
+            items.push({
+              uid: it.uid,
+              id: it.id,
+              owner: Number.isInteger(it.owner) ? it.owner : null,
+              // ロック：保存されていなければ（以前の保存データ）、伝説・裏ボスの装備はロックして守る
+              lock: typeof it.lock === "boolean" ? it.lock : GEAR[it.id].grade >= 4,
+            });
             if (items.length >= FORGE.maxItems) break;
           }
           const books = {};
@@ -5622,7 +5715,7 @@
           if (res.book) F.books[res.book] = Math.min(FORGE.maxBooks, (F.books[res.book] || 0) + 1);
           if (res.gear) {
             uid = ++F.seq;
-            F.items.push({ uid, id: res.gear, owner: null });
+            F.items.push({ uid, id: res.gear, owner: null, lock: GEAR[res.gear].grade >= 4 }); // 伝説は最初からロック
           }
           F.history.unshift({ w: wid, kind, tier: res.tier, got: res.book || res.gear || "shard" });
           F.history.length = Math.min(F.history.length, FORGE.historySize);
@@ -5763,6 +5856,71 @@
           if (F.books[skillId] <= 0) delete F.books[skillId];
           persistHeroes();
           return null;
+        }
+        // ----- ロック・売却 -----
+        // 売値（品質ごと。伝説・裏ボスの装備は売れない）。売ったゴールドは今のゲームの資金に入る（資金は今までどおり保存しない）
+        const SELL_PRICE = { 1: 50, 2: 150, 3: 500 };
+        const sellPrice = (it) => SELL_PRICE[GEAR[it.id].grade] || 0;
+        function sellError(it) {
+          if (!it) return "その装備はありません（もう売ったかもしれません）。";
+          const g = GEAR[it.id];
+          if (g.grade >= 4 || g.boss) return "伝説の装備は売れません（ロックを外しても売れない）。";
+          if (it.owner != null) return "装備中の品は売れません（先に外してください）。";
+          if (it.lock) return "ロック中の品は売れません（🔓 で外せます）。";
+          return null;
+        }
+        function toggleLock(uid) {
+          const it = itemByUid(uid);
+          if (!it) return "その装備はありません。";
+          it.lock = !it.lock; // 効果・持ち主は変わらない
+          persistHeroes();
+          return null;
+        }
+        // 売る：先に倉庫から消して保存し、その後で資金に足す。同じ装備は二度と見つからないので、二重には売れない
+        function sellItems(uids) {
+          const busy = gearBusy();
+          if (busy) return { error: busy.replace("装備を変更", "装備を売ることは") };
+          const ids = [...new Set(uids)],
+            list = ids.map(itemByUid);
+          if (!list.length) return { error: "売る装備を選んでください。" };
+          for (const it of list) {
+            const err = sellError(it);
+            if (err) return { error: (it ? GEAR[it.id].name + "：" : "") + err };
+          }
+          const total = list.reduce((n, it) => n + sellPrice(it), 0),
+            F = forgeSave();
+          F.items = F.items.filter((it) => !ids.includes(it.uid));
+          F.sold = (F.sold || 0) + list.length;
+          gearMap = null;
+          persistHeroes();
+          gold += total;
+          return { n: list.length, total };
+        }
+        // 並び替え・絞り込み（攻撃・防御は装備の「攻撃 +％」「防御 +％」の値で比べる。特殊効果は数えない。同じなら手に入れた順）
+        const GEAR_SORTS = {
+          "grade-desc": ["レアリティ（高い順）", (a, b) => GEAR[b.id].grade - GEAR[a.id].grade],
+          "grade-asc": ["レアリティ（低い順）", (a, b) => GEAR[a.id].grade - GEAR[b.id].grade],
+          atk: ["攻撃の高い順", (a, b) => (GEAR[b.id].fx.atk || 0) - (GEAR[a.id].fx.atk || 0)],
+          def: ["防御の高い順", (a, b) => (GEAR[b.id].fx.def || 0) - (GEAR[a.id].fx.def || 0)],
+          new: ["新しく手に入れた順", (a, b) => b.uid - a.uid],
+          old: ["古く手に入れた順", (a, b) => a.uid - b.uid],
+          name: ["名前順", (a, b) => GEAR[a.id].name.localeCompare(GEAR[b.id].name, "ja")],
+        };
+        const GEAR_TYPES = { all: "すべての種類", weapon: "武器", armor: "鎧", accessory: "装飾品" };
+        const GEAR_STATES = { all: "すべての状態", free: "未装備", worn: "装備中", locked: "ロック中" };
+        function gearView(o) {
+          const sorter = (GEAR_SORTS[o.sort] || GEAR_SORTS["grade-desc"])[1];
+          return forgeSave()
+            .items.filter(
+              (it) =>
+                (o.type === "all" || GEAR[it.id].slot === o.type) &&
+                (o.state === "all" ||
+                  (o.state === "free" && it.owner == null) ||
+                  (o.state === "worn" && it.owner != null) ||
+                  (o.state === "locked" && it.lock)) &&
+                (!o.grade || GEAR[it.id].grade === o.grade),
+            )
+            .sort((a, b) => sorter(a, b) || a.uid - b.uid);
         }
         // ----- 装備の戦闘効果（防衛戦・攻城戦・修練場で共通） -----
         const procMul = (s) => 1 + skillSum(s, "proc");
@@ -6847,6 +7005,7 @@
         // 戦闘・演出・武将の時間は必ずこの関数で進める（速度切替を一か所で反映）
         const gameStep = (dt) => Math.min(dt, 0.05) * speed;
         function tick(dt) {
+          autoTick(dt);
           if (battle) {
             if (!paused && !document.hidden) tickBattle(gameStep(dt)); // 攻城戦中は防衛戦を進めない
             return;
@@ -6958,6 +7117,7 @@
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (wave === 20) over = true;
+            autoArm(); // AUTO ON なら次のウェーブまで数える（ウェーブ20では数えない）
             const held = counterWaveCleared();
             if (held) {
               $("msg").textContent +=
@@ -8679,7 +8839,79 @@
               updateUI();
             }),
         );
+        // ===== ウェーブの自動開始（通常の防衛戦だけ） =====
+        // AUTO ON：ウェーブをクリアすると5秒数えて、いつもの「ウェーブ開始」を押したのと同じ処理で次のウェーブを始める。
+        // 一時停止中・ほかの画面（シート）を開いている間は数えない。ウェーブ20・ゲームオーバー・攻城戦・修練場・討伐戦では始めない
+        const SETTINGS_KEY = "worldDefense.settings.v1";
+        const AUTO_DELAY = 5;
+        function loadSettings() {
+          let d = null;
+          try {
+            d = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+          } catch (err) {
+            d = null;
+          }
+          const g = d && typeof d.gear === "object" && d.gear ? d.gear : {};
+          return {
+            auto: !!(d && d.auto === true),
+            gear: {
+              sort: typeof g.sort === "string" ? g.sort : "grade-desc",
+              type: typeof g.type === "string" ? g.type : "all",
+              state: typeof g.state === "string" ? g.state : "all",
+              grade: Number.isInteger(g.grade) ? g.grade : 0,
+            },
+          };
+        }
+        const settings = loadSettings();
+        function saveSettings() {
+          try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign({ version: 1 }, settings)));
+          } catch (err) {
+            // 保存できない環境でも遊べる
+          }
+        }
+        let autoLeft = null; // 次のウェーブまでの残り秒数（数えていないときは null）
+        const autoCanRun = () => settings.auto && !playing && !over && !battle && !training && wave >= 1 && wave < 20;
+        function autoArm() {
+          autoLeft = autoCanRun() ? AUTO_DELAY : null;
+          renderAuto();
+        }
+        function autoTick(dt) {
+          if (autoLeft == null) return;
+          if (!autoCanRun()) {
+            autoLeft = null;
+            return renderAuto();
+          }
+          if (paused || document.hidden || document.querySelector(".sheet-back:not([hidden])")) return;
+          const before = Math.ceil(autoLeft);
+          autoLeft -= Math.min(dt, 0.1);
+          if (autoLeft <= 0) {
+            autoLeft = null;
+            $("start").onclick(); // いつものウェーブ開始（ここでは別の開始処理を作らない）
+          } else if (Math.ceil(autoLeft) !== before) renderAuto();
+        }
+        function renderAuto() {
+          const b = $("autoWave"),
+            off = !!(battle || training);
+          b.textContent = settings.auto ? "AUTO\nON" : "AUTO\nOFF";
+          b.setAttribute("aria-pressed", String(settings.auto));
+          b.disabled = off; // 攻城戦・修練場・討伐戦では使わない
+          const st = $("start"),
+            counting = autoLeft != null;
+          st.classList.toggle("counting", counting);
+          if (counting) st.textContent = "▶ 次のWAVEまで\n" + Math.ceil(autoLeft) + "秒";
+          else if (st.textContent !== "▶ ウェーブ開始") st.textContent = "▶ ウェーブ開始";
+        }
+        $("autoWave").onclick = () => {
+          settings.auto = !settings.auto;
+          saveSettings();
+          if (settings.auto) autoArm(); // ウェーブの合間にONにしたら、そこから数える
+          else autoLeft = null;
+          msg(settings.auto ? "AUTO ON：ウェーブが終わると5秒後に次のウェーブを始めます。" : "AUTO OFF：ウェーブは「ウェーブ開始」で始めます。");
+          renderAuto();
+        };
         $("start").onclick = () => {
+          autoLeft = null; // 数えている途中に押しても二重には始めない
           if (playing || over || battle) return;
           if (training && training.done) return;
           wave++;
@@ -8691,6 +8923,7 @@
           if (training) trainingWaveStart();
           squadsWaveStart();
           if (!training) msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
+          renderAuto();
           updateUI();
         };
         $("pause").onclick = () => {
@@ -9806,7 +10039,10 @@
           gearTab = "gear",
           gearPickUid = null, // 倉庫から装備させる兵士を選んでいる装備
           gearPickBook = null, // 倉庫から使う兵士を選んでいる書
-          gearNote = "";
+          gearNote = "",
+          sellMode = false, // 売却モード（複数を選んで売る）
+          sellPick = new Set(), // 選んだ装備
+          sellConfirm = null; // 確認中の装備の一覧（uid）
         const gearSoldiers = () =>
           soldiers.filter((s) => s.alive && savedSoldier(s.id)).sort((a, b) => isHeroSoldier(b) - isHeroSoldier(a) || b.level - a.level);
         function gearItemCard(it, actions) {
@@ -9825,6 +10061,7 @@
             gearJobs(it.id) +
             "<br>装備者：" +
             (o ? esc(soldierName(o)) + "（" + jobName(o) + "）" : "なし（倉庫）") +
+            (it.lock ? "・🔒 ロック中" : "") +
             "</small></p>" +
             actions +
             "</div>"
@@ -9958,24 +10195,108 @@
             Object.values(F.books).reduce((a, b) => a + b, 0) +
             "冊</small></button></div>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
-          if (gearTab === "gear") {
-            const items = F.items
-              .slice()
-              .sort((a, b) => GEAR[b.id].grade - GEAR[a.id].grade || Object.keys(GEAR).indexOf(a.id) - Object.keys(GEAR).indexOf(b.id));
+          if (gearTab === "gear" && sellConfirm) {
+            // 売却の確認：数・一覧・合計・元に戻せないこと
+            const list = sellConfirm.map(itemByUid).filter(Boolean),
+              total = list.reduce((n, it) => n + sellPrice(it), 0);
+            html +=
+              '<div class="forge-confirm sell-confirm"><p><b>' +
+              list.length +
+              "個の装備を売却します</b>（合計 <b>" +
+              total +
+              "G</b>）</p><ul>" +
+              list.map((it) => "<li>" + gearName(it.id) + " … " + sellPrice(it) + "G</li>").join("") +
+              '</ul><p class="injured">売却した装備は元に戻せません。ゴールドは今のゲームの資金に入ります。</p>' +
+              '<div class="card-actions"><button data-sell-go>🪙 売却する</button><button data-sell-cancel>キャンセル</button></div></div>';
+          } else if (gearTab === "gear") {
+            const o = settings.gear,
+              items = gearView(o),
+              opt = (map, cur) =>
+                Object.entries(map)
+                  .map(([k, v]) => '<option value="' + k + '"' + (String(cur) === k ? " selected" : "") + ">" + (Array.isArray(v) ? v[0] : v) + "</option>")
+                  .join("");
+            const grades = { 0: "すべての品質" };
+            for (let g = 1; g <= 4; g++) grades[g] = GRADES[g].name;
+            html +=
+              '<div class="gear-tools">' +
+              '<label>並び <select data-gear-opt="sort">' +
+              opt(GEAR_SORTS, o.sort) +
+              "</select></label>" +
+              '<label>種類 <select data-gear-opt="type">' +
+              opt(GEAR_TYPES, o.type) +
+              "</select></label>" +
+              '<label>状態 <select data-gear-opt="state">' +
+              opt(GEAR_STATES, o.state) +
+              "</select></label>" +
+              '<label>品質 <select data-gear-opt="grade">' +
+              opt(grades, o.grade) +
+              "</select></label></div>" +
+              '<div class="card-actions"><button data-sell-mode aria-pressed="' +
+              sellMode +
+              '">' +
+              (sellMode ? "✕ 売却モードを終える" : "🪙 売却モード（まとめて売る）") +
+              '</button></div><p class="muted"><small>表示 ' +
+              items.length +
+              " / 全 " +
+              F.items.length +
+              "個" +
+              (sellMode ? "・売値：並 " + SELL_PRICE[1] + "G・良 " + SELL_PRICE[2] + "G・名品 " + SELL_PRICE[3] + "G（伝説は売れない）" : "") +
+              "</small></p>";
+            if (sellMode) {
+              const picked = [...sellPick].map(itemByUid).filter(Boolean),
+                total = picked.reduce((n, it) => n + sellPrice(it), 0);
+              html +=
+                '<div class="sell-tools"><button data-sell-all>表示中の売れる装備をすべて選ぶ</button><button data-sell-none>選択を外す</button>' +
+                [1, 2, 3].map((g) => '<button data-sell-grade="' + g + '">' + GRADES[g].name + "をすべて選ぶ</button>").join("") +
+                '</div><div class="sell-bar"><span>選択 <b>' +
+                picked.length +
+                "</b>個・合計 <b>" +
+                total +
+                'G</b></span><button data-sell-ask' +
+                (picked.length && !busy ? "" : " disabled") +
+                ">売却する…</button></div>";
+            }
             html += items.length
               ? items
-                  .map((it) =>
-                    gearItemCard(
-                      it,
-                      gearPickUid === it.uid
-                        ? soldierPicker((s) => !equipError(s, it.uid), "gear-to", it.uid)
-                        : it.owner != null
-                          ? '<button data-gear-off="' + it.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>"
-                          : '<button data-gear-pick="' + it.uid + '"' + (busy ? " disabled" : "") + ">装備させる…</button>",
-                    ),
-                  )
+                  .map((it) => {
+                    const why = sellError(it);
+                    let act;
+                    if (sellMode)
+                      act = why
+                        ? '<button disabled>売れない：' + esc(why.replace(/（.*）/, "")) + "</button>"
+                        : '<button data-sell-toggle="' +
+                          it.uid +
+                          '" aria-pressed="' +
+                          sellPick.has(it.uid) +
+                          '">' +
+                          (sellPick.has(it.uid) ? "☑ 選択中" : "☐ 選ぶ") +
+                          "（" +
+                          GEAR[it.id].name +
+                          "・" +
+                          sellPrice(it) +
+                          "G）</button>";
+                    else
+                      act =
+                        (gearPickUid === it.uid
+                          ? soldierPicker((s) => !equipError(s, it.uid), "gear-to", it.uid)
+                          : it.owner != null
+                            ? '<button data-gear-off="' + it.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>"
+                            : '<button data-gear-pick="' + it.uid + '"' + (busy ? " disabled" : "") + ">装備させる…</button>") +
+                        '<div class="card-actions"><button data-gear-lock="' +
+                        it.uid +
+                        '" aria-pressed="' +
+                        !!it.lock +
+                        '">' +
+                        (it.lock ? "🔒 ロック中（外す）" : "🔓 ロックする") +
+                        "</button>" +
+                        (why ? "" : '<button data-sell-one="' + it.uid + '"' + (busy ? " disabled" : "") + ">🪙 売却 " + sellPrice(it) + "G</button>") +
+                        "</div>";
+                    return gearItemCard(it, act);
+                  })
                   .join("")
-              : '<p class="muted">装備がありません。🔥 秘伝錬成の「装備錬成」で手に入ります。</p>';
+              : F.items.length
+                ? '<p class="muted">条件に合う装備がありません。絞り込みを変えてください。</p>'
+                : '<p class="muted">装備がありません。🔥 秘伝錬成の「装備錬成」で手に入ります。</p>';
           } else {
             const books = Object.keys(F.books);
             html += books.length
@@ -10011,6 +10332,9 @@
         function openGear(id = null) {
           gearSoldierId = id;
           gearPickUid = gearPickBook = null;
+          sellMode = false;
+          sellPick.clear();
+          sellConfirm = null;
           gearNote = "";
           renderGear();
           $("gearSheet").hidden = false;
@@ -10032,8 +10356,37 @@
             cur = gearSoldierId != null ? soldierById(gearSoldierId) : null;
           let err = null;
           gearNote = "";
-          if (d.gearTab) gearTab = d.gearTab;
-          else if (d.gearPick) gearPickUid = +d.gearPick;
+          if (d.gearTab) {
+            gearTab = d.gearTab;
+            sellConfirm = null;
+          } else if (d.gearLock) {
+            err = toggleLock(+d.gearLock);
+            if (!err) gearNote = itemByUid(+d.gearLock).lock ? "🔒 ロックしました（売却できません）。" : "🔓 ロックを外しました。";
+          } else if (d.sellMode !== undefined) {
+            sellMode = !sellMode;
+            sellPick.clear();
+            sellConfirm = null;
+          } else if (d.sellToggle) {
+            const u = +d.sellToggle;
+            if (sellPick.has(u)) sellPick.delete(u);
+            else sellPick.add(u);
+          } else if (d.sellAll !== undefined || d.sellGrade) {
+            for (const it of gearView(settings.gear))
+              if (!sellError(it) && (!d.sellGrade || GEAR[it.id].grade === +d.sellGrade)) sellPick.add(it.uid);
+          } else if (d.sellNone !== undefined) sellPick.clear();
+          else if (d.sellAsk !== undefined) sellConfirm = [...sellPick];
+          else if (d.sellOne) sellConfirm = [+d.sellOne];
+          else if (d.sellCancel !== undefined) sellConfirm = null;
+          else if (d.sellGo !== undefined) {
+            const r = sellItems(sellConfirm || []);
+            sellConfirm = null;
+            if (r.error) err = r.error;
+            else {
+              sellPick.clear();
+              gearNote = "🪙 " + r.n + "個の装備を売却して " + r.total + "G を得ました。";
+              msg(gearNote);
+            }
+          } else if (d.gearPick) gearPickUid = +d.gearPick;
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = null;
           else if (d.gearOff) err = unequipItem(+d.gearOff) || ((gearNote = "装備を外して倉庫に戻しました。"), null);
@@ -10057,6 +10410,15 @@
           if (err) gearNote = "⚠ " + err;
           renderGear();
           updateUI();
+        });
+        // 並び替え・絞り込みの切り替え（設定として保存）
+        $("gearSheet").addEventListener("change", (ev) => {
+          const sel = ev.target.closest("[data-gear-opt]");
+          if (!sel) return;
+          const k = sel.dataset.gearOpt;
+          settings.gear[k] = k === "grade" ? +sel.value : sel.value;
+          saveSettings();
+          renderGear();
         });
         // ===== 転職の画面 =====
         let jobSoldierId = null,
@@ -12268,7 +12630,7 @@
           if (!F.bossRewards[id]) {
             F.bossRewards[id] = true;
             const uid = ++F.seq;
-            F.items.push({ uid, id: D.reward, owner: null });
+            F.items.push({ uid, id: D.reward, owner: null, lock: true }); // 裏ボスの専用装備は最初からロック
             gearMap = null;
             B.firstReward = D.reward;
           }
@@ -14620,7 +14982,14 @@
               healTakenMul,
               phoenixSave,
               gearOnKill,
-              refreshGear: () => (gearMap = null), // 試験用：装備の一覧を作り直す（持ち主の確認はしない）
+              refreshGear: () => (gearMap = null),
+              toggleLock,
+              sellItems,
+              sellError,
+              sellPrice,
+              SELL_PRICE,
+              gearView,
+              settings: () => settings, // 試験用：装備の一覧を作り直す（持ち主の確認はしない）
               save: () => heroSave.forge,
               owned: () => heroSave.owned,
               stars,

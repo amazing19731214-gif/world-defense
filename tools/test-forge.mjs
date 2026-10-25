@@ -427,7 +427,7 @@ const give = (page, ids) =>
       const S = WD_DEBUG.forgeApi.save();
       const uids = ids.map((id) => {
         const uid = ++S.seq;
-        S.items.push({ uid, id, owner: null });
+        S.items.push({ uid, id, owner: null, lock: false }); // 試験では売却・ロックは関係ないのでロックなし
         return uid;
       });
       WD_DEBUG.forgeApi.persist();
