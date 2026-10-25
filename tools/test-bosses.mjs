@@ -306,7 +306,7 @@ const s0 = (await stored(page, WKEY)).forge.shards;
 r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi;
   a.bossOf().hp = 1;
-  WD_DEBUG.step(2);
+  for (let i = 0; i < 400 && a.battle(); i++) WD_DEBUG.step(0.05); // 倒れてから消える演出（1.2秒）のあとで結果
   return {
     result: !a.battle(),
     title: document.getElementById("battleTitle").textContent,
@@ -485,7 +485,7 @@ r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi;
   a.bossOf().hp = 1;
   a.bossOf().regenLeft = 0;
-  WD_DEBUG.step(2);
+  for (let i = 0; i < 400 && a.battle(); i++) WD_DEBUG.step(0.05); // 倒れてから消える演出（1.2秒）のあとで結果
   return document.getElementById("battleBody").textContent;
 });
 check("八岐を討伐：八岐の妖刀", /初討伐/.test(r) && /八岐の妖刀/.test(r), r.slice(0, 120));
@@ -612,7 +612,7 @@ check(
 r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi;
   a.bossOf().hp = 1;
-  WD_DEBUG.step(2);
+  for (let i = 0; i < 400 && a.battle(); i++) WD_DEBUG.step(0.05); // 倒れてから消える演出（1.2秒）のあとで結果
   return document.getElementById("battleBody").textContent;
 });
 check("天魔機神を討伐：天魔機神の神鎧", /初討伐/.test(r) && /天魔機神の神鎧/.test(r), r.slice(0, 120));
