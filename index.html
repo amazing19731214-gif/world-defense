@@ -1569,6 +1569,119 @@
       .tools.menu-tools #reset {
         grid-column: 2 / -1;
       }
+      /* 戦国図鑑 */
+      #zukanSheet {
+        z-index: 12;
+      }
+      .zk-total,
+      .zk-progress {
+        margin: 6px 0;
+      }
+      .zk-bar {
+        display: block;
+        height: 8px;
+        border-radius: 4px;
+        background: #0e1a16;
+        margin-top: 4px;
+        overflow: hidden;
+      }
+      .zk-bar i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #5cc46b, #ffd34d);
+      }
+      .zk-tabs {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .zk-tabs button {
+        min-height: 52px;
+        font-size: 13px;
+        padding: 2px;
+      }
+      .zk-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .zk-group {
+        grid-column: 1 / -1;
+        margin: 8px 0 0;
+        font-size: 15px;
+      }
+      .zk-tile {
+        min-height: 92px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 2px;
+        font-size: 13px;
+        overflow: hidden;
+      }
+      .zk-tile b {
+        font-size: 12px;
+        line-height: 1.2;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .zk-tile small {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      .zk-tile.lock {
+        opacity: 0.55;
+      }
+      .zk-tile.sel {
+        outline: 2px solid #ffd34d;
+      }
+      .zk-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #0e1a16;
+        border: 2px solid #4a6a5e;
+        font-size: 20px;
+        font-weight: bold;
+        color: #9aa39f;
+      }
+      .zk-icon.g2 {
+        border-color: #5fa8e8;
+      }
+      .zk-icon.g3 {
+        border-color: #b07ad8;
+      }
+      .zk-icon.g4 {
+        border-color: #e8b64a;
+      }
+      .zk-detail {
+        border: 1px solid #ffd34d88;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin: 8px 0;
+        background: #20312a;
+      }
+      .zk-detail p {
+        margin: 4px 0;
+        line-height: 1.5;
+      }
+      .zk-detail button {
+        width: 100%;
+        min-height: 44px;
+      }
+      .zk-no {
+        font-size: 12px;
+        opacity: 0.8;
+      }
+      .zk-head {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
       .map-progress {
         margin: 6px 0;
       }
@@ -1963,11 +2076,12 @@ OFF</button>
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
-        ><button id="mapOpen">🗾 全国</button><button id="reset">↻ 最初から</button>
+        ><button id="mapOpen">🗾 全国</button><button id="zukanOpen">📖 図鑑</button
+        ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v36（小判・AUTO・装備の整理）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v37（戦国図鑑）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2052,6 +2166,15 @@ OFF</button>
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="zukanSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="zukanTitle">
+        <div class="panel-head hg-head">
+          <strong id="zukanTitle">📖 戦国図鑑</strong
+          ><button id="zukanClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="zukanBody"></div>
       </div>
     </div>
     <div id="mapSheet" class="sheet-back" hidden>
@@ -4066,6 +4189,72 @@ OFF</button>
             return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), broken: true };
           }
         }
+        // ===== 戦国図鑑（発見の記録） =====
+        // 一度でも手に入れた武将・装備、習得したスキル、就いた職業を記録する（保存キー worldDefense.zukan.v1）。
+        // 記録は増えるだけで、錬成・売却・戦死・「最初から」でも消えない。
+        // 記録するのは実際に持っている・持っていた記録があるものだけ（所持・ガチャ履歴・錬成履歴・英霊名鑑・転職履歴）。推測では登録しない
+        const ZUKAN_KEY = "worldDefense.zukan.v1";
+        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs"];
+        function loadZukan() {
+          let d = null;
+          try {
+            d = JSON.parse(localStorage.getItem(ZUKAN_KEY) || "null");
+          } catch (err) {
+            d = null;
+          }
+          const out = { fresh: !d };
+          for (const c of ZUKAN_CATS) {
+            out[c] = {};
+            const src = d && d[c] && typeof d[c] === "object" ? d[c] : {};
+            for (const [k, v] of Object.entries(src)) if (v === true) out[c][k] = true;
+          }
+          return out;
+        }
+        const zukan = loadZukan();
+        let zukanReady = false; // 起動して兵士を読み込むまでは記録しない
+        function persistZukan() {
+          try {
+            localStorage.setItem(
+              ZUKAN_KEY,
+              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs }),
+            );
+          } catch (err) {
+            // 保存できない環境でも遊べる
+          }
+        }
+        // 図鑑に登録する：今の状態（と履歴）にあるものをすべて記録する。何度呼んでも同じ（増えるだけ）
+        function zukanSync() {
+          if (!zukanReady) return 0;
+          let n = 0;
+          const add = (c, id) => {
+            if (!zukan[c][id]) {
+              zukan[c][id] = true;
+              n++;
+            }
+          };
+          const skill = (id) => SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future && add("skills", id);
+          const job = (j) => JOBS[j] && add("jobs", j);
+          for (const [id, c] of Object.entries(heroSave.owned)) if (WARLORDS[id] && c > 0) add("warlords", id);
+          for (const h of heroSave.history) if (h && WARLORDS[h.id]) add("warlords", h.id);
+          const F = heroSave.forge;
+          for (const it of F.items) if (GEAR[it.id]) add("items", it.id);
+          for (const h of F.history) if (h && GEAR[h.got]) add("items", h.got);
+          for (const g of Object.keys(GEAR)) if (GEAR[g].boss && (F.bossRewards || {})[GEAR[g].boss]) add("items", g); // 裏ボスの初回報酬
+          const person = (s) => {
+            for (const k of s.learned || s.skills || []) skill(k);
+            for (const j of s.jobs || []) job(j);
+            job(s.job && JOBS[s.job] ? s.job : s.type);
+            for (const h of s.jobHist || []) if (h) (job(h.from), job(h.to));
+          };
+          for (const s of soldiers) person(s); // 戦死した兵士も、戦死するまでに覚えた・就いたもの
+          for (const v of soldierSave.soldiers) person(v);
+          for (const f of soldierSave.fallen) {
+            for (const k of f.skills || []) skill(k);
+            job(f.type);
+          }
+          if (n) persistZukan();
+          return n;
+        }
         const heroSave = loadWarlordSave();
         let saveOk = true;
         function persistHeroes() {
@@ -4086,6 +4275,7 @@ OFF</button>
           } catch (err) {
             saveOk = false; // プライベートブラウズ等で保存できなくても遊べるようにする
           }
+          zukanSync(); // 新しく手に入れた武将・装備を図鑑へ
           return saveOk;
         }
         const ownedIds = () => Object.keys(WARLORDS).filter((id) => heroSave.owned[id]);
@@ -5427,6 +5617,7 @@ OFF</button>
           s.hp = soldierStats(s).maxHp;
           logHistory(s, "新兵として雇用");
           soldiers.push(s);
+          zukanSync(); // 雇った兵士の職業（初期職）を図鑑へ
           return s;
         }
         function newSquad(type) {
@@ -5507,6 +5698,7 @@ OFF</button>
           learnedOf(s).push(id);
           if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(id);
           logHistory(s, (unique ? "固有スキル" : "スキル") + "「" + SOLDIER_SKILLS[id].name + "」を習得");
+          zukanSync(); // 戦闘中に覚えてもすぐ図鑑へ
           return id;
         }
         function onLevelUp(s, fresh = true) {
@@ -5578,6 +5770,7 @@ OFF</button>
             learnedOf(s).push(id);
             if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(id);
             logHistory(s, "職業スキル「" + SOLDIER_SKILLS[id].name + "」を習得");
+            zukanSync();
             msg(soldierName(s) + "：" + JOBS[j].name + "の職業スキル「" + SOLDIER_SKILLS[id].name + "」を習得！");
           }
         }
@@ -6863,6 +7056,7 @@ OFF</button>
               o = soldierById(b.owner);
             if (o && o.alive) msg(soldierName(o) + " の" + g.name + "は使えなくなったので装備倉庫に戻しました。");
           }
+          zukanSync(); // 習得したスキル・就いた職業を図鑑へ
           return soldierSaveOk;
         }
         const pickSaved = (s) => {
@@ -6951,6 +7145,8 @@ OFF</button>
         restoreRoster();
         gearReady = true;
         checkGear(); // 持ち主がいない装備は倉庫へ
+        zukanReady = true;
+        zukanSync(); // 図鑑：今の所持・習得・職業と履歴から登録（以前の保存データからの移行も同じ）
         // ===== 防衛塔の耐久 =====
         const towerMaxHp = (t) => Math.round(baseTowerMax(t) * (towerPassive(t).hpMul || (heroHas(heroOn(t), "kiyomasa") ? 1.15 : 1)));
         function towerHp(t) {
@@ -10443,6 +10639,306 @@ OFF</button>
           settings.gear[k] = k === "grade" ? +sel.value : sel.value;
           saveSettings();
           renderGear();
+        });
+        // ===== 戦国図鑑の画面 =====
+        // 番号は定義の順で決まる（武将30・スキル・装備・職業）。未発見は番号と「???」だけを出し、名前・絵・性能は出さない
+        const ZUKAN_SKILL_GROUPS = [
+          ["warlord", "武将の必殺技"],
+          ["normal", "兵士のスキル"],
+          ["unique", "固有スキル（Lv30）"],
+          ["job", "職業スキル"],
+          ["book", "秘伝スキル（スキルの書）"],
+        ];
+        const skillGroup = (k) => (k.job ? "job" : k.book ? "book" : k.unique ? "unique" : "normal");
+        let zukanLists = null;
+        function zukanEntries() {
+          if (zukanLists) return zukanLists;
+          const skills = Object.keys(WARLORDS).map((id) => ({ key: "w:" + id, group: "warlord", wid: id }));
+          for (const [g] of ZUKAN_SKILL_GROUPS.slice(1))
+            for (const [id, k] of Object.entries(SOLDIER_SKILLS)) if (!k.future && skillGroup(k) === g) skills.push({ key: id, group: g });
+          zukanLists = {
+            warlords: Object.keys(WARLORDS).map((id) => ({ key: id })),
+            skills, // 未実装のスキル（城攻め名人）は入れない
+            items: Object.keys(GEAR).map((id) => ({ key: id })),
+            jobs: Object.keys(JOBS).map((id) => ({ key: id })),
+          };
+          return zukanLists;
+        }
+        // 発見したか（武将の必殺技は、その武将を手に入れたら発見）
+        const zukanFound = (cat, e) => (cat === "skills" && e.wid ? !!zukan.warlords[e.wid] : !!zukan[cat][e.key]);
+        function zukanCount(cat) {
+          const list = zukanEntries()[cat];
+          return { found: list.filter((e) => zukanFound(cat, e)).length, total: list.length };
+        }
+        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業" };
+        const WEAPON_ICON = { katana: "🗡️", yari: "🔱", yumi: "🏹", teppo: "🔫" };
+        const gearIcon = (g) => (g.slot === "weapon" ? WEAPON_ICON[g.wtype] : g.slot === "armor" ? "🛡️" : "📿");
+        let zukanTab = "warlords",
+          zukanSel = null; // 詳しく見ている番号
+        const zbar = (f, t) =>
+          '<span class="zk-bar" role="img" aria-label="達成率 ' +
+          Math.floor((f / t) * 100) +
+          '%"><i style="width:' +
+          ((f / t) * 100).toFixed(1) +
+          '%"></i></span>';
+        function zukanDetail(cat, e) {
+          if (cat === "warlords") {
+            const c = WARLORDS[e.key],
+              n = heroSave.owned[e.key] || 0;
+            return (
+              '<div class="zk-head">' +
+              avatarHtml(e.key, true) +
+              "<p><b>" +
+              esc(c.name) +
+              "</b> " +
+              rarityTag(e.key) +
+              "<br><small>" +
+              esc(c.role || "") +
+              "</small><br>" +
+              (n ? "所持 " + n + "枚・★" + stars(e.key) : "今は所持していない（発見済み）") +
+              "</p></div><p><small><b>必殺技「" +
+              esc(c.skill.name) +
+              "」</b>：" +
+              esc(c.skillText) +
+              "<br><b>部隊</b>：" +
+              esc(c.squadText) +
+              "<br><b>塔</b>：" +
+              esc(c.towerText) +
+              "<br><b>攻城戦</b>：" +
+              esc(siegeSkillText(e.key)) +
+              "</small></p>"
+            );
+          }
+          if (cat === "skills") {
+            if (e.wid) {
+              const c = WARLORDS[e.wid];
+              return (
+                "<p><b>" +
+                esc(c.skill.name) +
+                "</b>（武将の必殺技・" +
+                esc(c.name) +
+                "）<br><small>" +
+                esc(c.skillText) +
+                "<br>攻城戦では：" +
+                esc(siegeSkillText(e.wid)) +
+                "</small></p>"
+              );
+            }
+            const k = SOLDIER_SKILLS[e.key];
+            return (
+              "<p><b>" +
+              esc(k.name) +
+              "</b>（" +
+              ZUKAN_SKILL_GROUPS.find((g) => g[0] === e.group)[1] +
+              "）<br><small>" +
+              esc(k.text) +
+              "<br>" +
+              (k.job
+                ? "習得：" + JOBS[k.job].name + "の熟練度 " + JOBS[k.job].skills.find((x) => x[0] === e.key)[1] + "（習得後はどの職業でも装備できる）"
+                : k.book
+                  ? "習得：スキルの書（" + GRADES[k.book].name + "）を使う。どの職業でも装備できる"
+                  : (k.unique ? "習得：Lv30の固有スキル。" : "習得：Lv5・15・30…でランダム。") +
+                    "対象：" +
+                    k.types.map((t) => SOLDIER_TYPES[t].name).join("・")) +
+              (e.key === "volley" ? "<br>※ 織田信長の必殺技「三段撃ち」とは別のスキル" : "") +
+              "</small></p>"
+            );
+          }
+          if (cat === "items") {
+            const g = GEAR[e.key],
+              have = forgeSave().items.filter((it) => it.id === e.key).length;
+            return (
+              '<p><span class="zk-icon g' +
+              g.grade +
+              '">' +
+              gearIcon(g) +
+              "</span> <b>" +
+              esc(g.name) +
+              "</b> " +
+              gradeTag(g.grade) +
+              "<br><small>" +
+              GEAR_SLOTS[g.slot] +
+              (g.wtype ? "・" + WEAPON_TYPES[g.wtype].name : "") +
+              "・" +
+              esc(g.text) +
+              "<br>装備できる職業：" +
+              gearJobs(e.key) +
+              "<br>入手方法：" +
+              (g.boss
+                ? "秘境の裏ボスを初めて倒す（" + esc(SECRETS[g.boss].name) + "）"
+                : "🔥 秘伝錬成の装備錬成（" + ["", "小当たり", "普通", "当たり", "大当たり"][g.grade] + "）") +
+              "<br>倉庫に " +
+              have +
+              "個</small></p>"
+            );
+          }
+          const J = JOBS[e.key],
+            c = SOLDIER_TYPES[J.base],
+            weapons = Object.values(WEAPON_TYPES)
+              .filter((w) => w.jobs.includes(e.key))
+              .map((w) => w.name),
+            best = soldiers.filter((s) => s.alive).reduce((m, s) => Math.max(m, profLv(s, e.key)), 0);
+          return (
+            '<p><span class="zk-icon">' +
+            J.icon +
+            "</span> <b>" +
+            J.name +
+            "</b>" +
+            (J.advanced ? "（上級職）" : "（基本職）") +
+            "<br><small>" +
+            esc(J.text) +
+            "<br>能力：" +
+            jobModsText(e.key) +
+            "（" +
+            c.name +
+            "の動き：HP " +
+            c.hp +
+            "・" +
+            (c.heal ? "回復 " + c.heal : "攻撃 " + c.atk) +
+            "・防御 " +
+            c.def +
+            "・射程 " +
+            c.range +
+            "・間隔 " +
+            c.rate +
+            "秒）<br>装備できる武器：" +
+            (weapons.join("・") || "なし（鎧・装飾品のみ）") +
+            "<br>職業スキル：" +
+            J.skills.map(([id, need]) => "「" + SOLDIER_SKILLS[id].name + "」熟練度" + need).join("・") +
+            "<br>今いる兵士の最高の熟練度：" +
+            best +
+            "/" +
+            JOB_RULES.profMax +
+            "</small></p>"
+          );
+        }
+        function renderZukan() {
+          const L = zukanEntries();
+          let f = 0,
+            t = 0;
+          for (const c of ZUKAN_CATS) {
+            const n = zukanCount(c);
+            f += n.found;
+            t += n.total;
+          }
+          let html =
+            '<p class="zk-total">総合 <b>' +
+            f +
+            "/" +
+            t +
+            "</b>（" +
+            Math.floor((f / t) * 100) +
+            "%）" +
+            zbar(f, t) +
+            "</p>" +
+            '<div class="forge-kinds zk-tabs" role="tablist">' +
+            ZUKAN_CATS.map((c) => {
+              const n = zukanCount(c);
+              return (
+                '<button role="tab" data-zk-tab="' +
+                c +
+                '" aria-selected="' +
+                (zukanTab === c) +
+                '" aria-pressed="' +
+                (zukanTab === c) +
+                '">' +
+                ZUKAN_TABS[c] +
+                "<small>" +
+                n.found +
+                "/" +
+                n.total +
+                "</small></button>"
+              );
+            }).join("") +
+            "</div>";
+          const n = zukanCount(zukanTab);
+          html +=
+            '<p class="zk-progress">' +
+            ZUKAN_TABS[zukanTab].replace(/^\S+ /, "") +
+            "図鑑 <b>" +
+            n.found +
+            "/" +
+            n.total +
+            "</b>（" +
+            Math.floor((n.found / n.total) * 100) +
+            "%）" +
+            zbar(n.found, n.total) +
+            "</p>";
+          const list = L[zukanTab];
+          if (zukanSel != null && list[zukanSel] && zukanFound(zukanTab, list[zukanSel]))
+            html +=
+              '<div class="zk-detail" id="zkDetail"><p class="zk-no">No.' +
+              String(zukanSel + 1).padStart(3, "0") +
+              "</p>" +
+              zukanDetail(zukanTab, list[zukanSel]) +
+              '<button data-zk-close>閉じる</button></div>';
+          let group = null;
+          html += '<div class="zk-grid">';
+          list.forEach((e, i) => {
+            if (zukanTab === "skills" && e.group !== group) {
+              group = e.group;
+              html += '<h3 class="zk-group">' + ZUKAN_SKILL_GROUPS.find((g) => g[0] === group)[1] + "</h3>";
+            }
+            const found = zukanFound(zukanTab, e),
+              no = "No." + String(i + 1).padStart(3, "0");
+            if (!found) {
+              html += '<button class="zk-tile lock" disabled><small>' + no + '</small><span class="zk-icon">?</span><b>???</b></button>';
+              return;
+            }
+            let icon, name;
+            if (zukanTab === "warlords") {
+              icon = avatarHtml(e.key);
+              name = WARLORDS[e.key].name;
+            } else if (zukanTab === "skills") {
+              const k = e.wid ? WARLORDS[e.wid].skill : SOLDIER_SKILLS[e.key];
+              icon = '<span class="zk-icon">' + (e.wid ? "✨" : e.group === "job" ? "🔄" : e.group === "book" ? "📜" : "⭐") + "</span>";
+              name = k.name;
+            } else if (zukanTab === "items") {
+              const g = GEAR[e.key];
+              icon = '<span class="zk-icon g' + g.grade + '">' + gearIcon(g) + "</span>";
+              name = g.name;
+            } else {
+              icon = '<span class="zk-icon">' + JOBS[e.key].icon + "</span>";
+              name = JOBS[e.key].name;
+            }
+            html +=
+              '<button class="zk-tile' +
+              (zukanSel === i ? " sel" : "") +
+              '" data-zk-no="' +
+              i +
+              '"><small>' +
+              no +
+              "</small>" +
+              icon +
+              "<b>" +
+              esc(name) +
+              "</b></button>";
+          });
+          html += "</div>";
+          $("zukanBody").innerHTML = html;
+        }
+        function openZukan() {
+          zukanSync();
+          zukanSel = null;
+          renderZukan();
+          $("zukanSheet").hidden = false;
+          $("zukanClose").focus();
+        }
+        const closeZukan = () => ($("zukanSheet").hidden = true);
+        $("zukanOpen").onclick = openZukan;
+        $("zukanClose").onclick = closeZukan;
+        $("zukanSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("zukanSheet")) return closeZukan();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "zukanClose") return;
+          const d = b.dataset;
+          if (d.zkTab) {
+            zukanTab = d.zkTab;
+            zukanSel = null;
+          } else if (d.zkNo) zukanSel = +d.zkNo;
+          else if (d.zkClose !== undefined) zukanSel = null;
+          renderZukan();
+          if (d.zkNo) $("zkDetail").scrollIntoView({ block: "nearest" });
         });
         // ===== 転職の画面 =====
         let jobSoldierId = null,
@@ -14909,7 +15405,8 @@ OFF</button>
         });
         document.addEventListener("keydown", (ev) => {
           if (ev.key !== "Escape") return;
-          if (!$("mapSheet").hidden) closeMap();
+          if (!$("zukanSheet").hidden) closeZukan();
+          else if (!$("mapSheet").hidden) closeMap();
           else if (!$("forgeSheet").hidden) closeForge();
           else if (!$("gearSheet").hidden) closeGear();
           else return;
@@ -15010,6 +15507,9 @@ OFF</button>
               toggleLock,
               sellItems,
               koban: () => heroSave.forge.koban,
+              zukan: () => JSON.parse(JSON.stringify(zukan)),
+              zukanCount,
+              zukanSync,
               sellError,
               sellPrice,
               SELL_PRICE,
