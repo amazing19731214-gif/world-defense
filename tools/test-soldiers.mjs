@@ -99,7 +99,7 @@ let r = await ev(page, () => {
 });
 check(
   "兵士は個別IDで兵種・Lv・経験値・スキル・出陣・討伐・生死・名前を持つ",
-  r.keys && r.ids === 5 && r.stats.maxHp > 0 && r.stats.atk > 0 && r.stats.def > 0,
+  r.keys && r.ids === 10 && r.stats.maxHp > 0 && r.stats.atk > 0 && r.stats.def > 0,
 );
 check("Lv1 は新兵", r.level === 1 && r.title === "新兵", r.title);
 check("雇用しただけでは保存しない（ウェーブをクリアしてから）", (await stored(page, SKEY)) === null);
@@ -134,7 +134,7 @@ check("ウェーブ終了で戦闘中の経験値の上限はリセット", r.wa
 let sv = await stored(page, SKEY);
 check(
   "ウェーブクリアで兵士を保存",
-  sv && sv.soldiers.length === 5 && sv.squads.length === 1 && sv.soldiers[0].level >= 1,
+  sv && sv.soldiers.length === 10 && sv.squads.length === 1 && sv.soldiers[0].level >= 1,
 );
 
 console.log("■ レベル・スキル・階級");
@@ -379,7 +379,7 @@ r = await ev(page, () => {
 });
 check(
   "全員が撤退した部隊は全滅扱いにならず待機へ",
-  r.squads === 1 && r.state === "reserve" && r.roster === 5,
+  r.squads === 1 && r.state === "reserve" && r.roster === 10,
   JSON.stringify(r),
 );
 await ev(page, () => {
@@ -521,7 +521,7 @@ r = await ev(
   }),
   namedId,
 );
-check("再読み込みしても戦死した兵士は復活しない", !r.found && r.count === 4, JSON.stringify(r));
+check("再読み込みしても戦死した兵士は復活しない", !r.found && r.count === 9, JSON.stringify(r));
 r = await ev(page, () => {
   const sv = JSON.parse(localStorage.getItem("worldDefense.soldiers.v1"));
   return WD_DEBUG.state().soldiers.every((m) => {
@@ -561,7 +561,7 @@ r = await ev(page, () => {
     m.skills = [];
     m.hp = 0.1;
   }
-  for (let i = 0; i < 5; i++) a.damageSquad(q, 999, false);
+  for (let i = 0; i < 20 && WD_DEBUG.state().squads.includes(q); i++) a.damageSquad(q, 999, false);
   const st = h.heroState().yukimura;
   return {
     wiped: !WD_DEBUG.state().squads.includes(q),
@@ -800,7 +800,7 @@ r = await ev(page, () => {
 });
 check(
   "タップで全員のHPが満タン・ゴールドが減る",
-  r.full && r.gold === 1000 - 75 - Number(r.msg.match(/(\d+)G/)[1]),
+  r.full && r.gold === 1000 - 150 - Number(r.msg.match(/(\d+)G/)[1]),
   JSON.stringify(r),
 );
 check("満タンなら押せない", await page.isDisabled("#sqHeal"));

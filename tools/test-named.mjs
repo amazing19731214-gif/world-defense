@@ -166,8 +166,8 @@ r = await ev(page, () => {
   };
 });
 check(
-  "通常の雇用は今までどおり（5人・名前なし・ネームドなし）",
-  r.n === 5 && r.named === 0 && r.names === 0,
+  "通常の雇用は今までどおり（10人・名前なし・ネームドなし）",
+  r.n === 10 && r.named === 0 && r.names === 0,
   JSON.stringify(r),
 );
 const normalCost = r.cost;
@@ -183,7 +183,7 @@ r = await ev(page, () => {
   const m = a.members(q);
   const named = m.filter((s) => s.named);
   const msgText = document.getElementById("msg").textContent;
-  // 鉄砲兵の人物は2人：5人を雇うと2人が人物、残り3人は通常（同じ人物は同時に1人まで）
+  // 鉄砲兵の人物は2人：10人を雇うと2人が人物、残り8人は通常（同じ人物は同時に1人まで）
   const q2 = a.hireSquad("gunner", 790, 300);
   const g = a.members(q2);
   const q3 = a.hireSquad("gunner", 520, 300);
@@ -209,12 +209,12 @@ r = await ev(page, () => {
 check("雇用費は通常の兵士と同じ", r.cost === normalCost, r.cost + " / " + normalCost);
 check(
   "対応する兵種（槍兵）で、Lv1・人物の名前で登場",
-  r.named.length === 5 && r.sameType && r.named.every((x) => x.endsWith(":1")),
+  r.named.length === 6 && r.sameType && r.named.every((x) => x.endsWith(":1")),
   JSON.stringify(r.named),
 );
 check(
-  "鉄砲兵を5人雇うと人物は2人（雑賀孫市・佐々成政）、残りは通常の兵士",
-  r.gun === "magoichi,narimasa" && r.gunNormal === 3,
+  "鉄砲兵を10人雇うと人物は2人（雑賀孫市・佐々成政）、残りは通常の兵士",
+  r.gun === "magoichi,narimasa" && r.gunNormal === 8,
   JSON.stringify(r),
 );
 check(
@@ -259,13 +259,13 @@ r = await ev(page, () => {
   };
 });
 check(
-  "初めて雇ったら図鑑に登録（槍兵の5人と鉄砲兵の2人）",
-  r.z === "dosetsu,magoichi,nagayoshi,narimasa,saizo,sakon,ujitsuna",
+  "初めて雇ったら図鑑に登録（槍兵の6人と鉄砲兵の2人）",
+  r.z === "danemon,dosetsu,magoichi,nagayoshi,narimasa,saizo,sakon,ujitsuna",
   r.z,
 );
-check("ネームド兵士図鑑：7/15", r.c.found === 7 && r.c.total === 15, JSON.stringify(r.c));
+check("ネームド兵士図鑑：8/15", r.c.found === 8 && r.c.total === 15, JSON.stringify(r.c));
 const zSaved = await ev(page, (k) => JSON.parse(localStorage.getItem(k)).named, ZKEY);
-check("発見の記録を保存", Object.keys(zSaved || {}).length === 7, JSON.stringify(zSaved));
+check("発見の記録を保存", Object.keys(zSaved || {}).length === 8, JSON.stringify(zSaved));
 
 console.log("■ 保存と再読み込み");
 // 雇った兵士はウェーブのクリアで保存される（今までどおり）
@@ -286,7 +286,7 @@ let saved = await ev(
       .join(),
   SKEY,
 );
-check("保存データにネームド兵士の人物を記録", saved.split(",").length === 7, saved);
+check("保存データにネームド兵士の人物を記録", saved.split(",").length === 8, saved);
 await reload(page);
 r = await ev(page, () =>
   WD_DEBUG.state()
@@ -296,7 +296,7 @@ r = await ev(page, () =>
 );
 check(
   "再読み込みしても人物・名前が残る",
-  r.length === 7 && r.includes("magoichi:雑賀孫市"),
+  r.length === 8 && r.includes("magoichi:雑賀孫市"),
   JSON.stringify(r),
 );
 
@@ -356,7 +356,7 @@ r = await ev(page, () => !!WD_DEBUG.forgeApi.zukan().named.magoichi);
 check("再読み込み後も発見の記録が残る", r);
 await ev(page, () => document.getElementById("reset").click());
 r = await ev(page, () => WD_DEBUG.forgeApi.zukanCount("named"));
-check("「最初から」でも発見の記録が残る", r.found === 7, JSON.stringify(r));
+check("「最初から」でも発見の記録が残る", r.found === 8, JSON.stringify(r));
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 

@@ -96,8 +96,8 @@ await ev(page, () => WD_DEBUG.setGold(9999));
 console.log("■ 雇用メニューと能力値");
 let text = await page.textContent("#unitTools");
 check(
-  "雇用メニューに鉄砲兵（5人 150G）・衛生兵（5人 120G）",
-  /鉄砲兵 150G/.test(text) && /衛生兵 120G/.test(text),
+  "雇用メニューに鉄砲兵（10人 300G）・衛生兵（10人 240G）",
+  /鉄砲兵 300G/.test(text) && /衛生兵 240G/.test(text),
   text,
 );
 check(
@@ -140,15 +140,15 @@ check(
   (await page.textContent('[data-t="magic"]')).includes("鉄砲") && r.g.name === "鉄砲兵",
 );
 await tapHire(page, "gunner");
-check("鉄砲兵を選ぶと説明を表示", /鉄砲隊（5人・150G）/.test(await page.textContent("#msg")));
+check("鉄砲兵を選ぶと説明を表示", /鉄砲隊（10人・300G）/.test(await page.textContent("#msg")));
 await tapMap(page, 760, 300);
 await tapHire(page, "medic");
 await tapMap(page, 690, 300);
 r = await ev(page, () =>
   WD_DEBUG.state().squads.map((q) => q.type + ":" + WD_DEBUG.squadApi.members(q).length),
 );
-check("道をタップして鉄砲隊・陣中医隊を雇用（部隊は5人）", r.join() === "gunner:5,medic:5", r.join());
-check("ゴールドは部隊の費用だけ減る", (await ev(page, () => WD_DEBUG.state().gold)) === 9999 - 150 - 120);
+check("道をタップして鉄砲隊・陣中医隊を雇用（部隊は10人）", r.join() === "gunner:10,medic:10", r.join());
+check("ゴールドは部隊の費用だけ減る", (await ev(page, () => WD_DEBUG.state().gold)) === 9999 - 300 - 240);
 
 console.log("■ 鉄砲兵の攻撃");
 await startHeldWave(page);
@@ -171,7 +171,7 @@ r = await ev(page, () => {
   };
 });
 check("射程内の敵を自動で撃つ（遠距離）", r.dmg1 > 0 && r.dist > 60, JSON.stringify(r));
-check("1発の威力は鉄砲兵の攻撃力（5人で一斉射撃）", Math.abs(r.dmg1 - r.atk * 5) < 0.01, JSON.stringify(r));
+check("1発の威力は鉄砲兵の攻撃力（10人で一斉射撃）", Math.abs(r.dmg1 - r.atk * 10) < 0.01, JSON.stringify(r));
 check("装填の間隔は約2.4秒（次の一斉射撃まで撃たない）", Math.abs(r.after - r.dmg1 * 2) < 0.01);
 check("攻撃で経験値を得る", r.xp > 0);
 r = await ev(page, () => {

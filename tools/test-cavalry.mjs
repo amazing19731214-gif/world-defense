@@ -79,7 +79,7 @@ await ev(() => WD_DEBUG.setGold(9999));
 
 console.log("■ 雇用と能力値");
 let text = await page.textContent('[data-u="cavalry"]');
-check("雇用メニューに騎兵（5人 140G）", /騎兵 140G/.test(text), text);
+check("雇用メニューに騎兵（10人 280G）", /騎兵 280G/.test(text), text);
 check(
   "ボタンに騎兵の絵",
   await page.$eval(
@@ -99,12 +99,12 @@ check(
 check("騎兵の撤退は速い（1.5秒）・進軍の速さを持つ（攻城戦用）", r.c.retreatTime === 1.5 && r.c.march > 1);
 check("騎兵のコマ（待機・攻撃・戦死）を埋め込み", r.frames === "idle,attack,death", r.frames);
 await tapHire(page, "cavalry");
-check("騎兵を選ぶと説明を表示", /騎馬隊（5人・140G）/.test(await page.textContent("#msg")));
+check("騎兵を選ぶと説明を表示", /騎馬隊（10人・280G）/.test(await page.textContent("#msg")));
 await tapMap(650, 300);
 await tapHire(page, "ashigaru");
 await tapMap(400, 165);
 r = await ev(() => WD_DEBUG.state().squads.map((q) => q.type + ":" + WD_DEBUG.squadApi.members(q).length));
-check("道をタップして騎馬隊を雇用（5人）", r.join() === "cavalry:5,ashigaru:5", r.join());
+check("道をタップして騎馬隊を雇用（10人）", r.join() === "cavalry:10,ashigaru:10", r.join());
 
 console.log("■ 敵の騎兵を止められる");
 await startHeldWave();
@@ -264,13 +264,13 @@ await clearWave();
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 r = await ev(() => WD_DEBUG.state().soldiers.filter((x) => x.type === "cavalry").length);
-check("騎兵を保存して再読み込みで復元", r === 5, String(r));
+check("騎兵を保存して再読み込みで復元", r === 10, String(r));
 r = await ev(() => {
   const s = WD_DEBUG.state(),
     q = s.squads.find((x) => x.type === "cavalry");
   return { slot: q.slot, siege: WD_DEBUG.squadApi.siege()[q.slot].soldiers.length };
 });
-check("騎兵の部隊がそのまま攻城の部隊になる（5人）", r.slot >= 0 && r.siege === 5, JSON.stringify(r));
+check("騎兵の部隊がそのまま攻城の部隊になる（10人）", r.slot >= 0 && r.siege === 10, JSON.stringify(r));
 
 console.log("■ 画面（390px）");
 await tapHire(page, "cavalry");

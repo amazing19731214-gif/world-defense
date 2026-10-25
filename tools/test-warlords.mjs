@@ -381,7 +381,8 @@ await page.evaluate(() => {
   for (const m of WD_DEBUG.squadApi.members(s.squads[0])) m.hp = 0.5;
   WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 60, hp: 1e6, speed: 0 });
 });
-await step(page, 5);
+// 10人の部隊は前から順に戦うので、全員が倒れるまで進める
+for (let i = 0; i < 80 && (await page.evaluate(() => WD_DEBUG.state().squads.length)); i++) await step(page, 0.25);
 hs = await H(page);
 let squadsLeft = await page.evaluate(() => WD_DEBUG.state().squads.length);
 check("部隊は全滅", squadsLeft === 0);
