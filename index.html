@@ -1702,6 +1702,58 @@
       #mapSheet {
         z-index: 12;
       }
+      /* 秘境の討伐戦 */
+      .target-card.boss {
+        border-color: #b07ad8;
+        background: #2a2036;
+      }
+      #battleBar.boss-bar {
+        border-color: #b07ad8;
+      }
+      .boss-head {
+        display: flex;
+        justify-content: space-between;
+        font-size: 16px;
+      }
+      .boss-hp {
+        position: relative;
+        height: 22px;
+        border-radius: 6px;
+        background: #3a1e1e;
+        overflow: hidden;
+        margin: 4px 0;
+      }
+      .boss-hp i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #e04a3a, #ff9a5a);
+      }
+      .boss-hp span {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 1px 2px #000;
+      }
+      .boss-state,
+      .boss-groups {
+        margin: 2px 0;
+        font-size: 13px;
+      }
+      .boss-warn {
+        margin: 4px 0;
+        padding: 6px 8px;
+        border: 2px solid #ff5a4a;
+        border-radius: 8px;
+        background: #3a1410;
+        color: #ffd0c8;
+        font-weight: bold;
+        font-size: 14px;
+      }
     </style>
   </head>
   <body>
@@ -1819,7 +1871,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v32（全国制覇・秘伝錬成・装備）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v33（秘境討伐・全国制覇・秘伝錬成）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2212,6 +2264,32 @@
           },
           shippu: { name: "疾風の護符", slot: "accessory", grade: 2, fx: { haste: 0.08 }, text: "攻撃の間隔 -8%" },
           bushin: { name: "武神の指輪", slot: "accessory", grade: 3, fx: { atk: 0.12 }, text: "攻撃 +12%" },
+          // --- 秘境の裏ボスを初めて倒したときだけ手に入る（錬成では出ない） ---
+          byakkoArmor: {
+            name: "白虎の雷鎧",
+            slot: "armor",
+            grade: 4,
+            boss: "hiei",
+            fx: { def: 0.15, haste: 0.1, thunderGuard: 0.6 },
+            text: "防御 +15%・攻撃の間隔 -10%・雷撃（落雷・雷）のダメージ -60%。雷獣・白虎を初めて倒すと手に入る",
+          },
+          yamataBlade: {
+            name: "八岐の妖刀",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            boss: "yomi",
+            fx: { atk: 0.22, yamata: 1 },
+            text: "攻撃 +22%。攻撃のたびに追加ダメージ +25%、20%の確率で最大HPの4%を回復（1秒に1回まで）。冥龍・八岐を初めて倒すと手に入る",
+          },
+          tenmaArmor: {
+            name: "天魔機神の神鎧",
+            slot: "armor",
+            grade: 4,
+            boss: "fuji",
+            fx: { atk: 0.15, def: 0.25, hp: 0.2, guard: 0.05 },
+            text: "攻撃 +15%・防御 +25%・最大HP +20%・受けるダメージ -5%（効果の上限はほかの装備と同じ）。零式・天魔機神を初めて倒すと手に入る",
+          },
           phoenix: {
             name: "不死鳥の護符",
             slot: "accessory",
@@ -3818,7 +3896,11 @@
           const used = {};
           if (o.used && typeof o.used === "object")
             for (const [id, n] of Object.entries(o.used)) if (WARLORDS[id] && int(n, 1e6) > 0) used[id] = int(n, 1e6);
+          const bossRewards = {};
+          if (o.bossRewards && typeof o.bossRewards === "object")
+            for (const id of ["hiei", "yomi", "fuji"]) if (o.bossRewards[id] === true) bossRewards[id] = true;
           return {
+            bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
@@ -5512,7 +5594,7 @@
           const grade = FORGE.tierGrade[tier],
             lean = gearLean(wid);
           if (kind === "book") return { tier, book: pickWeighted(bookIds(grade), (id) => [SOLDIER_SKILLS[id].line], lean, rng) };
-          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade);
+          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade && !GEAR[id].boss); // 裏ボスの専用装備は出ない
           return { tier, gear: pickWeighted(ids, (id) => gearTags(GEAR[id]), lean, rng) };
         }
         function forgeError(wid, kind) {
@@ -5697,6 +5779,15 @@
           if (skillSum(s, "thunder") && !coolLeft(s.thunderAt || 0, now, 1.5) && Math.random() < 0.15 * pm) {
             s.thunderAt = now + 1.5;
             m += 0.6;
+          }
+          // 八岐の妖刀：追加ダメージ、確率でHPを回復
+          if (skillSum(s, "yamata")) {
+            m += 0.25;
+            if (!coolLeft(s.yamataAt || 0, now, 1) && Math.random() < 0.2 * pm) {
+              s.yamataAt = now + 1;
+              const max = soldierStats(s).maxHp;
+              s.hp = Math.min(max, s.hp + max * 0.04 * healTakenMul(s));
+            }
           }
           if (skillSum(s, "renzan") && !coolLeft(s.renzanAt || 0, now, 3)) {
             const max = soldierStats(s).maxHp;
@@ -10536,6 +10627,35 @@
           const tid = targetCastleId(),
             TC = NPC_CASTLES[tid],
             done = conquest[tid].captured;
+          if (bossTarget) {
+            const D = BOSSES[bossTarget],
+              rec = bossRecord(bossTarget);
+            $("siegeTarget").className = "target-card boss";
+            setHtml(
+              $("siegeTarget"),
+              "🗻 討伐目標：<b>" +
+                D.name +
+                "</b>（" +
+                D.place +
+                "）<br><small>推奨 Lv" +
+                D.lv +
+                "（目安・入場制限なし）・制限時間 " +
+                D.time +
+                "秒<br>" +
+                D.text +
+                "<br>討伐 " +
+                rec.wins +
+                "回" +
+                (rec.best ? "・最速 " + rec.best + "秒" : "") +
+                (forgeSave().bossRewards && forgeSave().bossRewards[bossTarget]
+                  ? "・初回報酬は受け取り済み（2回目からは欠片・ガチャ券）"
+                  : "・初めて倒すと専用の伝説装備「" + GEAR[D.reward].name + "」") +
+                '</small><br><span class="injured">⚠ 一般の兵士は戦死すると復活しません（永久戦死）。主人公は戦死するとLv1から再出発します。</span>' +
+                '<div class="card-actions"><button data-boss-clear>城の攻略に戻る</button></div>',
+            );
+            $("siegeGo").textContent = "⚔️ 討伐（" + D.name + "に挑む）";
+            return;
+          }
           $("siegeTarget").className = "target-card" + (done ? " done" : "");
           const cc = activeCounter();
           setHtml(
@@ -10735,7 +10855,10 @@
             .map((l, i) => (l.length ? SIEGE_RULES.names[i] + " " + l.length + "人" : ""))
             .filter(Boolean)
             .join("・");
-          if (!confirm("出陣しますか？\n" + plan + "\n（戦死した兵士は復活しません）")) return;
+          const bossText = bossTarget
+            ? "\n" + BOSSES[bossTarget].name + "（推奨Lv" + BOSSES[bossTarget].lv + "）に挑みます。\n一般の兵士は戦死すると復活しません（永久戦死）。主人公はLv1から再出発します。"
+            : "\n（戦死した兵士は復活しません）";
+          if (!confirm("出陣しますか？\n" + plan + bossText)) return;
           closeSiege();
           startBattle();
         };
@@ -10919,7 +11042,29 @@
                   S.lv +
                   "（目安）・発見の条件：" +
                   S.need.map((p) => PROVINCES[p].name).join("・") +
-                  "を制圧</small></p><button disabled>討伐戦は次の更新で実装します</button></div>"
+                  "を制圧" +
+                  (() => {
+                    const rec = bossRecord(id),
+                      got = forgeSave().bossRewards && forgeSave().bossRewards[id];
+                    return (
+                      "<br>討伐 " +
+                      rec.wins +
+                      "回・挑戦 " +
+                      rec.attempts +
+                      "回" +
+                      (rec.best ? "・最速 " + rec.best + "秒" : "") +
+                      "<br>初回報酬：" +
+                      GEAR[BOSSES[id].reward].name +
+                      (got ? "（受け取り済み）" : "") +
+                      "<br>" +
+                      BOSSES[id].text
+                    );
+                  })() +
+                  '</small></p><button data-boss-go="' +
+                  id +
+                  '"' +
+                  (battle ? " disabled" : "") +
+                  ">⚔️ 討伐に出陣（攻城編成へ）</button></div>"
                 : '<div class="secret-card lock"><p><b>？？？</b><br><small>まだ見つかっていない秘境。ある国々を制圧すると、道が開けるという…</small></p></div>';
             }
           }
@@ -10955,6 +11100,17 @@
             mapRoad = d.mapRoad;
             mapProv = null;
           } else if (d.mapProv) mapProv = mapProv === d.mapProv ? null : d.mapProv;
+          else if (d.bossGo) {
+            const err = setBossTarget(d.bossGo);
+            if (err) mapNote = "⚠ " + err;
+            else {
+              closeMap();
+              openSiege();
+              siegeNote = "🗻 " + BOSSES[d.bossGo].name + "の討伐：部隊を確かめて「討伐」で出陣";
+              renderSiege();
+              return;
+            }
+          }
           else if (d.mapGo) {
             const err = setTarget(d.mapGo);
             if (err) mapNote = "⚠ " + err;
@@ -10988,6 +11144,10 @@
           } else if (d.provinces !== undefined) {
             siegeProvinces = true;
             changed = false;
+          } else if (d.bossClear !== undefined) {
+            setBossTarget(null);
+            changed = false;
+            siegeNote = "🎯 城の攻略に戻りました";
           } else if (d.mapOpen !== undefined) {
             closeSiege();
             openMap();
@@ -11466,6 +11626,20 @@
           };
           conquestMeta.secrets = flags(d && d.secrets);
           conquestMeta.secretSeen = flags(d && d.secretSeen);
+          // 裏ボスの討伐の記録：{ 秘境ID: { attempts, wins, first（初めて倒した時刻）, best（最速の秒数） } }
+          conquestMeta.bosses = {};
+          const bs = d && d.bosses;
+          if (bs && typeof bs === "object")
+            for (const id of Object.keys(SECRETS)) {
+              const v = bs[id];
+              if (!v || typeof v !== "object") continue;
+              conquestMeta.bosses[id] = {
+                attempts: intIn(v.attempts, 0, 1e6, 0),
+                wins: intIn(v.wins, 0, 1e6, 0),
+                first: Number.isFinite(v.first) && v.first > 0 ? v.first : 0,
+                best: intIn(v.best, 0, 1e6, 0),
+              };
+            }
           // 反撃：{ province: 狙われた国, from: 攻めてきた国 }（中身の確認は activeCounter で行う）
           const c = d && d.counter;
           conquestMeta.counter =
@@ -11474,7 +11648,15 @@
               : null;
           return out;
         }
-        const conquestMeta = { target: null, unified: false, counter: null, tenka: false, secrets: {}, secretSeen: {} };
+        const conquestMeta = {
+          target: null,
+          unified: false,
+          counter: null,
+          tenka: false,
+          secrets: {},
+          secretSeen: {},
+          bosses: {},
+        };
         const conquest = loadConquest();
         function persistConquest() {
           try {
@@ -11489,6 +11671,7 @@
                 tenka: conquestMeta.tenka,
                 secrets: conquestMeta.secrets,
                 secretSeen: conquestMeta.secretSeen,
+                bosses: conquestMeta.bosses,
               }),
             );
             return true;
@@ -11600,6 +11783,7 @@
           const err = targetError(castleId);
           if (err) return err;
           conquestMeta.target = castleId;
+          bossTarget = null; // 城を目標にしたら討伐は外す
           persistConquest();
           return null;
         }
@@ -11618,11 +11802,394 @@
         function battleRoster() {
           return siegeUnits.map((u) => u.soldiers.map(soldierById).filter((s) => s && siegeEligible(s.id)));
         }
+        // ===== 秘境の討伐戦（裏ボス） =====
+        // 攻城戦の戦闘をそのまま使う：攻城編成の4部隊が順に出撃し、道の上に立つ裏ボス1体と戦う（塔・城はない）。
+        // ボスを倒せば勝利、全部隊が倒れる・時間切れ・撤退で敗北。戦死のルールは攻城戦と同じ（一般兵は永久・主人公はLv1から再出発）。
+        // 大技は必ず予兆（文字と色）を出してから放つ。守りの陣（被ダメージ -50%）・手当て・衛生兵・装備で備えられる
+        // 強さは模擬（4部隊×10人・ステータスポイントは攻撃と防御に半分ずつ）で調整：推奨Lv の少し下は装備・必殺技なしでは負け、
+        // 推奨Lv は装備なしだと僅差の負け・必殺技（守りの陣・手当て）や伝説装備を使えば勝てる、十分に上なら装備なしでも勝てる
+        const BOSSES = {
+          hiei: {
+            name: "雷獣・白虎",
+            place: "比叡山の封印",
+            lv: 200,
+            hp: 110000,
+            atk: 280,
+            time: 300,
+            color: "#fff7a8",
+            reward: "byakkoArmor",
+            shards: 6,
+            text: "高速で跳び回り、雷撃と範囲攻撃を使う。一定の間隔で強力な落雷（予兆あり）。HP50%以下で雷撃が激しくなる。",
+          },
+          yomi: {
+            name: "冥龍・八岐",
+            place: "黄泉の洞窟",
+            lv: 500,
+            hp: 650000,
+            atk: 1350,
+            time: 360,
+            color: "#c79bff",
+            reward: "yamataBlade",
+            shards: 10,
+            text: "八つの頭がそれぞれ毒・炎・氷などで攻める。HPを再生する（HP30%以下で強化・上限あり）。攻撃中の頭を叩くと、その頭をしばらく封じられる。",
+          },
+          fuji: {
+            name: "零式・天魔機神",
+            place: "富士地下遺跡",
+            lv: 1000,
+            hp: 500000,
+            atk: 880,
+            time: 420,
+            color: "#9fd6ff",
+            reward: "tenmaArmor",
+            shards: 15,
+            text: "装甲が厚く（装甲無視が効く）、範囲砲撃を使う。HP70%・30%で形態が変わり、最後は必殺の「天魔砲」（予兆あり）と防御形態を切り替える。",
+          },
+        };
+        const BOSS_RULES = {
+          d: 720, // ボスの立つ位置（道に沿った距離。上下の道が合流した後）
+          firstTickets: 3, // 初めて倒したとき（専用の伝説装備とは別に）
+          repeatTickets: 1, // 2回目から
+          regenCap: 0.3, // 八岐の再生：1回の戦いで最大HPの30%まで
+        };
+        const YAMATA_HEADS = [
+          { kind: "poison", name: "毒の頭" },
+          { kind: "fire", name: "炎の頭" },
+          { kind: "ice", name: "氷の頭" },
+          { kind: "bite", name: "牙の頭" },
+          { kind: "poison", name: "瘴気の頭" },
+          { kind: "fire", name: "業火の頭" },
+          { kind: "ice", name: "凍気の頭" },
+          { kind: "roar", name: "咆哮の頭" },
+        ];
+        let bossTarget = null; // 攻城編成で選んだ討伐の相手（秘境ID）。城を目標にすると外れる
+        const bossRecord = (id) =>
+          conquestMeta.bosses[id] || (conquestMeta.bosses[id] = { attempts: 0, wins: 0, first: 0, best: 0 });
+        function bossError(id) {
+          if (!BOSSES[id]) return "その秘境はありません。";
+          if (!conquestMeta.secrets[id]) return "まだ見つけていない秘境です。";
+          return null;
+        }
+        function setBossTarget(id) {
+          if (battle) return "戦いの最中は目標を変えられません。";
+          const err = id && bossError(id);
+          if (err) return err;
+          bossTarget = id || null;
+          return null;
+        }
+        function makeBoss(id) {
+          const D = BOSSES[id],
+            p = pathAt(upper, BOSS_RULES.d);
+          const e = {
+            kind: "boss",
+            boss: id,
+            path: upper,
+            d: BOSS_RULES.d,
+            x: p.x,
+            y: p.y,
+            hp: D.hp,
+            max: D.hp,
+            r: 34,
+            face: -1,
+            blockedBy: true,
+            cd: 1.5,
+            atkAnim: 0,
+            reward: 300,
+            phase: 1,
+            sp: 6, // 大技までの秒数
+            sp2: 4,
+          };
+          if (id === "yomi") {
+            e.heads = YAMATA_HEADS.map((h) => Object.assign({ hp: D.hp * 0.05, max: D.hp * 0.05, sealed: 0 }, h));
+            e.head = 0;
+            e.headLeft = 8;
+            e.regenLeft = D.hp * BOSS_RULES.regenCap;
+          }
+          if (id === "fuji") {
+            e.form = "attack";
+            e.formLeft = 8;
+          }
+          return e;
+        }
+        const bossOf = (B) => B && B.boss && B.garrison.find((e) => e.boss);
+        const bossDown = (B) => !!(B && B.boss && !bossOf(B));
+        // 範囲攻撃：部隊の兵士全員へ（守りの陣・防御・回避・装備がそれぞれ効く）
+        function bossBlast(g, raw, kind) {
+          for (const s of groupAlive(g)) if (groupActive(g)) battleHurt(g, raw, true, kind, s);
+        }
+        const activeGroups = (B) => B.groups.filter(groupActive);
+        // 一番人数の多い部隊（落雷・砲撃の狙い）
+        const biggestGroup = (B) =>
+          activeGroups(B).sort((a, b) => groupAlive(b).length - groupAlive(a).length)[0] || null;
+        function nearestGroup(B, e, reach) {
+          let tg = null,
+            best = reach;
+          for (const g of activeGroups(B)) {
+            const dd = Math.hypot(g.x - e.x, g.y - e.y);
+            if (dd <= best) {
+              best = dd;
+              tg = g;
+            }
+          }
+          return tg;
+        }
+        // 予兆：left 秒後に fire() で放つ。画面の上と、狙われた部隊の足元に文字で出す
+        function bossWarn(B, text, left, target, fire) {
+          B.warn = { text, left, max: left, target, fire };
+          msg("⚠ " + text);
+        }
+        function bossHit(B, e, g, raw, kind, ranged) {
+          if (!g) return;
+          e.atkAnim = 0.35;
+          if (ranged) {
+            if (shots.length >= 160) shots.shift();
+            shots.push({ x: e.x, y: e.y - 30, tx: g.x, ty: g.y - 16, type: "magic", age: 0, duration: 0.25, col: BOSSES[e.boss].color });
+          }
+          battleHurt(g, raw, ranged, kind);
+        }
+        // ボスが受けるダメージ：天魔機神は装甲（装甲無視で減らせる）、八岐は攻撃中の頭も傷つく
+        function bossTakeDamage(e, dmg, s) {
+          if (e.boss === "fuji") {
+            const armor = e.phase < 3 ? 0.5 : e.form === "guard" ? 0.85 : 0.3,
+              pierce = s ? Math.min(0.8, skillSum(s, "armorPierce")) : 0;
+            dmg *= 1 - armor * (1 - pierce);
+          }
+          if (e.boss === "yomi") {
+            const h = e.heads[e.head];
+            if (h && !h.sealed) {
+              h.hp -= dmg;
+              if (h.hp <= 0) {
+                h.sealed = 25;
+                h.hp = h.max;
+                msg("🐉 八岐の「" + h.name + "」を封じた！（25秒・再生も弱まる）");
+                if (effects.length < 80) effects.push({ x: e.x, y: e.y - 40, kind: "heal", color: "#c79bff", age: 0, duration: 0.8 });
+                nextHead(e);
+              }
+            }
+          }
+          return dmg;
+        }
+        function nextHead(e) {
+          for (let i = 1; i <= 8; i++) {
+            const k = (e.head + i) % 8;
+            if (!e.heads[k].sealed) {
+              e.head = k;
+              e.headLeft = 8;
+              return;
+            }
+          }
+          e.headLeft = 3; // 全部封じた：しばらく攻撃が止まる
+        }
+        // ボスの行動（1体だけ）。守備隊の攻撃の代わりに呼ぶ
+        function bossTick(B, e, dt) {
+          const D = BOSSES[e.boss],
+            ratio = e.hp / e.max;
+          e.cd -= dt;
+          e.sp -= dt;
+          e.sp2 -= dt;
+          // 予兆の時間が来たら放つ
+          if (B.warn) {
+            B.warn.left -= dt;
+            if (B.warn.left <= 0) {
+              const w = B.warn;
+              B.warn = null;
+              w.fire();
+            }
+          }
+          if (e.boss === "hiei") {
+            if (ratio <= 0.5 && e.phase === 1) {
+              e.phase = 2;
+              msg("⚡ 白虎が怒った！ 雷撃が激しくなる");
+            }
+            const fast = e.phase === 2;
+            // 通常攻撃：近くの部隊の先頭へ（速い）
+            if (e.cd <= 0) {
+              const g = nearestGroup(B, e, 70);
+              e.cd = g ? (fast ? 0.6 : 0.8) : 0;
+              if (g) bossHit(B, e, g, D.atk, "boss", false);
+            }
+            // 雷撃：遠くの部隊も含めて2部隊の先頭へ
+            if (e.sp2 <= 0) {
+              e.sp2 = fast ? 3.5 : 5;
+              const gs = activeGroups(B).slice(0, 2);
+              for (const g of gs) bossHit(B, e, g, D.atk * 1.3, "thunder", true);
+            }
+            // 跳躍：位置を変え、着地した先の部隊全員に爪の範囲攻撃
+            if (!B.warn && (e.leap = (e.leap ?? 9) - dt) <= 0) {
+              e.leap = fast ? 7 : 9;
+              e.d = Math.max(560, Math.min(820, e.d + (Math.random() < 0.5 ? -90 : 90)));
+              Object.assign(e, pathAt(e.path, e.d));
+              burst(e.x, e.y, "#fff7a8", "fire");
+              const g = nearestGroup(B, e, 90);
+              if (g) bossBlast(g, D.atk * 0.5, "boss");
+            }
+            // 落雷：予兆3秒 → 一番大きい部隊の全員へ
+            if (!B.warn && e.sp <= 0) {
+              const g = biggestGroup(B);
+              e.sp = fast ? 9 : 14;
+              if (g)
+                bossWarn(B, "落雷の予兆：3秒後に " + g.name + " へ落雷（守りの陣で半減）", 3, g, () => {
+                  burst(g.x, g.y - 30, "#fff7a8", "cannon");
+                  bossBlast(g, D.atk * 3, "thunder");
+                });
+            }
+          } else if (e.boss === "yomi") {
+            // 封じた頭が戻る
+            for (const h of e.heads) if (h.sealed > 0 && (h.sealed -= dt) <= 0) h.sealed = 0;
+            if (ratio <= 0.3 && e.phase === 1) {
+              e.phase = 2;
+              msg("🐉 八岐の再生が強まった！");
+            }
+            // 再生：生きている頭の数に比例。1回の戦いの上限あり
+            const open = e.heads.filter((h) => !h.sealed).length,
+              regen = Math.min(e.regenLeft, e.max * (e.phase === 2 ? 0.006 : 0.003) * (open / 8) * dt);
+            e.hp = Math.min(e.max, e.hp + regen);
+            e.regenLeft -= regen;
+            // 頭の交代
+            if ((e.headLeft -= dt) <= 0) nextHead(e);
+            const h = e.heads[e.head];
+            if (!h || h.sealed) return;
+            if (e.cd <= 0 && !B.warn) {
+              e.cd = 2.2;
+              const g = nearestGroup(B, e, 260) || activeGroups(B)[0];
+              if (!g) return (e.cd = 0);
+              if (h.kind === "poison") {
+                bossHit(B, e, g, D.atk * 0.6, "poison", true);
+                g.poison = 6; // 6秒の毒（部隊の全員）
+                g.poisonDps = D.atk * 0.12;
+              } else if (h.kind === "ice") {
+                bossHit(B, e, g, D.atk * 0.8, "ice", true);
+                g.frozen = 4; // 4秒、攻撃が遅くなる
+              } else if (h.kind === "bite") bossHit(B, e, g, D.atk * 2.2, "boss", false);
+              else if (h.kind === "roar") for (const o of activeGroups(B)) bossHit(B, e, o, D.atk * 0.7, "boss", true);
+              else if (h.kind === "fire") {
+                e.cd = 4.5; // 炎の息は溜めが長い
+                bossWarn(B, "炎の息の予兆：2秒後に " + g.name + " を焼き払う（守りの陣で半減）", 2, g, () => {
+                  burst(g.x, g.y - 20, "#ff8a4a", "fire");
+                  bossBlast(g, D.atk * 1.6, "fire");
+                });
+              }
+            }
+          } else if (e.boss === "fuji") {
+            const ph = ratio <= 0.3 ? 3 : ratio <= 0.7 ? 2 : 1;
+            if (ph !== e.phase) {
+              e.phase = ph;
+              e.sp = ph === 3 ? 6 : 4;
+              msg(ph === 2 ? "🤖 天魔機神 第二形態：高速攻撃と広範囲砲撃！" : "🤖 天魔機神 第三形態：必殺「天魔砲」と防御形態の切り替え！");
+            }
+            if (e.phase === 3 && (e.formLeft -= dt) <= 0) {
+              e.form = e.form === "attack" ? "guard" : "attack";
+              e.formLeft = 8;
+              msg(e.form === "guard" ? "🛡 天魔機神が防御形態に（攻撃が通りにくい）" : "⚔️ 天魔機神が攻撃形態に（今が攻め時！）");
+            }
+            const weak = e.phase === 3 && e.form === "guard" ? 0.5 : 1;
+            if (e.cd <= 0) {
+              const g = nearestGroup(B, e, 80);
+              e.cd = g ? (e.phase === 1 ? 1.2 : 0.7) : 0;
+              if (g) bossHit(B, e, g, D.atk * weak, "boss", false);
+            }
+            if (!B.warn && e.sp <= 0) {
+              if (e.phase === 1) {
+                const g = biggestGroup(B);
+                e.sp = 10;
+                if (g)
+                  bossWarn(B, "砲撃の予兆：2秒後に " + g.name + " へ砲撃（守りの陣で半減）", 2, g, () => {
+                    burst(g.x, g.y - 20, "#9fd6ff", "cannon");
+                    bossBlast(g, D.atk * 1.4, "cannon");
+                  });
+              } else if (e.phase === 2) {
+                e.sp = 9;
+                bossWarn(B, "広範囲砲撃の予兆：2.5秒後に全部隊へ砲撃（守りの陣で半減）", 2.5, "all", () => {
+                  for (const g of activeGroups(B)) {
+                    burst(g.x, g.y - 20, "#9fd6ff", "cannon");
+                    bossBlast(g, D.atk * 0.9, "cannon");
+                  }
+                });
+              } else {
+                e.sp = 16;
+                bossWarn(B, "必殺「天魔砲」の予兆：4秒後に全部隊へ大打撃（守りの陣・手当てで備えよう）", 4, "all", () => {
+                  for (const g of activeGroups(B)) {
+                    burst(g.x, g.y - 30, "#ffffff", "cannon");
+                    bossBlast(g, D.atk * 2.4 * weak, "cannon");
+                  }
+                });
+              }
+            }
+          }
+        }
+        // 部隊にかかった毒・凍結（八岐）
+        function tickGroupAilments(B, dt) {
+          for (const g of B.groups) {
+            if (g.frozen > 0) g.frozen = Math.max(0, g.frozen - dt);
+            if (!(g.poison > 0)) continue;
+            g.poison -= dt;
+            g.poisonAcc = (g.poisonAcc || 0) + dt;
+            if (g.poisonAcc >= 1 && groupActive(g)) {
+              g.poisonAcc -= 1;
+              bossBlast(g, g.poisonDps, "poison");
+            }
+          }
+        }
+        // 状態の文字（討伐戦の画面の上）
+        function bossStatusText(e) {
+          if (!e) return "";
+          if (e.boss === "hiei") return e.phase === 2 ? "怒り（雷撃が激しい）" : "通常";
+          if (e.boss === "yomi") {
+            const h = e.heads[e.head],
+              sealed = e.heads.filter((x) => x.sealed).length;
+            return (
+              (h && !h.sealed ? "攻撃中：" + h.name : "全部の頭を封じた") +
+              "・封じた頭 " +
+              sealed +
+              "/8" +
+              (e.phase === 2 ? "・再生強化" : "") +
+              "・残りの再生 " +
+              Math.round((e.regenLeft / e.max) * 100) +
+              "%"
+            );
+          }
+          return (
+            ["", "第一形態", "第二形態", "第三形態"][e.phase] +
+            (e.phase === 3 ? (e.form === "guard" ? "・🛡 防御形態（攻撃が通りにくい）" : "・⚔️ 攻撃形態（攻め時）") : "")
+          );
+        }
+        // 勝敗の記録と報酬。初回の専用装備は錬成と同じ保存データに1回で書く（二重には入らない）
+        function finishBoss(B, result) {
+          const id = B.boss,
+            D = BOSSES[id],
+            rec = bossRecord(id);
+          rec.attempts++;
+          if (result === "win") {
+            rec.wins++;
+            if (!rec.first) rec.first = Date.now();
+            const t = Math.ceil(B.t);
+            if (!rec.best || t < rec.best) {
+              B.newBest = !!rec.best;
+              rec.best = t;
+            }
+          }
+          persistConquest();
+          if (result !== "win") return;
+          const F = forgeSave();
+          F.bossRewards = F.bossRewards || {};
+          if (!F.bossRewards[id]) {
+            F.bossRewards[id] = true;
+            const uid = ++F.seq;
+            F.items.push({ uid, id: D.reward, owner: null });
+            gearMap = null;
+            B.firstReward = D.reward;
+          }
+          F.shards = Math.min(99999, F.shards + D.shards);
+          B.shards = D.shards;
+          persistHeroes();
+          B.tickets = B.firstReward ? BOSS_RULES.firstTickets : BOSS_RULES.repeatTickets;
+        }
         function canStartBattle() {
           if (training) return "修練場の挑戦中は出陣できません。";
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
           if (battle) return "攻城戦の最中です。";
           if (!battleRoster().some((l) => l.length)) return "攻城編成に兵士がいません。";
+          if (bossTarget) return bossError(bossTarget); // 討伐戦は反撃中でもできる
           const c = activeCounter();
           if (c && !ownsProvince(provinceOf(targetCastleId())))
             return (
@@ -11646,7 +12213,10 @@
           effects.length = 0;
           unitGhosts.length = 0;
           const castleId = targetCastleId(),
-            C = NPC_CASTLES[castleId];
+            boss = bossTarget,
+            C = boss
+              ? { name: BOSSES[boss].name, province: BOSSES[boss].place, hp: BOSSES[boss].hp, power: 1, towers: [], garrison: [], towerLevel: 1 }
+              : NPC_CASTLES[castleId];
           const towersNpc = C.towers.map((c, i) => {
             const t = {
               id: 900 + i,
@@ -11709,12 +12279,16 @@
             castleName: C.name,
             castleMax: C.hp,
             power: C.power,
-            practice: conquest[castleId].captured, // 占領済みの城は演習（報酬・占領なし。経験値は得られる）
+            practice: !boss && conquest[castleId].captured, // 占領済みの城は演習（報酬・占領なし。経験値は得られる）
+            boss,
+            timeLimit: boss ? BOSSES[boss].time : 0,
+            warn: null,
             castleHp: C.hp,
             kills: 0,
             result: null,
             id: Date.now().toString(36),
           };
+          if (boss) battle.garrison = [makeBoss(boss)]; // 秘境の討伐戦：裏ボス1体だけ
           for (const l of lists) for (const s of l) s.waveXp = 0;
           msg(
             "出陣！ 第一部隊から" +
@@ -11878,11 +12452,12 @@
           cutin = { id: g.hero, age: 0, duration: 1.3 };
           B.skillUses = (B.skillUses || 0) + 1;
           msg(c.name + "「" + c.skill.name + "」（" + S.name + "）！ " + done);
-          if (B.castleHp <= 0) endBattle("win");
+          if (B.boss ? bossDown(B) : B.castleHp <= 0) endBattle("win");
           return null;
         }
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
-        function battleHitGarrison(e, dmg) {
+        function battleHitGarrison(e, dmg, s) {
+          if (e.boss) dmg = bossTakeDamage(e, dmg, s);
           e.hp -= dmg;
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
@@ -11904,9 +12479,10 @@
         }
         // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
         const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
-        function battleHurt(g, raw, ranged, kind) {
+        // who：範囲攻撃で狙う兵士（省略すると部隊の先頭）
+        function battleHurt(g, raw, ranged, kind, who) {
           const alive = groupAlive(g),
-            s = alive[0];
+            s = who || alive[0];
           if (!s) return;
           if (evadeHit(s, battle.t)) return; // 回避術
           const st = battleStats(g, s),
@@ -11920,6 +12496,7 @@
             (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
             (1 - skillSum(s, "guard")) *
             (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) : 1) *
+            (kind === "thunder" ? 1 - Math.min(0.8, skillSum(s, "thunderGuard")) : 1) *
             spear;
           s.hit = 0.2;
           if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
@@ -11930,7 +12507,7 @@
           if (s.hp <= 0 && isHeroSoldier(s)) {
             // 主人公は消えない：この攻城戦からは外れ、Lv1から再出発
             s.siegeOut = true;
-            heroFall(s, g.name + "（攻城戦）");
+            heroFall(s, g.name + (battle.boss ? "（討伐戦）" : "（攻城戦）"));
             unitGhosts.push({ type: s.type, x: g.x, y: g.y, age: 0, duration: 1.2, scale: SQUAD_SCALE, face: 1 });
             if (unitGhosts.length > 16) unitGhosts.shift();
             if (!groupAlive(g).length) groupLost(g, true);
@@ -11940,8 +12517,8 @@
             s.alive = false; // 永久死亡（防衛戦と同じ）
             s.hp = 0;
             s.diedWave = wave;
-            s.diedIn = g.name + "（攻城戦）";
-            logHistory(s, g.name + "（攻城戦）で戦死");
+            s.diedIn = g.name + (battle.boss ? "（" + BOSSES[battle.boss].name + "討伐）" : "（攻城戦）");
+            logHistory(s, s.diedIn + "で戦死");
             recordDeath(s);
             g.fallen++;
             unitGhosts.push({
@@ -11984,7 +12561,8 @@
           for (const e of battle.garrison) {
             if (e.hp <= 0 || !samePath(e.path, g.path, e.d)) continue;
             const gap = e.d - g.d;
-            if (gap >= -6 && gap <= SIEGE_BATTLE.blockGap && (!best || e.d < best.d)) best = e;
+            // 裏ボスは跳んで後ろに回ることがあるので、追い越した部隊もそこで止まって戦う
+            if ((e.boss || gap >= -6) && gap <= SIEGE_BATTLE.blockGap && (!best || e.d < best.d)) best = e;
           }
           return best;
         }
@@ -12027,7 +12605,7 @@
             if (!groupActive(g)) continue;
             for (const s of groupAlive(g)) {
               prayerTick(s, groupAlive(g), B.t);
-              s.cd -= dt;
+              s.cd -= dt * (g.frozen > 0 ? 0.5 : 1); // 八岐の氷：攻撃が遅くなる
               if (s.cd > 0) continue;
               const st = battleStats(g, s),
                 c = SOLDIER_TYPES[s.type];
@@ -12124,7 +12702,7 @@
               } else burst(tx, ty, "#fff1c4", "slash");
               gainXp(s, SQUAD_RULES.xpPerHit);
               if (target) {
-                if (battleHitGarrison(target, dmg)) {
+                if (battleHitGarrison(target, dmg, s)) {
                   gearOnKill(s, st, battle.t); // 妖刀・村正
                   s.kills++;
                   gainXp(s, SQUAD_RULES.xpPerKill + Math.round(target.reward / 2));
@@ -12136,7 +12714,12 @@
           B.garrison = B.garrison.filter((e) => e.hp > 0);
           // 守備隊の攻撃（届く部隊の先頭の兵士へ）
           const scale = 1 + Math.max(0, wave - 1) * 0.05;
+          if (B.boss) tickGroupAilments(B, dt);
           for (const e of B.garrison) {
+            if (e.boss) {
+              bossTick(B, e, dt);
+              continue;
+            }
             e.cd -= dt;
             if (e.cd > 0) continue;
             const a = ENEMY_VS_UNIT[e.kind],
@@ -12208,10 +12791,10 @@
             battleHurt(tg, t.damage * scale, true, "tower");
           }
           // 勝敗
-          if (B.castleHp <= 0) return endBattle("win");
+          if (B.boss ? bossDown(B) : B.castleHp <= 0) return endBattle("win");
           const pending = B.groups.some((g) => g.state === "wait");
           if (!pending && !B.groups.some(groupActive)) return endBattle("lose");
-          if (B.t >= SIEGE_BATTLE.timeLimit) return endBattle("timeup");
+          if (B.t >= (B.timeLimit || SIEGE_BATTLE.timeLimit)) return endBattle("timeup");
         }
         // 終了：生き残った兵士に経験値を与えて保存する（1回の攻城戦で1回だけ）
         function endBattle(result) {
@@ -12253,6 +12836,17 @@
             }
           refreshSiege();
           B.report = report;
+          for (const g of B.groups) g.poison = g.frozen = 0;
+          if (B.boss) {
+            // 秘境の討伐戦：討伐の記録と報酬（占領・反撃はない）
+            finishBoss(B, result);
+            shots = [];
+            showBattleResult(B);
+            if (B.tickets) grantTickets(B.tickets, BOSSES[B.boss].name + "を討伐", true);
+            battle = null;
+            updateUI();
+            return;
+          }
           // 占領の記録。初めて攻め落としたときだけ占領・報酬（演習や再戦では増えない）
           const rec = conquest[B.castleId];
           rec.attempts++;
@@ -12294,7 +12888,9 @@
         }
         function showBattleResult(B) {
           const title =
-            B.result === "win"
+            B.result === "win" && B.boss
+              ? "🗻 討伐！ " + B.castleName + "を倒した"
+              : B.result === "win"
               ? B.practice
                 ? "🏯 勝利！（" + B.castleName + "・演習）"
                 : "🏯 勝利！ " + B.castleName + "を攻め落とした"
@@ -12303,8 +12899,34 @@
                 : B.result === "timeup"
                   ? "⌛ 時間切れ（撤退）"
                   : "敗北… 全部隊が倒れた";
-          const C = NPC_CASTLES[B.castleId];
+          const C = NPC_CASTLES[B.castleId],
+            BD = B.boss && BOSSES[B.boss],
+            rec = B.boss && bossRecord(B.boss);
           let html =
+            (BD
+              ? (B.firstReward
+                  ? '<div class="tenka"><p class="tenka-title">🗻 初討伐！</p><p>専用の伝説装備「' +
+                    GEAR[B.firstReward].name +
+                    "」を手に入れた（🎒 装備倉庫）<br><small>" +
+                    esc(GEAR[B.firstReward].text) +
+                    "</small></p></div>"
+                  : "") +
+                (B.result === "win"
+                  ? '<p class="capture">報酬：🔹 錬成の欠片 +' +
+                    B.shards +
+                    "・🎴 ガチャ券 +" +
+                    B.tickets +
+                    (B.firstReward ? "" : "（専用装備は初回だけ）") +
+                    "</p>"
+                  : "") +
+                "<p>討伐 " +
+                rec.wins +
+                "回・挑戦 " +
+                rec.attempts +
+                "回" +
+                (rec.best ? "・最速 " + rec.best + "秒" + (B.newBest ? "（更新！）" : "") : "") +
+                "</p>"
+              : "") +
             (B.captured
               ? '<p class="capture">🏯 ' +
                 C.name +
@@ -12339,7 +12961,7 @@
                   SECRETS[id].boss +
                   "（推奨 Lv" +
                   SECRETS[id].lv +
-                  "）・討伐戦は次の更新で実装します。🗾 全国の「秘境」で確認できます。</small></p></div>",
+                  "）・🗾 全国の「秘境」から討伐に出陣できます。</small></p></div>",
               )
               .join("") +
             (B.heroFell
@@ -12354,12 +12976,9 @@
               : "") +
             "<p>経過 " +
             Math.floor(B.t) +
-            "秒・城の耐久 " +
-            Math.ceil(B.castleHp) +
-            "/" +
-            B.castleMax +
-            "・撃破 " +
-            B.kills +
+            (BD
+              ? "秒・" + BD.name + "のHP " + Math.ceil(Math.max(0, (bossOf(B) || { hp: 0 }).hp)) + "/" + BD.hp
+              : "秒・城の耐久 " + Math.ceil(B.castleHp) + "/" + B.castleMax + "・撃破 " + B.kills) +
             "</p>";
           for (const r of B.report) {
             if (!r.total) continue;
@@ -12450,6 +13069,62 @@
           if (!battle) return;
           const B = battle;
           renderBattleSkills(B);
+          bar.classList.toggle("boss-bar", !!B.boss);
+          if (B.boss) {
+            const e = bossOf(B),
+              D = BOSSES[B.boss],
+              r = e ? Math.max(0, e.hp / e.max) : 0,
+              w = B.warn;
+            setHtml(
+              $("battleInfo"),
+              '<div class="boss-head"><b>🗻 ' +
+                D.name +
+                '</b><span>' +
+                Math.floor(B.t) +
+                "/" +
+                B.timeLimit +
+                "秒</span></div>" +
+                '<div class="boss-hp" role="img" aria-label="ボスのHP ' +
+                Math.round(r * 100) +
+                '%"><i style="width:' +
+                (r * 100).toFixed(1) +
+                '%"></i><span>HP ' +
+                Math.ceil(e ? e.hp : 0) +
+                " / " +
+                e.max +
+                "（" +
+                Math.ceil(r * 100) +
+                "%）</span></div>" +
+                '<p class="boss-state">状態：' +
+                bossStatusText(e) +
+                "</p>" +
+                (w
+                  ? '<p class="boss-warn" role="alert">⚠ ' +
+                    esc(w.text.replace(/\d+(\.\d+)?秒後/, Math.max(0, w.left).toFixed(1) + "秒後")) +
+                    "</p>"
+                  : "") +
+                '<p class="boss-groups">' +
+                B.groups
+                  .filter((g) => g.list.length)
+                  .map(
+                    (g) =>
+                      g.name.replace("部隊", "") +
+                      " " +
+                      (g.state === "wait"
+                        ? "待機（" + Math.max(0, Math.ceil(g.idx * SIEGE_BATTLE.interval - B.t)) + "秒）"
+                        : g.state === "lost"
+                          ? "壊滅"
+                          : groupAlive(g).length +
+                            "人" +
+                            (g.guard > 0 ? "🛡" : "") +
+                            (g.poison > 0 ? "☠毒" : "") +
+                            (g.frozen > 0 ? "❄凍" : "")),
+                  )
+                  .join("・") +
+                "</p>",
+            );
+            return;
+          }
           setHtml(
             $("battleInfo"),
             "<b>" +
@@ -12503,6 +13178,20 @@
               y: e.y,
               draw: () => {
                 ctx.save();
+                if (e.boss) {
+                  // 裏ボス：大きく、色のついた気配をまとう（天魔機神の防御形態は青い盾）
+                  const D = BOSSES[e.boss];
+                  ctx.globalAlpha = 0.35 + 0.15 * Math.sin(visualTime * 4);
+                  ellipse(e.x, e.y - 10, 62, 46, D.color);
+                  if (e.form === "guard" && e.phase === 3) {
+                    ctx.globalAlpha = 0.5;
+                    ellipse(e.x, e.y - 10, 70, 54, "#6fb8ff");
+                  }
+                  ctx.globalAlpha = 1;
+                  ctx.translate(e.x, e.y);
+                  ctx.scale(1.9, 1.9);
+                  ctx.translate(-e.x, -e.y);
+                }
                 if (!drawEnemySprite(e)) soldierFallback(e);
                 if (e.hit > 0) {
                   ctx.globalAlpha = e.hit * 3;
@@ -12567,6 +13256,32 @@
           for (const a of actors) a.draw();
           for (const s of shots) projectile(s);
           for (const e of effects) effect(e);
+          if (B.boss) {
+            // 予兆：狙われた部隊の足元に点滅する輪と文字
+            const w = B.warn;
+            if (w) {
+              const list = w.target === "all" ? B.groups.filter(groupActive) : groupActive(w.target) ? [w.target] : [];
+              ctx.save();
+              for (const g of list) {
+                ctx.globalAlpha = 0.45 + 0.35 * Math.abs(Math.sin(visualTime * 8));
+                ctx.strokeStyle = "#ff5a4a";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.ellipse(g.x - 12, g.y + 8, 48, 20, 0, 0, 7);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.font = "bold 15px system-ui";
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#2a0f0cdd";
+                ctx.fillRect(g.x - 40, g.y - 88, 80, 20);
+                ctx.fillStyle = "#ffd0c8";
+                ctx.fillText("⚠ " + Math.max(0, w.left).toFixed(1) + "秒", g.x, g.y - 73);
+              }
+              ctx.restore();
+            }
+            drawCutin();
+            return;
+          }
           // 城の耐久バーと「敵城」の札
           const c = SIEGE_BATTLE.castle,
             r = Math.max(0, B.castleHp / B.castleMax);
@@ -13350,6 +14065,15 @@
               conquest: () => conquest,
               conquestMeta: () => conquestMeta,
               PROVINCES,
+              BOSSES,
+              setBossTarget,
+              bossTarget: () => bossTarget,
+              bossOf: () => bossOf(battle),
+              bossRecord,
+              makeBoss,
+              bossTakeDamage,
+              bossStatusText,
+              bossBlast,
               KUNI,
               SEA_ROUTES,
               ROADS,
