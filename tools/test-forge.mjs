@@ -299,7 +299,7 @@ r = await ev(page, () => {
   // 武将の傾向：同じ等級（伝説）の中で、傾向に合うものが出やすい。どの武将からでも全部出る
   const F = WD_DEBUG.forgeApi,
     N = 6000,
-    legend = Object.keys(F.GEAR).filter((id) => F.GEAR[id].grade === 4);
+    legend = Object.keys(F.GEAR).filter((id) => F.GEAR[id].grade === 4 && !F.GEAR[id].boss); // 裏ボスの専用装備は錬成では出ない
   const run = (wid) => {
     const seen = {};
     for (let i = 0; i < N; i++) {
@@ -337,6 +337,16 @@ r = await ev(page, () => {
 check("本多忠勝は槍・鎧の伝説装備が出やすい", r.tada > r.kan + 0.1, JSON.stringify(r));
 check("竹中半兵衛は策略・支援のスキルの書が出やすい", r.sup > r.sup0 + 0.15, JSON.stringify(r));
 check("特定の武将でなくても、全部の伝説装備が出る", r.allTada && r.allKan);
+r = await ev(page, () => {
+  const F = WD_DEBUG.forgeApi,
+    seen = new Set();
+  for (let i = 0; i < 3000; i++) {
+    let k = 0;
+    seen.add(F.rollForge("nobunaga", "gear", () => (k++ === 0 ? 0.9999 : Math.random())).gear);
+  }
+  return ["byakkoArmor", "yamataBlade", "tenmaArmor"].some((id) => seen.has(id));
+});
+check("裏ボスの専用装備は錬成では出ない", r === false);
 
 console.log("■ 外れの欠片と交換");
 r = await ev(

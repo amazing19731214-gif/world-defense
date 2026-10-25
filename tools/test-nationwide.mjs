@@ -326,7 +326,7 @@ check(
     /秘境を発見：比叡山の封印/.test(r.body) &&
     /雷獣・白虎/.test(r.body) &&
     /推奨 Lv200/.test(r.body) &&
-    /次の更新/.test(r.body),
+    /討伐に出陣できます/.test(r.body),
   r.body && r.body.slice(0, 300),
 );
 r = await page.evaluate(() => {
@@ -659,14 +659,17 @@ check("制圧 67/68", /制圧 67\/68か国/.test(text), text.slice(0, 60));
 await page.tap('[data-map-tab="secret"]');
 text = await page.textContent("#mapBody");
 check(
-  "秘境3つ：名前・主・推奨Lv・討伐戦は次の更新（押せない）",
+  "秘境3つ：名前・主・推奨Lv・討伐に出陣できる（v33）",
   /比叡山の封印/.test(text) &&
     /黄泉の洞窟/.test(text) &&
     /富士地下遺跡/.test(text) &&
     /雷獣・白虎/.test(text) &&
     /冥龍・八岐/.test(text) &&
     /零式・天魔機神/.test(text) &&
-    (await page.$$eval(".secret-card button", (bs) => bs.length === 3 && bs.every((b) => b.disabled))),
+    (await page.$$eval(
+      ".secret-card button",
+      (bs) => bs.length === 3 && bs.every((b) => !b.disabled && /討伐に出陣/.test(b.textContent)),
+    )),
   text.slice(0, 200),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "n2-secrets.png") });
