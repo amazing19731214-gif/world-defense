@@ -574,7 +574,7 @@ check(
   JSON.stringify(r),
 );
 await page.tap('[data-tr-diff="super"]');
-check("難易度を選ぶとボタンの文字も変わる", /超級で挑戦する/.test(await page.textContent("#trStart")));
+check("難易度を選ぶとボタンの文字も変わる", /超級.*ウェーブに挑戦する/.test(await page.textContent("#trStart")));
 await page.tap('[data-tr-diff="advanced"]');
 await page.tap("#trStart");
 r = await ev(page, () => {
