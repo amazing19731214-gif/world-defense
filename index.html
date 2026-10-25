@@ -1380,6 +1380,7 @@
         color: inherit;
         opacity: 0.85;
       }
+      #trainingSheet #trStart { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -5px 10px #12343c; }
       .tr-start {
         width: 100%;
         min-height: 52px;
@@ -1611,6 +1612,7 @@
       #heartBuy { width: 100%; min-height: 48px; font-size: 16px; white-space: normal; }
       #heartBody p { margin: 10px 0; }
       #heartClose { min-height: 44px; }
+      #trainingWaves { display: block; width: 100%; min-height: 44px; margin: 6px 0; padding: 8px; font-size: 16px; color: #fff0c9; background: #254338; border: 2px solid #91ac92; border-radius: 10px; }
       .goal-list {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2159,7 +2161,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v45（ゴールドでハート回復）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v46（修練場の回数選択）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4238,7 +4240,7 @@ OFF</button>
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
           $("wave").textContent = training
-            ? "修練 " + wave + (training.D.endless ? "" : "/" + TRAINING.waves)
+            ? "修練 " + wave + (training.D.endless ? "" : "/" + training.waves)
             : "WAVE " + wave + "/" + waveGoal;
           $("start").disabled = playing || over || !!battle;
           renderAuto();
@@ -5287,7 +5289,8 @@ OFF</button>
         // 兵士の成長と戦死は本物（主人公はLv1から再出発、一般の兵士は永久に戦死）
         const TRAINING_KEY = "worldDefense.training.v1";
         const TRAINING = {
-          waves: 10, // 1回の挑戦（無限は終わりなし）
+          waves: 10, // 既定の回数（旧保存データとテストとの互換用）
+          waveGoals: [10, 20, 30, 50, 100],
           maxHit: 0.6, // 敵の一撃で減るHPの上限（兵士の最大HPに対する割合）
           castleHp: 20, // 修練場の城HP（通常の防衛戦とは別）
           diffs: {
@@ -5320,7 +5323,7 @@ OFF</button>
           healXp: 0.6, // 実際に回復したHP ÷ 相手の最大HP × 単位 × この値
           blockXp: 0.4, // 実際に受けた＋防御で減らしたダメージ ÷ 自分の最大HP × 単位 × この値
           waveXp: 1.5, // ウェーブを生き延びた（上限の対象外）
-          clearXp: 6, // 10ウェーブをクリアした（最後の敵レベルの単位の何倍か・上限の対象外）
+          clearXp: 6, // 選択した全ウェーブをクリアした（最後の敵レベルの単位の何倍か・上限の対象外）
           waveCap: (L) => 70 + 12 * L, // 1人が1ウェーブの戦闘で得られる上限（通常は70）
           goldPerWave: 10, // 報酬のG：クリアしたウェーブ × これ × 難易度の倍率（通常の防衛戦のゴールドに足す）
           clearGold: 50,
@@ -5329,7 +5332,7 @@ OFF</button>
           const D = T.D,
             n = Math.max(1, w);
           if (D.endless) return Math.round(D.from * D.grow ** (n - 1));
-          return Math.round(D.from + ((D.to - D.from) * (n - 1)) / (TRAINING.waves - 1));
+          return Math.round(D.from + ((D.to - D.from) * (n - 1)) / ((T.waves || TRAINING.waves) - 1));
         }
         const trainUnit = (T, L) => TRAINING.xpUnit(L) * T.D.xpMul;
         function trainingEnemy(T, i, total) {
@@ -5394,7 +5397,7 @@ OFF</button>
         function loadTrainingSave() {
           try {
             const d = JSON.parse(localStorage.getItem(TRAINING_KEY) || "null");
-            const out = { best: {}, clears: {} };
+            const out = { best: {}, clears: {}, waves: d && TRAINING.waveGoals.includes(d.waves) ? d.waves : TRAINING.waves };
             for (const k of TRAINING.order) {
               const b = d && d.best && d.best[k];
               if (b) out.best[k] = { waves: intIn(b.waves, 0, 1e6, 0), level: intIn(b.level, 0, 1e9, 0) };
@@ -5402,19 +5405,27 @@ OFF</button>
             }
             return out;
           } catch (err) {
-            return { best: {}, clears: {} };
+            return { best: {}, clears: {}, waves: TRAINING.waves };
           }
         }
         const trainingSave = loadTrainingSave();
-        function startTraining(key) {
+        function persistTrainingSave() {
+          try { localStorage.setItem(TRAINING_KEY, JSON.stringify({ version: 1, ...trainingSave })); return true; }
+          catch (err) { return false; }
+        }
+        function startTraining(key, waves = trainingSave.waves) {
           if (training) return "修練場で挑戦中です。";
           if (battle) return "攻城戦の最中は始められません。";
           if (playing) return "防衛のウェーブ中は始められません。ウェーブの合間に始めよう。";
           const D = TRAINING.diffs[key];
           if (!D) return "その難易度はありません。";
+          if (!TRAINING.waveGoals.includes(waves)) return "そのウェーブ数は選べません。";
+          trainingSave.waves = waves;
+          persistTrainingSave();
           training = {
             key,
             D,
+            waves,
             wave: 0,
             cleared: 0,
             done: false,
@@ -5452,8 +5463,8 @@ OFF</button>
         function trainingWaveCleared() {
           const T = training;
           T.cleared = wave;
-          msg("修練場 ウェーブ " + wave + " クリア！" + (T.D.endless || wave < TRAINING.waves ? " 次のウェーブへ。" : ""));
-          if (!T.D.endless && wave >= TRAINING.waves) endTraining("clear");
+          msg("修練場 ウェーブ " + wave + " クリア！" + (T.D.endless || wave < T.waves ? " 次のウェーブへ。" : ""));
+          if (!T.D.endless && wave >= T.waves) endTraining("clear");
         }
         // 修練場を終える（クリア・撤退・敗北）。報酬は1回だけ（done）。通常の防衛戦の状態を元に戻す
         function endTraining(result) {
@@ -5504,9 +5515,7 @@ OFF</button>
           const b = trainingSave.best[T.key] || { waves: 0, level: 0 };
           trainingSave.best[T.key] = { waves: Math.max(b.waves, T.cleared), level: Math.max(b.level, T.cleared ? lastLv : 0) };
           if (result === "clear") trainingSave.clears[T.key] = (trainingSave.clears[T.key] || 0) + 1;
-          try {
-            localStorage.setItem(TRAINING_KEY, JSON.stringify(Object.assign({ version: 1 }, trainingSave)));
-          } catch (err) {}
+          persistTrainingSave();
           T.result = result;
           T.reward = reward;
           T.lastLv = lastLv;
@@ -5524,15 +5533,18 @@ OFF</button>
               T.D.name +
               "</b>・ウェーブ " +
               wave +
-              (T.D.endless ? "" : "/" + TRAINING.waves) +
+              (T.D.endless ? "" : "/" + T.waves) +
               "・敵Lv " +
               trainLevel(T, Math.max(1, wave)) +
               '</p><div class="card-actions"><button data-tr-retreat>↩ 撤退する</button></div>';
             return;
           }
           $("trBody").innerHTML =
-            '<p class="muted">強い敵と10ウェーブ戦って兵士と主人公を鍛える戦場です（無限は負けるか撤退するまで）。5ウェーブ目に中ボス、10ウェーブ目に大将。' +
+            '<p class="muted">強い敵と戦って兵士と主人公を鍛える戦場です。終了ウェーブ数を選べます（無限は負けるか撤退するまで）。5ウェーブごとに中ボス、10ウェーブごとに大将。' +
             "通常の防衛戦のウェーブ・城・ゴールド・塔は、終わると元に戻ります。戦死はふだんどおり（主人公はLv1から再出発、ほかの兵士は永久）。報酬は経験値と少しのG（ガチャ券・領土はなし）。</p>" +
+            '<label for="trainingWaves">終了ウェーブ数</label><select id="trainingWaves"' + (TRAINING.diffs[trainPick].endless ? ' disabled' : '') + '>' +
+            TRAINING.waveGoals.map(n => '<option value="' + n + '"' + (n === trainingSave.waves ? ' selected' : '') + '>' + n + 'ウェーブ</option>').join('') + '</select>' +
+            '<p class="muted">' + (TRAINING.diffs[trainPick].endless ? '無限は回数制限なし。撤退か敗北まで続きます。' : '選んだ回数で、敵Lvがこの難易度の最終Lvまで上がります。挑戦中は回数を変更できません。') + '</p>' +
             '<div class="tr-diffs">' +
             TRAINING.order
               .map((k) => {
@@ -5560,7 +5572,7 @@ OFF</button>
             "</div>" +
             '<button id="trStart" class="tr-start">⚔️ ' +
             TRAINING.diffs[trainPick].name +
-            "で挑戦する</button>";
+            (TRAINING.diffs[trainPick].endless ? "で挑戦する</button>" : "・" + trainingSave.waves + "ウェーブに挑戦する</button>");
         }
         function openTraining() {
           renderTrainingSheet();
@@ -5577,6 +5589,12 @@ OFF</button>
         $("trainingOpen").onclick = openTraining;
         $("trClose").onclick = closeTraining;
         $("trainRetreat").onclick = retreatTraining;
+        $("trainingSheet").addEventListener("change", ev => {
+          if (ev.target.id !== "trainingWaves" || training) return;
+          const n = +ev.target.value;
+          if (TRAINING.waveGoals.includes(n)) { trainingSave.waves = n; persistTrainingSave(); }
+          renderTrainingSheet();
+        });
         $("trainingSheet").addEventListener("click", (ev) => {
           if (ev.target === $("trainingSheet")) return closeTraining();
           const b = ev.target.closest("button");
@@ -5606,7 +5624,7 @@ OFF</button>
               T.D.name +
               "</b> ウェーブ " +
               wave +
-              (T.D.endless ? "" : "/" + TRAINING.waves) +
+              (T.D.endless ? "" : "/" + T.waves) +
               "・敵Lv " +
               trainLevel(T, Math.max(1, playing ? wave : wave + 1)) +
               (playing ? "" : "（次）") +
@@ -5617,7 +5635,7 @@ OFF</button>
               "<br>獲得経験値：戦闘 +" +
               xp +
               "（クリアのボーナスは" +
-              (T.D.endless ? "なし" : TRAINING.waves + "ウェーブ後") +
+              (T.D.endless ? "なし" : T.waves + "ウェーブ後") +
               "）",
           );
         }
@@ -5635,7 +5653,7 @@ OFF</button>
           let html =
             "<p>クリアしたウェーブ <b>" +
             T.cleared +
-            (T.D.endless ? "" : "/" + TRAINING.waves) +
+            (T.D.endless ? "" : "/" + T.waves) +
             "</b>・敵Lv <b>" +
             T.lastLv +
             "</b>・報酬 <b>🪙 " +
@@ -7153,7 +7171,7 @@ OFF</button>
           "named",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
-        const intIn = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
+        function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
         function cleanSkills(list, type) {
           if (!Array.isArray(list)) return [];
           const out = [];
