@@ -263,8 +263,8 @@ r = await page.evaluate(() => ({
   label: document.querySelector('[data-u="ashigaru"]').textContent,
 }));
 check(
-  "領土が三河だけなら効果なし（開始ゴールド 500・足軽 75G）",
-  r.gold === 500 && /75G/.test(r.label),
+  "領土が三河だけなら効果なし（開始ゴールド 500・足軽 150G）",
+  r.gold === 500 && /150G/.test(r.label),
   JSON.stringify(r),
 );
 // 尾張（ウェーブの報酬）・遠江と駿河（開始ゴールド）・美濃（修理費）・信濃（雇用費）を領土にした保存データ
@@ -304,8 +304,8 @@ r = await page.evaluate(() => ({
   cost: WD_DEBUG.squadApi.unitCost("ashigaru"),
 }));
 check(
-  "信濃を取ると、すぐ雇用費 -15%（足軽 1人13G・部隊65G）",
-  r.cost === 13 && r.label === "65G",
+  "信濃を取ると、すぐ雇用費 -15%（足軽 1人13G・部隊130G）",
+  r.cost === 13 && r.label === "130G",
   JSON.stringify(r),
 );
 r = await page.evaluate(() => {
@@ -315,7 +315,7 @@ r = await page.evaluate(() => {
   const q = a.hireSquad("ashigaru", 650, 300);
   return { paid: g0 - WD_DEBUG.state().gold, ok: !!q };
 });
-check("雇用では割引後の費用を払う", r.ok && r.paid === 65, JSON.stringify(r));
+check("雇用では割引後の費用を払う", r.ok && r.paid === 130, JSON.stringify(r));
 await page.tap("#battleClose").catch(() => {});
 await page.tap("#siege");
 await page.tap("#siegeTarget [data-provinces]");

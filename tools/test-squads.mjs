@@ -179,19 +179,19 @@ check(
   btns.join() === "ashigaru,spearman,archer,gunner,medic,cavalry",
   btns.join(),
 );
-check("ボタンに部隊の費用（5人分）を表示", /足軽 75G/.test(await page.textContent('[data-u="ashigaru"]')));
+check("ボタンに部隊の費用（10人分）を表示", /足軽 150G/.test(await page.textContent('[data-u="ashigaru"]')));
 
 console.log("■ 雇用・配置");
 await tapHire(page, "ashigaru");
 await tapMap(page, 650, 322);
 let st = await S(page);
-check("道をタップで5人の部隊を雇用・配置", st.squads.length === 1 && sq(st, 1).alive.length === 5);
+check("道をタップで10人の部隊を雇用・配置", st.squads.length === 1 && sq(st, 1).alive.length === 10);
 // x はタップ位置（画面の1px ≒ マップの2.6）の丸めの分だけずれる
 check("中心線へ補正（y=322 → 300）", near(sq(st, 1).y, 300) && near(sq(st, 1).x, 650, 1.5), JSON.stringify([sq(st, 1).x, sq(st, 1).y]));
-check("雇用費用 15G × 5人", st.gold === 5000 - 75);
+check("雇用費用 15G × 10人", st.gold === 5000 - 150);
 check(
   "兵士は個別のIDと能力を持つ",
-  new Set(st.soldiers.map((m) => m.id)).size === 5 &&
+  new Set(st.soldiers.map((m) => m.id)).size === 10 &&
     st.soldiers.every((m) => m.level === 1 && m.title === "新兵"),
 );
 for (const [label, xy, re] of [
@@ -224,10 +224,10 @@ st = await S(page);
 check("部隊をタップすると部隊パネル", await page.isVisible("#squadPanel"));
 check("塔パネルは同時に出さない", !(await page.isVisible("#towerPanel")));
 const summary = await page.textContent("#sqSummary");
-check("生存数と戦死数を表示", /生存 5人/.test(summary) && /戦死 0人/.test(summary), summary);
+check("生存数と戦死数を表示", /生存 10人/.test(summary) && /戦死 0人/.test(summary), summary);
 check("最初は兵士の詳細を畳んでいる（マップを広く見せる）", !(await page.isVisible("#sqMembers")));
 await page.tap("#sqMore");
-check("兵士5人を押しやすいボタンで表示", (await page.$$("#sqMembers [data-soldier]")).length === 5);
+check("兵士10人を押しやすいボタンで表示", (await page.$$("#sqMembers [data-soldier]")).length === 10);
 await page.tap("#sqMembers [data-soldier]:nth-child(3)");
 const info = await page.textContent("#soldierInfo");
 check(
@@ -284,8 +284,8 @@ st = await S(page);
 check("HP0の兵士は戦死", so(st, D1).alive === false && so(st, D1).hp === 0, JSON.stringify(so(st, D1)));
 const fallen1 = sq(st, 1).fallen;
 check(
-  "部隊の人数は実際の生存者数（5 − 戦死）",
-  fallen1 >= 1 && sq(st, 1).alive.length === 5 - fallen1,
+  "部隊の人数は実際の生存者数（10 − 戦死）",
+  fallen1 >= 1 && sq(st, 1).alive.length === 10 - fallen1,
   JSON.stringify(sq(st, 1)),
 );
 check(
@@ -299,7 +299,7 @@ await endWave(page);
 st = await S(page);
 check(
   "ウェーブ終了でも戦死者は復活しない",
-  so(st, D1).alive === false && sq(st, 1).alive.length === 5 - fallen1,
+  so(st, D1).alive === false && sq(st, 1).alive.length === 10 - fallen1,
 );
 check("生存部隊は次のウェーブにも残る", st.squads.length === 4 && sq(st, 1).state === "deployed");
 check(
@@ -327,7 +327,7 @@ check(
 st = await S(page);
 check(
   "補充で1人増え・戦死者のIDは使わない",
-  sq(st, 1).alive.length === 6 - fallen1 && !sq(st, 1).alive.includes(D1) && st.gold === g0 - 15,
+  sq(st, 1).alive.length === 11 - fallen1 && !sq(st, 1).alive.includes(D1) && st.gold === g0 - 15,
 );
 check("補充しても戦死者は戦死のまま", so(st, D1).alive === false);
 await page.tap("#organize");
@@ -419,14 +419,16 @@ check("経験値・レベルはウェーブをまたいで保持", so(st, L3).le
 
 console.log("■ 最後の生存者");
 await startHeldWave(page);
-// 槍兵隊(#2 @740)の4人を倒す
+// 槍兵隊(#2 @740)の9人を倒す
 const spear = sq(await S(page), 2).alive;
-for (const id of spear.slice(0, 4)) await setHp(page, id, 0.5);
+for (const id of spear.slice(0, 9)) await setHp(page, id, 0.5);
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 150, hp: 1e6, speed: 0 }));
-await step(page, 6);
+// 10人の部隊は前から順に戦うので、9人が倒れるまで進める（倒れたらすぐ敵を消す）
+for (let i = 0; i < 80 && ((sq(await S(page), 2) || {}).fallen || 0) < 9; i++) await step(page, 0.25);
+await clearEnemies(page);
 st = await S(page);
 const last = sq(st, 2)?.alive || [];
-check("5人中4人が戦死して1人生存", last.length === 1 && sq(st, 2).fallen === 4, JSON.stringify(sq(st, 2)));
+check("10人中9人が戦死して1人生存", last.length === 1 && sq(st, 2).fallen === 9, JSON.stringify(sq(st, 2)));
 check(
   "「最後の生存者」の称号と戦歴",
   last.length === 1 &&
@@ -463,8 +465,12 @@ check(
   !!ns,
   (await msgText(page)) + JSON.stringify(st.squads.map((q) => [q.id, q.type, q.state])),
 );
-// 満員なので1人移籍させて空きを作る
-await api(page, "transferSoldier", ns.alive[0], "new");
+// 新しい部隊は10人で満員（部隊の枠も4つ埋まっている）ので、1人を除いて空きを作る
+await page.evaluate((id) => {
+  const S = WD_DEBUG.state(),
+    m = S.soldiers.find((x) => x.id === id);
+  WD_DEBUG.squadApi.killSoldier(m, S.squads.find((q) => q.id === m.squadId));
+}, ns.alive[0]);
 const before = so(await S(page), last[0]);
 check("最後の生存者を新しい部隊に編入", (await api(page, "transferSoldier", last[0], ns.id)) === null);
 st = await S(page);
@@ -577,7 +583,8 @@ console.log("■ 全滅");
 await startHeldWave(page);
 for (const id of sq(await S(page), ash.id).alive) await setHp(page, id, 0.5);
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 60, hp: 1e6, speed: 0 }));
-await step(page, 4);
+// 10人の部隊は前から順に戦うので、全員が倒れるまで進める
+for (let i = 0; i < 80 && sq(await S(page), ash.id); i++) await step(page, 0.25);
 st = await S(page);
 check("全員戦死で部隊は全滅・消滅", !sq(st, ash.id));
 check(
@@ -862,7 +869,7 @@ const sheet = await page.evaluate(() => {
     ),
   };
 });
-check("編成画面は画面の72%以下", sheet.h <= 0.73, sheet.h.toFixed(2));
+check("編成画面は画面の88%以下（ほかの画面と同じ上限。10人の部隊はスクロール）", sheet.h <= 0.885, sheet.h.toFixed(2));
 check("編成画面のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
 await page.tap("#squadSheet", { position: { x: 20, y: 20 } });
 check("背景タップで編成画面を閉じる", !(await page.isVisible("#squadSheet")));

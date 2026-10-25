@@ -2155,7 +2155,7 @@ OFF</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v40（まとめて移籍・データ消去）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v41（10人で雇用）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -3579,7 +3579,8 @@ OFF</button>
         // 能力・経験値・称号の数値はすべてここで調整する。
         const SQUAD_RULES = {
           squadSize: 10, // 1部隊の上限人数（攻城戦の部隊と同じ）
-          hireSize: 5, // 新しく雇うときの人数（残りは「新兵補充」で1人ずつ）
+          hireSize: 10, // 新しく雇うときの人数（1部隊の上限と同じ。戦死などで減った分は「新兵補充」で1人ずつ）
+          lastSurvivorFallen: 4, // 最後の生存者：この人数以上が戦死して1人だけ残ったとき（以前の5人で雇う基準のまま）
           maxDeployed: 4, // 道に同時に出せる部隊数
           maxSquads: 4, // 保有できる部隊数。防衛戦も攻城戦も同じ第一〜第四部隊を使う
           slotNames: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
@@ -3888,7 +3889,7 @@ OFF</button>
             icon: "💥",
             mark: "鉄",
             color: "#27375f",
-            cost: 30, // 1人30G（5人の部隊で150G）
+            cost: 30, // 1人30G（10人の部隊で300G）
             hp: 40,
             atk: 20,
             def: 1,
@@ -3908,7 +3909,7 @@ OFF</button>
             icon: "🩹",
             mark: "医",
             color: "#4f7a55",
-            cost: 24, // 1人24G（5人の部隊で120G）
+            cost: 24, // 1人24G（10人の部隊で240G）
             hp: 55,
             atk: 0,
             def: 3,
@@ -3930,7 +3931,7 @@ OFF</button>
             icon: "🐎",
             mark: "騎",
             color: "#8a2f2a",
-            cost: 28, // 1人28G（5人の部隊で140G）
+            cost: 28, // 1人28G（10人の部隊で280G）
             hp: 85,
             atk: 11,
             def: 6,
@@ -6632,7 +6633,7 @@ OFF</button>
           });
           if (unitGhosts.length > 16) unitGhosts.shift();
           const alive = members(q);
-          if (alive.length === 1 && q.fallen >= SQUAD_RULES.hireSize - 1 && !alive[0].lastSurvivor) {
+          if (alive.length === 1 && q.fallen >= SQUAD_RULES.lastSurvivorFallen && !alive[0].lastSurvivor) {
             alive[0].lastSurvivor = true;
             logHistory(alive[0], squadName(q) + " でただ一人生き残った（最後の生存者）");
             msg(soldierName(alive[0]) + " が " + squadName(q) + " 最後の生存者となった。");
