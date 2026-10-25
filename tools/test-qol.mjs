@@ -207,12 +207,13 @@ check(
 await page.tap("#autoWave");
 await reload(page);
 check("AUTO ON は次に起動しても ON", /AUTO\s*ON/.test(await page.textContent("#autoWave")));
+const resumedWave = await page.evaluate(() => WD_DEBUG.state().wave);
 r = await page.evaluate(() => {
-  // 起動直後（ウェーブ0）は自動では始めない
+  // 起動・途中保存からの再開後は自動では始めない
   WD_DEBUG.step(8);
   return WD_DEBUG.state().wave;
 });
-check("起動直後は自動では始めない（最初のウェーブは自分で）", r === 0);
+check("起動・再開直後は自動では始めない（次のウェーブは自分で）", r === resumedWave && !(await page.evaluate(() => WD_DEBUG.state().playing)));
 r = await page.evaluate(() => {
   // ウェーブ20まで進める（AUTO ON のまま）
   for (let w = 0; w < 20; w++) {
