@@ -1394,6 +1394,156 @@
         min-height: 44px;
         font-size: 15px;
       }
+      /* 秘伝錬成・装備倉庫 */
+      #forgeSheet,
+      #gearSheet {
+        z-index: 12; /* 主人公・兵士名簿の画面の上に開く */
+      }
+      .forge-kinds {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 6px 0 8px;
+      }
+      .forge-kinds button {
+        min-height: 52px;
+        font-size: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .forge-kinds button small {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      .forge-kinds button[aria-pressed="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
+      .forge-confirm {
+        border: 1px solid #ffd34d88;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin: 8px 0;
+        background: #20312a;
+      }
+      .forge-result {
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin: 8px 0;
+        text-align: center;
+        border: 2px solid var(--tc);
+        background: color-mix(in srgb, var(--tc) 18%, #13221d);
+      }
+      .forge-result p {
+        margin: 4px 0;
+      }
+      .forge-tier {
+        font-size: 20px;
+        font-weight: bold;
+        color: var(--tc);
+      }
+      .t-miss {
+        --tc: #9aa39f;
+      }
+      .t-small {
+        --tc: #5cc46b;
+      }
+      .t-normal {
+        --tc: #5fa8e8;
+      }
+      .t-hit {
+        --tc: #b07ad8;
+      }
+      .t-jackpot {
+        --tc: #f0c24f;
+      }
+      th.t-miss,
+      th.t-small,
+      th.t-normal,
+      th.t-hit,
+      th.t-jackpot {
+        color: var(--tc);
+      }
+      .forge-result.t-jackpot {
+        animation: jackpot 0.9s ease-out 3;
+        box-shadow: 0 0 18px #f0c24f99;
+      }
+      .forge-result.t-jackpot .forge-tier {
+        font-size: 24px;
+        text-shadow: 0 0 10px #ffe9a0;
+      }
+      @keyframes jackpot {
+        0% {
+          transform: scale(0.94);
+          box-shadow: 0 0 0 #f0c24f00;
+        }
+        40% {
+          transform: scale(1.03);
+          box-shadow: 0 0 28px #f0c24f;
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: 0 0 18px #f0c24f99;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .forge-result.t-jackpot {
+          animation: none;
+        }
+      }
+      .forge-rates {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        text-align: center;
+      }
+      .forge-rates th,
+      .forge-rates td {
+        padding: 4px 2px;
+        border-bottom: 1px solid #719b8f44;
+      }
+      .rar {
+        border-radius: 4px;
+        padding: 0 4px;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .gear-card {
+        border: 1px solid #719b8f55;
+        border-left: 4px solid var(--gc, #9fb3a8);
+        border-radius: 8px;
+        padding: 6px 8px;
+        margin: 6px 0;
+      }
+      .gear-card.g2 {
+        --gc: #5fa8e8;
+      }
+      .gear-card.g3 {
+        --gc: #b07ad8;
+      }
+      .gear-card.g4 {
+        --gc: #e8b64a;
+        background: #e8b64a12;
+      }
+      .gear-card p {
+        margin: 2px 0 6px;
+        line-height: 1.45;
+      }
+      .gear-card button,
+      .gear-pick button,
+      .forge-confirm button {
+        width: 100%;
+        min-height: 44px;
+        margin-top: 4px;
+      }
+      .gear-free summary {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -1504,13 +1654,14 @@
       <div class="tools menu-tools">
         <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
         ><button id="gacha">🎴 ガチャ</button
+        ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="reset">↻ 最初から</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v30（転職・修練場・主人公）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v31（秘伝錬成・装備・転職）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -1595,6 +1746,24 @@
           ><button id="hgClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="hgBody"></div>
+      </div>
+    </div>
+    <div id="forgeSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="forgeTitle">
+        <div class="panel-head hg-head">
+          <strong id="forgeTitle">🔥 秘伝錬成</strong
+          ><button id="forgeClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="forgeBody"></div>
+      </div>
+    </div>
+    <div id="gearSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gearTitle">
+        <div class="panel-head hg-head">
+          <strong id="gearTitle">🎒 装備倉庫</strong
+          ><button id="gearClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="gearBody"></div>
       </div>
     </div>
     <div id="jobSheet" class="sheet-back" hidden>
@@ -1698,6 +1867,228 @@
           SR: { color: "#b07ad8", text: "#1f1030" },
           R: { color: "#5f9fc4", text: "#0d2230" },
         };
+        // ===== 秘伝錬成・装備 =====
+        // 武将カードの重複分（2枚目以降）を1枚使って、抽選でスキルの書・装備を得る。
+        // 等級：外れ（欠片だけ）→ 小当たり（並）→ 普通（良）→ 当たり（名品）→ 大当たり（伝説）
+        const FORGE = {
+          tiers: ["miss", "small", "normal", "hit", "jackpot"],
+          tierName: { miss: "外れ", small: "小当たり", normal: "普通", hit: "当たり", jackpot: "大当たり" },
+          tierGrade: { small: 1, normal: 2, hit: 3, jackpot: 4 }, // 等級 → 品質（並・良・名品・伝説）
+          // 武将カードのレア度ごとの確率（％・合計100）。R が基本。SR・SSR は当たり・大当たりが出やすい
+          rates: {
+            R: { jackpot: 3, hit: 12, normal: 35, small: 35, miss: 15 },
+            SR: { jackpot: 5, hit: 17, normal: 35, small: 31, miss: 12 },
+            SSR: { jackpot: 8, hit: 22, normal: 34, small: 27, miss: 9 },
+          },
+          shardPerMiss: 1, // 外れでも錬成の欠片
+          shardTrade: 100, // 欠片100個で上級（名品）のスキルの書1冊と交換
+          leanWeight: 3, // 武将の傾向に合うアイテムの重み（合わないものは1。同じ等級の中の選び方だけに効く）
+          historySize: 20,
+          maxItems: 300, // 倉庫に入る装備の数
+          maxBooks: 99, // 同じ書を持てる数
+        };
+        const GRADES = [
+          null,
+          { name: "並", color: "#9fb3a8" },
+          { name: "良", color: "#5fa8e8" },
+          { name: "名品", color: "#b07ad8" },
+          { name: "伝説", color: "#e8b64a" },
+        ];
+        // 武器の種類と使える職業（鎧・装飾品はすべての職業）
+        const WEAPON_TYPES = {
+          katana: { name: "刀", jobs: ["ashigaru", "samurai", "ninja", "kensei"] },
+          yari: { name: "槍", jobs: ["spearman", "sohei", "cavalry"] },
+          yumi: { name: "弓", jobs: ["archer"] },
+          teppo: { name: "鉄砲", jobs: ["gunner"] },
+        };
+        const GEAR_SLOTS = { weapon: "武器", armor: "鎧", accessory: "装飾品" };
+        // 装備。fx は兵士のスキルと同じ効果の名前（足し合わせて skillSum で効く）に加えて
+        //   def（防御）/ hp（最大HP）/ crit（会心：一撃 ×1.5）/ proc（確率で発動する効果の発動率）/ healTaken（受ける回復）
+        //   resist（弱点・遠距離への耐性）/ march（攻城戦の進軍の速さ・撤退の速さ）
+        //   thunder（雷撃）/ renzan（HPを使って連撃）/ frenzy（撃破で次の攻撃が早い）/ phoenix（致命傷を1回耐える）
+        // tags は武将の傾向（FORGE_LEAN）に使う
+        const GEAR = {
+          // --- 刀 ---
+          uchigatana: { name: "打刀", slot: "weapon", wtype: "katana", grade: 1, fx: { atk: 0.06 }, text: "攻撃 +6%" },
+          tachi: { name: "太刀", slot: "weapon", wtype: "katana", grade: 2, fx: { atk: 0.12 }, text: "攻撃 +12%" },
+          osafune: { name: "備前長船", slot: "weapon", wtype: "katana", grade: 3, fx: { atk: 0.16, crit: 0.06 }, text: "攻撃 +16%・会心率 +6%" },
+          muramasa: {
+            name: "妖刀・村正",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            fx: { atk: 0.2, crit: 0.12, frenzy: 1 },
+            text: "攻撃 +20%・会心率 +12%。敵を倒すと次の攻撃がすぐ出る（1秒に1回まで）",
+          },
+          masamuneBlade: {
+            name: "妖刀・政宗",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            fx: { atk: 0.3, renzan: 1 },
+            text: "攻撃 +30%。HPが半分以上のとき、30%の確率で最大HPの5%を使って連撃（威力 +80%・3秒に1回まで）。ゲーム独自の創作武器",
+          },
+          doujigiri: {
+            name: "童子切安綱",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            fx: { atk: 0.2, vsBoss: 0.5 },
+            text: "攻撃 +20%・大将（ボス）への攻撃 +50%",
+          },
+          raikiri: {
+            name: "雷切",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            fx: { atk: 0.18, thunder: 1 },
+            text: "攻撃 +18%。15%の確率で雷撃（威力 +60%・1.5秒に1回まで）",
+          },
+          // --- 槍 ---
+          suyari: { name: "素槍", slot: "weapon", wtype: "yari", grade: 1, fx: { atk: 0.06 }, text: "攻撃 +6%" },
+          nagayari: { name: "長槍", slot: "weapon", wtype: "yari", grade: 2, fx: { atk: 0.1, range: 0.05 }, text: "攻撃 +10%・射程 +5%" },
+          katakama: {
+            name: "片鎌槍",
+            slot: "weapon",
+            wtype: "yari",
+            grade: 3,
+            fx: { atk: 0.15, armorPierce: 0.15 },
+            text: "攻撃 +15%・敵の装甲を15%無視",
+          },
+          tonbokiri: {
+            name: "蜻蛉切",
+            slot: "weapon",
+            wtype: "yari",
+            grade: 4,
+            fx: { atk: 0.22, range: 0.15, armorPierce: 0.35 },
+            text: "攻撃 +22%・射程 +15%・敵の装甲を35%無視",
+          },
+          nihongo: {
+            name: "日本号",
+            slot: "weapon",
+            wtype: "yari",
+            grade: 4,
+            tags: ["charge"],
+            fx: { atk: 0.28, chargeAdd: 0.5 },
+            text: "攻撃 +28%・突撃の一撃 +50%（騎兵の動きのとき）",
+          },
+          // --- 弓 ---
+          hankyu: { name: "半弓", slot: "weapon", wtype: "yumi", grade: 1, fx: { atk: 0.06 }, text: "攻撃 +6%" },
+          shigeto: { name: "重籐の弓", slot: "weapon", wtype: "yumi", grade: 2, fx: { atk: 0.1, range: 0.06 }, text: "攻撃 +10%・射程 +6%" },
+          raijodo: { name: "雷上動", slot: "weapon", wtype: "yumi", grade: 3, fx: { atk: 0.16, range: 0.1 }, text: "攻撃 +16%・射程 +10%" },
+          // --- 鉄砲 ---
+          hinawa: { name: "火縄銃", slot: "weapon", wtype: "teppo", grade: 1, fx: { atk: 0.06 }, text: "攻撃 +6%" },
+          sakaizutsu: { name: "堺筒", slot: "weapon", wtype: "teppo", grade: 2, fx: { atk: 0.12 }, text: "攻撃 +12%" },
+          kunitomo: {
+            name: "国友筒",
+            slot: "weapon",
+            wtype: "teppo",
+            grade: 3,
+            fx: { atk: 0.16, armorPierce: 0.2 },
+            text: "攻撃 +16%・敵の装甲を20%無視",
+          },
+          // --- 鎧 ---
+          domaru: { name: "胴丸", slot: "armor", grade: 1, fx: { def: 0.08 }, text: "防御 +8%" },
+          haramaki: { name: "腹巻", slot: "armor", grade: 2, fx: { def: 0.12, hp: 0.05 }, text: "防御 +12%・最大HP +5%" },
+          tosei: { name: "当世具足", slot: "armor", grade: 3, fx: { def: 0.18, hp: 0.08 }, text: "防御 +18%・最大HP +8%" },
+          nanbando: {
+            name: "南蛮胴",
+            slot: "armor",
+            grade: 3,
+            fx: { def: 0.12, rangedGuard: 0.15 },
+            text: "防御 +12%・遠距離攻撃のダメージ -15%",
+          },
+          akazonae: {
+            name: "真田の赤備え",
+            slot: "armor",
+            grade: 4,
+            tags: ["charge"],
+            fx: { def: 0.15, atk: 0.05, chargeAdd: 0.4 },
+            text: "防御 +15%・攻撃 +5%・突撃の一撃 +40%（騎兵の動きのとき）",
+          },
+          kokuyoroi: {
+            name: "独眼竜の黒鎧",
+            slot: "armor",
+            grade: 4,
+            fx: { def: 0.15, evade: 0.1 },
+            text: "防御 +15%・10%の確率で攻撃をかわす（かわすと2秒は発動しない）",
+          },
+          shirogane: {
+            name: "白銀の神鎧",
+            slot: "armor",
+            grade: 4,
+            fx: { hp: 0.25, def: 0.06, resist: 0.5 },
+            text: "最大HP +25%・防御 +6%・耐性 +50%（弱点の追加ダメージ・遠距離のダメージを減らす）",
+          },
+          kishin: {
+            name: "鬼神の鎧",
+            slot: "armor",
+            grade: 4,
+            fx: { atk: 0.18, def: 0.18, healTaken: -0.35 },
+            text: "攻撃 +18%・防御 +18%。受ける回復 -35%",
+          },
+          fudo: {
+            name: "不動の大鎧",
+            slot: "armor",
+            grade: 4,
+            fx: { def: 0.45, march: -0.3 },
+            text: "防御 +45%。移動が遅い（攻城戦の進軍 -30%・撤退に1.3倍の時間）",
+          },
+          // --- 装飾品 ---
+          omamori: { name: "守護のお守り", slot: "accessory", grade: 1, fx: { guard: 0.05 }, text: "受けるダメージ -5%" },
+          magatama: {
+            name: "勾玉",
+            slot: "accessory",
+            grade: 2,
+            fx: { proc: 0.3 },
+            text: "確率で発動する効果（連続攻撃・会心・回避・雷撃・連撃）の発動率 ×1.3",
+          },
+          shippu: { name: "疾風の護符", slot: "accessory", grade: 2, fx: { haste: 0.08 }, text: "攻撃の間隔 -8%" },
+          bushin: { name: "武神の指輪", slot: "accessory", grade: 3, fx: { atk: 0.12 }, text: "攻撃 +12%" },
+          phoenix: {
+            name: "不死鳥の護符",
+            slot: "accessory",
+            grade: 4,
+            fx: { phoenix: 1 },
+            text: "致命傷を1回だけ耐える（HP30%で踏みとどまる。ウェーブ・攻城戦ごとに1回。もう一度倒れれば戦死）",
+          },
+        };
+        // 武将の錬成の傾向（等級が決まった後、同じ等級の中で出やすくなる。どの武将からでも全部出る）
+        //   katana / yari / yumi / teppo（武器）・armor・accessory・charge（突撃）
+        //   attack / defense / support / strategy（スキルの書の系統）
+        const FORGE_LEAN = {
+          nobunaga: ["teppo", "attack"],
+          shingen: ["yari", "strategy", "armor"],
+          kenshin: ["katana", "yari", "attack"],
+          motoyasu: ["armor", "defense", "accessory"],
+          hideyoshi: ["support", "strategy", "accessory"],
+          yukimura: ["yari", "charge", "armor"],
+          kanetsugu: ["support", "armor"],
+          masamune: ["katana", "teppo", "armor"],
+          tadakatsu: ["yari", "armor", "defense"],
+          mitsuhide: ["teppo", "strategy"],
+          mitsunari: ["strategy", "yumi"],
+          yoshihiro: ["teppo", "katana"],
+          motochika: ["yari", "yumi"],
+          kiyomasa: ["yari", "armor"],
+          hanbei: ["strategy", "support"],
+          muneshige: ["katana", "yumi", "charge"],
+          kanbei: ["strategy", "accessory"],
+          motonari: ["yumi", "strategy"],
+          keiji: ["yari", "charge", "attack"],
+          ujiyasu: ["armor", "defense"],
+          masanori: ["yari", "attack"],
+          kansuke: ["strategy", "accessory"],
+          yoshiaki: ["yumi", "defense"],
+          yoshikage: ["support", "accessory"],
+          dosan: ["strategy", "katana"],
+          yoshikata: ["yumi", "armor"],
+          haruhisa: ["katana", "defense"],
+          sorin: ["teppo", "attack"],
+          takanobu: ["katana", "attack"],
+          terumoto: ["support", "accessory"],
+        };
+        const gearTags = (g) => [g.wtype || g.slot, ...(g.slot === "armor" ? ["defense"] : []), ...(g.tags || [])];
         const WARLORDS = {
   "nobunaga": {
     "name": "織田信長",
@@ -2818,6 +3209,66 @@
             prayer: 0.06,
             text: "6秒ごとに、自分の部隊でいちばん傷ついた兵士のHPを最大HPの6%回復",
           },
+          // ----- 秘伝スキル（book）：秘伝錬成で得る「スキルの書」で習得する。どの兵種・職業でも装備できる -----
+          // book … 品質（1 並・2 良・3 名品＝上級・4 伝説）、line … 系統（武将の傾向に使う）
+          shingan: { name: "心眼", book: 1, line: "attack", types: ALL_UNITS, crit: 0.05, text: "会心率 +5%（会心：一撃 ×1.5）" },
+          kenshu: { name: "堅守", book: 1, line: "defense", types: ALL_UNITS, def: 0.06, text: "防御 +6%" },
+          hayawaza: { name: "早業", book: 1, line: "attack", types: ALL_UNITS, haste: 0.05, text: "攻撃・回復の間隔 -5%" },
+          teate: { name: "手当の心得", book: 1, line: "support", types: ALL_UNITS, healMul: 0.1, text: "回復量 +10%（衛生兵）" },
+          goriki: { name: "剛力", book: 2, line: "attack", types: ALL_UNITS, atk: 0.1, text: "攻撃力 +10%" },
+          mikiri: { name: "見切り", book: 2, line: "defense", types: ALL_UNITS, evade: 0.08, text: "8%の確率で攻撃をかわす（かわすと2秒は発動しない）" },
+          gunryaku: { name: "軍略", book: 2, line: "strategy", types: ALL_UNITS, vsBoss: 0.25, text: "大将への攻撃力 +25%" },
+          kyugo: { name: "救護の心得", book: 2, line: "support", types: ALL_UNITS, healMul: 0.2, text: "回復量 +20%（衛生兵）" },
+          kishinGeki: {
+            name: "鬼神の一撃",
+            book: 3,
+            line: "attack",
+            types: ALL_UNITS,
+            atk: 0.05,
+            crit: 0.1,
+            text: "攻撃力 +5%・会心率 +10%",
+          },
+          kongo: { name: "金剛", book: 3, line: "defense", types: ALL_UNITS, guard: 0.12, text: "受けるダメージ -12%" },
+          jinrai: { name: "疾風迅雷", book: 3, line: "attack", types: ALL_UNITS, haste: 0.12, text: "攻撃・回復の間隔 -12%" },
+          saihai: {
+            name: "采配",
+            book: 3,
+            line: "strategy",
+            types: ALL_UNITS,
+            atk: 0.06,
+            guard: 0.06,
+            text: "攻撃力 +6%・受けるダメージ -6%",
+          },
+          jinjutsu: { name: "仁術", book: 3, line: "support", types: ALL_UNITS, healMul: 0.3, text: "回復量 +30%（衛生兵）" },
+          tenkaMuso: {
+            name: "天下無双",
+            book: 4,
+            line: "attack",
+            types: ALL_UNITS,
+            atk: 0.2,
+            crit: 0.06,
+            text: "攻撃力 +20%・会心率 +6%",
+          },
+          fudoMyoo: {
+            name: "不動明王",
+            book: 4,
+            line: "defense",
+            types: ALL_UNITS,
+            guard: 0.16,
+            hp: 0.1,
+            text: "受けるダメージ -16%・最大HP +10%",
+          },
+          shinsoku: { name: "神速", book: 4, line: "attack", types: ALL_UNITS, haste: 0.18, text: "攻撃・回復の間隔 -18%" },
+          kiboku: {
+            name: "奇謀",
+            book: 4,
+            line: "strategy",
+            types: ALL_UNITS,
+            vsBoss: 0.4,
+            evade: 0.06,
+            text: "大将への攻撃力 +40%・6%の確率で攻撃をかわす",
+          },
+          isei: { name: "医聖", book: 4, line: "support", types: ALL_UNITS, healMul: 0.5, text: "回復量 +50%（衛生兵）" },
           siegeMaster: {
             name: "城攻め名人",
             future: true,
@@ -3181,6 +3632,37 @@
           return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0, passiveClock: 0, guardReady: false, lastActivity: 0, lastHit: -100, hitStack: 0, shots: 0, chain: 0, seen: new Set(), wardUsed: new Set(), protected: new Set(), economyGold: 0, couponWave: -1 };
         }
         // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将・負傷の残りウェーブ」だけ。戦闘は保存しない。
+        // 秘伝錬成の保存データ（武将と同じ保存データに入れる）：欠片・装備・スキルの書・履歴・錬成で使った枚数
+        function cleanForge(d) {
+          const o = d && typeof d === "object" ? d : {};
+          const int = (v, max) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
+          const items = [],
+            uids = new Set();
+          for (const it of Array.isArray(o.items) ? o.items : []) {
+            if (!it || !GEAR[it.id] || !Number.isInteger(it.uid) || it.uid < 1 || uids.has(it.uid)) continue;
+            uids.add(it.uid);
+            items.push({ uid: it.uid, id: it.id, owner: Number.isInteger(it.owner) ? it.owner : null });
+            if (items.length >= FORGE.maxItems) break;
+          }
+          const books = {};
+          if (o.books && typeof o.books === "object")
+            for (const [id, n] of Object.entries(o.books))
+              if (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id].book && int(n, FORGE.maxBooks) > 0) books[id] = int(n, FORGE.maxBooks);
+          const used = {};
+          if (o.used && typeof o.used === "object")
+            for (const [id, n] of Object.entries(o.used)) if (WARLORDS[id] && int(n, 1e6) > 0) used[id] = int(n, 1e6);
+          return {
+            shards: int(o.shards, 99999),
+            seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
+            items,
+            books,
+            used,
+            count: int(o.count, 1e9),
+            history: (Array.isArray(o.history) ? o.history : [])
+              .filter((h) => h && typeof h === "object" && (h.w === null || WARLORDS[h.w]))
+              .slice(0, FORGE.historySize),
+          };
+        }
         function loadWarlordSave() {
           const fresh = () => ({
             owned: {},
@@ -3188,6 +3670,7 @@
             history: [],
             lastHero: null,
             injured: {},
+            forge: cleanForge(null),
           });
           let raw = null;
           try {
@@ -3221,11 +3704,12 @@
               history,
               lastHero: WARLORDS[data.lastHero] ? data.lastHero : null,
               injured,
+              forge: cleanForge(data.forge), // 以前の保存データには無い（重複カードは今の枚数のまま。錬成で使った分は減っている）
             };
           } catch (err) {
             // 壊れた保存データ：所持はなしで開始（初回配布の券は二重に配らない）
             console.warn("武将の保存データを読み込めないため初期化します", err);
-            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, broken: true };
+            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), broken: true };
           }
         }
         const heroSave = loadWarlordSave();
@@ -3241,6 +3725,7 @@
                 history: heroSave.history,
                 lastHero: heroSave.lastHero,
                 injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
+                forge: heroSave.forge,
               }),
             );
             saveOk = true;
@@ -3378,7 +3863,7 @@
         }
         const rawMaxHp = (s) => {
           const c = SOLDIER_TYPES[s.type], lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
-          return Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (squadPassive(squadById(s.squadId)).hpMul || 1));
+          return Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1));
         };
         const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
@@ -3630,7 +4115,7 @@
           const t = towers.includes(target) ? target : null, q = t ? null : squadById(target.squadId);
           if ((t && t.destroyed) || (!t && (!target.alive || target.out || !q))) return 0;
           const pos = t || q, max = t ? towerMaxHp(t) : rawMaxHp(target);
-          const healed = Math.max(0, Math.min(amount, max - (t ? towerHp(t) : target.hp)));
+          const healed = Math.max(0, Math.min(t ? amount : amount * healTakenMul(target), max - (t ? towerHp(t) : target.hp)));
           target.hp += healed;
 
           return healed;
@@ -4241,7 +4726,7 @@
             s.out = false;
             s.heroFell = false;
             s.waveXp = 0;
-            s.instinctTried = s.unyieldUsed = false;
+            s.instinctTried = s.unyieldUsed = s.phoenixUsed = false;
           }
           // クリアのボーナス：最後まで生き残った、修練場で戦った兵士だけ
           if (result === "clear")
@@ -4484,10 +4969,14 @@
           (rankTitle(s).id !== "recruit" ? "・" + rankTitle(s).name : "") +
           (s.lastSurvivor ? "・最後の生存者" : "");
         // スキル効果の合計（同じスキルは1つしか持てない）
+        // スキルと装備の効果の合計（上限のあるものは上限まで）
+        const SKILL_CAPS = { haste: 0.6, guard: 0.75, rangedGuard: 0.8, evade: 0.4, crit: 0.4, resist: 0.8, armorPierce: 0.8 };
         function skillSum(s, key) {
           let n = 0;
           for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
-          return n;
+          const g = s.id != null && gearOf(s.id);
+          if (g) for (const d of g) n += d.fx[key] || 0;
+          return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
         }
         const hasSkill = (s, id) => (s.skills || []).includes(id);
         // 能力は兵種の基本値＋レベル成長＋称号・階級・スキルのボーナスから毎回計算する（積み上がらない）
@@ -4528,9 +5017,9 @@
           const jm = JOBS[jobOf(s)].mods,
             pf = 1 + JOB_RULES.profBonus * profLv(s);
           return {
-            maxHp: ignoreHero ? Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1)) : rawMaxHp(s),
+            maxHp: ignoreHero ? Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1) * (1 + skillSum(s, "hp"))) : rawMaxHp(s),
             atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * (jm.atk || 1) * pf * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
-            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
+            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def + skillSum(s, "def")) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
             rate: ((c.rate * (1 - skillSum(s, "haste"))) / (1 + pointBonus(s, "spd"))) * (jm.rate || 1) / hm.speed * support.interval,
             range: c.range * (1 + skillSum(s, "range")) * (1 + pointBonus(s, "rng")) * hm.range * support.range,
             // 衛生兵の回復量（ほかの兵種は 0）
@@ -4657,7 +5146,7 @@
         function learnSkill(s, unique) {
           const pool = Object.keys(SOLDIER_SKILLS).filter((id) => {
             const k = SOLDIER_SKILLS[id];
-            return !k.future && !k.job && !!k.unique === !!unique && k.types.includes(s.type) && !learnedOf(s).includes(id);
+            return !k.future && !k.job && !k.book && !!k.unique === !!unique && k.types.includes(s.type) && !learnedOf(s).includes(id);
           });
           if (!pool.length) return null;
           const id = pool[Math.min(pool.length - 1, Math.floor(skillRng() * pool.length))];
@@ -4761,7 +5250,7 @@
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
         function evadeHit(s, now) {
           const p = skillSum(s, "evade");
-          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= p) return false;
+          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p * procMul(s))) return false;
           s.evadeUntil = now + 2;
           return true;
         }
@@ -4782,7 +5271,7 @@
           s.prayerAt = now + 6;
           const max = soldierStats(best).maxHp,
             before = best.hp;
-          best.hp = Math.min(max, best.hp + max * p);
+          best.hp = Math.min(max, best.hp + max * p * healTakenMul(best));
           earnXp(s, "heal", best.hp - before, max);
         }
         // 転職できるか（理由を返す。できるなら null）
@@ -4814,6 +5303,260 @@
           patchSavedSoldier(s, pickSaved(s));
           return null;
         }
+        // ===== 秘伝錬成 =====
+        // 武将カード：heroSave.owned[id] が引いた枚数（重複も含む）。★は min(5, 枚数) で決まる。
+        // 錬成は2枚目以降を1枚ずつ使い、枚数を減らす（★もその分下がる）。同じ1枚が★と錬成の両方に数えられることはない。
+        // 最初の1枚は使えない。使った枚数は減らしたまま保存するので、読み込み直しても戻らない
+        const forgeSave = () => heroSave.forge;
+        const forgeable = (id) => Math.max(0, (heroSave.owned[id] || 0) - 1);
+        const forgeRates = (rarity) => FORGE.rates[rarity] || FORGE.rates.R;
+        const gearLean = (wid) => FORGE_LEAN[wid] || [];
+        function forgeBusy() {
+          if (battle) return "攻城戦の最中は錬成できません。";
+          if (training) return "修練場の挑戦中は錬成できません。";
+          if (playing) return "ウェーブ中は錬成できません。ウェーブの合間に錬成しよう。";
+          return null;
+        }
+        // 抽選1：等級（レア度ごとの確率）
+        function rollTier(rarity, rng) {
+          const rates = forgeRates(rarity);
+          let r = rng() * 100;
+          for (const t of FORGE.tiers) {
+            if (r < rates[t]) return t;
+            r -= rates[t];
+          }
+          return "miss";
+        }
+        // 抽選2：同じ等級の中から1つ（武将の傾向に合うものは重み FORGE.leanWeight）
+        function pickWeighted(list, tagsOf, lean, rng) {
+          const w = list.map((x) => (tagsOf(x).some((t) => lean.includes(t)) ? FORGE.leanWeight : 1)),
+            total = w.reduce((a, b) => a + b, 0);
+          let r = rng() * total;
+          for (let i = 0; i < list.length; i++) {
+            if (r < w[i]) return list[i];
+            r -= w[i];
+          }
+          return list[list.length - 1];
+        }
+        const bookIds = (grade) => Object.keys(SOLDIER_SKILLS).filter((id) => SOLDIER_SKILLS[id].book === grade);
+        function rollForge(wid, kind, rng) {
+          const tier = rollTier(WARLORDS[wid].rarity, rng);
+          if (tier === "miss") return { tier, shard: FORGE.shardPerMiss };
+          const grade = FORGE.tierGrade[tier],
+            lean = gearLean(wid);
+          if (kind === "book") return { tier, book: pickWeighted(bookIds(grade), (id) => [SOLDIER_SKILLS[id].line], lean, rng) };
+          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade);
+          return { tier, gear: pickWeighted(ids, (id) => gearTags(GEAR[id]), lean, rng) };
+        }
+        function forgeError(wid, kind) {
+          const busy = forgeBusy();
+          if (busy) return busy;
+          if (!WARLORDS[wid]) return "その武将はいません。";
+          if (kind !== "book" && kind !== "gear") return "錬成の種類を選んでください。";
+          if (!heroSave.owned[wid]) return "その武将を持っていません。";
+          if (forgeable(wid) < 1) return WARLORDS[wid].name + " の重複カードがありません（最初の1枚は使えません）。";
+          if (kind === "gear" && forgeSave().items.length >= FORGE.maxItems) return "装備倉庫がいっぱいです。";
+          return null;
+        }
+        // 錬成：抽選 → カードを1枚減らす → アイテム・欠片を加える → 1回で保存（武将と同じ保存データなので、消費と獲得は必ず一緒）
+        function forge(wid, kind, rng = secureRandom) {
+          const err = forgeError(wid, kind);
+          if (err) return { error: err };
+          const F = forgeSave(),
+            res = rollForge(wid, kind, rng),
+            starsBefore = stars(wid);
+          heroSave.owned[wid]--;
+          F.used[wid] = (F.used[wid] || 0) + 1;
+          F.count++;
+          let uid = null;
+          if (res.shard) F.shards = Math.min(99999, F.shards + res.shard);
+          if (res.book) F.books[res.book] = Math.min(FORGE.maxBooks, (F.books[res.book] || 0) + 1);
+          if (res.gear) {
+            uid = ++F.seq;
+            F.items.push({ uid, id: res.gear, owner: null });
+          }
+          F.history.unshift({ w: wid, kind, tier: res.tier, got: res.book || res.gear || "shard" });
+          F.history.length = Math.min(F.history.length, FORGE.historySize);
+          const saved = persistHeroes();
+          return Object.assign({ wid, kind, uid, starsBefore, stars: stars(wid), saved }, res);
+        }
+        // 欠片100個 → 上級（名品）のスキルの書を1冊。交換するときだけ欠片を使う
+        function tradeShards(skillId) {
+          const F = forgeSave(),
+            k = SOLDIER_SKILLS[skillId];
+          if (!k || k.book !== 3) return "交換できるのは上級（名品）のスキルの書です。";
+          if (F.shards < FORGE.shardTrade) return "錬成の欠片が足りません（" + F.shards + "/" + FORGE.shardTrade + "）。";
+          F.shards -= FORGE.shardTrade;
+          F.books[skillId] = Math.min(FORGE.maxBooks, (F.books[skillId] || 0) + 1);
+          F.history.unshift({ w: null, kind: "trade", tier: "trade", got: skillId });
+          F.history.length = Math.min(F.history.length, FORGE.historySize);
+          persistHeroes();
+          return null;
+        }
+
+        // ===== 装備 =====
+        // 装備は倉庫（heroSave.forge.items）に1つずつあり、owner に装備している兵士のIDを持つ（装備の持ち主は1人だけ）。
+        // 兵士の側には持たせないので、複製は起きない。持ち主がいなくなった・使えない装備は倉庫へ戻す（checkGear）
+        let gearMap = null,
+          gearReady = false; // 起動時に兵士を読み込むまでは確認しない // 兵士ID → 装備の定義の一覧（変わったら作り直す）
+        function gearOf(id) {
+          if (!gearMap) {
+            gearMap = new Map();
+            for (const it of forgeSave().items)
+              if (it.owner != null) {
+                if (!gearMap.has(it.owner)) gearMap.set(it.owner, []);
+                gearMap.get(it.owner).push(GEAR[it.id]);
+              }
+          }
+          return gearMap.get(id) || null;
+        }
+        const itemByUid = (uid) => forgeSave().items.find((it) => it.uid === uid) || null;
+        const itemsOf = (s) => forgeSave().items.filter((it) => it.owner === s.id);
+        const slotItem = (s, slot) => itemsOf(s).find((it) => GEAR[it.id].slot === slot) || null;
+        // 武器は職業で使えるものが決まる（刀・槍・弓・鉄砲）。鎧・装飾品はすべての職業
+        function canWear(job, gid) {
+          const g = GEAR[gid];
+          return !!g && (g.slot !== "weapon" || WEAPON_TYPES[g.wtype].jobs.includes(job));
+        }
+        const gearJobs = (gid) =>
+          GEAR[gid].slot === "weapon" ? WEAPON_TYPES[GEAR[gid].wtype].jobs.map((j) => JOBS[j].name).join("・") : "すべての職業";
+        const savedSoldier = (id) => soldierSave.soldiers.find((v) => v.id === id) || null;
+        function gearBusy() {
+          if (battle) return "攻城戦の最中は装備を変更できません。";
+          if (training) return "修練場の挑戦中は装備を変更できません。";
+          if (playing) return "戦闘中（ウェーブ中）は装備を変更できません。";
+          return null;
+        }
+        function equipError(s, uid) {
+          const busy = gearBusy();
+          if (busy) return busy;
+          const it = itemByUid(uid);
+          if (!it) return "その装備はありません。";
+          if (!s || !s.alive) return "その兵士は装備できません。";
+          // 保存されていない新兵（ウェーブをクリアする前）には装備させない（読み込み直すといなくなるため）
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから装備できます。";
+          if (it.owner === s.id) return "すでに装備しています。";
+          if (it.owner != null) return (soldierName(soldierById(it.owner)) || "ほかの兵士") + " が装備中です。先に外してください。";
+          if (!canWear(jobOf(s), it.id))
+            return JOBS[jobOf(s)].name + " は" + WEAPON_TYPES[GEAR[it.id].wtype].name + "を使えません（" + gearJobs(it.id) + "）。";
+          return null;
+        }
+        // 装備する（同じ枠の装備は倉庫へ戻る）
+        function equipItem(s, uid) {
+          const err = equipError(s, uid);
+          if (err) return err;
+          const it = itemByUid(uid),
+            old = slotItem(s, GEAR[it.id].slot);
+          if (old) old.owner = null;
+          it.owner = s.id;
+          afterGearChange(s);
+          return null;
+        }
+        function unequipItem(uid) {
+          const busy = gearBusy();
+          if (busy) return busy;
+          const it = itemByUid(uid);
+          if (!it || it.owner == null) return "装備されていません。";
+          const s = soldierById(it.owner);
+          it.owner = null;
+          afterGearChange(s);
+          return null;
+        }
+        function afterGearChange(s) {
+          gearMap = null;
+          if (s && s.alive) s.hp = Math.min(s.hp, soldierStats(s).maxHp);
+          persistHeroes();
+        }
+        // 持ち主がいない（戦死・解散）・持ち主の職業で使えない（転職・主人公の戦死で初期職に戻った）装備は倉庫へ戻す。
+        // 同じ兵士の同じ枠に2つあれば、後のものを戻す。兵士の保存のたびに確認する
+        function checkGear() {
+          if (!gearReady) return [];
+          const back = [],
+            used = new Set();
+          for (const it of forgeSave().items) {
+            if (it.owner == null) continue;
+            const v = savedSoldier(it.owner),
+              s = soldierById(it.owner),
+              job = s ? jobOf(s) : v && JOBS[v.job] ? v.job : v && v.type,
+              key = it.owner + ":" + GEAR[it.id].slot;
+            if (!v || (s && !s.alive) || !canWear(job, it.id) || used.has(key)) {
+              back.push({ it, owner: it.owner });
+              it.owner = null;
+            } else used.add(key);
+          }
+          if (back.length) {
+            gearMap = null;
+            persistHeroes();
+          }
+          return back;
+        }
+        // スキルの書：兵士に使うと、その書のスキルを習得する（書は1冊減る）。習得済みなら使わない
+        function useBookError(s, skillId) {
+          const k = SOLDIER_SKILLS[skillId];
+          if (!k || !k.book) return "そのスキルの書はありません。";
+          if (!(forgeSave().books[skillId] > 0)) return "「" + k.name + "」の書を持っていません。";
+          if (!s || !s.alive) return "その兵士には使えません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
+          if (learnedOf(s).includes(skillId)) return soldierName(s) + " は「" + k.name + "」をもう習得しています（書は使いません）。";
+          return null;
+        }
+        function useBook(s, skillId) {
+          const err = useBookError(s, skillId);
+          if (err) return err;
+          const k = SOLDIER_SKILLS[skillId];
+          // 先に兵士を保存してから書を減らす（途中で止まっても、習得したのに書だけ消えることはない）
+          learnedOf(s).push(skillId);
+          if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(skillId);
+          logHistory(s, "スキルの書で「" + k.name + "」を習得");
+          patchSavedSoldier(s, pickSaved(s));
+          const F = forgeSave();
+          F.books[skillId]--;
+          if (F.books[skillId] <= 0) delete F.books[skillId];
+          persistHeroes();
+          return null;
+        }
+        // ----- 装備の戦闘効果（防衛戦・攻城戦・修練場で共通） -----
+        const procMul = (s) => 1 + skillSum(s, "proc");
+        const comboHit = (s) => {
+          const p = skillSum(s, "combo");
+          return p > 0 && Math.random() < Math.min(0.5, p * procMul(s));
+        };
+        // 一撃の倍率：会心（×1.5）・雷切の雷撃（+60%）・妖刀政宗の連撃（HPを使って +80%）
+        function gearHitMul(s, now) {
+          let m = 1;
+          const pm = procMul(s),
+            crit = Math.min(0.4, skillSum(s, "crit") * pm);
+          if (crit > 0 && Math.random() < crit) m *= 1.5;
+          if (skillSum(s, "thunder") && !coolLeft(s.thunderAt || 0, now, 1.5) && Math.random() < 0.15 * pm) {
+            s.thunderAt = now + 1.5;
+            m += 0.6;
+          }
+          if (skillSum(s, "renzan") && !coolLeft(s.renzanAt || 0, now, 3)) {
+            const max = soldierStats(s).maxHp;
+            if (s.hp > max * 0.5 && Math.random() < 0.3 * pm) {
+              s.renzanAt = now + 3;
+              s.hp -= max * 0.05;
+              m += 0.8;
+            }
+          }
+          return m;
+        }
+        // 妖刀・村正：敵を倒すと次の攻撃がすぐ出る（1秒に1回まで）
+        function gearOnKill(s, st, now) {
+          if (!skillSum(s, "frenzy") || coolLeft(s.frenzyAt || 0, now, 1)) return;
+          s.frenzyAt = now + 1;
+          s.cd = Math.min(s.cd, st.rate * 0.4);
+        }
+        // 不死鳥の護符：致命傷を1回だけ HP30% で耐える（ウェーブ・攻城戦ごとに1回）
+        function phoenixSave(s) {
+          if (s.hp > 0 || !skillSum(s, "phoenix") || s.phoenixUsed) return false;
+          s.phoenixUsed = true;
+          s.hp = Math.max(1, Math.round(soldierStats(s).maxHp * 0.3));
+          logHistory(s, "不死鳥の護符で致命傷を耐えた");
+          return true;
+        }
+        // 受ける回復の倍率（鬼神の鎧で下がる）
+        const healTakenMul = (s) => Math.max(0.2, 1 + skillSum(s, "healTaken"));
         // ===== 主人公 =====
         // 兵士の中から一人を主人公にする（保存データの heroId に兵士のIDだけを持つ。複製はしない）。
         // 主人公は戦死しても消えず、Lv1から再出発する（名前・戦歴・習得したスキルと装備は残る）
@@ -5019,9 +5762,14 @@
           const st = soldierStats(front),
             weak = SOLDIER_TYPES[front.type].spearWeak,
             // 騎兵は敵の槍兵（内部ID knight）に弱い。人馬一体で追加分を減らす
-            spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(front, "spearGuard")) : 1,
+            spear =
+              weak && kind === "knight"
+                ? 1 + (weak - 1) * (1 - skillSum(front, "spearGuard")) * (1 - skillSum(front, "resist"))
+                : 1,
             guard =
-              (1 - skillSum(front, "guard")) * (ranged ? 1 - skillSum(front, "rangedGuard") : 1) * spear;
+              (1 - skillSum(front, "guard")) *
+              (ranged ? (1 - skillSum(front, "rangedGuard")) * (1 - skillSum(front, "resist") * 0.3) : 1) *
+              spear;
           const dmg = ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard * heroGuard(front, ranged, enemy || (kind ? { kind } : null));
           const hpBefore = front.hp;
           // 修練場の敵の一撃は、最大HPの6割まで（強い敵でも一撃で倒れ続けない）
@@ -5037,6 +5785,7 @@
             front.hp = 1;
             logHistory(front, "不屈で踏みとどまった");
           }
+          phoenixSave(front); // 不死鳥の護符
           if (front.hp <= 0) return killSoldier(front, q);
           // 生存本能：HPが減ると撤退を試みる（1ウェーブに1回。失敗すると戦い続ける）
           if (
@@ -5140,7 +5889,7 @@
         const retreatTimeOf = (q) =>
           Math.max(
             ...(members(q).length ? members(q) : roster(q)).map(
-              (s) => SOLDIER_TYPES[s.type].retreatTime || SQUAD_RULES.retreatTime,
+              (s) => (SOLDIER_TYPES[s.type].retreatTime || SQUAD_RULES.retreatTime) * (1 - Math.min(0, skillSum(s, "march"))),
             ),
             0.1,
           );
@@ -5192,7 +5941,11 @@
               s.atk = 0.18;
               q.face = target.x < q.x ? -1 : 1;
               // 敵将狙い：大将への攻撃アップ。連続攻撃：一定確率でもう1回
-              const hitDmg = st.atk * (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) * skillHitMul(s, target),
+              const hitDmg =
+                  st.atk *
+                  (target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) *
+                  skillHitMul(s, target) *
+                  gearHitMul(s, combatClock),
                 charge = ct.charge;
               // 突撃（騎兵）：新しい敵への最初の一撃だけ強い
               if (charge && s.chargeTarget !== target) {
@@ -5200,10 +5953,11 @@
                 dealEnemyDamage(target, hitDmg * (charge + skillSum(s, "chargeAdd")), { s, q, h: heroOnSquad(q) });
                 burst(target.x - 6, target.y - 8, "#ffd9a0", "slash");
               } else dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
-              if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) {
+              if (comboHit(s)) {
                 dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
                 burst(target.x + 6, target.y - 6, "#ffe3a0", "slash");
               }
+              if (target.hp <= 0) gearOnKill(s, st, combatClock); // 妖刀・村正
               target.hit = 0.18;
               touchHero(q);
               earnXp(s, "hit");
@@ -5363,6 +6117,7 @@
             s.heroFell = false;
             s.instinctTried = false;
             s.unyieldUsed = false;
+            s.phoenixUsed = false;
             const max = soldierStats(s).maxHp;
             const q = squadById(s.squadId), extra = q && heroHas(heroOnSquad(q), "terumoto") ? 0.15 : 0;
             s.hp = Math.min(max, s.hp + max * (SQUAD_RULES.waveEndHeal + extra));
@@ -5665,6 +6420,12 @@
           } catch (err) {
             soldierSaveOk = false; // 保存できない環境でも遊べるようにする
           }
+          // 戦死・解散でいなくなった兵士、転職で使えなくなった装備は倉庫へ
+          for (const b of checkGear()) {
+            const g = GEAR[b.it.id],
+              o = soldierById(b.owner);
+            if (o && o.alive) msg(soldierName(o) + " の" + g.name + "は使えなくなったので装備倉庫に戻しました。");
+          }
           return soldierSaveOk;
         }
         const pickSaved = (s) => {
@@ -5751,6 +6512,8 @@
           return soldiers.length;
         }
         restoreRoster();
+        gearReady = true;
+        checkGear(); // 持ち主がいない装備は倉庫へ
         // ===== 防衛塔の耐久 =====
         const towerMaxHp = (t) => Math.round(baseTowerMax(t) * (towerPassive(t).hpMul || (heroHas(heroOn(t), "kiyomasa") ? 1.15 : 1)));
         function towerHp(t) {
@@ -8448,7 +9211,7 @@
                       '"><span><b>' +
                       k.name +
                       "</b>" +
-                      (k.unique ? "（固有）" : "") +
+                      (k.unique ? "（固有）" : k.book ? "（秘伝）" : k.job ? "（職業）" : "") +
                       "<br><small>" +
                       esc(k.text) +
                       "</small></span>" +
@@ -8481,7 +9244,10 @@
             "</b>回・過去最高 <b>Lv" +
             Math.max(s.bestLevel || 1, s.level) +
             "</b></p>" +
-            '<div class="card-actions"><button data-hg-job>🔄 転職（' +
+            '<h3 class="hg-h">装備</h3><p><small>' +
+            slotLine(s) +
+            "</small></p>" +
+            '<div class="card-actions"><button data-hg-gear>🎒 装備・スキルの書</button><button data-hg-job>🔄 転職（' +
             JOBS[jobOf(s)].icon +
             jobName(s) +
             "・熟練度 " +
@@ -8514,6 +9280,7 @@
               hgNote = soldierName(heroSoldier()) + " を主人公にしました。";
             }
           } else if (d.hgJob !== undefined && s) return openJobSheet(s.id);
+          else if (d.hgGear !== undefined && s) return openGear(s.id);
           else if (d.hgChange !== undefined) heroPicking = true;
           else if (d.hgCancel !== undefined) heroPicking = false;
           else if (d.hgAdd) err = addPoint(s, d.hgAdd, 1);
@@ -8522,6 +9289,510 @@
           else if (d.hgOff) err = unequipSkill(s, d.hgOff);
           if (err) hgNote = "⚠ " + err;
           renderHeroGrowth();
+          updateUI();
+        });
+        // ===== 秘伝錬成の画面 =====
+        let forgeKind = "gear",
+          forgePick = null, // 確認中の武将
+          forgeLast = null, // 最後の錬成の結果
+          forgeNote = "";
+        const RAR_ORDER = { SSR: 0, SR: 1, R: 2 };
+        const gradeTag = (g) =>
+          '<b class="grade" style="color:' + GRADES[g].color + '">' + GRADES[g].name + "</b>";
+        function gearName(gid) {
+          const g = GEAR[gid];
+          return (
+            gradeTag(g.grade) +
+            " " +
+            esc(g.name) +
+            " <small>（" +
+            GEAR_SLOTS[g.slot] +
+            (g.wtype ? "・" + WEAPON_TYPES[g.wtype].name : "") +
+            "）</small>"
+          );
+        }
+        const bookName = (id) => gradeTag(SOLDIER_SKILLS[id].book) + " 📜 " + esc(SOLDIER_SKILLS[id].name) + "の書";
+        function forgeRateTable() {
+          const head = FORGE.tiers
+            .slice()
+            .reverse()
+            .map((t) => '<th class="t-' + t + '">' + FORGE.tierName[t] + "</th>")
+            .join("");
+          const rows = ["R", "SR", "SSR"]
+            .map(
+              (r) =>
+                "<tr><th>" +
+                r +
+                "</th>" +
+                FORGE.tiers
+                  .slice()
+                  .reverse()
+                  .map((t) => "<td>" + FORGE.rates[r][t] + "%</td>")
+                  .join("") +
+                "</tr>",
+            )
+            .join("");
+          return '<table class="forge-rates"><tr><th>レア度</th>' + head + "</tr>" + rows + "</table>";
+        }
+        function forgeResultHtml(r) {
+          const got = r.shard
+            ? "🔹 錬成の欠片 +" + r.shard + "（" + forgeSave().shards + "/" + FORGE.shardTrade + "）"
+            : r.book
+              ? bookName(r.book) + "<br><small>" + esc(SOLDIER_SKILLS[r.book].text) + "</small>"
+              : gearName(r.gear) + "<br><small>" + esc(GEAR[r.gear].text) + "</small>";
+          return (
+            '<div class="forge-result t-' +
+            r.tier +
+            '" role="status"><p class="forge-tier">' +
+            (r.tier === "jackpot" ? "✨ 大当たり！ ✨" : FORGE.tierName[r.tier]) +
+            "</p><p>" +
+            got +
+            '</p><p class="muted"><small>' +
+            esc(WARLORDS[r.wid].name) +
+            " のカードを1枚使いました（★" +
+            r.starsBefore +
+            (r.stars !== r.starsBefore ? " → ★" + r.stars : "") +
+            "）" +
+            (r.saved ? "" : "・⚠ 保存できませんでした") +
+            "</small></p></div>"
+          );
+        }
+        function renderForge() {
+          const F = forgeSave(),
+            busy = forgeBusy();
+          let html =
+            (forgeNote ? '<p class="saved">' + esc(forgeNote) + "</p>" : "") +
+            '<p class="muted">武将カードの重複分（2枚目以降）を1枚使って、抽選でアイテムを手に入れます。最初の1枚は使えません。' +
+            "重複カードは★にも数えられているので、使うと★がその分下がります（★上限を超えた分なら下がりません）。錬成は無料です。</p>" +
+            (busy ? '<p class="injured">' + esc(busy) + "</p>" : "") +
+            '<div class="forge-kinds" role="group" aria-label="錬成の種類">' +
+            '<button data-forge-kind="book" aria-pressed="' +
+            (forgeKind === "book") +
+            '">📜 秘伝書錬成<small>スキルの書</small></button>' +
+            '<button data-forge-kind="gear" aria-pressed="' +
+            (forgeKind === "gear") +
+            '">⚔️ 装備錬成<small>武器・鎧・装飾品</small></button></div>';
+          if (forgeLast) html += forgeResultHtml(forgeLast);
+          if (forgePick) {
+            const w = WARLORDS[forgePick],
+              n = heroSave.owned[forgePick],
+              after = Math.min(GACHA.maxStars, n - 1);
+            html +=
+              '<div class="forge-confirm"><p><b>' +
+              esc(w.name) +
+              "</b>（" +
+              w.rarity +
+              "）の重複カードを1枚使って、" +
+              (forgeKind === "book" ? "📜 秘伝書錬成" : "⚔️ 装備錬成") +
+              "をします。<br>所持 " +
+              n +
+              "枚 → " +
+              (n - 1) +
+              "枚・★" +
+              stars(forgePick) +
+              (after !== stars(forgePick) ? " → ★" + after + "（★が下がります）" : "（★は変わりません）") +
+              "<br><small>最初の1枚は残ります。使ったカードは戻りません。</small></p>" +
+              '<div class="card-actions"><button data-forge-go' +
+              (forgeError(forgePick, forgeKind) ? " disabled" : "") +
+              '>🔥 錬成する</button><button data-forge-cancel>やめる</button></div></div>';
+          }
+          const list = ownedIds()
+            .filter((id) => forgeable(id) > 0)
+            .sort((a, b) => forgeable(b) - forgeable(a) || RAR_ORDER[WARLORDS[a].rarity] - RAR_ORDER[WARLORDS[b].rarity]);
+          html += '<h3 class="hg-h">重複カードのある武将</h3>';
+          html += list.length
+            ? list
+                .map((id) => {
+                  const w = WARLORDS[id],
+                    n = heroSave.owned[id];
+                  return (
+                    '<div class="pick-row"><span><b>' +
+                    esc(w.name) +
+                    '</b> <span class="rar" style="background:' +
+                    RARITY[w.rarity].color +
+                    ";color:" +
+                    RARITY[w.rarity].text +
+                    '">' +
+                    w.rarity +
+                    "</span> ★" +
+                    stars(id) +
+                    "<br><small>所持 " +
+                    n +
+                    "枚・使える " +
+                    forgeable(id) +
+                    "枚" +
+                    (n > GACHA.maxStars ? "（★に影響しない " + (n - GACHA.maxStars) + "枚）" : "") +
+                    "・傾向：" +
+                    gearLean(id)
+                      .map((t) => LEAN_NAME[t])
+                      .join("・") +
+                    "</small></span><button data-forge-pick=\"" +
+                    id +
+                    '"' +
+                    (busy ? " disabled" : "") +
+                    ">🔥 錬成</button></div>"
+                  );
+                })
+                .join("")
+            : '<p class="muted">重複している武将カードがありません。🎴 ガチャで同じ武将を引くと、2枚目から錬成に使えます。</p>';
+          html +=
+            '<h3 class="hg-h">抽選の確率（武将のレア度別）</h3>' +
+            forgeRateTable() +
+            '<p class="muted"><small>大当たり＝伝説・当たり＝名品・普通＝良・小当たり＝並の品。外れは錬成の欠片 ' +
+            FORGE.shardPerMiss +
+            "個。等級が決まった後、同じ等級の中で武将の傾向に合うものが" +
+            FORGE.leanWeight +
+            "倍出やすくなります（どの武将からでも全部出ます）。</small></p>" +
+            '<h3 class="hg-h">🔹 錬成の欠片 ' +
+            F.shards +
+            "/" +
+            FORGE.shardTrade +
+            '</h3><p class="muted"><small>欠片' +
+            FORGE.shardTrade +
+            "個で、選んだ上級（名品）のスキルの書1冊と交換できます。</small></p>" +
+            bookIds(3)
+              .map(
+                (id) =>
+                  '<div class="pick-row"><span>' +
+                  bookName(id) +
+                  "<br><small>" +
+                  esc(SOLDIER_SKILLS[id].text) +
+                  '</small></span><button data-forge-trade="' +
+                  id +
+                  '"' +
+                  (F.shards < FORGE.shardTrade ? " disabled" : "") +
+                  ">交換</button></div>",
+              )
+              .join("") +
+            '<h3 class="hg-h">錬成の履歴</h3>' +
+            (F.history.length
+              ? "<p><small>" +
+                F.history
+                  .map((h) =>
+                    h.kind === "trade"
+                      ? "交換：" + esc(SOLDIER_SKILLS[h.got].name) + "の書"
+                      : esc(WARLORDS[h.w].name) +
+                        "：" +
+                        FORGE.tierName[h.tier] +
+                        "（" +
+                        (h.got === "shard" ? "欠片" : GEAR[h.got] ? esc(GEAR[h.got].name) : SOLDIER_SKILLS[h.got] ? esc(SOLDIER_SKILLS[h.got].name) + "の書" : "?") +
+                        "）",
+                  )
+                  .join("<br>") +
+                "</small></p>"
+              : '<p class="muted">まだ錬成していません。</p>');
+          $("forgeBody").innerHTML = html;
+        }
+        const LEAN_NAME = {
+          katana: "刀",
+          yari: "槍",
+          yumi: "弓",
+          teppo: "鉄砲",
+          armor: "鎧",
+          accessory: "装飾品",
+          charge: "突撃",
+          attack: "攻撃",
+          defense: "防御",
+          support: "支援",
+          strategy: "策略",
+        };
+        function openForge() {
+          forgePick = forgeLast = null;
+          forgeNote = "";
+          renderForge();
+          $("forgeSheet").hidden = false;
+          $("forgeClose").focus();
+        }
+        function closeForge() {
+          $("forgeSheet").hidden = true;
+          updateUI();
+        }
+        $("forgeOpen").onclick = openForge;
+        $("forgeClose").onclick = closeForge;
+        $("forgeSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("forgeSheet")) return closeForge();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "forgeClose") return;
+          const d = b.dataset;
+          forgeNote = "";
+          if (d.forgeKind) forgeKind = d.forgeKind;
+          else if (d.forgePick) {
+            forgePick = d.forgePick;
+            forgeLast = null;
+          } else if (d.forgeCancel !== undefined) forgePick = null;
+          else if (d.forgeGo !== undefined) {
+            const r = forge(forgePick, forgeKind);
+            if (r.error) forgeNote = "⚠ " + r.error;
+            else {
+              forgeLast = r;
+              if (forgeable(forgePick) < 1) forgePick = null;
+              msg("🔥 秘伝錬成：" + FORGE.tierName[r.tier] + "！");
+            }
+          } else if (d.forgeTrade) {
+            const err = tradeShards(d.forgeTrade);
+            forgeNote = err ? "⚠ " + err : "📜 " + SOLDIER_SKILLS[d.forgeTrade].name + "の書と交換しました（装備倉庫）。";
+          }
+          renderForge();
+          // 結果・確認を見せる
+          const top = $("forgeBody").querySelector(".forge-result, .forge-confirm");
+          if (top && (d.forgeGo !== undefined || d.forgePick)) top.scrollIntoView({ block: "nearest" });
+        });
+
+        // ===== 装備倉庫（装備・スキルの書） =====
+        let gearSoldierId = null, // 兵士の装備を変える画面（null なら倉庫の一覧）
+          gearTab = "gear",
+          gearPickUid = null, // 倉庫から装備させる兵士を選んでいる装備
+          gearPickBook = null, // 倉庫から使う兵士を選んでいる書
+          gearNote = "";
+        const gearSoldiers = () =>
+          soldiers.filter((s) => s.alive && savedSoldier(s.id)).sort((a, b) => isHeroSoldier(b) - isHeroSoldier(a) || b.level - a.level);
+        function gearItemCard(it, actions) {
+          const g = GEAR[it.id],
+            o = it.owner != null ? soldierById(it.owner) : null;
+          return (
+            '<div class="gear-card g' +
+            g.grade +
+            '" data-uid="' +
+            it.uid +
+            '"><p>' +
+            gearName(it.id) +
+            "<br><small>" +
+            esc(g.text) +
+            "<br>装備できる職業：" +
+            gearJobs(it.id) +
+            "<br>装備者：" +
+            (o ? esc(soldierName(o)) + "（" + jobName(o) + "）" : "なし（倉庫）") +
+            "</small></p>" +
+            actions +
+            "</div>"
+          );
+        }
+        const slotLine = (s) =>
+          Object.keys(GEAR_SLOTS)
+            .map((slot) => {
+              const it = slotItem(s, slot);
+              return GEAR_SLOTS[slot] + "：" + (it ? esc(GEAR[it.id].name) : "なし");
+            })
+            .join("・");
+        function renderGearSoldier(s) {
+          const busy = gearBusy(),
+            F = forgeSave(),
+            st = soldierStats(s, true);
+          let html =
+            "<p><b>" +
+            esc(soldierName(s)) +
+            "</b> Lv" +
+            s.level +
+            "・" +
+            JOBS[jobOf(s)].icon +
+            jobName(s) +
+            "<br><small>" +
+            (SOLDIER_TYPES[s.type].heal ? "回復" + fmt(st.heal) : "攻撃" + fmt(st.atk)) +
+            "・防御" +
+            fmt(st.def) +
+            "・HP" +
+            st.maxHp +
+            "・間隔" +
+            fmt(st.rate) +
+            "秒・射程" +
+            Math.round(st.range) +
+            "</small></p>" +
+            (busy ? '<p class="injured">' + esc(busy) + "</p>" : "") +
+            (savedSoldier(s.id) ? "" : '<p class="injured">雇ったばかりの兵士は、ウェーブをクリアしてから装備できます。</p>');
+          for (const slot of Object.keys(GEAR_SLOTS)) {
+            const cur = slotItem(s, slot);
+            html +=
+              '<h3 class="hg-h">' +
+              GEAR_SLOTS[slot] +
+              "</h3>" +
+              (cur
+                ? gearItemCard(cur, '<button data-gear-off="' + cur.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>")
+                : '<p class="muted">なし</p>');
+            const free = F.items.filter((it) => it.owner == null && GEAR[it.id].slot === slot && canWear(jobOf(s), it.id));
+            free.sort((a, b) => GEAR[b.id].grade - GEAR[a.id].grade);
+            if (free.length)
+              html +=
+                '<details class="gear-free"' +
+                (cur ? "" : " open") +
+                "><summary>倉庫の" +
+                GEAR_SLOTS[slot] +
+                "（" +
+                free.length +
+                "）</summary>" +
+                free
+                  .map((it) =>
+                    gearItemCard(
+                      it,
+                      '<button data-gear-on="' + it.uid + '"' + (equipError(s, it.uid) ? " disabled" : "") + ">装備する</button>",
+                    ),
+                  )
+                  .join("") +
+                "</details>";
+          }
+          const books = Object.keys(F.books);
+          html +=
+            '<h3 class="hg-h">スキルの書</h3>' +
+            (books.length
+              ? books
+                  .map(
+                    (id) =>
+                      '<div class="pick-row"><span>' +
+                      bookName(id) +
+                      " ×" +
+                      F.books[id] +
+                      "<br><small>" +
+                      esc(SOLDIER_SKILLS[id].text) +
+                      "</small></span>" +
+                      (learnedOf(s).includes(id)
+                        ? '<button disabled>習得済み</button>'
+                        : '<button data-book-use="' + id + '"' + (useBookError(s, id) ? " disabled" : "") + ">使う</button>") +
+                      "</div>",
+                  )
+                  .join("")
+              : '<p class="muted">スキルの書がありません（🔥 秘伝錬成の「秘伝書錬成」で手に入ります）。</p>');
+          return html;
+        }
+        function soldierPicker(filter, attr, val) {
+          const list = gearSoldiers().filter(filter);
+          return (
+            '<div class="gear-pick"><p><small>使う兵士を選んでください：</small></p>' +
+            (list.length
+              ? list
+                  .map(
+                    (s) =>
+                      '<button data-' +
+                      attr +
+                      '="' +
+                      val +
+                      '" data-to="' +
+                      s.id +
+                      '">' +
+                      esc(soldierName(s)) +
+                      " <small>" +
+                      JOBS[jobOf(s)].icon +
+                      jobName(s) +
+                      " Lv" +
+                      s.level +
+                      "</small></button>",
+                  )
+                  .join("")
+              : '<p class="muted">使える兵士がいません。</p>') +
+            '<button data-pick-cancel>やめる</button></div>'
+          );
+        }
+        function renderGearStore() {
+          const F = forgeSave(),
+            busy = gearBusy();
+          let html =
+            '<div class="forge-kinds" role="group" aria-label="倉庫"><button data-gear-tab="gear" aria-pressed="' +
+            (gearTab === "gear") +
+            '">⚔️ 装備 <small>' +
+            F.items.length +
+            "個</small></button>" +
+            '<button data-gear-tab="books" aria-pressed="' +
+            (gearTab === "books") +
+            '">📜 スキルの書 <small>' +
+            Object.values(F.books).reduce((a, b) => a + b, 0) +
+            "冊</small></button></div>" +
+            (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
+          if (gearTab === "gear") {
+            const items = F.items
+              .slice()
+              .sort((a, b) => GEAR[b.id].grade - GEAR[a.id].grade || Object.keys(GEAR).indexOf(a.id) - Object.keys(GEAR).indexOf(b.id));
+            html += items.length
+              ? items
+                  .map((it) =>
+                    gearItemCard(
+                      it,
+                      gearPickUid === it.uid
+                        ? soldierPicker((s) => !equipError(s, it.uid), "gear-to", it.uid)
+                        : it.owner != null
+                          ? '<button data-gear-off="' + it.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>"
+                          : '<button data-gear-pick="' + it.uid + '"' + (busy ? " disabled" : "") + ">装備させる…</button>",
+                    ),
+                  )
+                  .join("")
+              : '<p class="muted">装備がありません。🔥 秘伝錬成の「装備錬成」で手に入ります。</p>';
+          } else {
+            const books = Object.keys(F.books);
+            html += books.length
+              ? books
+                  .map(
+                    (id) =>
+                      '<div class="gear-card g' +
+                      SOLDIER_SKILLS[id].book +
+                      '"><p>' +
+                      bookName(id) +
+                      " ×" +
+                      F.books[id] +
+                      "<br><small>［秘伝スキル］" +
+                      esc(SOLDIER_SKILLS[id].text) +
+                      "。どの職業でも装備できる。一度習得したら転職・主人公の戦死でも消えない</small></p>" +
+                      (gearPickBook === id
+                        ? soldierPicker((s) => !useBookError(s, id), "book-to", id)
+                        : '<button data-book-pick="' + id + '">使う…</button>') +
+                      "</div>",
+                  )
+                  .join("")
+              : '<p class="muted">スキルの書がありません。🔥 秘伝錬成の「秘伝書錬成」で手に入ります。</p>';
+          }
+          return html;
+        }
+        function renderGear() {
+          const s = gearSoldierId != null ? soldierById(gearSoldierId) : null;
+          $("gearTitle").textContent = s ? "🎒 装備：" + soldierName(s) : "🎒 装備倉庫";
+          $("gearBody").innerHTML =
+            (gearNote ? '<p class="saved">' + esc(gearNote) + "</p>" : "") +
+            (s && s.alive ? renderGearSoldier(s) : renderGearStore());
+        }
+        function openGear(id = null) {
+          gearSoldierId = id;
+          gearPickUid = gearPickBook = null;
+          gearNote = "";
+          renderGear();
+          $("gearSheet").hidden = false;
+          $("gearClose").focus();
+        }
+        function closeGear() {
+          $("gearSheet").hidden = true;
+          if (!$("heroGrowthSheet").hidden) renderHeroGrowth();
+          if (!$("soldierSheet").hidden) renderSoldierSheet();
+          updateUI();
+        }
+        $("gearOpen").onclick = () => openGear(null);
+        $("gearClose").onclick = closeGear;
+        $("gearSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("gearSheet")) return closeGear();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "gearClose") return;
+          const d = b.dataset,
+            cur = gearSoldierId != null ? soldierById(gearSoldierId) : null;
+          let err = null;
+          gearNote = "";
+          if (d.gearTab) gearTab = d.gearTab;
+          else if (d.gearPick) gearPickUid = +d.gearPick;
+          else if (d.bookPick) gearPickBook = d.bookPick;
+          else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = null;
+          else if (d.gearOff) err = unequipItem(+d.gearOff) || ((gearNote = "装備を外して倉庫に戻しました。"), null);
+          else if (d.gearOn && cur) {
+            err = equipItem(cur, +d.gearOn);
+            if (!err) gearNote = GEAR[itemByUid(+d.gearOn).id].name + " を装備しました。";
+          } else if (d.gearTo) {
+            const s = soldierById(+d.to);
+            err = equipItem(s, +d.gearTo);
+            if (!err) gearNote = soldierName(s) + " が " + GEAR[itemByUid(+d.gearTo).id].name + " を装備しました。";
+            gearPickUid = null;
+          } else if (d.bookUse && cur) {
+            err = useBook(cur, d.bookUse);
+            if (!err) gearNote = soldierName(cur) + " は「" + SOLDIER_SKILLS[d.bookUse].name + "」を習得しました。";
+          } else if (d.bookTo) {
+            const s = soldierById(+d.to);
+            err = useBook(s, d.bookTo);
+            if (!err) gearNote = soldierName(s) + " は「" + SOLDIER_SKILLS[d.bookTo].name + "」を習得しました。";
+            gearPickBook = null;
+          }
+          if (err) gearNote = "⚠ " + err;
+          renderGear();
           updateUI();
         });
         // ===== 転職の画面 =====
@@ -8737,6 +10008,7 @@
               "</button>";
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
           act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
+          act += '<button data-gear-open="' + s.id + '">🎒 装備</button>';
           if (act) act = '<div class="card-actions">' + act + "</div>";
           return (
             '<div class="s-card' +
@@ -8763,6 +10035,7 @@
             (SOLDIER_TYPES[s.type].heal ? "・治療 " + (s.heals || 0) + "回" : "") +
             "</small><p>スキル " +
             skillTags(s.skills) +
+            (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p><p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -8849,6 +10122,8 @@
         $("tabFallen").onclick = () => openSoldierSheet("fallen");
         $("soldierSheet").addEventListener("click", (ev) => {
           if (ev.target === $("soldierSheet")) return closeSoldierSheet();
+          const go = ev.target.closest("[data-gear-open]");
+          if (go) return openGear(+go.dataset.gearOpen);
           const jo = ev.target.closest("[data-job-open]");
           if (jo) return openJobSheet(+jo.dataset.jobOpen);
           const mh = ev.target.closest("[data-make-hero]");
@@ -9836,7 +11111,7 @@
               else
                 for (const m of groupAlive(o)) {
                   const max = soldierStats(m).maxHp;
-                  m.hp = Math.min(max, m.hp + max * S.heal);
+                  m.hp = Math.min(max, m.hp + max * S.heal * healTakenMul(m));
                 }
               burst(o.x, o.y - 20, type === "heal" ? "#7be08a" : type === "guard" ? "#8fd0ff" : "#ffd36a", "heal");
             }
@@ -9879,18 +11154,22 @@
           if (evadeHit(s, battle.t)) return; // 回避術
           const st = battleStats(g, s),
             weak = SOLDIER_TYPES[s.type].spearWeak,
-            spear = weak && kind === "knight" ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) : 1;
+            spear =
+              weak && kind === "knight"
+                ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) * (1 - skillSum(s, "resist"))
+                : 1;
           s.hp -=
             ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
             (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
             (1 - skillSum(s, "guard")) *
-            (ranged ? 1 - skillSum(s, "rangedGuard") : 1) *
+            (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) : 1) *
             spear;
           s.hit = 0.2;
           if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
             s.unyieldUsed = true;
             s.hp = 1;
           }
+          phoenixSave(s); // 不死鳥の護符
           if (s.hp <= 0 && isHeroSoldier(s)) {
             // 主人公は消えない：この攻城戦からは外れ、Lv1から再出発
             s.siegeOut = true;
@@ -9977,7 +11256,11 @@
               g.state = "march";
               const speed =
                 SIEGE_BATTLE.march *
-                Math.min(...groupAlive(g).map((s) => (SOLDIER_TYPES[s.type].march || 1) * (1 + pointBonus(s, "spd"))));
+                Math.min(
+                  ...groupAlive(g).map(
+                    (s) => (SOLDIER_TYPES[s.type].march || 1) * (1 + pointBonus(s, "spd")) * Math.max(0.3, 1 + skillSum(s, "march")),
+                  ),
+                );
               g.d += speed * dt;
               Object.assign(g, pathAt(g.path, g.d));
             }
@@ -10012,7 +11295,7 @@
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
-                best.m.hp += Math.min(st.heal, soldierStats(best.m).maxHp - best.m.hp);
+                best.m.hp += Math.min(st.heal * healTakenMul(best.m), soldierStats(best.m).maxHp - best.m.hp);
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
                 if (effects.length >= 80) effects.shift();
@@ -10055,12 +11338,16 @@
               s.cd += st.rate;
               s.atk = 0.18;
               const key = target || tower || "castle";
-              let dmg = st.atk * (target && target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) * skillHitMul(s, key);
+              let dmg =
+                st.atk *
+                (target && target.kind === "boss" ? 1 + skillSum(s, "vsBoss") : 1) *
+                skillHitMul(s, key) *
+                gearHitMul(s, battle.t);
               if (c.charge && s.chargeTarget !== key) {
                 s.chargeTarget = key;
                 dmg *= c.charge + skillSum(s, "chargeAdd");
               }
-              if (skillSum(s, "combo") && Math.random() < skillSum(s, "combo")) dmg *= 2;
+              if (comboHit(s)) dmg *= 2;
               const tx = target ? target.x : tower ? tower.x : SIEGE_BATTLE.castle.x,
                 ty = target ? target.y : tower ? tower.y - 30 : SIEGE_BATTLE.castle.y - 40;
               if (c.range > 60) {
@@ -10081,6 +11368,7 @@
               gainXp(s, SQUAD_RULES.xpPerHit);
               if (target) {
                 if (battleHitGarrison(target, dmg)) {
+                  gearOnKill(s, st, battle.t); // 妖刀・村正
                   s.kills++;
                   gainXp(s, SQUAD_RULES.xpPerKill + Math.round(target.reward / 2));
                 }
@@ -10192,6 +11480,7 @@
               s.siegeOut = false;
               s.instinctTried = false;
               s.unyieldUsed = false;
+              s.phoenixUsed = false;
               s.chargeTarget = null;
               patchSavedSoldier(s, pickSaved(s)); // 成長を保存（戦死はその場で保存済み）
             }
@@ -11000,8 +12289,8 @@
                 [
                   c.name,
                   c.text,
-                  c.job ? "職業" : c.unique ? "固有" : c.future ? "未実装" : "通常",
-                  ...(c.job ? [JOBS[c.job].name] : c.types.map((id) => SOLDIER_TYPES[id].name)),
+                  c.job ? "職業" : c.book ? "秘伝 スキルの書" : c.unique ? "固有" : c.future ? "未実装" : "通常",
+                  ...(c.job ? [JOBS[c.job].name] : c.book ? [] : c.types.map((id) => SOLDIER_TYPES[id].name)),
                 ]
                   .join(" ")
                   .toLocaleLowerCase()
@@ -11014,11 +12303,13 @@
                   '"><h3>' +
                   esc(c.name) +
                   " <small>［" +
-                  (c.future ? "未実装・習得不可" : c.job ? "職業スキル" : c.unique ? "固有" : "通常") +
+                  (c.future ? "未実装・習得不可" : c.job ? "職業スキル" : c.book ? "秘伝スキル" : c.unique ? "固有" : "通常") +
                   "］</small></h3><p>" +
                   esc(c.text) +
                   '</p><p class="guide-meta">' +
-                  (c.job
+                  (c.book
+                    ? "スキルの書で習得（🔥 秘伝錬成・" + GRADES[c.book].name + "）。どの職業でも装備できる"
+                    : c.job
                     ? "職業：" + esc(JOBS[c.job].name) + "（熟練度 " + JOBS[c.job].skills.find((x) => x[0] === id)[1] + " で習得。習得後はどの職業でも装備できる）"
                     : "対象：" + c.types.map((id) => esc(SOLDIER_TYPES[id].name)).join("・")) +
                   "</p></article>",
@@ -11120,6 +12411,14 @@
           }
         });
         document.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Escape") return;
+          if (!$("forgeSheet").hidden) closeForge();
+          else if (!$("gearSheet").hidden) closeGear();
+          else return;
+          ev.preventDefault();
+          ev.stopImmediatePropagation(); // 下の画面は閉じない
+        });
+        document.addEventListener("keydown", (ev) => {
           if (ev.key !== "Escape" || $("jobSheet").hidden) return;
           ev.preventDefault();
           ev.stopImmediatePropagation(); // 下の画面は閉じない
@@ -11185,6 +12484,37 @@
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            forgeApi: {
+              FORGE,
+              GEAR,
+              FORGE_LEAN,
+              forge,
+              forgeable,
+              forgeError,
+              rollTier,
+              rollForge,
+              tradeShards,
+              equipItem,
+              unequipItem,
+              equipError,
+              checkGear,
+              useBook,
+              useBookError,
+              itemsOf,
+              slotItem,
+              canWear,
+              gearHitMul,
+              healTakenMul,
+              phoenixSave,
+              gearOnKill,
+              refreshGear: () => (gearMap = null), // 試験用：装備の一覧を作り直す（持ち主の確認はしない）
+              save: () => heroSave.forge,
+              owned: () => heroSave.owned,
+              stars,
+              persist: persistHeroes,
+              openForge,
+              openGear,
             },
             jobApi: { JOBS, JOB_RULES, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
