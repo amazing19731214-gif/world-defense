@@ -2155,7 +2155,7 @@ OFF</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v41（10人で雇用）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v42（WAVE100対応）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4192,7 +4192,7 @@ OFF</button>
         const rand = (a, b) => a + Math.random() * (b - a);
         const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
         // 目標ウェーブの選択肢。21ウェーブ目からも敵の数・強さは今までと同じ式で増えていく（20までは変わらない）
-        const WAVE_GOALS = [20, 25, 30, 35, 40];
+        const WAVE_GOALS = [20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100];
         function updateUI() {
           $("hp").textContent = "❤️ " + hp;
           $("gold").textContent = "🪙 " + Math.floor(gold) + "G";
@@ -9403,7 +9403,7 @@ OFF</button>
         }
         function renderGoal() {
           $("goalBody").innerHTML =
-            '<p class="goal-note">防衛戦を何ウェーブまで戦うか選べます。21ウェーブ目からも敵はさらに増え、強くなります。<br>今 WAVE ' +
+            '<p class="goal-note">防衛戦を何ウェーブまで戦うか、最大100まで選べます。21ウェーブ目からも敵はさらに増え、強くなります。進行中のウェーブは保存されません。<br>今 WAVE ' +
             wave +
             "。" +
             (goalWon() ? "勝利しました。目標を延ばすと続けて戦えます。" : "今より先のウェーブを選べます。") +
