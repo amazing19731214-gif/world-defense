@@ -1881,7 +1881,7 @@
             SSR: { jackpot: 8, hit: 22, normal: 34, small: 27, miss: 9 },
           },
           shardPerMiss: 1, // 外れでも錬成の欠片
-          shardTrade: 100, // 欠片100個で上級（名品）のスキルの書1冊と交換
+          shardTrade: 20, // 交換に必要な欠片の数（この数で上級＝名品のスキルの書1冊と交換。交換するときだけこの数を使う）
           leanWeight: 3, // 武将の傾向に合うアイテムの重み（合わないものは1。同じ等級の中の選び方だけに効く）
           historySize: 20,
           maxItems: 300, // 倉庫に入る装備の数
@@ -5380,7 +5380,7 @@
           const saved = persistHeroes();
           return Object.assign({ wid, kind, uid, starsBefore, stars: stars(wid), saved }, res);
         }
-        // 欠片100個 → 上級（名品）のスキルの書を1冊。交換するときだけ欠片を使う
+        // 欠片 FORGE.shardTrade 個 → 上級（名品）のスキルの書を1冊。交換するときだけ欠片を使う
         function tradeShards(skillId) {
           const F = forgeSave(),
             k = SOLDIER_SKILLS[skillId];
@@ -9461,7 +9461,9 @@
                   id +
                   '"' +
                   (F.shards < FORGE.shardTrade ? " disabled" : "") +
-                  ">交換</button></div>",
+                  ">交換（欠片" +
+                  FORGE.shardTrade +
+                  "）</button></div>",
               )
               .join("") +
             '<h3 class="hg-h">錬成の履歴</h3>' +
