@@ -41,7 +41,10 @@ try {
  check('習得条件を設定から表示',text.includes('Lv5・Lv15')&&text.includes('Lv30')&&text.includes('30%')&&text.includes('最大20個'));
  check('城攻め名人は習得不可と明示',(await page.locator('[data-guide-soldier="siegeMaster"]').innerText()).includes('未実装・習得不可'));
  await page.locator('#skillGuideSearch').fill('衛生兵');
- check('兵種から適合スキルを検索（衛生兵の職業スキル「応急処置」を含む）',await page.locator('[data-guide-soldier]').count()===7);
+ check('兵種から適合スキルを検索（衛生兵の職業スキル「応急処置」・衛生兵向けの秘伝スキル4つを含む）',await page.locator('[data-guide-soldier]').count()===11);
+  await page.locator('#skillGuideSearch').fill('秘伝');
+  check('秘伝スキル（スキルの書）を検索・区別して表示',await page.locator('[data-guide-soldier]').count()===await page.evaluate(()=>Object.values(WD_DEBUG.squadApi.SOLDIER_SKILLS).filter((k)=>k.book).length)&&(await page.locator('[data-guide-soldier="kongo"]').innerText()).includes('秘伝スキル')&&(await page.locator('[data-guide-soldier="kongo"]').innerText()).includes('スキルの書で習得'));
+  await page.locator('#skillGuideSearch').fill('衛生兵');
  await page.locator('#skillGuideSearch').fill('');
  const folder=process.env.SCREENSHOTS;
  if(folder){fs.mkdirSync(folder,{recursive:true});await page.screenshot({path:path.join(folder,'skills-soldiers.png')});}
