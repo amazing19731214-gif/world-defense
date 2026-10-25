@@ -1871,7 +1871,7 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v33（秘境討伐・全国制覇・秘伝錬成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v34（裏ボスの絵・秘境討伐・全国制覇）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -7679,6 +7679,7 @@
           return h;
         }
         function drawEnemySprite(e) {
+          if (e.boss) bossDrawn.spriteCalls++; // 裏ボスは大将の絵を使わない（テストで確認）
           const set = enemySet(e);
           if (!set) return false;
           let list = set.walk,
@@ -8183,6 +8184,7 @@
             if (s.age >= s.duration) burst(s.tx, s.ty, s.col, s.type);
           }
           shots = shots.filter((s) => s.age < s.duration);
+          if (battle) for (const e of battle.garrison) if (e.boss) bossAnimate(e, dt);
           for (const e of effects) e.age += dt;
           for (let i = effects.length - 1; i >= 0; i--)
             if (effects[i].age >= effects[i].duration) effects.splice(i, 1);
@@ -8324,6 +8326,7 @@
           ctx.restore();
         }
         function effect(e) {
+          if (e.boss) return drawBossFx(e);
           const p = e.age / e.duration;
           if (e.kind === "edeath") {
             // 敵兵のやられ：やられのコマを順に表示して消える
@@ -11934,8 +11937,9 @@
           return tg;
         }
         // 予兆：left 秒後に fire() で放つ。画面の上と、狙われた部隊の足元に文字で出す
-        function bossWarn(B, text, left, target, fire) {
-          B.warn = { text, left, max: left, target, fire };
+        // kind：演出の種類（bolt 落雷・breath 炎の息・cannon 砲撃・wide 広範囲砲撃・beam 天魔砲）。威力・秒数には関係しない
+        function bossWarn(B, text, left, target, fire, kind, extra) {
+          B.warn = Object.assign({ text, left, max: left, target, fire, kind }, extra);
           msg("⚠ " + text);
         }
         function bossHit(B, e, g, raw, kind, ranged) {
@@ -11961,6 +11965,8 @@
               if (h.hp <= 0) {
                 h.sealed = 25;
                 h.hp = h.max;
+                const hp = yamataHeadPos(e, e.head);
+                bossFx("bspark", { x: hp.x, y: hp.y + 10, col: "#c8c0d0", seed: e.head });
                 msg("🐉 八岐の「" + h.name + "」を封じた！（25秒・再生も弱まる）");
                 if (effects.length < 80) effects.push({ x: e.x, y: e.y - 40, kind: "heal", color: "#c79bff", age: 0, duration: 0.8 });
                 nextHead(e);
@@ -12000,26 +12006,36 @@
             if (ratio <= 0.5 && e.phase === 1) {
               e.phase = 2;
               msg("⚡ 白虎が怒った！ 雷撃が激しくなる");
+              bossFx("bphase", { x: W / 2, y: 200, text: "⚡ 白虎が怒った！", col: "#8ef0ff", duration: 1.1 });
             }
             const fast = e.phase === 2;
             // 通常攻撃：近くの部隊の先頭へ（速い）
             if (e.cd <= 0) {
               const g = nearestGroup(B, e, 70);
               e.cd = g ? (fast ? 0.6 : 0.8) : 0;
-              if (g) bossHit(B, e, g, D.atk, "boss", false);
+              if (g) {
+                bossHit(B, e, g, D.atk, "boss", false);
+                e.swipe = 0.35; // 前脚を振り下ろす
+              }
             }
             // 雷撃：遠くの部隊も含めて2部隊の先頭へ
             if (e.sp2 <= 0) {
               e.sp2 = fast ? 3.5 : 5;
               const gs = activeGroups(B).slice(0, 2);
-              for (const g of gs) bossHit(B, e, g, D.atk * 1.3, "thunder", true);
+              for (const g of gs) {
+                bossHit(B, e, g, D.atk * 1.3, "thunder", true);
+                const hd = byakkoHead(e);
+                bossFx("bbolt", { x1: hd.x, y1: hd.y, x: g.x, y: g.y - 18, seed: Math.floor(B.t * 10), duration: 0.25 });
+              }
             }
             // 跳躍：位置を変え、着地した先の部隊全員に爪の範囲攻撃
             if (!B.warn && (e.leap = (e.leap ?? 9) - dt) <= 0) {
               e.leap = fast ? 7 : 9;
               e.d = Math.max(560, Math.min(820, e.d + (Math.random() < 0.5 ? -90 : 90)));
               Object.assign(e, pathAt(e.path, e.d));
-              burst(e.x, e.y, "#fff7a8", "fire");
+              e.leapAnim = 0.5; // 体を伸ばして跳ぶ
+              bossFx("bshock", { x: e.x + BOSS_DX.hiei, y: e.y + 8, r0: 10, r1: 110, col: "#c8f2ff" });
+              bossFx("bspark", { x: e.x + BOSS_DX.hiei, y: e.y, col: "#e9fbff", seed: e.d });
               const g = nearestGroup(B, e, 90);
               if (g) bossBlast(g, D.atk * 0.5, "boss");
             }
@@ -12028,10 +12044,20 @@
               const g = biggestGroup(B);
               e.sp = fast ? 9 : 14;
               if (g)
-                bossWarn(B, "落雷の予兆：3秒後に " + g.name + " へ落雷（守りの陣で半減）", 3, g, () => {
-                  burst(g.x, g.y - 30, "#fff7a8", "cannon");
-                  bossBlast(g, D.atk * 3, "thunder");
-                });
+                bossWarn(
+                  B,
+                  "落雷の予兆：3秒後に " + g.name + " へ落雷（守りの陣で半減）",
+                  3,
+                  g,
+                  () => {
+                    // 落雷 → 衝撃波と火花
+                    bossFx("bbolt", { x1: g.x - 6, y1: 0, x: g.x - 6, y: g.y - 8, width: 7, segs: 8, seed: Math.floor(B.t * 7), duration: 0.35 });
+                    bossFx("bshock", { x: g.x - 6, y: g.y + 8, r0: 8, r1: 80, col: "#c8f2ff" });
+                    bossFx("bspark", { x: g.x - 6, y: g.y, col: "#e9fbff", seed: B.t });
+                    bossBlast(g, D.atk * 3, "thunder");
+                  },
+                  "bolt",
+                );
             }
           } else if (e.boss === "yomi") {
             // 封じた頭が戻る
@@ -12039,12 +12065,14 @@
             if (ratio <= 0.3 && e.phase === 1) {
               e.phase = 2;
               msg("🐉 八岐の再生が強まった！");
+              bossFx("bphase", { x: W / 2, y: 200, text: "🐉 八岐の再生が強まった！", col: "#c79bff", duration: 1.1 });
             }
             // 再生：生きている頭の数に比例。1回の戦いの上限あり
             const open = e.heads.filter((h) => !h.sealed).length,
               regen = Math.min(e.regenLeft, e.max * (e.phase === 2 ? 0.006 : 0.003) * (open / 8) * dt);
             e.hp = Math.min(e.max, e.hp + regen);
             e.regenLeft -= regen;
+            if (regen > 0) e.regenFx = 0.3; // 紫の光が集まる
             // 頭の交代
             if ((e.headLeft -= dt) <= 0) nextHead(e);
             const h = e.heads[e.head];
@@ -12053,21 +12081,41 @@
               e.cd = 2.2;
               const g = nearestGroup(B, e, 260) || activeGroups(B)[0];
               if (!g) return (e.cd = 0);
+              h.anim = 0.5; // 攻撃する頭だけ大きく動く
               if (h.kind === "poison") {
+                bossFx("bmist", { x: g.x, y: g.y, duration: 1.2 });
                 bossHit(B, e, g, D.atk * 0.6, "poison", true);
                 g.poison = 6; // 6秒の毒（部隊の全員）
                 g.poisonDps = D.atk * 0.12;
               } else if (h.kind === "ice") {
+                bossFx("bfrost", { x: g.x, y: g.y, duration: 0.8 });
                 bossHit(B, e, g, D.atk * 0.8, "ice", true);
                 g.frozen = 4; // 4秒、攻撃が遅くなる
-              } else if (h.kind === "bite") bossHit(B, e, g, D.atk * 2.2, "boss", false);
-              else if (h.kind === "roar") for (const o of activeGroups(B)) bossHit(B, e, o, D.atk * 0.7, "boss", true);
+              } else if (h.kind === "bite") {
+                bossHit(B, e, g, D.atk * 2.2, "boss", false);
+                bossFx("bspark", { x: g.x, y: g.y, col: "#ff6a6a", seed: B.t });
+              } else if (h.kind === "roar") {
+                bossFx("bshock", { x: e.x + BOSS_DX.yomi, y: e.y - 30, r0: 20, r1: 220, col: "#c79bff", duration: 0.6 });
+                for (const o of activeGroups(B)) bossHit(B, e, o, D.atk * 0.7, "boss", true);
+              }
               else if (h.kind === "fire") {
                 e.cd = 4.5; // 炎の息は溜めが長い
-                bossWarn(B, "炎の息の予兆：2秒後に " + g.name + " を焼き払う（守りの陣で半減）", 2, g, () => {
-                  burst(g.x, g.y - 20, "#ff8a4a", "fire");
-                  bossBlast(g, D.atk * 1.6, "fire");
-                });
+                const hi = e.head;
+                bossWarn(
+                  B,
+                  "炎の息の予兆：2秒後に " + g.name + " を焼き払う（守りの陣で半減）",
+                  2,
+                  g,
+                  () => {
+                    const p = yamataHeadPos(e, hi);
+                    e.heads[hi].anim = 0.5;
+                    bossFx("bfire", { x1: p.x - 15, y1: p.y, x: g.x, y: g.y - 15, duration: 0.6 });
+                    burst(g.x, g.y - 20, "#ff8a4a", "fire");
+                    bossBlast(g, D.atk * 1.6, "fire");
+                  },
+                  "breath",
+                  { head: hi },
+                );
               }
             }
           } else if (e.boss === "fuji") {
@@ -12076,46 +12124,91 @@
               e.phase = ph;
               e.sp = ph === 3 ? 6 : 4;
               msg(ph === 2 ? "🤖 天魔機神 第二形態：高速攻撃と広範囲砲撃！" : "🤖 天魔機神 第三形態：必殺「天魔砲」と防御形態の切り替え！");
+              bossFx("bphase", {
+                x: W / 2,
+                y: 200,
+                text: ph === 2 ? "🤖 第二形態：肩の装甲が開く" : "🤖 第三形態：炉が燃え上がる",
+                col: "#ff6a4a",
+                duration: 1.1,
+              });
             }
             if (e.phase === 3 && (e.formLeft -= dt) <= 0) {
               e.form = e.form === "attack" ? "guard" : "attack";
               e.formLeft = 8;
               msg(e.form === "guard" ? "🛡 天魔機神が防御形態に（攻撃が通りにくい）" : "⚔️ 天魔機神が攻撃形態に（今が攻め時！）");
+              bossFx("bshock", { x: e.x + BOSS_DX.fuji, y: e.y, r0: 20, r1: 130, col: e.form === "guard" ? "#6fb8ff" : "#ff6a4a" });
             }
             const weak = e.phase === 3 && e.form === "guard" ? 0.5 : 1;
             if (e.cd <= 0) {
               const g = nearestGroup(B, e, 80);
               e.cd = g ? (e.phase === 1 ? 1.2 : 0.7) : 0;
-              if (g) bossHit(B, e, g, D.atk * weak, "boss", false);
+              if (g) {
+                bossHit(B, e, g, D.atk * weak, "boss", false);
+                e.swing = 0.4; // 刀を振る
+              }
             }
             if (!B.warn && e.sp <= 0) {
               if (e.phase === 1) {
                 const g = biggestGroup(B);
                 e.sp = 10;
                 if (g)
-                  bossWarn(B, "砲撃の予兆：2秒後に " + g.name + " へ砲撃（守りの陣で半減）", 2, g, () => {
-                    burst(g.x, g.y - 20, "#9fd6ff", "cannon");
-                    bossBlast(g, D.atk * 1.4, "cannon");
-                  });
+                  bossWarn(
+                    B,
+                    "砲撃の予兆：2秒後に " + g.name + " へ砲撃（守りの陣で半減）",
+                    2,
+                    g,
+                    () => {
+                      tenmaShot(e, g);
+                      bossBlast(g, D.atk * 1.4, "cannon");
+                    },
+                    "cannon",
+                  );
               } else if (e.phase === 2) {
                 e.sp = 9;
-                bossWarn(B, "広範囲砲撃の予兆：2.5秒後に全部隊へ砲撃（守りの陣で半減）", 2.5, "all", () => {
-                  for (const g of activeGroups(B)) {
-                    burst(g.x, g.y - 20, "#9fd6ff", "cannon");
-                    bossBlast(g, D.atk * 0.9, "cannon");
-                  }
-                });
+                bossWarn(
+                  B,
+                  "広範囲砲撃の予兆：2.5秒後に全部隊へ砲撃（守りの陣で半減）",
+                  2.5,
+                  "all",
+                  () => {
+                    for (const g of activeGroups(B)) {
+                      tenmaShot(e, g);
+                      bossBlast(g, D.atk * 0.9, "cannon");
+                    }
+                  },
+                  "wide",
+                );
               } else {
                 e.sp = 16;
-                bossWarn(B, "必殺「天魔砲」の予兆：4秒後に全部隊へ大打撃（守りの陣・手当てで備えよう）", 4, "all", () => {
-                  for (const g of activeGroups(B)) {
-                    burst(g.x, g.y - 30, "#ffffff", "cannon");
-                    bossBlast(g, D.atk * 2.4 * weak, "cannon");
-                  }
-                });
+                bossWarn(
+                  B,
+                  "必殺「天魔砲」の予兆：4秒後に全部隊へ大打撃（守りの陣・手当てで備えよう）",
+                  4,
+                  "all",
+                  () => {
+                    // 胸の炉から光線 → 衝撃波と火花 → 元に戻る
+                    e.fireAnim = 0.4;
+                    for (const g of activeGroups(B)) {
+                      const c = tenmaChest(e);
+                      bossFx("bbeam", { x1: c.x, y1: c.y, x: g.x, y: g.y - 15, duration: 0.6 });
+                      bossFx("bshock", { x: g.x, y: g.y + 8, r0: 10, r1: 90, col: "#ff8a6a" });
+                      bossFx("bspark", { x: g.x, y: g.y, col: "#ffd0a0", seed: g.idx });
+                      bossBlast(g, D.atk * 2.4 * weak, "cannon");
+                    }
+                  },
+                  "beam",
+                );
               }
             }
           }
+        }
+        // 天魔機神の大筒：腕から砲弾が飛び、着弾で衝撃波
+        function tenmaShot(e, g) {
+          e.fireAnim = 0.4;
+          if (shots.length >= 160) shots.shift();
+          const m = tenmaMuzzle(e);
+          shots.push({ x: m.x, y: m.y, tx: g.x, ty: g.y - 14, type: "cannon", age: 0, duration: 0.3, col: "#ffb08a" });
+          bossFx("bshock", { x: g.x, y: g.y + 8, r0: 8, r1: 60, col: "#ffb08a" });
         }
         // 部隊にかかった毒・凍結（八岐）
         function tickGroupAilments(B, dt) {
@@ -12162,7 +12255,7 @@
           if (result === "win") {
             rec.wins++;
             if (!rec.first) rec.first = Date.now();
-            const t = Math.ceil(B.t);
+            const t = Math.ceil(B.deathAt ?? B.t); // 倒した時刻（消える演出の時間は入れない）
             if (!rec.best || t < rec.best) {
               B.newBest = !!rec.best;
               rec.best = t;
@@ -12452,7 +12545,7 @@
           cutin = { id: g.hero, age: 0, duration: 1.3 };
           B.skillUses = (B.skillUses || 0) + 1;
           msg(c.name + "「" + c.skill.name + "」（" + S.name + "）！ " + done);
-          if (B.boss ? bossDown(B) : B.castleHp <= 0) endBattle("win");
+          if (!B.boss && B.castleHp <= 0) endBattle("win"); // 裏ボスは次の時間で（消える演出のあと）
           return null;
         }
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
@@ -12462,6 +12555,7 @@
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
           e.dead = true;
+          if (e.boss) battle.bossCorpse = e; // 討伐の消える演出に使う
           battle.kills++;
           if (effects.length >= 80) effects.shift();
           effects.push({ x: e.x, y: e.y, kind: "edeath", ekind: e.kind, face: -1, age: 0, duration: 0.9 });
@@ -12790,8 +12884,19 @@
             if (t.type === "magic") burst(t.x + 4, t.y - 42, "#ffe6a0", "gunsmoke");
             battleHurt(tg, t.damage * scale, true, "tower");
           }
-          // 勝敗
-          if (B.boss ? bossDown(B) : B.castleHp <= 0) return endBattle("win");
+          // 勝敗（裏ボスは倒れてから1.2秒、消える演出を見せてから結果）
+          if (B.boss ? bossDown(B) : B.castleHp <= 0) {
+            if (B.boss) {
+              if (B.deathAt == null) {
+                B.deathAt = B.t;
+                B.warn = null;
+                const c = B.bossCorpse || { boss: B.boss, x: 720, y: 300, phase: 1, heads: null };
+                bossFx("bdeath", { e: c, x: c.x + BOSS_DX[c.boss], y: c.y, duration: 1.2 });
+              }
+              if (B.t - B.deathAt < 1.2) return;
+            }
+            return endBattle("win");
+          }
           const pending = B.groups.some((g) => g.state === "wait");
           if (!pending && !B.groups.some(groupActive)) return endBattle("lose");
           if (B.t >= (B.timeLimit || SIEGE_BATTLE.timeLimit)) return endBattle("timeup");
@@ -12837,6 +12942,8 @@
           refreshSiege();
           B.report = report;
           for (const g of B.groups) g.poison = g.frozen = 0;
+          B.warn = null;
+          for (let i = effects.length - 1; i >= 0; i--) if (effects[i].boss) effects.splice(i, 1); // ボスの演出は残さない
           if (B.boss) {
             // 秘境の討伐戦：討伐の記録と報酬（占領・反撃はない）
             finishBoss(B, result);
@@ -13091,12 +13198,12 @@
                 '%"></i><span>HP ' +
                 Math.ceil(e ? e.hp : 0) +
                 " / " +
-                e.max +
+                (e ? e.max : D.hp) +
                 "（" +
                 Math.ceil(r * 100) +
                 "%）</span></div>" +
                 '<p class="boss-state">状態：' +
-                bossStatusText(e) +
+                (e ? bossStatusText(e) : "討伐！") +
                 "</p>" +
                 (w
                   ? '<p class="boss-warn" role="alert">⚠ ' +
@@ -13154,6 +13261,519 @@
                 .join("・"),
           );
         }
+        // ===== 三大裏ボスの絵と演出（Canvas のドット絵。画像ファイルは使わない） =====
+        // 4px の四角を並べて描く（ほかの絵と同じ、くっきりしたドット絵の見た目）。毎フレーム数十〜百数十の四角だけなので軽い。
+        // 視差効果を減らす設定（reduced）では、呼吸・ゆれ・点滅・画面の閃光を止め、形と文字だけで伝える
+        const BP = 5;
+        // 絵の中心を立ち位置（攻撃の判定の位置）より右（奥）にずらす：前で止まる部隊と重ならないように
+        const BOSS_DX = { hiei: 105, yomi: 90, fuji: 80 };
+        const byakkoHead = (e) => ({ x: e.x + BOSS_DX.hiei - 18.5 * BP, y: e.y + 8 - 16.4 * BP });
+        const tenmaChest = (e) => ({ x: e.x + BOSS_DX.fuji, y: e.y + 10 - 25.5 * BP });
+        const tenmaMuzzle = (e) => ({ x: e.x + BOSS_DX.fuji - 22 * BP, y: e.y + 10 - 15.5 * BP });
+        function bpx(ox, oy, x, y, w, h, col) {
+          ctx.fillStyle = col;
+          ctx.fillRect(Math.round(ox + x * BP), Math.round(oy + y * BP), Math.ceil(w * BP), Math.ceil(h * BP));
+        }
+        // 決まった種から作る乱数（雷のぎざぎざ・火花が毎フレームばらばらに揺れすぎないように）
+        const seeded = (n) => {
+          const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+          return x - Math.floor(x);
+        };
+        function drawBolt(x1, y1, x2, y2, seed, col, width, segs = 6) {
+          ctx.strokeStyle = col;
+          ctx.lineWidth = width;
+          ctx.lineCap = "square";
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          for (let i = 1; i < segs; i++) {
+            const k = i / segs,
+              j = (seeded(seed + i) - 0.5) * 22;
+            ctx.lineTo(x1 + (x2 - x1) * k + j, y1 + (y2 - y1) * k + j * 0.4);
+          }
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+        // ボスの演出（effects に boss:true で入れる。戦いが終わると消す）
+        function bossFx(kind, o) {
+          if (effects.length >= 80) effects.shift();
+          effects.push(Object.assign({ kind, boss: true, age: 0, duration: 0.5 }, o));
+        }
+        // ----- 雷獣・白虎 -----
+        function drawByakko(e, alpha) {
+          const T = visualTime,
+            rm = reduced,
+            ox = e.x + BOSS_DX.hiei,
+            oy = e.y + 8;
+          const leap = e.leapAnim > 0 ? e.leapAnim / 0.5 : 0, // 1 → 0
+            arc = leap ? Math.sin(leap * Math.PI) : 0,
+            lift = arc * 9,
+            stretch = 1 + 0.22 * arc,
+            swipe = e.swipe > 0 ? Math.sin((e.swipe / 0.35) * Math.PI) : 0,
+            breathe = rm || leap ? 0 : Math.sin(T * 2.2) * 0.5,
+            shake = e.hit > 0 && !rm ? (Math.random() - 0.5) * 3 : 0;
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ellipse(ox, oy + 2, 64 * (1 - arc * 0.3), 9, "#00000044");
+          const by = oy - lift * BP + breathe * BP;
+          ctx.translate(ox + shake, by);
+          ctx.scale(stretch, 1 / (1 + 0.1 * arc));
+          ctx.translate(-ox, -by);
+          const P = (x, y, w, h, c) => bpx(ox, by, x, y, w, h, c);
+          // 長い尾（後ろで揺れる）
+          for (let i = 0; i < 9; i++) {
+            const wv = rm ? 0 : Math.sin(T * 3 + i * 0.7) * 0.9;
+            P(11.5 + i * 1.1, -11 - i * 1.15 + wv, 2.2, 2.2, i % 3 === 1 ? "#1c1d22" : i === 8 ? "#1c1d22" : "#eef1f6");
+          }
+          // 後ろ脚・前脚（攻撃のとき前脚を振り上げて叩きつける）
+          const up = swipe * 5,
+            legs = leap ? 2 : 0; // 跳ぶと脚が伸びる
+          P(5.5, -6, 3.2, 6 + legs, "#3b404c");
+          P(9.2, -6, 3.2, 6 + legs, "#3b404c");
+          P(6, -6, 2.2, 5.5 + legs, "#e8ecf2");
+          P(9.7, -6, 2.2, 5.5 + legs, "#dfe4ec");
+          P(-11.5 - legs, -6 - up, 3.2, 6 + legs, "#3b404c");
+          P(-7.5, -6, 3.2, 6 + legs, "#3b404c");
+          P(-11 - legs, -6 - up, 2.2, 5.5 + legs, "#f2f4f8");
+          P(-7, -6, 2.2, 5.5 + legs, "#e8ecf2");
+          P(-12 - legs, -0.6 - up + legs, 3.8, 1, "#b8c2d4"); // 爪
+          // 胴（白い体・黒い縞）
+          P(-13.5, -15.5, 27, 10.5, "#3b404c");
+          P(-13, -15, 26, 9.5, "#f2f4f8");
+          P(-12, -8.2, 22, 2.6, "#d9e0ea");
+          for (const sx of [-9, -5, -1, 3, 7]) {
+            P(sx, -15, 1.3, 3.8, "#1c1d22");
+            P(sx + 0.7, -11.6, 1.1, 2.4, "#1c1d22");
+          }
+          // 頭（左向き）・耳・青白く光る目・牙
+          const hx = -22,
+            hy = -20 - swipe * 1.5;
+          P(hx - 0.6, hy - 0.6, 10.2, 9.2, "#3b404c");
+          P(hx, hy, 9, 8, "#f6f8fb");
+          P(hx + 1, hy - 2.6, 2.2, 2.6, "#3b404c");
+          P(hx + 6, hy - 2.6, 2.2, 2.6, "#3b404c");
+          P(hx + 1.5, hy - 2, 1.2, 1.6, "#ffd8e0");
+          P(hx + 6.5, hy - 2, 1.2, 1.6, "#ffd8e0");
+          P(hx + 3.5, hy + 0.3, 1, 2.6, "#1c1d22");
+          P(hx + 6, hy + 0.3, 1, 2.2, "#1c1d22");
+          P(hx + 1.2, hy + 3, 2.3, 1.3, "#8ef0ff");
+          P(hx + 5, hy + 3, 2.3, 1.3, "#8ef0ff");
+          P(hx - 1.6, hy + 4.8, 4.6, 3.2, "#e6ebf2");
+          P(hx - 1.9, hy + 4.8, 1.3, 1.1, "#2a2d36");
+          P(hx - 1.2, hy + 7.6, 3.6, 0.7, "#2a2d36");
+          if (swipe > 0.2) {
+            P(hx - 0.6, hy + 8.2, 0.8, 1.2, "#ffffff");
+            P(hx + 1.6, hy + 8.2, 0.8, 1.2, "#ffffff");
+          }
+          ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          if (!rm) bloom(ox + (hx + 3.5) * BP, by + (hy + 3.6) * BP, 16, "#8ef0ff77");
+          // 体にまとう雷（怒ると増える）
+          const n = rm ? 1 : e.phase === 2 ? 6 : 2,
+            tick = rm ? 0 : Math.floor(T * 14);
+          for (let i = 0; i < n; i++) {
+            const a = seeded(tick + i * 7) * 6.28,
+              r = 50 + seeded(tick + i * 13) * 20,
+              cx = ox + Math.cos(a) * r,
+              cy = by - 40 + Math.sin(a) * r * 0.5;
+            drawBolt(cx, cy, cx + (seeded(tick + i) - 0.5) * 30, cy + 18, tick + i * 3, e.phase === 2 ? "#e9fbff" : "#b5ecff", 2, 3);
+          }
+          if (e.hit > 0) {
+            ctx.globalAlpha = Math.min(1, e.hit * 4) * 0.5 * alpha;
+            ellipse(ox, by - 40, 60, 34, "#ffffff");
+          }
+          ctx.restore();
+        }
+        // ----- 冥龍・八岐 -----
+        // 八つの頭：上の段に長い首の4つ、下の段に短い首の4つを扇形に並べる（小さい画面でも数えられるように）
+        const YAMATA_MARK = { fire: "炎", poison: "毒", ice: "氷", bite: "牙", roar: "吼" };
+        function yamataHeadPos(e, i) {
+          const row = i < 4 ? 0 : 1,
+            k = i % 4,
+            deg = row === 0 ? [-170, -142, -114, -86][k] : [-195, -165, -135, -105][k],
+            len = row === 0 ? 150 : 90,
+            h = e.heads[i],
+            lunge = h.anim > 0 ? Math.sin((h.anim / 0.5) * Math.PI) * 34 : 0,
+            droop = h.sealed > 0 ? 10 : 0,
+            bob = reduced ? 0 : Math.sin(visualTime * 1.3 + i * 0.9) * (h.sealed ? 2 : 6),
+            a = (deg * Math.PI) / 180,
+            bx = e.x + BOSS_DX.yomi,
+            by = e.y - 66;
+          return { bx, by, x: bx + Math.cos(a) * (len + lunge), y: by + Math.sin(a) * (len + lunge) + bob + droop };
+        }
+        function drawYamata(e, alpha) {
+          const T = visualTime,
+            rm = reduced,
+            ox = e.x + BOSS_DX.yomi,
+            oy = e.y + 8,
+            shake = e.hit > 0 && !rm ? (Math.random() - 0.5) * 3 : 0;
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(shake, 0);
+          ellipse(ox, oy + 2, 84, 11, "#00000055");
+          const P = (x, y, w, h, c) => bpx(ox, oy, x, y, w, h, c);
+          // 尾と胴（黒紫・鱗）
+          for (let i = 0; i < 7; i++) P(14 + i * 2, -6 - Math.sin(i * 0.7 + (rm ? 0 : T)) * 1.2, 3, 3 - i * 0.25, "#24142f");
+          P(-17, -20, 34, 20, "#120a1a");
+          P(-16, -19, 32, 18, "#2b1a3a");
+          P(-13, -22, 26, 4, "#2b1a3a");
+          for (let r = 0; r < 4; r++)
+            for (let c = 0; c < 7; c++) P(-14 + c * 4 + (r % 2) * 2, -18 + r * 4, 2, 1.2, "#4b2c66");
+          P(-12, -6, 24, 4, "#3a2448"); // 腹
+          P(-15, -3, 5, 3, "#120a1a");
+          P(10, -3, 5, 3, "#120a1a"); // 脚
+          P(-16, -0.6, 6, 1, "#c8b8d8");
+          P(9, -0.6, 6, 1, "#c8b8d8"); // 爪
+          // 再生：紫の光が胴に集まる
+          if (e.regenFx > 0 && !rm)
+            for (let i = 0; i < 8; i++) {
+              const k = (T * 0.8 + i / 8) % 1,
+                a = i * 0.785,
+                r = 70 * (1 - k);
+              bloom(ox + Math.cos(a) * r, oy - 40 + Math.sin(a) * r * 0.6, 7, "#c79bffaa");
+            }
+          // 首（後ろの頭から描く）と頭
+          const order = [0, 1, 2, 3, 4, 5, 6, 7].sort((a, b) => (e.head === a) - (e.head === b));
+          for (const i of order) {
+            const h = e.heads[i],
+              p = yamataHeadPos(e, i),
+              active = e.head === i && !h.sealed,
+              dark = h.sealed > 0;
+            const neck = dark ? "#2a2430" : "#24142f",
+              scale = dark ? "#3a3440" : "#4b2c66";
+            for (let k = 0; k <= 8; k++) {
+              const x = p.bx + (p.x - p.bx) * (k / 8),
+                y = p.by + (p.y - p.by) * (k / 8) + Math.sin(k * 0.9 + i) * 3;
+              ctx.fillStyle = neck;
+              ctx.fillRect(Math.round(x - 8), Math.round(y - 8), 16, 16);
+              if (k % 2) {
+                ctx.fillStyle = scale;
+                ctx.fillRect(Math.round(x - 4), Math.round(y - 7), 7, 4);
+              }
+            }
+            // 頭（左向き）：角・赤い目。攻撃中の頭は大きく、金の縁。封じた頭は暗く「封」
+            const s = (active ? 1.25 : 1) * 1.35,
+              hp = (x, y, w, hh, c) => {
+                ctx.fillStyle = c;
+                ctx.fillRect(Math.round(p.x + x * 3 * s), Math.round(p.y + y * 3 * s), Math.ceil(w * 3 * s), Math.ceil(hh * 3 * s));
+              };
+            if (active) hp(-6, -4.2, 11.4, 8.4, "#ffd36a");
+            hp(-5.5, -3.7, 10.4, 7.4, "#120a1a");
+            hp(-5, -3.2, 9.4, 6.4, dark ? "#3a3440" : "#3d2352");
+            hp(-7, -0.4, 4, 3, dark ? "#3a3440" : "#3d2352"); // 鼻先
+            hp(1.5, -6, 1.2, 3, dark ? "#6a6470" : "#d8cce8"); // 角
+            hp(3.5, -5.6, 1.2, 2.6, dark ? "#6a6470" : "#d8cce8");
+            hp(-2.5, -1.6, 2, 1.3, dark ? "#504a58" : "#ff3a3a"); // 目
+            hp(-7, 2.2, 4, 0.8, "#120a1a"); // 口
+            if (h.anim > 0 && !dark) {
+              hp(-6.6, 2.6, 0.8, 1.2, "#ffffff");
+              hp(-4.6, 2.6, 0.8, 1.2, "#ffffff");
+            }
+            if (!dark && !rm) bloom(p.x - 1.5 * 3 * s, p.y - 1 * 3 * s, 7, "#ff3a3a66");
+            // 頭の種類を文字でも（色だけに頼らない）
+            ctx.font = "bold 14px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#000000aa";
+            ctx.fillRect(Math.round(p.x - 10), Math.round(p.y + 12), 20, 17);
+            ctx.fillStyle = dark ? "#9a94a0" : active ? "#ffd36a" : "#f0e6ff";
+            ctx.fillText(dark ? "封" : YAMATA_MARK[h.kind], p.x, p.y + 26);
+          }
+          if (e.hit > 0) {
+            ctx.globalAlpha = Math.min(1, e.hit * 4) * 0.4 * alpha;
+            ellipse(ox, oy - 40, 70, 40, "#ffffff");
+          }
+          ctx.restore();
+        }
+        // ----- 零式・天魔機神 -----
+        function drawTenma(e, alpha, B) {
+          const T = visualTime,
+            rm = reduced,
+            ox = e.x + BOSS_DX.fuji,
+            oy = e.y + 10,
+            hum = rm ? 0 : Math.sin(T * 3) * 0.4,
+            shake = e.hit > 0 && !rm ? (Math.random() - 0.5) * 2 : 0,
+            ph = e.phase,
+            open = ph >= 2 ? 1 : 0,
+            charge = B && B.warn && B.warn.kind === "beam" ? 1 - B.warn.left / B.warn.max : 0,
+            swing = e.swing > 0 ? Math.sin((e.swing / 0.4) * Math.PI) : 0,
+            recoil = e.fireAnim > 0 ? e.fireAnim / 0.4 : 0;
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(shake, 0);
+          ellipse(ox, oy + 2, 70, 11, "#00000055");
+          const by = oy + hum * BP;
+          const P = (x, y, w, h, c) => bpx(ox, by, x, y, w, h, c);
+          const iron = "#2a2e36",
+            plate = "#454c58",
+            edge = "#6e7888",
+            red = ph === 3 ? "#ff3a2a" : ph === 2 ? "#d8301f" : "#7a1a14";
+          // 脚・草摺
+          P(-8, -15, 5, 15, iron);
+          P(3, -15, 5, 15, iron);
+          P(-7.5, -9, 4, 2, edge);
+          P(3.5, -9, 4, 2, edge);
+          P(-9, -1, 7, 1.4, plate);
+          P(2, -1, 7, 1.4, plate);
+          for (let i = 0; i < 5; i++) P(-11 + i * 4.4, -20, 4, 6, i % 2 ? plate : iron);
+          // 胴と胸の炉
+          P(-10, -32, 20, 13, "#14161b");
+          P(-9.5, -31.5, 19, 12, iron);
+          P(-9, -31, 18, 2, edge);
+          const glow = ph === 3 ? 1 : ph === 2 ? 0.6 : 0.25;
+          P(-3, -28, 6, 5, "#14161b");
+          P(-2.4, -27.4, 4.8, 3.8, red);
+          if (!rm || charge) bloom(ox, by - 25.5 * BP, 14 + glow * 16 + charge * 40, ph === 1 && !charge ? "#ff4a3a55" : "#ff6a4acc");
+          // 肩当て（第二形態から開いて、中の赤い光が見える）
+          const so = open * 2.2;
+          if (open) {
+            P(-15 - so, -33, 3, 7, red);
+            P(12 + so, -33, 3, 7, red);
+          }
+          P(-18 - so, -35 - open, 8, 10, "#14161b");
+          P(-17.5 - so, -34.5 - open, 7, 9, plate);
+          P(-17.5 - so, -34.5 - open, 7, 1.5, edge);
+          P(10 + so, -35 - open, 8, 10, "#14161b");
+          P(10.5 + so, -34.5 - open, 7, 9, plate);
+          P(10.5 + so, -34.5 - open, 7, 1.5, edge);
+          // 腕：前（左）の腕は大筒（撃つと反動）、奥（右）の腕は刀を振り下ろす
+          P(-16 + recoil * 1.5, -25, 4, 10, iron);
+          P(-22 + recoil * 1.5, -17, 8, 3.2, "#14161b"); // 大筒
+          P(-22.6 + recoil * 1.5, -17.4, 1.2, 4, "#5a606c");
+          P(12, -25 + swing * 2, 4, 11, iron);
+          P(15 - swing * 6, -38 + swing * 14, 2, 14, "#c8d0dc"); // 刀
+          P(14.6 - swing * 6, -25 + swing * 14, 3, 1.5, "#d9b04a"); // 鍔
+          // 兜：鬼の角（金）・赤い目・面
+          P(-5, -41, 10, 9, "#14161b");
+          P(-4.5, -40.5, 9, 8, iron);
+          P(-6.5, -45, 1.5, 4.5, "#d9b04a");
+          P(-7.5, -46.5, 1.5, 2, "#d9b04a");
+          P(5, -45, 1.5, 4.5, "#d9b04a");
+          P(6, -46.5, 1.5, 2, "#d9b04a");
+          P(-3, -37, 2, 1, "#ff3a2a");
+          P(1, -37, 2, 1, "#ff3a2a");
+          P(-3, -35, 6, 1.5, "#5a606c");
+          for (let i = 0; i < 3; i++) P(-2.2 + i * 1.8, -34.6, 0.6, 1, "#c8d0dc");
+          ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          if (!rm) bloom(ox, by - 36.5 * BP, 10, "#ff3a2a88");
+          // 第三形態：全身に赤いエネルギーが走る
+          if (ph === 3) {
+            const tick = rm ? 0 : Math.floor(T * 12);
+            ctx.fillStyle = "#ff5a3a";
+            for (let i = 0; i < (rm ? 3 : 8); i++) {
+              const x = ox + (seeded(tick + i) - 0.5) * 90,
+                y = by - 30 - seeded(tick + i * 5) * 170;
+              ctx.fillRect(Math.round(x), Math.round(y), seeded(i + tick * 3) > 0.5 ? 12 : 3, seeded(i + tick * 3) > 0.5 ? 3 : 12);
+            }
+          }
+          // 防御形態：青い障壁（文字でも）
+          if (ph === 3 && e.form === "guard") {
+            ctx.globalAlpha = alpha * (rm ? 0.5 : 0.35 + 0.15 * Math.sin(T * 6));
+            ctx.strokeStyle = "#6fb8ff";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(ox - 100, by - 240, 200, 240);
+            ctx.globalAlpha = alpha;
+            ctx.font = "bold 14px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#0d2238dd";
+            ctx.fillRect(ox - 48, by - 252, 96, 20);
+            ctx.fillStyle = "#cfe8ff";
+            ctx.fillText("🛡 防御形態", ox, by - 237);
+          }
+          if (e.hit > 0) {
+            ctx.globalAlpha = Math.min(1, e.hit * 4) * 0.35 * alpha;
+            ellipse(ox, by - 115, 64, 104, "#ffffff");
+          }
+          ctx.restore();
+        }
+        // 最後に描いた裏ボスの様子（テスト用。値を覚えるだけ）
+        const bossDrawn = { frames: 0, spriteCalls: 0 };
+        // 裏ボスを描く（登場：最初の1秒で浮かび上がる）
+        function drawBoss(e, B) {
+          const intro = B.t < 1 ? B.t : 1,
+            alpha = reduced ? 1 : Math.max(0.15, intro);
+          Object.assign(bossDrawn, {
+            frames: bossDrawn.frames + 1,
+            id: e.boss,
+            phase: e.phase,
+            heads: e.heads ? e.heads.length : 0,
+            sealed: e.heads ? e.heads.filter((h) => h.sealed).length : 0,
+            active: e.heads ? e.head : null,
+            open: e.boss === "fuji" && e.phase >= 2, // 肩の装甲が開いている
+            core: e.boss === "fuji" ? (e.phase === 3 ? "強" : e.phase === 2 ? "中" : "弱") : null, // 胸の炉の光
+            guard: e.boss === "fuji" && e.phase === 3 && e.form === "guard",
+            bolts: e.boss === "hiei" ? (reduced ? 1 : e.phase === 2 ? 6 : 2) : 0, // 体にまとう雷の数
+            warn: B.warn ? B.warn.kind : null,
+            alpha,
+          });
+          if (e.boss === "hiei") drawByakko(e, alpha);
+          else if (e.boss === "yomi") drawYamata(e, alpha);
+          else drawTenma(e, alpha, B);
+          // 頭上のHPバー
+          const r = Math.max(0, e.hp / e.max),
+            cx = e.x + BOSS_DX[e.boss],
+            top = e.y - (e.boss === "fuji" ? 262 : e.boss === "yomi" ? 232 : 150);
+          ctx.fillStyle = "#1f2a22dd";
+          ctx.fillRect(cx - 62, top, 124, 9);
+          ctx.fillStyle = "#ed6654";
+          ctx.fillRect(cx - 60, top + 2, 120 * r, 5);
+        }
+        // 登場の帯（最初の2秒）
+        function drawBossIntro(B) {
+          if (B.t > 2) return;
+          const D = BOSSES[B.boss],
+            a = B.t < 1.6 ? 1 : (2 - B.t) / 0.4;
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, a);
+          ctx.fillStyle = "#0b0610cc";
+          ctx.fillRect(0, 110, W, 56);
+          ctx.font = "bold 30px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillStyle = D.color;
+          ctx.fillText((B.boss === "hiei" ? "⚡ " : B.boss === "yomi" ? "🐉 " : "🤖 ") + D.name + " 出現", W / 2, 148);
+          ctx.restore();
+        }
+        // 予兆の間の演出（落雷の光・炎の溜め・炉の充填）
+        function drawBossWarnFx(B, e) {
+          const w = B.warn;
+          if (!w || !e) return;
+          const k = 1 - w.left / w.max,
+            blink = reduced ? 0.6 : 0.35 + 0.5 * Math.abs(Math.sin(visualTime * (8 + k * 14)));
+          const list = w.target === "all" ? B.groups.filter(groupActive) : groupActive(w.target) ? [w.target] : [];
+          ctx.save();
+          if (w.kind === "bolt")
+            for (const g of list) {
+              // 青白い雷光が狙った部隊の上で点滅する
+              ctx.globalAlpha = blink * (0.3 + 0.6 * k);
+              ctx.fillStyle = "#c8f2ff";
+              ctx.fillRect(Math.round(g.x - 26), 0, 40, g.y + 10);
+              ctx.globalAlpha = blink;
+              if (!reduced && k > 0.5) drawBolt(g.x - 6, 0, g.x - 6, g.y - 40, Math.floor(visualTime * 10), "#ffffff", 2, 5);
+            }
+          else if (w.kind === "breath") {
+            const p = yamataHeadPos(e, w.head);
+            ctx.globalAlpha = 0.5 + 0.5 * k;
+            bloom(p.x - 12, p.y, 10 + 22 * k, "#ff8a3acc");
+          } else if (w.kind === "beam" || w.kind === "cannon" || w.kind === "wide") {
+            const o = w.kind === "beam" ? tenmaChest(e) : tenmaMuzzle(e),
+              cx = o.x,
+              cy = o.y;
+            ctx.globalAlpha = 0.6 + 0.4 * k;
+            bloom(cx, cy, (w.kind === "beam" ? 30 : 10) + (w.kind === "beam" ? 60 : 18) * k, "#ff5a3acc");
+            if (w.kind === "beam" && !reduced)
+              for (let i = 0; i < 6; i++) {
+                // 光が炉へ集まる
+                const a = i * 1.047 + visualTime * 2,
+                  r = 90 * (1 - ((visualTime * 1.5 + i / 6) % 1));
+                bloom(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 6, "#ffb08acc");
+              }
+          }
+          ctx.restore();
+        }
+        // ボスの演出の描画（effects の boss:true）
+        function drawBossFx(f) {
+          const p = f.age / f.duration;
+          // 画面の外は描かない
+          if ((f.x ?? 0) < -80 || (f.x ?? 0) > W + 80 || (f.y ?? 0) < -80 || (f.y ?? 0) > 680) return;
+          ctx.save();
+          if (f.kind === "bbolt") {
+            ctx.globalAlpha = 1 - p;
+            drawBolt(f.x1, f.y1, f.x, f.y, f.seed || 1, f.col || "#e9fbff", f.width || 3, f.segs || 6);
+            if (f.width > 4) drawBolt(f.x1, f.y1, f.x, f.y, f.seed || 1, "#ffffff", 2, f.segs || 6);
+          } else if (f.kind === "bshock") {
+            ctx.globalAlpha = (1 - p) * 0.9;
+            ctx.strokeStyle = f.col || "#ffffff";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            const r = (f.r0 || 10) + ((f.r1 || 60) - (f.r0 || 10)) * (reduced ? 0.6 : p);
+            ctx.ellipse(f.x, f.y, r, r * 0.4, 0, 0, 7);
+            ctx.stroke();
+          } else if (f.kind === "bspark") {
+            ctx.globalAlpha = 1 - p;
+            ctx.fillStyle = f.col || "#fff3b0";
+            for (let i = 0; i < 10; i++) {
+              const a = i * 0.628 + (f.seed || 0),
+                r = 6 + 40 * p * (0.6 + seeded(i + (f.seed || 0)) * 0.6);
+              ctx.fillRect(Math.round(f.x + Math.cos(a) * r), Math.round(f.y + Math.sin(a) * r * 0.6 - 10), 4, 4);
+            }
+          } else if (f.kind === "bfire") {
+            // 炎の噴射：頭から部隊へ赤と橙の塊が流れる
+            for (let i = 0; i < 14; i++) {
+              const k = (i / 14 + p) % 1,
+                x = f.x1 + (f.x - f.x1) * k + (seeded(i) - 0.5) * 16 * k,
+                y = f.y1 + (f.y - f.y1) * k + (seeded(i + 9) - 0.5) * 16 * k,
+                s = 6 + 10 * k;
+              ctx.globalAlpha = (1 - p) * 0.9;
+              ctx.fillStyle = i % 3 ? "#ff7a2a" : "#ffd36a";
+              ctx.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s);
+            }
+          } else if (f.kind === "bmist") {
+            // 毒：紫の霧
+            ctx.globalAlpha = (1 - p) * 0.7;
+            for (let i = 0; i < 6; i++)
+              bloom(f.x + (seeded(i) - 0.5) * 70, f.y - 10 + (seeded(i + 3) - 0.5) * 30 - p * 10, 22 + p * 14, "#9a4ad8aa");
+          } else if (f.kind === "bfrost") {
+            // 氷：青白い冷気と氷の欠片
+            ctx.globalAlpha = (1 - p) * 0.8;
+            bloom(f.x, f.y - 10, 50, "#bfeaffaa");
+            ctx.fillStyle = "#e8f8ff";
+            for (let i = 0; i < 8; i++) {
+              const a = i * 0.785,
+                r = 14 + 26 * p;
+              ctx.fillRect(Math.round(f.x + Math.cos(a) * r), Math.round(f.y - 10 + Math.sin(a) * r * 0.5), 3, 8);
+            }
+          } else if (f.kind === "bbeam") {
+            // 天魔砲：胸の炉から部隊へ太い光線
+            const w = (reduced ? 14 : 22) * (1 - p * 0.6);
+            ctx.globalAlpha = 1 - p * 0.8;
+            ctx.strokeStyle = "#ff3a2a";
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            ctx.moveTo(f.x1, f.y1);
+            ctx.lineTo(f.x, f.y);
+            ctx.stroke();
+            ctx.strokeStyle = "#fff4e0";
+            ctx.lineWidth = w * 0.4;
+            ctx.stroke();
+          } else if (f.kind === "bphase") {
+            // 形態の変化：画面がひと瞬き光り、文字が出る（視差効果を減らす設定では文字だけ）
+            if (!reduced) {
+              ctx.globalAlpha = (1 - p) * 0.35;
+              ctx.fillStyle = f.col;
+              ctx.fillRect(0, 0, W, 600);
+            }
+            ctx.globalAlpha = p < 0.8 ? 1 : (1 - p) / 0.2;
+            ctx.font = "bold 26px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#0b0610cc";
+            ctx.fillRect(W / 2 - 170, 180, 340, 44);
+            ctx.fillStyle = f.col;
+            ctx.fillText(f.text, W / 2, 211);
+          } else if (f.kind === "bdeath") {
+            // 討伐：ボスの姿が光の粒になって消える
+            const ghost = f.e;
+            if (p < 0.6) {
+              const B = { t: 9, warn: null };
+              if (ghost.boss === "hiei") drawByakko(ghost, 1 - p / 0.6);
+              else if (ghost.boss === "yomi") drawYamata(ghost, 1 - p / 0.6);
+              else drawTenma(ghost, 1 - p / 0.6, B);
+            }
+            ctx.globalAlpha = 1 - p;
+            ctx.fillStyle = BOSSES[ghost.boss].color;
+            for (let i = 0; i < (reduced ? 6 : 24); i++) {
+              const x = f.x + (seeded(i) - 0.5) * 180,
+                y = f.y - 20 - seeded(i + 30) * 180 - p * 90 * (0.5 + seeded(i + 60));
+              ctx.fillRect(Math.round(x), Math.round(y), 4, 4);
+            }
+          }
+          ctx.restore();
+        }
+        // 演出のための時間（攻撃・跳躍などの動きの残り時間を減らす）
+        function bossAnimate(e, dt) {
+          for (const k of ["swipe", "leapAnim", "swing", "fireAnim", "hit", "regenFx"]) if (e[k] > 0) e[k] = Math.max(0, e[k] - dt);
+          if (e.heads) for (const h of e.heads) if (h.anim > 0) h.anim = Math.max(0, h.anim - dt);
+        }
         // 描画：NPCの塔・守備隊・味方の部隊・城の耐久
         function drawBattle() {
           const B = battle,
@@ -13177,21 +13797,8 @@
             actors.push({
               y: e.y,
               draw: () => {
+                if (e.boss) return drawBoss(e, B); // 裏ボスは専用のドット絵
                 ctx.save();
-                if (e.boss) {
-                  // 裏ボス：大きく、色のついた気配をまとう（天魔機神の防御形態は青い盾）
-                  const D = BOSSES[e.boss];
-                  ctx.globalAlpha = 0.35 + 0.15 * Math.sin(visualTime * 4);
-                  ellipse(e.x, e.y - 10, 62, 46, D.color);
-                  if (e.form === "guard" && e.phase === 3) {
-                    ctx.globalAlpha = 0.5;
-                    ellipse(e.x, e.y - 10, 70, 54, "#6fb8ff");
-                  }
-                  ctx.globalAlpha = 1;
-                  ctx.translate(e.x, e.y);
-                  ctx.scale(1.9, 1.9);
-                  ctx.translate(-e.x, -e.y);
-                }
                 if (!drawEnemySprite(e)) soldierFallback(e);
                 if (e.hit > 0) {
                   ctx.globalAlpha = e.hit * 3;
@@ -13257,6 +13864,8 @@
           for (const s of shots) projectile(s);
           for (const e of effects) effect(e);
           if (B.boss) {
+            drawBossWarnFx(B, bossOf(B)); // 予兆の間の光（落雷の光・炎の溜め・炉の充填）
+            drawBossIntro(B);
             // 予兆：狙われた部隊の足元に点滅する輪と文字
             const w = B.warn;
             if (w) {
@@ -14074,6 +14683,10 @@
               bossTakeDamage,
               bossStatusText,
               bossBlast,
+              bossDrawn: () => Object.assign({}, bossDrawn),
+              bossEffects: () => effects.filter((f) => f.boss).map((f) => f.kind),
+              yamataHeadPos: (i) => yamataHeadPos(battle.garrison.find((e) => e.boss), i),
+              BOSS_DX,
               KUNI,
               SEA_ROUTES,
               ROADS,
