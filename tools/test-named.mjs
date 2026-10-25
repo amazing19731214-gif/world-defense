@@ -133,16 +133,23 @@ r = await ev(page, () => {
     if (id) who[id] = (who[id] || 0) + 1;
   }
   out.cav = Object.keys(who).sort().join();
+  const ash = {};
+  for (let i = 0; i < 40000; i++) {
+    const id = N.rollNamed("ashigaru");
+    if (id) ash[id] = 1;
+  }
+  out.ash = Object.keys(ash).sort().join();
   N.setRng(() => 1);
   return out;
 });
 check("設定確率（2%）に従って抽選される", r.spear > 0.017 && r.spear < 0.023, String(r.spear));
 check("確率は後から変えられる（10%にすると約10%）", r.ten > 0.09 && r.ten < 0.11, String(r.ten));
 check("その兵種の人物がいない兵種（衛生兵）では出ない", r.medic === 0, String(r.medic));
+check("騎兵では騎兵の人物（馬場信春・山県昌景）だけが選ばれる", r.cav === "masakage,nobuharu", r.cav);
 check(
-  "騎兵では騎兵の人物（馬場・山県・半蔵・小太郎・佐助）だけが選ばれる",
-  r.cav === "hanzo,kotaro,masakage,nobuharu,sasuke",
-  r.cav,
+  "足軽では足軽の人物（服部半蔵・風魔小太郎・猿飛佐助・吉川元春）だけが選ばれる",
+  r.ash === "hanzo,kotaro,motoharu,sasuke",
+  r.ash,
 );
 
 console.log("■ 通常の雇用（ネームド兵士が出ないとき）");
@@ -410,13 +417,128 @@ check(
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
+console.log("■ 忍びの3人：足軽で雇い、Lv30で忍者に転職");
+({ page, errors, context } = await newContext());
+r = await ev(page, () => {
+  const a = WD_DEBUG.squadApi,
+    N = WD_DEBUG.namedApi,
+    J = WD_DEBUG.jobApi,
+    S = WD_DEBUG.state();
+  N.setRng(() => 0);
+  const q = a.hireSquad("ashigaru", 650, 300);
+  N.setRng(() => 1);
+  const m = a.members(q),
+    hanzo = m.find((s) => s.named === "hanzo"),
+    kotaro = m.find((s) => s.named === "kotaro"),
+    normal = m.find((s) => !s.named);
+  const out = {
+    hired: m.filter((s) => s.named).map((s) => s.named + ":" + s.type + ":" + s.job + ":" + s.level),
+  };
+  hanzo.level = 29;
+  out.lv29 = J.changeJob(hanzo, "ninja");
+  for (const s of [hanzo, kotaro, normal]) s.level = 30;
+  out.ok = [J.changeJob(hanzo, "ninja"), J.changeJob(kotaro, "ninja"), J.changeJob(normal, "ninja")];
+  out.after = [hanzo, kotaro].map((s) => s.named + ":" + s.name + ":" + s.type + ":" + s.job);
+  out.rate = a.soldierStats(kotaro).rate / a.soldierStats(normal).rate;
+  out.name = N.soldierName(hanzo);
+  out.zukan = !!WD_DEBUG.forgeApi.zukan().named.hanzo && !!WD_DEBUG.forgeApi.zukan().jobs.ninja;
+  return out;
+});
+check(
+  "服部半蔵・風魔小太郎・猿飛佐助は足軽（初期職も足軽）・Lv1で雇われる",
+  JSON.stringify(r.hired) ===
+    JSON.stringify([
+      "hanzo:ashigaru:ashigaru:1",
+      "kotaro:ashigaru:ashigaru:1",
+      "sasuke:ashigaru:ashigaru:1",
+      "motoharu:ashigaru:ashigaru:1",
+    ]),
+  JSON.stringify(r.hired),
+);
+check("転職の条件は今までどおり（Lv29では忍者になれない）", /Lv30から/.test(r.lv29 || ""), String(r.lv29));
+check(
+  "Lv30で忍者に転職できる",
+  r.ok.every((e) => e === null),
+  JSON.stringify(r.ok),
+);
+check(
+  "転職後も人物と名前はそのまま（動きは忍者＝騎兵）",
+  JSON.stringify(r.after) ===
+    JSON.stringify(["hanzo:服部半蔵:cavalry:ninja", "kotaro:風魔小太郎:cavalry:ninja"]) &&
+    r.name === "⭐服部半蔵",
+  JSON.stringify(r),
+);
+check(
+  "転職後も固有スキルが効く（風魔の夜襲：攻撃の間隔 -6%）",
+  Math.abs(r.rate - 0.94) < 0.001,
+  String(r.rate),
+);
+check("転職後も図鑑の記録が残る（忍者も職業図鑑に登録）", r.zukan);
+await ev(page, () => {
+  document.getElementById("start").click();
+  WD_DEBUG.stopSpawning();
+  WD_DEBUG.state().enemies.length = 0;
+  WD_DEBUG.addEnemy({ kind: "knight", d: 0, hp: 1e9, speed: 0, holder: true });
+});
+await clearWave(page);
+await reload(page);
+r = await ev(page, () =>
+  WD_DEBUG.state()
+    .soldiers.filter((s) => s.named)
+    .map((s) => s.named + ":" + s.name + ":" + s.type + ":" + s.job)
+    .sort(),
+);
+check(
+  "忍者に転職したネームド兵士も、再読み込み後に人物・名前・職業が残る",
+  r.includes("hanzo:服部半蔵:cavalry:ninja") &&
+    r.includes("kotaro:風魔小太郎:cavalry:ninja") &&
+    r.length === 4,
+  JSON.stringify(r),
+);
+r = await ev(page, () => {
+  const a = WD_DEBUG.squadApi,
+    N = WD_DEBUG.namedApi,
+    S = WD_DEBUG.state();
+  const k = S.soldiers.find((s) => s.named === "kotaro"),
+    q = S.squads.find((x) => x.id === k.squadId);
+  a.deployReserve(q, 650, 300);
+  document.getElementById("start").click();
+  WD_DEBUG.stopSpawning();
+  S.enemies.length = 0;
+  WD_DEBUG.addEnemy({ kind: "knight", d: 0, hp: 1e9, speed: 0, holder: true });
+  q.frontId = k.id;
+  k.skills = k.skills.filter((x) => x !== "unyielding");
+  k.hp = 0.1;
+  a.damageSquad(q, 99999, false);
+  S.enemies.length = 0;
+  WD_DEBUG.step(0.1);
+  const dead = !k.alive;
+  N.setRng(() => 0);
+  const err = a.recruitInto(q, "ashigaru");
+  N.setRng(() => 1);
+  const again = S.soldiers.filter((s) => s.alive && s.named === "kotaro");
+  return {
+    dead,
+    err,
+    again: again.map((s) => s.type + ":" + s.job + ":" + s.level + ":" + s.jobs.join("/")),
+    zukan: !!WD_DEBUG.forgeApi.zukan().named.kotaro,
+  };
+});
+check(
+  "忍者の風魔小太郎が戦死 → 再登場はLv1の足軽から育て直し",
+  r.dead && !r.err && JSON.stringify(r.again) === JSON.stringify(["ashigaru:ashigaru:1:ashigaru"]) && r.zukan,
+  JSON.stringify(r),
+);
+check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
+await context.close();
+
 console.log("■ 画面（375×667）");
 ({ page, errors, context } = await newContext({}, 375, 667));
 await ev(page, () => {
   const a = WD_DEBUG.squadApi,
     N = WD_DEBUG.namedApi;
   N.setRng(() => 0);
-  a.hireSquad("cavalry", 650, 300);
+  a.hireSquad("ashigaru", 650, 300);
   N.setRng(() => 1);
   a.hireSquad("archer", 400, 165);
   WD_DEBUG.step(0.2);
@@ -440,13 +562,13 @@ r = await ev(page, () => {
   };
 });
 check(
-  "図鑑に「ネームド兵士」の分類：5/15・総合は171",
-  /ネームド兵士図鑑5\/15/.test(r.text) && /総合[0-9]+\/171/.test(r.text),
+  "図鑑に「ネームド兵士」の分類：4/15・総合は171",
+  /ネームド兵士図鑑4\/15/.test(r.text) && /総合[0-9]+\/171/.test(r.text),
   r.text.slice(0, 160),
 );
 check(
   "未発見の人物は「???」で名前を出さない",
-  r.tiles === 15 && r.locked === 10 && r.hidden,
+  r.tiles === 15 && r.locked === 11 && r.hidden,
   JSON.stringify(r),
 );
 check(
@@ -463,10 +585,10 @@ let text = await page.textContent("#zkDetail");
 check(
   "詳細：名前・兵種・在籍中・固有スキル・出会い方・ゆかり（未発見の相手は???）",
   /服部半蔵/.test(text) &&
-    /兵種：騎兵/.test(text) &&
+    /兵種：足軽/.test(text) &&
     /在籍中・Lv1/.test(text) &&
     /伊賀の頭領/.test(text) &&
-    /騎兵を雇うと/.test(text) &&
+    /足軽を雇うと/.test(text) &&
     /ゆかり「忍びの者」：風魔小太郎・猿飛佐助/.test(text),
   text,
 );

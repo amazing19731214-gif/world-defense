@@ -3939,7 +3939,7 @@ OFF</button>
         // 通常の兵士を雇うとき（新しい部隊の雇用・新兵補充）、1人ごとに chance の確率で、その兵種の人物が仕官する。
         // 費用・成長・戦死は通常の兵士と同じ（Lv1から。戦死すれば失われ、のちの雇用でまた現れることがある）。同じ人物は同時に1人まで。
         // 武将ガチャの30人とは別の人物。skill は人物ごとの固有スキル（効果のキーは兵士のスキルと同じ。控えめな値）。
-        // 忍者は上級職（雇えない）ので、忍者の人物は忍者と同じ動きの騎兵で現れる
+        // type は雇うときの兵種（初期職）。忍者は上級職（雇えない）なので、忍びの3人は足軽で現れ、Lv30 で忍者に転職できる
         const NAMED_RULES = {
           chance: 0.02, // 兵士1人を雇うごとの出現確率
         };
@@ -3954,9 +3954,9 @@ OFF</button>
           dosetsu: { name: "立花道雪", type: "spearman", color: "#e8c547", skill: { name: "雷切", crit: 0.04, text: "会心率 +4%（会心：一撃 ×1.5）" } },
           nagayoshi: { name: "森長可", type: "spearman", color: "#b8323f", skill: { name: "鬼武蔵", combo: 0.06, text: "6%の確率で追加攻撃" } },
           danemon: { name: "塙団右衛門", type: "spearman", color: "#c77a2e", skill: { name: "夜討ちの札", haste: 0.05, text: "攻撃の間隔 -5%" } },
-          hanzo: { name: "服部半蔵", type: "cavalry", color: "#3a3f58", skill: { name: "伊賀の頭領", evade: 0.05, text: "5%の確率で攻撃をかわす" } },
-          kotaro: { name: "風魔小太郎", type: "cavalry", color: "#4b5e3a", skill: { name: "風魔の夜襲", haste: 0.06, text: "攻撃の間隔 -6%" } },
-          sasuke: { name: "猿飛佐助", type: "cavalry", color: "#d9822b", skill: { name: "猿飛の術", rangedGuard: 0.15, text: "遠距離攻撃のダメージ -15%" } },
+          hanzo: { name: "服部半蔵", type: "ashigaru", color: "#3a3f58", skill: { name: "伊賀の頭領", evade: 0.05, text: "5%の確率で攻撃をかわす" } },
+          kotaro: { name: "風魔小太郎", type: "ashigaru", color: "#4b5e3a", skill: { name: "風魔の夜襲", haste: 0.06, text: "攻撃の間隔 -6%" } },
+          sasuke: { name: "猿飛佐助", type: "ashigaru", color: "#d9822b", skill: { name: "猿飛の術", rangedGuard: 0.15, text: "遠距離攻撃のダメージ -15%" } },
           takakage: { name: "小早川隆景", type: "archer", color: "#2f8f8a", skill: { name: "智将の采配", range: 0.06, text: "射程 +6%" } },
           motoharu: { name: "吉川元春", type: "ashigaru", color: "#9c2f2f", skill: { name: "鬼吉川", atk: 0.06, text: "攻撃力 +6%" } },
         };
@@ -5924,6 +5924,7 @@ OFF</button>
           s.hp = Math.min(s.hp, soldierStats(s).maxHp);
           s.iaiTarget = null;
           patchSavedSoldier(s, pickSaved(s));
+          zukanSync(); // まだ保存されていない兵士（このウェーブで雇った）の転職も、すぐ職業図鑑へ
           return null;
         }
         // ===== 秘伝錬成 =====
@@ -7000,11 +7001,12 @@ OFF</button>
           const sum = POINT_KEYS.reduce((n, k) => n + p[k], 0);
           return sum <= (level - 1) * SQUAD_RULES.statPoints ? p : emptyPoints();
         }
-        // 保存されたネームド兵士が正しいか（人物が存在し、兵種が合い、同じ人物がまだ読み込まれていない）
+        // 保存されたネームド兵士が正しいか（人物が存在し、初期職が人物の兵種と合い、同じ人物がまだ読み込まれていない）
+        // 転職すると兵種（type）は職業の動きに変わる（忍者なら騎兵）ので、初期職（jobs の最初）でも確かめる
         const namedOk = (v, list) =>
           typeof v.named === "string" &&
           !!NAMED_SOLDIERS[v.named] &&
-          NAMED_SOLDIERS[v.named].type === v.type &&
+          (NAMED_SOLDIERS[v.named].type === v.type || (Array.isArray(v.jobs) && v.jobs[0] === NAMED_SOLDIERS[v.named].type)) &&
           !list.some((x) => x.named === v.named);
         function cleanFallen(f) {
           if (!f || typeof f !== "object" || !SOLDIER_TYPES[f.type]) return null;
