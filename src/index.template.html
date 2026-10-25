@@ -1595,6 +1595,7 @@
         outline: 2px solid #ffd34d;
         background: #3d5a4a;
       }
+      #checkpointSave { grid-column: 1 / -1; }
       /* データを全部消す */
       .tools.menu-tools #wipeData {
         font-size: 13px;
@@ -2151,11 +2152,12 @@ OFF</button>
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="mapOpen">🗾 全国</button><button id="zukanOpen">📖 図鑑</button
-        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button>
+        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v42（WAVE100対応）</small>
+      <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v43（途中保存・再開）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -3573,29 +3575,54 @@ OFF</button>
 };
         const HERO_ASSETS = /*@@HERO_ASSETS@@*/ {};
         const SAVE_KEY = "worldDefense.warlords.v1";
-        // スキル習得と書の消費を1回の書き込みで確定する先行ログ。
-        // 片方の保存が失敗しても、このログから両方を復元する。
+        // 武将・兵士・防衛進行・反撃報酬をまとめて確定する先行ログ。
+        // 旧版のスキルの書の {heroes,soldiers} 形式も読める。
         const BOOK_TX_KEY = "worldDefense.bookTransaction.v1";
+        let gameSaveBatch = null, gameSaveBatchActive = false, defenseSaveMessage = "";
         function pendingBookTransaction() {
           const raw = localStorage.getItem(BOOK_TX_KEY);
           if (!raw) return null;
           const tx = JSON.parse(raw);
-          if (typeof tx.heroes !== "string" || typeof tx.soldiers !== "string") throw new Error("invalid book transaction");
-          return tx;
+          const writes = tx.writes || (typeof tx.heroes === "string" && typeof tx.soldiers === "string"
+            ? { [SAVE_KEY]: tx.heroes, "worldDefense.soldiers.v1": tx.soldiers } : null);
+          const keys = [SAVE_KEY, "worldDefense.soldiers.v1", "worldDefense.conquest.v1"];
+          if (!writes || typeof writes !== "object" || Object.entries(writes).some(([k,v]) => !keys.includes(k) || typeof v !== "string")) throw new Error("invalid save transaction");
+          return { writes };
         }
         function flushBookTransaction() {
           const tx = pendingBookTransaction();
           if (!tx) return;
-          localStorage.setItem(SAVE_KEY, tx.heroes);
-          localStorage.setItem("worldDefense.soldiers.v1", tx.soldiers);
+          for (const [key, value] of Object.entries(tx.writes)) localStorage.setItem(key, value);
           localStorage.removeItem(BOOK_TX_KEY);
         }
         function readGameSave(key) {
           const tx = pendingBookTransaction();
-          if (tx) return key === SAVE_KEY ? tx.heroes : tx.soldiers;
-          return localStorage.getItem(key);
+          return tx && Object.hasOwn(tx.writes, key) ? tx.writes[key] : localStorage.getItem(key);
         }
-
+        function beginGameSaveBatch() {
+          gameSaveBatch = gameSaveBatch || {};
+          gameSaveBatchActive = true;
+        }
+        function commitGameSaveBatch() {
+          gameSaveBatchActive = false;
+          if (!gameSaveBatch) return true;
+          try {
+            const previous = pendingBookTransaction();
+            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ writes: { ...(previous ? previous.writes : {}), ...gameSaveBatch } }));
+            gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
+            try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
+            return true;
+          } catch (err) { return false; } // 未確定の変更はメモリに残し、次の保存で再試行
+        }
+        function writeGameSave(key, value) {
+          if (gameSaveBatch) {
+            gameSaveBatch[key] = value;
+            if (!gameSaveBatchActive && !commitGameSaveBatch()) throw new Error("save failed");
+          } else {
+            flushBookTransaction();
+            localStorage.setItem(key, value);
+          }
+        }
 
         // ===== 兵士部隊：調整用設定 =====
         // 塔に配属する「武将」とは別のシステム。兵士は1人ずつ個別に管理し、HPが0になると永久に死亡する。
@@ -4213,6 +4240,7 @@ OFF</button>
           renderBattleBar();
           renderTrainBar();
           renderCounterBanner();
+          renderDefenseSave();
         }
         function renderCounterBanner() {
           const c = territoryReady ? activeCounter() : null,
@@ -4243,7 +4271,7 @@ OFF</button>
         function newHeroState(id) {
           return { id, tower: null, squad: null, active: 0, cd: 0, volleysLeft: 0, volleyClock: 0, passiveClock: 0, guardReady: false, lastActivity: 0, lastHit: -100, hitStack: 0, shots: 0, chain: 0, seen: new Set(), wardUsed: new Set(), protected: new Set(), economyGold: 0, couponWave: -1 };
         }
-        // 保存するのは「所持武将（枚数）・ガチャ券・ガチャ履歴・最後に配属した武将・負傷の残りウェーブ」だけ。戦闘は保存しない。
+        // 武将・装備の永続データと、通常防衛戦のチェックポイントを保存する。戦闘の途中の敵や演出は保存しない。
         // 秘伝錬成の保存データ（武将と同じ保存データに入れる）：欠片・装備・スキルの書・履歴・錬成で使った枚数
         function cleanForge(d) {
           const o = d && typeof d === "object" ? d : {};
@@ -4336,6 +4364,7 @@ OFF</button>
               history,
               lastHero: WARLORDS[data.lastHero] ? data.lastHero : null,
               injured,
+              defense: data.defense || null,
               forge: cleanForge(data.forge), // 以前の保存データには無い（重複カードは今の枚数のまま。錬成で使った分は減っている）
             };
           } catch (err) {
@@ -4416,8 +4445,7 @@ OFF</button>
         let saveOk = true;
         function persistHeroes() {
           try {
-            flushBookTransaction();
-            localStorage.setItem(
+            writeGameSave(
               SAVE_KEY,
               JSON.stringify({
                 version: 1,
@@ -4427,6 +4455,7 @@ OFF</button>
                 lastHero: heroSave.lastHero,
                 injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
                 forge: heroSave.forge,
+                defense: heroSave.defense || null,
               }),
             );
             saveOk = true;
@@ -6163,7 +6192,7 @@ OFF</button>
           if (!it) return "その装備はありません。";
           if (!s || !s.alive) return "その兵士は装備できません。";
           // 保存されていない新兵（ウェーブをクリアする前）には装備させない（読み込み直すといなくなるため）
-          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから装備できます。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、準備中に「途中保存」するか、ウェーブをクリアしてから装備できます。";
           if (it.owner === s.id) return "すでに装備しています。";
           if (it.owner != null) return (soldierName(soldierById(it.owner)) || "ほかの兵士") + " が装備中です。先に外してください。";
           if (!canWear(jobOf(s), it.id))
@@ -6225,7 +6254,7 @@ OFF</button>
           if (!k || !k.book) return "そのスキルの書はありません。";
           if (!(forgeSave().books[skillId] > 0)) return "「" + k.name + "」の書を持っていません。";
           if (!s || !s.alive) return "その兵士には使えません。";
-          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、準備中に「途中保存」するか、ウェーブをクリアしてから使えます。";
           if (learnedOf(s).includes(skillId)) return soldierName(s) + " は「" + k.name + "」をもう習得しています（書は使いません）。";
           return null;
         }
@@ -6236,6 +6265,7 @@ OFF</button>
           const F = forgeSave(), before = pickSaved(s), oldBooks = { ...F.books };
           const saved = savedSoldier(s.id), beforeSaved = { ...saved };
           try {
+            if (gameSaveBatch && !commitGameSaveBatch()) throw new Error("save pending");
             flushBookTransaction(); // 前の処理を確定できない間は次の書を使わない
             learnedOf(s).push(skillId);
             if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(skillId);
@@ -6247,7 +6277,7 @@ OFF</button>
               version: 1, owned: heroSave.owned, tickets: heroSave.tickets,
               history: heroSave.history, lastHero: heroSave.lastHero,
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
-              forge: F,
+              forge: F, defense: heroSave.defense || null,
             });
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
               heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
@@ -6265,7 +6295,7 @@ OFF</button>
         }
         // ----- ロック・売却 -----
         // 売値（品質ごと・単位は両。伝説・裏ボスの装備は売れない）。売ると小判が増える。
-        // 小判は戦闘の軍資金（G・保存しない）とは別の通貨で、装備と同じ保存データに残る（読み込み直し・「最初から」でも消えない）。
+        // 小判は戦闘の軍資金（G・防衛の途中保存のみ）とは別の通貨で、装備と同じ保存データに残る（読み込み直し・「最初から」でも消えない）。
         // いずれ装備の店・強化に使う予定（今はためるだけ）
         const SELL_PRICE = { 1: 50, 2: 150, 3: 500 };
         const kobanText = (n) => Math.floor(n).toLocaleString("ja-JP") + "両";
@@ -7279,8 +7309,7 @@ OFF</button>
         let soldierSaveOk = true;
         function writeSoldierSave() {
           try {
-            flushBookTransaction();
-            localStorage.setItem(
+            writeGameSave(
               SOLDIER_SAVE_KEY,
               JSON.stringify(Object.assign({ version: 1 }, soldierSave)),
             );
@@ -7520,7 +7549,10 @@ OFF</button>
               const rewardHero = e.lastTowerHero && heroState[e.lastTowerHero];
               if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
-              if (e.kind === "boss" && !training) grantTickets(GACHA.ticketsPerBoss, "ボス撃破"); // 修練場ではガチャ券なし
+              if (e.kind === "boss" && !training && (!heroSave.defense || (heroSave.defense.bossRewardThrough || 0) < wave)) {
+                if (heroSave.defense) heroSave.defense.bossRewardThrough = wave;
+                grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
+              } // 修練場ではガチャ券なし
               if (enemySet(e)) {
                 if (effects.length >= 80) effects.shift();
                 effects.push({
@@ -7544,6 +7576,7 @@ OFF</button>
             hp = 0;
             over = true;
             playing = false;
+            invalidateDefenseCheckpoint();
             msg("ゲームオーバー！ 最初から挑戦しよう。");
             const lost = counterFailed();
             if (lost)
@@ -7559,6 +7592,7 @@ OFF</button>
             playing = false;
             for (const h of ownedHeroes()) endSkill(h);
             for (const t of towers) t.heroShield = null;
+            if (!training) beginGameSaveBatch();
             squadsWaveEnd();
             if (training) {
               // 修練場：ウェーブの報酬・反撃・負傷の回復・ガチャ券は通常の防衛戦だけ
@@ -7595,6 +7629,7 @@ OFF</button>
               if (ruined.includes(selectedTower)) selectedTower = null;
               $("msg").textContent += " 破壊された塔" + ruined.length + "基のがれきを片付けた。";
             }
+            saveDefenseCheckpoint();
           }
           updateUI();
         }
@@ -9403,7 +9438,7 @@ OFF</button>
         }
         function renderGoal() {
           $("goalBody").innerHTML =
-            '<p class="goal-note">防衛戦を何ウェーブまで戦うか、最大100まで選べます。21ウェーブ目からも敵はさらに増え、強くなります。進行中のウェーブは保存されません。<br>今 WAVE ' +
+            '<p class="goal-note">防衛戦を何ウェーブまで戦うか、最大100まで選べます。21ウェーブ目からも敵はさらに増え、強くなります。ウェーブクリア時に自動保存し、再読み込み後は続きから再開できます。<br>今 WAVE ' +
             wave +
             "。" +
             (goalWon() ? "勝利しました。目標を延ばすと続けて戦えます。" : "今より先のウェーブを選べます。") +
@@ -9454,12 +9489,14 @@ OFF</button>
           autoLeft = null; // 数えている途中に押しても二重には始めない
           if (playing || over || battle) return;
           if (training && training.done) return;
+          if (!training) saveDefenseCheckpoint();
           wave++;
           spawned = 0;
           spawnTotal = 8 + wave * 3;
           spawnClock = 0.5;
           playing = true;
           paused = false;
+          $("pause").textContent = "⏸ 停止";
           if (training) trainingWaveStart();
           squadsWaveStart();
           if (!training) msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
@@ -9516,6 +9553,7 @@ OFF</button>
         $("reset").onclick = () => {
           if (training) return (msg("修練場の挑戦中です。先に撤退してください。"), toast($("msg").textContent));
           if (!confirm("最初からやり直しますか？")) return;
+          if (!invalidateDefenseCheckpoint()) return msg("保存を消せないため、やり直しを中止しました。空き容量を確認してください。");
           combatClock = 0;
           gold = startGold();
           hp = 20;
@@ -10746,7 +10784,7 @@ OFF</button>
             Math.round(st.range) +
             "</small></p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "") +
-            (savedSoldier(s.id) ? "" : '<p class="injured">雇ったばかりの兵士は、ウェーブをクリアしてから装備できます。</p>');
+            (savedSoldier(s.id) ? "" : '<p class="injured">雇ったばかりの兵士は、準備中に「途中保存」するか、ウェーブをクリアしてから装備できます。</p>');
           for (const slot of Object.keys(GEAR_SLOTS)) {
             const cur = slotItem(s, slot);
             html +=
@@ -12969,7 +13007,7 @@ OFF</button>
           const out = {};
           let d = null;
           try {
-            d = JSON.parse(localStorage.getItem(CONQUEST_KEY) || "null");
+            d = JSON.parse(readGameSave(CONQUEST_KEY) || "null");
           } catch (err) {
             d = null; // 保存できない・壊れたデータ：未攻略として始める
           }
@@ -13027,7 +13065,7 @@ OFF</button>
         const conquest = loadConquest();
         function persistConquest() {
           try {
-            localStorage.setItem(
+            writeGameSave(
               CONQUEST_KEY,
               JSON.stringify({
                 version: 2, // 2：全国68か国（城IDは同じなので、1 の占領はそのまま読める）
@@ -16161,6 +16199,7 @@ OFF</button>
                 animateVisuals(h);
               }
             },
+            defenseApi: { save: saveDefenseCheckpoint, restore: restoreDefenseCheckpoint },
             config: { WARLORDS, HERO_RULES, GACHA },
             heroApi: {
               save: () => heroSave,
@@ -16185,6 +16224,103 @@ OFF</button>
             },
           };
         }
+        // ===== 防衛戦の途中保存（ウェーブの合間のみ） =====
+        function defenseSnapshot() {
+          const old = heroSave.defense;
+          return {
+            version: 1, wave, waveGoal, gold, hp, speed, runId, clock: combatClock,
+            bossRewardThrough: old && old.runId === runId ? old.bossRewardThrough || 0 : 0,
+            towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
+            squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
+            soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0 })),
+            heroes: ownedHeroes().map(h => ({ id:h.id, tower:h.tower ? h.tower.id : null, squad:h.squad ? h.squad.id : null, cd:h.cd })),
+          };
+        }
+        function renderDefenseSave() {
+          const b = $("checkpointSave"), el = $("checkpointStatus");
+          if (!b || !el) return;
+          b.disabled = !!(playing || training || battle || (over && hp <= 0));
+          el.textContent = defenseSaveMessage || (heroSave.defense
+            ? "💾 WAVE " + heroSave.defense.wave + " の準備状態を保存済み。戦闘中に閉じても、この地点から再開します。"
+            : "ウェーブクリア時に自動保存します。準備中は「💾 途中保存」も使えます。");
+        }
+        function saveDefenseCheckpoint() {
+          if (playing || training || battle || hp <= 0) return false;
+          beginGameSaveBatch();
+          saveRoster();
+          heroSave.defense = defenseSnapshot();
+          persistHeroes();
+          const ok = commitGameSaveBatch();
+          defenseSaveMessage = ok ? "" : "⚠ 途中保存に失敗しました。空き容量を確認して「途中保存」を押してください。";
+          renderDefenseSave();
+          return ok;
+        }
+        function invalidateDefenseCheckpoint() {
+          beginGameSaveBatch();
+          heroSave.defense = null;
+          persistHeroes();
+          const ok = commitGameSaveBatch();
+          defenseSaveMessage = ok ? "" : "⚠ 保存の更新に失敗しました。空き容量を確認してください。";
+          return ok;
+        }
+        function restoreDefenseCheckpoint() {
+          const d = heroSave.defense;
+          if (!d) return false;
+          const finite = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
+          const valid = d.version === 1 && Number.isInteger(d.wave) && finite(d.wave,0,100) && WAVE_GOALS.includes(d.waveGoal) && d.wave <= d.waveGoal
+            && finite(d.gold,0,1e12) && finite(d.hp,1,20) && typeof d.runId === "string" && d.runId.length <= 100
+            && finite(d.clock,0,1e12) && Array.isArray(d.towers) && d.towers.length <= 300 && Array.isArray(d.squads)
+            && d.squads.length <= 16 && Array.isArray(d.soldiers) && d.soldiers.length <= 160 && Array.isArray(d.heroes) && d.heroes.length <= 30
+            && d.towers.every(t => t && Number.isInteger(t.id) && t.id > 0 && Object.hasOwn(types,t.type) && finite(t.x,0,960) && finite(t.y,0,600) && Number.isInteger(t.level) && finite(t.level,1,5) && finite(t.spent,0,1e12) && finite(t.hp,0,1e9) && finite(t.cd,0,1e6))
+            && new Set(d.towers.map(t=>t.id)).size === d.towers.length
+            && d.squads.every(q => q && Number.isInteger(q.id) && finite(q.x,0,960) && finite(q.y,0,600))
+            && d.soldiers.every(s => s && Number.isInteger(s.id) && finite(s.hp,0,1e12) && finite(s.cd,0,1e6))
+            && d.heroes.every(h => h && typeof h.id === "string" && finite(h.cd,0,1e6));
+          if (!valid) {
+            heroSave.defense = null;
+            persistHeroes();
+            defenseSaveMessage = "⚠ 途中保存を読み込めませんでした。武将・装備・兵士の保存データは維持して、新しく始めます。";
+            return false;
+          }
+          wave = d.wave; gold = d.gold; hp = d.hp; speed = d.speed === 2 ? 2 : 1;
+          waveGoal = WAVE_GOALS.includes(settings.waveGoal) && settings.waveGoal >= wave ? settings.waveGoal : d.waveGoal;
+          runId = d.runId; combatClock = d.clock;
+          towers = d.towers.map(t => ({...t})); towerSeq = Math.max(0, ...towers.map(t=>t.id));
+          for (const q of squads) {
+            const v = d.squads.find(x=>x.id === q.id);
+            if (v && v.deployed && roster(q).length && fieldSquads().length < SQUAD_RULES.maxDeployed) {
+              q.state = "deployed"; q.x = v.x; q.y = v.y; q.face = -1;
+            }
+            if (v) q.fallen = Number.isFinite(v.fallen) ? Math.max(0,v.fallen) : 0;
+          }
+          const posts = new Set();
+          for (const v of d.heroes) {
+            const h = heroState[v.id];
+            if (!h) continue;
+            h.cd = v.cd;
+            if (injuryOf(v.id)) continue;
+            const t = towers.find(t=>t.id === v.tower), q = squads.find(q=>q.id === v.squad);
+            const key = t ? "t:"+t.id : q ? "q:"+q.id : null;
+            if (!key || posts.has(key)) continue;
+            posts.add(key); h.tower = t || null; h.squad = t ? null : q || null;
+          }
+          for (const t of towers) t.hp = Math.min(t.hp,towerMaxHp(t));
+          // 現在の兵士保存データが正本。戦死・解散した兵士を復活させない。
+          for (const s of soldiers) {
+            const v = d.soldiers.find(x=>x.id === s.id);
+            s.hp = v ? Math.min(v.hp,rawMaxHp(s)) : rawMaxHp(s);
+            s.cd = v ? v.cd : 0;
+          }
+          playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;
+          $("pause").textContent = "▶ 再開"; $("speed").textContent = "⏩ x" + speed;
+          msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < 100 ? "目標達成済みです。WAVEから目標を延ばせます。" : "全100ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
+          return true;
+        }
+        $("checkpointSave").onclick = () => {
+          if (saveDefenseCheckpoint()) msg("💾 WAVE " + wave + " の準備状態を保存しました。次に開くと、この続きから再開します。");
+          else if (playing) toast("戦闘中は直前の保存地点から再開します。ウェーブ終了時に自動保存します。");
+          updateUI();
+        };
         // ===== 画面の大きさ（iPhone Safari） =====
         // 見えている高さ（アドレスバーの出し入れ・キーボードで変わる）と、下に出した塔・部隊のパネルの高さを CSS に渡す
         function syncViewport() {
@@ -16210,6 +16346,7 @@ OFF</button>
         new MutationObserver(syncViewport).observe($("squadPanel"), { attributes: true, attributeFilter: ["hidden"] });
         new MutationObserver(syncViewport).observe($("towerPanel"), { attributes: true, attributeFilter: ["hidden"] });
         syncViewport();
+        restoreDefenseCheckpoint();
         updateUI();
         requestAnimationFrame(frame);
       })();

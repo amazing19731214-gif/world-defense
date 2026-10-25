@@ -450,6 +450,7 @@ const before = await ev(page, () =>
     .sort()
     .join(","),
 );
+const defenseBeforeReload = await ev(page, () => WD_DEBUG.heroApi.save().defense || null);
 await reload(page);
 r = await ev(page, () => {
   const s = WD_DEBUG.state(),
@@ -459,13 +460,16 @@ r = await ev(page, () => {
       .map((m) => [m.id, m.level, m.xp, m.skills.join("+"), m.name, m.battles, m.kills, m.squadId].join("|"))
       .sort()
       .join(","),
-    reserve: s.squads.every((q) => q.state === "reserve"),
-    fullHp: s.soldiers.every((m) => m.hp === a.soldierStats(m).maxHp),
+    squads: s.squads.map(q => ({id:q.id,state:q.state,x:q.x,y:q.y})),
+    soldiers: s.soldiers.map(m => ({id:m.id,hp:m.hp,max:a.soldierStats(m).maxHp})),
     wave: s.wave,
   };
 });
 check("Lv・経験値・スキル・名前・出陣・討伐・所属を復元", r.list === before, r.list + " vs " + before);
-check("復元した部隊は待機中・HP満タン（ゲームは最初から）", r.reserve && r.fullHp && r.wave === 0);
+check("途中保存があれば配置・HP・ウェーブを復元（ない場合は従来の待機状態）",
+  r.wave === (defenseBeforeReload ? defenseBeforeReload.wave : 0) &&
+  r.squads.every(q => { const v = defenseBeforeReload && defenseBeforeReload.squads.find(v=>v.id === q.id);return v && v.deployed ? q.state === "deployed" && q.x === v.x && q.y === v.y : q.state === "reserve"; }) &&
+  r.soldiers.every(m => { const v = defenseBeforeReload && defenseBeforeReload.soldiers.find(v=>v.id === m.id);return m.hp === (v ? Math.min(v.hp,m.max) : m.max); }), JSON.stringify(r));
 
 console.log("■ 戦死（復活しない・英霊名鑑）");
 await ev(page, () => {
