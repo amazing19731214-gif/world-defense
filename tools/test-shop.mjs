@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// 小判の商店：能力の実（攻撃・防御・体力・射程。1個5,000両・使うとその兵士の能力がずっと +1）と、書の売却
+// 小判の商店：能力の実（攻撃・防御・体力・射程。1個5,000両・使うとその兵士の能力がずっと +1（最大HPは +10））と、書の売却
 // （スキルの書150両・伝承の秘伝書500両・🌟超秘伝書3,000両・装備中は売れない）・保存（失敗したら取り消す）・画面
 //   node tools/test-shop.mjs
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import fs from "node:fs";
+import http from "node:http";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -14,7 +16,14 @@ try {
   ({ chromium } = require(path.join(process.execPath, "../../lib/node_modules/playwright")));
 }
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const url = pathToFileURL(path.join(root, "index.html")).href + "?debug";
+// file:// で開くと、読み込み直しのときにまれに保存データ（localStorage）が全部見えなくなることがあった（テストのブラウザだけ）。
+// 公開版と同じく http で開く（小さなサーバーで index.html を返す）
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(fs.readFileSync(path.join(root, "index.html")));
+});
+await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
+const url = "http://127.0.0.1:" + server.address().port + "/index.html?debug";
 
 let failures = 0,
   passes = 0;
@@ -65,8 +74,9 @@ const context = await browser.newContext({
 });
 await context.addInitScript(
   ([a, b, c, d]) => {
-    if (sessionStorage.getItem("__seeded")) return;
-    sessionStorage.setItem("__seeded", "1");
+    // 最初の読み込みのときだけ入れる（印は読み込み直しでも残る window.name に置く）
+    if (location.protocol !== "http:" || window.name === "seeded") return; // 最初の about:blank では何もしない
+    window.name = "seeded";
     localStorage.clear();
     localStorage.setItem(a, b);
     localStorage.setItem(c, d);
@@ -78,11 +88,13 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 page.on("dialog", (d) => d.accept());
+// 読み込み直しは同じページの reload で（別の URL へ移ると、まれに直前の保存が見えないことがあった）
 const reload = async () => {
-  await page.goto(url);
+  await page.reload();
   await page.waitForFunction(() => window.WD_DEBUG);
 };
-await reload();
+await page.goto(url);
+await page.waitForFunction(() => window.WD_DEBUG);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const failSave = (on) =>
   ev((on) => {
@@ -145,8 +157,8 @@ check(
   JSON.stringify(r.e),
 );
 check(
-  "その兵士の攻撃・防御・最大HP・射程がそれぞれ +1",
-  Math.abs(r.atk - 1) < 1e-6 && Math.abs(r.def - 1) < 1e-6 && r.hp === 1 && Math.abs(r.range - 1) < 1e-6,
+  "その兵士の攻撃・防御・射程は +1、最大HPは +10",
+  Math.abs(r.atk - 1) < 1e-6 && Math.abs(r.def - 1) < 1e-6 && r.hp === 10 && Math.abs(r.range - 1) < 1e-6,
   JSON.stringify(r),
 );
 check(
@@ -280,5 +292,6 @@ check(
 check("エラーなし", errors.length === 0, errors.join(" / "));
 
 await browser.close();
+server.close();
 console.log(`\n結果: ${passes} 件成功 / ${failures} 件失敗`);
 process.exit(failures ? 1 : 0);

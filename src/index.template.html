@@ -4636,20 +4636,21 @@ OFF</button>
         // ===== 小判の商店：能力の実（使うと、その兵士の能力がずっと 1 上がる）と、書の売値 =====
         const SHOP = {
           fruits: {
-            atk: { name: "攻撃の実", icon: "🍎", stat: "攻撃" },
-            def: { name: "防御の実", icon: "🍐", stat: "防御" },
-            hp: { name: "体力の実", icon: "🍑", stat: "最大HP" },
-            rng: { name: "射程の実", icon: "🍇", stat: "射程" },
+            // up：実1個で上がる量
+            atk: { name: "攻撃の実", icon: "🍎", stat: "攻撃", up: 1 },
+            def: { name: "防御の実", icon: "🍐", stat: "防御", up: 1 },
+            hp: { name: "体力の実", icon: "🍑", stat: "最大HP", up: 10 },
+            rng: { name: "射程の実", icon: "🍇", stat: "射程", up: 1 },
           },
           fruitPrice: 5000, // 実の値段（両）
-          fruitUp: 1, // 実1個で上がる量
           maxStock: 999, // 倉庫に置ける実の数（種類ごと）
           maxEat: 1e6, // 兵士1人が食べられる数（種類ごと・保存の安全のため）
           bookSell: { skill: 150, legend: 500, super: 3000 }, // 書の売値（両）：スキルの書・伝承の秘伝書・🌟超秘伝書
         };
         const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
+        const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
         const legendHp = (s, hp) =>
-          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitOf(s, "hp") * SHOP.fruitUp);
+          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp"));
         function rollLegend() {
           const between = (min, max) => min + legendRng() * (max - min),
             pick = (o) => {
@@ -6426,9 +6427,9 @@ OFF</button>
           out.def = out.def * (1 + lv2("defPct") / 100) + lv2("defFlat");
           out.range = out.range * (1 + lv2("rngPct") / 100) + lv2("rngFlat");
           // 能力の実：食べた数 × 1 を足す（最大HPは legendHp で足す）
-          out.atk += fruitOf(s, "atk") * SHOP.fruitUp;
-          out.def += fruitOf(s, "def") * SHOP.fruitUp;
-          out.range += fruitOf(s, "rng") * SHOP.fruitUp;
+          out.atk += fruitUp(s, "atk");
+          out.def += fruitUp(s, "def");
+          out.range += fruitUp(s, "rng");
           return out;
         }
         // 能力の表示（衛生兵は攻撃のかわりに回復量と間隔）
@@ -7223,7 +7224,7 @@ OFF</button>
             gameSaveBatchActive = false;
             return "保存できなかったので使いませんでした（実は残っています）。";
           }
-          logHistory(s, SHOP.fruits[k].name + "を食べた（" + SHOP.fruits[k].stat + " +" + SHOP.fruitUp + "）");
+          logHistory(s, SHOP.fruits[k].name + "を食べた（" + SHOP.fruits[k].stat + " +" + SHOP.fruits[k].up + "）");
           return null;
         }
         // 並び替え・絞り込み（攻撃・防御は装備の「攻撃 +％」「防御 +％」の値で比べる。特殊効果は数えない。同じなら手に入れた順）
@@ -11895,7 +11896,7 @@ OFF</button>
               ? "<br>能力の実：" +
                 Object.entries(SHOP.fruits)
                   .filter(([k]) => fruitOf(s, k))
-                  .map(([k, f]) => f.icon + f.stat + " +" + fruitOf(s, k) * SHOP.fruitUp)
+                  .map(([k, f]) => f.icon + f.stat + " +" + fruitUp(s, k))
                   .join("・")
               : "") +
             "</small></p>" +
@@ -12070,9 +12071,7 @@ OFF</button>
           if (gearTab === "shop") {
             const st = F.fruits || {};
             html +=
-              '<p class="muted"><small>能力の実：兵士に使うと、その兵士の能力がずっと ' +
-              SHOP.fruitUp +
-              " 上がります（何個でも・転職しても消えない）。1個 " +
+              '<p class="muted"><small>能力の実：兵士に使うと、その兵士の能力がずっと上がります（攻撃・防御・射程は +1、最大HPは +10。何個でも・転職しても消えない）。1個 ' +
               kobanText(SHOP.fruitPrice) +
               "。買った実は倉庫に入り、ここから兵士に使えます。</small></p>" +
               '<div class="gear-list">' +
@@ -12086,7 +12085,7 @@ OFF</button>
                     "</span><small>" +
                     f.stat +
                     " +" +
-                    SHOP.fruitUp +
+                    f.up +
                     "・" +
                     kobanText(SHOP.fruitPrice) +
                     "・持っている数 " +
@@ -12457,7 +12456,7 @@ OFF</button>
           else if (d.fruitTo) {
             const s = soldierById(+d.to);
             err = useFruit(s, d.fruitTo);
-            if (!err) gearNote = soldierName(s) + " は" + SHOP.fruits[d.fruitTo].name + "を食べた（" + SHOP.fruits[d.fruitTo].stat + " +" + SHOP.fruitUp + "）。";
+            if (!err) gearNote = soldierName(s) + " は" + SHOP.fruits[d.fruitTo].name + "を食べた（" + SHOP.fruits[d.fruitTo].stat + " +" + SHOP.fruits[d.fruitTo].up + "）。";
             gearPickFruit = null;
           } else if (d.bookSell) {
             if (!confirm("「" + SOLDIER_SKILLS[d.bookSell].name + "」の書を1冊、" + kobanText(SHOP.bookSell.skill) + "で売りますか？（元に戻せません）")) return;
