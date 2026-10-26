@@ -299,7 +299,7 @@ r = await ev(page, () => {
   // 武将の傾向：同じ等級（伝説）の中で、傾向に合うものが出やすい。どの武将からでも全部出る
   const F = WD_DEBUG.forgeApi,
     N = 6000,
-    legend = Object.keys(F.GEAR).filter((id) => F.GEAR[id].grade === 4 && !F.GEAR[id].boss); // 裏ボスの専用装備は錬成では出ない
+    legend = Object.keys(F.GEAR).filter((id) => F.GEAR[id].grade === 4 && !F.GEAR[id].boss && !F.GEAR[id].endgame); // 裏ボス・終盤の装備は錬成では出ない
   const run = (wid) => {
     const seen = {};
     for (let i = 0; i < N; i++) {

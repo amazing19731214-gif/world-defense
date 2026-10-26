@@ -918,13 +918,14 @@
       }
       .s-card .card-actions {
         display: flex;
+        flex-wrap: wrap; /* 5つ目（指導員に）は次の行へ */
         gap: 6px;
         margin-top: 4px;
       }
       .s-card .card-actions button {
         font-size: 15px;
         padding: 8px 12px;
-        flex: 1;
+        flex: 1 1 22%;
       }
       .injured {
         color: #ffb3a7;
@@ -1738,6 +1739,87 @@
       .tools.menu-tools #reset {
         grid-column: auto;
       }
+      /* 終盤（試作）：伝説の能力・指導員・特殊装備 */
+      #retireSheet,
+      #previewSheet {
+        z-index: 13;
+      }
+      .legend-box {
+        margin: 4px 0;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #5fd8ff88;
+        background: linear-gradient(90deg, #5fd8ff14, transparent 80%);
+      }
+      .legend-box p {
+        margin: 2px 0;
+      }
+      .legend-stats button {
+        min-height: 36px;
+        margin: 2px 4px 2px 0;
+        padding: 3px 10px;
+        font-size: 13px;
+      }
+      .legend-stats button[aria-pressed="true"] {
+        outline: 2px solid #5fd8ff;
+        background: #24525e;
+      }
+      .legend-tag {
+        display: inline-block;
+        margin: 2px 4px 2px 0;
+        padding: 2px 8px;
+        border-radius: 8px;
+        border: 1px solid #c08bff;
+        background: #3a2a5a;
+        font-size: 13px;
+      }
+      .legend-forge {
+        margin: 6px 0 10px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        border: 1px solid #e8b64a;
+        background: #e8b64a12;
+      }
+      .legend-forge p {
+        margin: 0 0 4px;
+      }
+      .legend-forge button {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-height: 48px;
+        margin-top: 4px;
+        text-align: left;
+      }
+      .legend-forge button small {
+        font-size: 12px;
+        opacity: 0.85;
+        white-space: normal;
+      }
+      .retire-list {
+        display: grid;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .retire-list button {
+        min-height: 44px;
+        text-align: left;
+        white-space: normal;
+      }
+      .retire-list button[aria-pressed="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
+      .preview-actions {
+        flex-direction: column;
+      }
+      .preview-actions button {
+        width: 100%;
+        min-height: 48px;
+      }
+      #previewOpen {
+        grid-column: 1 / -1;
+      }
       /* まとめて移籍 */
       .bulk-bar {
         position: sticky;
@@ -2326,12 +2408,13 @@ OFF</button>
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
         ><button id="mapOpen">🗾 全国</button><button id="zukanOpen">📖 図鑑</button
-        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button>
+        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
+        ><button id="previewOpen" hidden>🧪 試作：終盤</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v50（スキルの説明）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v51（試作：伝説の兵士）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2394,7 +2477,8 @@ OFF</button>
         </div>
         <div class="tabs" role="tablist">
           <button id="tabLive" role="tab">在籍の兵士</button
-          ><button id="tabFallen" role="tab">英霊名鑑</button>
+          ><button id="tabFallen" role="tab">英霊名鑑</button
+          ><button id="tabMentor" role="tab">指導員</button>
         </div>
         <p id="soldierHint" class="muted" style="margin: 6px 0"></p>
         <div id="soldierList"></div>
@@ -2461,6 +2545,24 @@ OFF</button>
           ><button id="forgeClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="forgeBody"></div>
+      </div>
+    </div>
+    <div id="retireSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="retireTitle">
+        <div class="panel-head hg-head">
+          <strong id="retireTitle">🎓 指導員として引退</strong
+          ><button id="retireClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="retireBody"></div>
+      </div>
+    </div>
+    <div id="previewSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+        <div class="panel-head hg-head">
+          <strong id="previewTitle">🧪 試作：終盤の確認</strong
+          ><button id="previewClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="previewBody"></div>
       </div>
     </div>
     <div id="gearSheet" class="sheet-back" hidden>
@@ -2784,6 +2886,42 @@ OFF</button>
             grade: 4,
             fx: { phoenix: 1 },
             text: "致命傷を1回だけ耐える（HP30%で踏みとどまる。ウェーブ・攻城戦ごとに1回。もう一度倒れれば戦死）",
+          },
+          // ----- 終盤の特殊装備（試作）：天下統一と三大裏ボスの討伐で解放。秘伝錬成の装備錬成からは出ない（endgame） -----
+          lightMuramasa: {
+            name: "光刃・村正",
+            slot: "weapon",
+            wtype: "katana",
+            grade: 4,
+            endgame: true,
+            fx: { atk: 0.15, beam: 1 },
+            text: "攻撃 +15%・光の刃が一直線上の敵すべてを貫く（攻撃の100%）",
+          },
+          raijinSpear: {
+            name: "雷神の槍",
+            slot: "weapon",
+            wtype: "yari",
+            grade: 4,
+            endgame: true,
+            fx: { atk: 0.12, chain: 0.7 },
+            text: "攻撃 +12%・命中すると周りの敵へ雷が4回まで連鎖（攻撃の70%）",
+          },
+          blastGun: {
+            name: "爆炎の鉄砲",
+            slot: "weapon",
+            wtype: "teppo",
+            grade: 4,
+            endgame: true,
+            fx: { atk: 0.12, blast: 0.6 },
+            text: "攻撃 +12%・着弾で爆発し、周りの敵に攻撃の60%",
+          },
+          phantomRing: {
+            name: "幻影の指輪",
+            slot: "accessory",
+            grade: 4,
+            endgame: true,
+            fx: { shadow: 0.3 },
+            text: "30%の確率で影分身が現れ、同じ威力でもう一度攻撃",
           },
         };
         // 武将の錬成の傾向（等級が決まった後、同じ等級の中で出やすくなる。どの武将からでも全部出る）
@@ -4339,6 +4477,118 @@ OFF</button>
           { id: "sekigahara", name: "石田家の重臣", named: ["sakon"], warlords: ["mitsunari"], text: "「三成に過ぎたるもの」島左近" },
           { id: "oda", name: "織田家の猛将", named: ["nagayoshi", "narimasa"], warlords: ["nobunaga"], text: "信長に仕えた森長可・佐々成政" },
         ];
+        // ===== 終盤：伝説の兵士（試作） =====
+        // 天下統一（全国68か国）と三大裏ボスの討伐で解放。解放後、兵士がレベルアップすると chance の確率で「伝説の能力」を1つ習得する。
+        //   能力値（stats）：固定値か割合を、習得したときに抽選して固定。兵士1人につき有効にできるのは1つだけ（on）
+        //   特殊能力（abil）：数の上限なし・重複も可。強さ（v）を習得したときに抽選。装備の fx（beam など）と足し合わせる
+        // 強すぎてもよい（やり込みの最終目標）。追加の攻撃（ビーム・雷・爆発・分身）からは特殊能力を発動しない（無限に連鎖しない）
+        const lpct = (v) => Math.round(v * 100) + "%";
+        const LEGEND = {
+          chance: 0.12, // レベルアップ1回ごとの習得の確率
+          statShare: 0.5, // 習得するとき能力値になる割合（残りは特殊能力）
+          stats: {
+            atkFlat: { name: "攻撃", min: 1, max: 100, unit: "" },
+            atkPct: { name: "攻撃", min: 1, max: 15, unit: "%" },
+            defFlat: { name: "防御", min: 1, max: 100, unit: "" },
+            defPct: { name: "防御", min: 1, max: 20, unit: "%" },
+            hpFlat: { name: "最大HP", min: 10, max: 500, unit: "" },
+            hpPct: { name: "最大HP", min: 1, max: 25, unit: "%" },
+            rngFlat: { name: "射程", min: 1, max: 30, unit: "" },
+            rngPct: { name: "射程", min: 1, max: 15, unit: "%" },
+          },
+          abil: {
+            beam: { name: "貫通ビームサーベル", icon: "🗡️", min: 0.6, max: 1.2, text: (v) => "光の刃が前方へ伸び、一直線上の敵すべてに攻撃の" + lpct(v) },
+            chain: { name: "連鎖雷撃", icon: "⚡", min: 0.4, max: 0.9, text: (v) => "命中すると周りの敵へ雷が4回まで連鎖（攻撃の" + lpct(v) + "）" },
+            blast: { name: "爆炎斬", icon: "💥", min: 0.4, max: 0.8, text: (v) => "攻撃のたびに爆発し、周りの敵に攻撃の" + lpct(v) },
+            shadow: { name: "影分身", icon: "👥", min: 0.15, max: 0.35, text: (v) => lpct(Math.min(0.8, v)) + "の確率で分身が現れ、同じ威力でもう一度攻撃" },
+          },
+          beamLen: 260, // ビームの長さ（攻撃した相手より短くはならない）
+          beamWidth: 18,
+          beamMax: 12, // 1本のビームで当たる敵の数の上限（描画と計算を軽くする）
+          chainJumps: 4,
+          chainRange: 120,
+          chainFade: 0.85, // 連鎖するごとの威力
+          blastRadius: 70,
+          shadowMax: 0.8,
+          gearCost: 2000, // 試作：終盤の特殊装備を作る小判
+          books: 200, // 伝承の秘伝書を持てる数
+          mentors: 100, // 指導員名簿に残す人数
+          maxEach: 200, // 1人が持てる能力値・特殊能力の数（保存の安全のため）
+        };
+        let legendRng = Math.random; // 伝説の能力の抽選・影分身の確率（テストで差し替え可能）
+        // 試作の確認用：?debug のときと、試作版（WD_PREVIEW）のときだけ、解放の状態を切り替えられる（公開版では切り替えない）
+        const PREVIEW = window.WD_PREVIEW === true;
+        let legendForce = false;
+        if (PREVIEW || /[?&]debug\b/.test(location.search))
+          try {
+            legendForce = localStorage.getItem("worldDefense.preview.v1") === "endgame";
+          } catch (err) {
+            legendForce = false;
+          }
+        // 終盤の解放：天下統一の報酬を受け取り、三大裏ボスをすべて倒した
+        function endgameOn() {
+          if (legendForce) return true;
+          return !!(
+            conquestMeta.tenka &&
+            Object.keys(BOSSES).every((id) => conquestMeta.bosses[id] && conquestMeta.bosses[id].wins > 0)
+          );
+        }
+        function legendActiveStat(s) {
+          const L = s && s.legend;
+          return L && L.on >= 0 && L.stats[L.on] ? L.stats[L.on] : null;
+        }
+        const legendStatVal = (s, k) => {
+          const st = legendActiveStat(s);
+          return st && st.k === k ? st.v : 0;
+        };
+        const legendStatText = (st) => LEGEND.stats[st.k].name + " +" + st.v + LEGEND.stats[st.k].unit;
+        const legendAbilName = (a) => LEGEND.abil[a.k].icon + LEGEND.abil[a.k].name + "（" + lpct(a.v) + "）";
+        // 最大HPに伝説の能力値（有効なもの）を足す
+        const legendHp = (s, hp) => Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat"));
+        function rollLegend() {
+          const between = (min, max) => min + legendRng() * (max - min),
+            pick = (o) => {
+              const ks = Object.keys(o);
+              return ks[Math.min(ks.length - 1, Math.floor(legendRng() * ks.length))];
+            };
+          if (legendRng() < LEGEND.statShare) {
+            const k = pick(LEGEND.stats),
+              c = LEGEND.stats[k];
+            return { type: "stat", k, v: Math.round(between(c.min, c.max)) };
+          }
+          const k = pick(LEGEND.abil),
+            c = LEGEND.abil[k];
+          return { type: "abil", k, v: Math.round(between(c.min, c.max) * 100) / 100 };
+        }
+        // 伝説の能力を1つ足す（能力値は、有効なものがまだなければ有効にする）
+        function addLegend(s, g) {
+          const L = s.legend || (s.legend = { stats: [], on: -1, abil: [] });
+          if (g.type === "stat") {
+            if (L.stats.length >= LEGEND.maxEach) return false;
+            L.stats.push({ k: g.k, v: g.v });
+            if (L.on < 0) L.on = L.stats.length - 1;
+          } else {
+            if (L.abil.length >= LEGEND.maxEach) return false;
+            L.abil.push({ k: g.k, v: g.v });
+          }
+          return true;
+        }
+        // 保存データの伝説の能力を確かめる（範囲外・知らない種類は捨てる）
+        function cleanLegend(d) {
+          if (!d || typeof d !== "object") return null;
+          const ok = (c, v) => Number.isFinite(v) && v >= c.min && v <= c.max;
+          const stats = (Array.isArray(d.stats) ? d.stats : [])
+            .filter((st) => st && LEGEND.stats[st.k] && ok(LEGEND.stats[st.k], st.v))
+            .map((st) => ({ k: st.k, v: Math.round(st.v) }))
+            .slice(0, LEGEND.maxEach);
+          const abil = (Array.isArray(d.abil) ? d.abil : [])
+            .filter((a) => a && LEGEND.abil[a.k] && ok(LEGEND.abil[a.k], a.v))
+            .map((a) => ({ k: a.k, v: a.v }))
+            .slice(0, LEGEND.maxEach);
+          if (!stats.length && !abil.length) return null;
+          const on = Number.isInteger(d.on) && d.on >= -1 && d.on < stats.length ? d.on : stats.length ? 0 : -1;
+          return { stats, on, abil };
+        }
         // 称号：上から順に条件を満たした最も高いものになる。atk / def は能力への倍率ボーナス
         const TITLES = [
           { id: "recruit", name: "新兵", waves: 0, kills: 0, atk: 0, def: 0 },
@@ -4527,6 +4777,15 @@ OFF</button>
         }
         // 武将・装備の永続データと、通常防衛戦のチェックポイントを保存する。戦闘の途中の敵や演出は保存しない。
         // 秘伝錬成の保存データ（武将と同じ保存データに入れる）：欠片・装備・スキルの書・履歴・錬成で使った枚数
+        // 伝承の秘伝書（スキル・能力値・特殊能力のどれか1つ）
+        function cleanLegendBook(b) {
+          if (!b || !Number.isInteger(b.uid) || b.uid < 1) return null;
+          const from = typeof b.from === "string" ? b.from.slice(0, 40) : "";
+          if (b.type === "skill") return SOLDIER_SKILLS[b.id] && !SOLDIER_SKILLS[b.id].future ? { uid: b.uid, type: "skill", id: b.id, from } : null;
+          const c = b.type === "stat" ? LEGEND.stats[b.k] : b.type === "abil" ? LEGEND.abil[b.k] : null;
+          if (!c || !Number.isFinite(b.v) || b.v < c.min || b.v > c.max) return null;
+          return { uid: b.uid, type: b.type, k: b.k, v: b.type === "stat" ? Math.round(b.v) : b.v, from };
+        }
         function cleanForge(d) {
           const o = d && typeof d === "object" ? d : {};
           const int = (v, max) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
@@ -4571,6 +4830,16 @@ OFF</button>
             items,
             books,
             used,
+            // 終盤（試作）：指導員が残した伝承の秘伝書（能力値・特殊能力の数値もそのまま）と指導員名簿
+            legendBooks: (Array.isArray(o.legendBooks) ? o.legendBooks : [])
+              .map(cleanLegendBook)
+              .filter((b, i, a) => b && a.findIndex((x) => x && x.uid === b.uid) === i)
+              .slice(0, LEGEND.books),
+            lseq: Math.max(int(o.lseq, 1e9), ...(Array.isArray(o.legendBooks) ? o.legendBooks : []).map((b) => (b && Number.isInteger(b.uid) ? b.uid : 0)), 0),
+            mentors: (Array.isArray(o.mentors) ? o.mentors : [])
+              .filter((m) => m && typeof m.name === "string" && JOBS[m.job] && Number.isFinite(m.level) && typeof m.skill === "string")
+              .map((m) => ({ name: m.name.slice(0, 40), job: m.job, level: Math.max(1, Math.floor(m.level)), skill: m.skill.slice(0, 80), at: Number.isFinite(m.at) ? m.at : 0 }))
+              .slice(0, LEGEND.mentors),
             count: int(o.count, 1e9),
             history: (Array.isArray(o.history) ? o.history : [])
               .filter((h) => h && typeof h === "object" && (h.w === null || WARLORDS[h.w]))
@@ -4848,7 +5117,7 @@ OFF</button>
         }
         const rawMaxHp = (s) => {
           const c = unitOf(s), lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
-          return Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1));
+          return legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1)));
         };
         const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
@@ -5983,6 +6252,7 @@ OFF</button>
           let n = 0;
           for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
           if (s.named && NAMED_SOLDIERS[s.named]) n += NAMED_SOLDIERS[s.named].skill[key] || 0; // ネームド兵士の固有スキル
+          if (s.legend) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す）
           const g = s.id != null && gearOf(s.id);
           if (g) for (const d of g) n += d.fx[key] || 0;
           return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
@@ -6025,8 +6295,8 @@ OFF</button>
           // 職業の補正（上級職）と熟練度（今の職業のとき、熟練度1ごとに攻撃・防御 +1%）
           const jm = JOBS[jobOf(s)].mods,
             pf = 1 + JOB_RULES.profBonus * profLv(s);
-          return {
-            maxHp: ignoreHero ? Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1) * (1 + skillSum(s, "hp"))) : rawMaxHp(s),
+          const out = {
+            maxHp: ignoreHero ? legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1) * (1 + skillSum(s, "hp")))) : rawMaxHp(s),
             atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * (jm.atk || 1) * pf * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
             def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def + skillSum(s, "def")) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
             rate: ((c.rate * (1 - skillSum(s, "haste"))) / (1 + pointBonus(s, "spd"))) * (jm.rate || 1) / hm.speed * support.interval,
@@ -6034,6 +6304,18 @@ OFF</button>
             // 衛生兵の回復量（ほかの兵種は 0）
             heal: ((c.heal || 0) + ((c.grow && c.grow.heal) || 0) * lv) * (1 + skillSum(s, "healMul")) * support.heal,
           };
+          // 伝説の能力値（有効な1つだけ）：固定値は足し、割合は掛ける
+          const ls2 = legendActiveStat(s);
+          if (ls2) {
+            const v = ls2.v;
+            if (ls2.k === "atkFlat") out.atk += v;
+            else if (ls2.k === "atkPct") out.atk *= 1 + v / 100;
+            else if (ls2.k === "defFlat") out.def += v;
+            else if (ls2.k === "defPct") out.def *= 1 + v / 100;
+            else if (ls2.k === "rngFlat") out.range += v;
+            else if (ls2.k === "rngPct") out.range *= 1 + v / 100;
+          }
+          return out;
         }
         // 能力の表示（衛生兵は攻撃のかわりに回復量と間隔）
         const statText = (s, st) =>
@@ -6196,6 +6478,15 @@ OFF</button>
             const id = learnSkill(s, true);
             if (id) note = "固有スキル「" + SOLDIER_SKILLS[id].name + "」を習得！";
           }
+          // 終盤：伝説の能力（解放後だけ。レベルアップのたびに chance の確率）
+          if (fresh && endgameOn() && legendRng() < LEGEND.chance) {
+            const g = rollLegend();
+            if (addLegend(s, g)) {
+              const t = g.type === "stat" ? legendStatText(g) : legendAbilName(g);
+              logHistory(s, "伝説の能力「" + t + "」を習得");
+              note = "⚡伝説の能力「" + t + "」を習得！" + note;
+            }
+          }
           if (s.level === SQUAD_RULES.eliteLevel && fresh) {
             logHistory(s, "精鋭兵に昇格");
             note = "精鋭兵に昇格！" + note;
@@ -6303,6 +6594,97 @@ OFF</button>
         function jobOnKill(s, now) {
           if (skillSum(s, "fury")) s.furyUntil = now + 5;
         }
+        // ===== 伝説の特殊能力（試作）：貫通ビームサーベル・連鎖雷撃・爆炎斬・影分身 =====
+        // 通常の攻撃が当たったあとに呼ぶ。list：攻撃できる敵、hit(e, ダメージ)：ダメージを与える。
+        // 追加の攻撃は hit を直接呼ぶだけで、ここをもう一度通らない（無限に連鎖・フリーズしない）
+        const legendFx = (o) => {
+          if (effects.length >= 80) effects.shift(); // 演出は軽く（数の上限）
+          o.age = 0;
+          effects.push(o);
+        };
+        function legendStrike(s, from, target, dmg, list, hit) {
+          if (s.legendBusy || !target || !(dmg > 0)) return;
+          const beam = skillSum(s, "beam"),
+            chain = skillSum(s, "chain"),
+            blast = skillSum(s, "blast"),
+            shadow = skillSum(s, "shadow");
+          if (!beam && !chain && !blast && !shadow) return;
+          s.legendBusy = true;
+          try {
+            const tx = target.x,
+              ty = target.y;
+            if (beam) {
+              // 光の刃：攻撃した部隊から相手の方向へ一直線。線の近くの敵すべて（相手を含む）
+              const x0 = from.x,
+                y0 = from.y - 18,
+                dx = tx - x0,
+                dy = ty - y0,
+                len = Math.hypot(dx, dy) || 1,
+                ux = dx / len,
+                uy = dy / len,
+                L = Math.max(LEGEND.beamLen, len + 40);
+              let n = 0;
+              for (const e of list) {
+                if (n >= LEGEND.beamMax) break;
+                const px = e.x - x0,
+                  py = e.y - y0,
+                  along = px * ux + py * uy;
+                if (along > 0 && along <= L && Math.abs(px * uy - py * ux) <= LEGEND.beamWidth + (e.r || 12)) {
+                  hit(e, dmg * beam);
+                  n++;
+                }
+              }
+              legendFx({ kind: "lbeam", x: x0, y: y0, x2: x0 + ux * L, y2: y0 + uy * L, duration: 0.32 });
+            }
+            if (chain) {
+              // 雷：相手から近い敵へ順に連鎖（同じ敵には1回だけ）
+              const done = new Set([target]),
+                pts = [[tx, ty - 10]];
+              let cur = target,
+                d = dmg * chain;
+              for (let j = 0; j < LEGEND.chainJumps; j++) {
+                let best = null,
+                  bd = LEGEND.chainRange;
+                for (const e of list) {
+                  if (done.has(e)) continue;
+                  const dd = Math.hypot(e.x - cur.x, e.y - cur.y);
+                  if (dd <= bd) {
+                    bd = dd;
+                    best = e;
+                  }
+                }
+                if (!best) break;
+                hit(best, d);
+                done.add(best);
+                pts.push([best.x, best.y - 10]);
+                cur = best;
+                d *= LEGEND.chainFade;
+              }
+              // 稲妻のぎざぎざは作るときに決める（毎フレーム計算しない）
+              const zz = [];
+              for (let i = 1; i < pts.length; i++) {
+                const [ax, ay] = pts[i - 1],
+                  [bx, by] = pts[i];
+                zz.push([ax, ay]);
+                for (let k = 1; k < 4; k++) zz.push([ax + ((bx - ax) * k) / 4 + (Math.random() - 0.5) * 14, ay + ((by - ay) * k) / 4 + (Math.random() - 0.5) * 14]);
+              }
+              zz.push(pts[pts.length - 1]);
+              legendFx({ kind: "lchain", zz: pts.length > 1 ? zz : [[tx - 6, ty - 30], [tx + 4, ty - 18], [tx - 2, ty - 6]], duration: 0.36 });
+            }
+            if (blast) {
+              // 爆発：相手のまわりの敵（相手以外）に範囲ダメージ
+              for (const e of list) if (e !== target && Math.hypot(e.x - tx, e.y - ty) <= LEGEND.blastRadius) hit(e, dmg * blast);
+              legendFx({ kind: "lblast", x: tx, y: ty, r: LEGEND.blastRadius, duration: 0.45 });
+            }
+            if (shadow && legendRng() < Math.min(LEGEND.shadowMax, shadow)) {
+              // 影分身：もう一度、同じ威力で攻撃（分身の攻撃からは特殊能力を出さない）
+              hit(target, dmg);
+              legendFx({ kind: "lshadow", x: from.x - 18, y: from.y, tx, ty, type: s.type, duration: 0.42 });
+            }
+          } finally {
+            s.legendBusy = false;
+          }
+        }
         // 待ち時間の残り（防衛戦と攻城戦は時計が別なので、待ち時間より長く残っていたら古い値として無視する）
         const coolLeft = (until, now, len) => (until > now && until - now <= len ? until - now : 0);
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
@@ -6404,7 +6786,7 @@ OFF</button>
           const grade = FORGE.tierGrade[tier],
             lean = gearLean(wid);
           if (kind === "book") return { tier, book: pickWeighted(bookIds(grade), (id) => [SOLDIER_SKILLS[id].line], lean, rng) };
-          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade && !GEAR[id].boss); // 裏ボスの専用装備は出ない
+          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade && !GEAR[id].boss && !GEAR[id].endgame); // 裏ボス・終盤の装備は出ない
           return { tier, gear: pickWeighted(ids, (id) => gearTags(GEAR[id]), lean, rng) };
         }
         function forgeError(wid, kind) {
@@ -7134,6 +7516,8 @@ OFF</button>
                 dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
                 burst(target.x + 6, target.y - 6, "#ffe3a0", "slash");
               }
+              // 伝説の特殊能力（解放後に習得・終盤の装備）
+              legendStrike(s, q, target, hitDmg, alive, (e, d) => dealEnemyDamage(e, d, { s, q, h: heroOnSquad(q) }, { normal: false }));
               // 流鏑馬：続けて矢を放つ
               for (let k = yabusameExtra(s); k > 0 && target.hp > 0; k--) {
                 dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
@@ -7479,6 +7863,7 @@ OFF</button>
           "jobHist",
           "prof",
           "named",
+          "legend",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
@@ -7622,6 +8007,7 @@ OFF</button>
                 wavesSurvived: intIn(v.wavesSurvived, 0, 1e6, 0),
                 lastSurvivor: v.lastSurvivor === true,
                 heals: intIn(v.heals, 0, 1e6, 0),
+                legend: cleanLegend(v.legend),
                 history: (Array.isArray(v.history) ? v.history : [])
                   .filter((h) => typeof h === "string")
                   .map((h) => h.slice(0, 80))
@@ -7673,7 +8059,16 @@ OFF</button>
         const pickSaved = (s) => {
           const o = {};
           for (const k of SAVED_FIELDS)
-            o[k] = Array.isArray(s[k]) ? s[k].slice() : s[k] && typeof s[k] === "object" ? Object.assign({}, s[k]) : s[k];
+            o[k] =
+              k === "legend"
+                ? s[k]
+                  ? JSON.parse(JSON.stringify(s[k])) // 中の配列も写す（保存前の変更が保存データに混ざらない）
+                  : null
+                : Array.isArray(s[k])
+                  ? s[k].slice()
+                  : s[k] && typeof s[k] === "object"
+                    ? Object.assign({}, s[k])
+                    : s[k];
           return o;
         };
         // ウェーブクリア時：部隊に所属する生存兵をすべて保存する
@@ -9346,6 +9741,84 @@ OFF</button>
         function effect(e) {
           if (e.boss) return drawBossFx(e);
           const p = e.age / e.duration;
+          if (e.kind === "lbeam") {
+            // 光の刃：水色の外側と白い芯。伸びてから細くなって消える
+            const k = Math.min(1, p * 4),
+              x2 = e.x + (e.x2 - e.x) * k,
+              y2 = e.y + (e.y2 - e.y) * k;
+            ctx.save();
+            ctx.globalAlpha = 1 - p * 0.8;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = "#5fd8ff88";
+            ctx.lineWidth = 14 * (1 - p * 0.6);
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            ctx.strokeStyle = "#dff9ff";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(Math.round(x2) - 3, Math.round(y2) - 3, 6, 6);
+            ctx.restore();
+            return;
+          }
+          if (e.kind === "lchain") {
+            // 稲妻：黄色の光と白い線のぎざぎざ。点滅して消える
+            if (p > 0.5 && Math.floor(e.age * 30) % 2) return;
+            ctx.save();
+            ctx.globalAlpha = 1 - p * 0.7;
+            ctx.lineJoin = "miter";
+            for (const [w, c] of [
+              [11, "#ffe24a55"],
+              [5, "#ffe24a"],
+              [2, "#ffffff"],
+            ]) {
+              ctx.strokeStyle = c;
+              ctx.lineWidth = w;
+              ctx.beginPath();
+              e.zz.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+              ctx.stroke();
+            }
+            ctx.restore();
+            return;
+          }
+          if (e.kind === "lblast") {
+            // 爆発：中心の白い閃光 → 橙の火の輪が広がり、火の粉（ドット）が飛ぶ
+            const k = Math.min(1, p * 1.8),
+              r = e.r * (0.3 + 0.7 * k);
+            ctx.save();
+            ctx.globalAlpha = (1 - p) * 0.9;
+            if (p < 0.25) ellipse(e.x, e.y - 4, 16 * (1 - p * 3), 12 * (1 - p * 3), "#fff6d0");
+            ctx.strokeStyle = "#ff7a1f";
+            ctx.lineWidth = 6 * (1 - p) + 1;
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y, r, r * 0.6, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ellipse(e.x, e.y - 3, r * 0.45 * (1 - p), r * 0.3 * (1 - p), "#ffb34799");
+            ctx.fillStyle = "#ffd36a";
+            for (let i = 0; i < 10; i++) {
+              const a = i * 0.628 + 0.3;
+              ctx.fillRect(Math.round(e.x + Math.cos(a) * r * 1.05), Math.round(e.y + Math.sin(a) * r * 0.62 - k * 12), 4, 4);
+            }
+            ctx.restore();
+            return;
+          }
+          if (e.kind === "lshadow") {
+            // 影分身：紫がかった半透明の分身が現れ、相手へ紫の斬撃
+            ctx.save();
+            ellipse(e.x, e.y, 16, 5.5, "#7a3cff88");
+            unitFigure(e.type, e.x, e.y, { scale: SQUAD_SCALE * 1.15, face: e.tx < e.x ? -1 : 1, alpha: 0.7 * (1 - p), dx: (e.tx - e.x) * 0.3 * Math.min(1, p * 3) });
+            ctx.globalAlpha = 1 - p;
+            ctx.strokeStyle = "#d9b3ff";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(e.tx - 14, e.ty - 22);
+            ctx.lineTo(e.tx + 14, e.ty + 2);
+            ctx.stroke();
+            ctx.restore();
+            return;
+          }
           if (e.kind === "edeath") {
             // 敵兵のやられ：やられのコマを順に表示して消える
             const a = ENEMY_VS_UNIT[e.ekind],
@@ -11085,6 +11558,7 @@ OFF</button>
           gearTab = "gear",
           gearPickUid = null, // 倉庫から装備させる兵士を選んでいる装備
           gearPickBook = null, // 倉庫から使う兵士を選んでいる書
+          gearPickLBook = null, // 使う兵士を選んでいる伝承の秘伝書（uid）
           gearNote = "",
           sellMode = false, // 売却モード（複数を選んで売る）
           sellPick = new Set(), // 選んだ装備
@@ -11327,6 +11801,29 @@ OFF</button>
               '</ul><p class="injured">売却した装備は元に戻せません。売値は小判（両）で受け取り、保存されます。</p>' +
               '<div class="card-actions"><button data-sell-go>🪙 売却する</button><button data-sell-cancel>キャンセル</button></div></div>';
           } else if (gearTab === "gear") {
+            if (endgameOn())
+              html +=
+                '<div class="legend-forge"><p><b>⚡ 終盤の特殊装備（試作）</b><br><small>小判 ' +
+                kobanText(LEGEND.gearCost) +
+                "で1つ作る（正式版では最終盤の素材を集めて錬成する予定）</small></p>" +
+                Object.keys(GEAR)
+                  .filter((id) => GEAR[id].endgame)
+                  .map(
+                    (id) =>
+                      '<button data-endgame-craft="' +
+                      id +
+                      '"' +
+                      ((F.koban || 0) < LEGEND.gearCost || busy ? " disabled" : "") +
+                      ">" +
+                      gearIcon(GEAR[id]) +
+                      " " +
+                      esc(GEAR[id].name) +
+                      "<small>" +
+                      esc(GEAR[id].text) +
+                      "</small></button>",
+                  )
+                  .join("") +
+                "</div>";
             const o = settings.gear,
               items = gearView(o),
               opt = (map, cur) =>
@@ -11484,6 +11981,30 @@ OFF</button>
                   .join("") +
                 "</div>"
               : '<p class="muted">スキルの書がありません。🔥 秘伝錬成の「秘伝書錬成」で手に入ります。</p>';
+            // 伝承の秘伝書（指導員が残した書。数値もそのまま）
+            if (F.legendBooks.length || endgameOn())
+              html +=
+                '<h3 class="hg-h">🎓 伝承の秘伝書 <small>' +
+                F.legendBooks.length +
+                "冊</small></h3>" +
+                (F.legendBooks.length
+                  ? '<div class="gear-list">' +
+                    F.legendBooks
+                      .map(
+                        (b) =>
+                          '<div class="gear-line"><div class="gear-row static g4"><span class="zk-icon g4">🎓</span><span class="gr-main"><span class="gr-name">' +
+                          esc(legendBookText(b)) +
+                          "</span><small>" +
+                          esc(b.from ? b.from + " が残した書" : "伝承の秘伝書") +
+                          "</small></span></div>" +
+                          (gearPickLBook === b.uid
+                            ? soldierPicker((x) => !useLegendBookError(x, b.uid), "lbook-to", b.uid)
+                            : '<button data-lbook-pick="' + b.uid + '">使う…</button>') +
+                          "</div>",
+                      )
+                      .join("") +
+                    "</div>"
+                  : '<p class="muted">まだありません。兵士を「🎓 指導員に」すると、スキルを1つ書に残せます。</p>');
           }
           return html;
         }
@@ -11579,7 +12100,17 @@ OFF</button>
             }
           } else if (d.gearPick) gearPickUid = +d.gearPick;
           else if (d.bookPick) gearPickBook = d.bookPick;
-          else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = null;
+          else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = null;
+          else if (d.lbookPick) gearPickLBook = +d.lbookPick;
+          else if (d.lbookTo) {
+            const s = soldierById(+d.to);
+            err = useLegendBook(s, +d.lbookTo);
+            if (!err) gearNote = soldierName(s) + " は伝承の秘伝書で能力を受け継ぎました。";
+            gearPickLBook = null;
+          } else if (d.endgameCraft) {
+            err = craftEndgame(d.endgameCraft);
+            if (!err) gearNote = "⚡ " + GEAR[d.endgameCraft].name + " を作りました（🔒 ロック中）。";
+          }
           else if (d.gearOff) {
             err = unequipItem(+d.gearOff);
             if (!err) {
@@ -11640,7 +12171,9 @@ OFF</button>
           zukanLists = {
             warlords: Object.keys(WARLORDS).map((id) => ({ key: id })),
             skills, // 未実装のスキル（城攻め名人）は入れない
-            items: Object.keys(GEAR).map((id) => ({ key: id })),
+            items: Object.keys(GEAR)
+              .filter((id) => !GEAR[id].endgame) // 終盤の特殊装備（試作）は図鑑に入れない
+              .map((id) => ({ key: id })),
             jobs: Object.keys(JOBS).map((id) => ({ key: id })),
             named: Object.keys(NAMED_SOLDIERS).map((id) => ({ key: id })),
           };
@@ -12260,6 +12793,219 @@ OFF</button>
           info.innerHTML = skillInfoHtml(b.dataset.skillInfo);
           b.setAttribute("aria-expanded", "true");
         });
+        // ===== 終盤（試作）：伝説の能力の表示・指導員の引退・伝承の秘伝書・特殊装備 =====
+        const legendBookText = (b) =>
+          b.type === "skill"
+            ? "「" + SOLDIER_SKILLS[b.id].name + "」（" + SOLDIER_SKILLS[b.id].text + "）"
+            : b.type === "stat"
+              ? "⚡" + legendStatText(b)
+              : legendAbilName(b);
+        // 引退で残せるスキル：習得したスキル（通常・固有・職業・秘伝）と伝説の能力。ネームド兵士・武将の専用の能力は残せない
+        function inheritables(s) {
+          const out = [];
+          for (const id of learnedOf(s)) if (SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future) out.push({ type: "skill", id });
+          if (s.legend) {
+            for (const st of s.legend.stats) out.push({ type: "stat", k: st.k, v: st.v });
+            for (const a of s.legend.abil) out.push({ type: "abil", k: a.k, v: a.v });
+          }
+          return out;
+        }
+        function legendBusyError() {
+          if (battle) return "攻城戦の最中はできません。";
+          if (training) return "修練場で挑戦中はできません。";
+          if (playing) return "ウェーブ中はできません（ウェーブの合間に）。";
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return "未保存の進行があります。先に途中保存をやり直してください。";
+          return null;
+        }
+        function retireError(s) {
+          if (!endgameOn()) return "終盤（天下統一と三大裏ボスの討伐）で解放されます。";
+          if (!s || !s.alive) return "その兵士は引退できません。";
+          if (isHeroSoldier(s)) return "主人公は引退できません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから引退できます。";
+          if (!inheritables(s).length) return "残せるスキルがありません。";
+          if (forgeSave().legendBooks.length >= LEGEND.books) return "伝承の秘伝書がいっぱいです（" + LEGEND.books + "冊まで）。";
+          return legendBusyError();
+        }
+        // 武将・兵士の保存データをまとめて確定する（どちらかだけ保存されることはない）。失敗したら false
+        function commitLegend() {
+          beginGameSaveBatch();
+          writeSoldierSave();
+          persistHeroes();
+          return commitGameSaveBatch();
+        }
+        // 指導員として引退：選んだスキル1つを伝承の秘伝書として残し、兵士は部隊から外れる（元に戻せない）
+        function retireSoldier(id, pickIndex) {
+          const s = soldierById(id),
+            err = retireError(s);
+          if (err) return err;
+          const pick = inheritables(s)[pickIndex];
+          if (!pick) return "残すスキルを選んでください。";
+          const F = forgeSave(),
+            q = squadById(s.squadId),
+            before = {
+              soldiers: soldiers.slice(),
+              squads: squads.slice(),
+              saveSoldiers: soldierSave.soldiers.slice(),
+              saveSquads: soldierSave.squads.map((v) => Object.assign({}, v)),
+              slots: squads.map((x) => x.slot),
+              books: F.legendBooks.slice(),
+              lseq: F.lseq,
+              mentors: F.mentors.slice(),
+              items: F.items.map((it) => Object.assign({}, it)),
+              heroes: Object.fromEntries(Object.entries(heroState).map(([k, h]) => [k, { squad: h.squad, tower: h.tower }])),
+              selected: selectedSquad,
+            };
+          soldiers = soldiers.filter((x) => x !== s);
+          soldierSave.soldiers = soldierSave.soldiers.filter((v) => v.id !== s.id);
+          if (q && !roster(q).length) {
+            releaseBlocks(q);
+            releaseHeroFromSquad(q);
+            squads = squads.filter((x) => x !== q);
+            fixSlots();
+            soldierSave.squads = soldierSave.squads.filter((v) => v.id !== q.id);
+            for (const v of soldierSave.squads) if (squadById(v.id)) v.slot = squadById(v.id).slot;
+            if (selectedSquad === q) selectedSquad = null;
+          } else if (q) refreshSquadType(q);
+          F.lseq++;
+          const book = Object.assign({ uid: F.lseq, from: soldierName(s) }, pick);
+          F.legendBooks.push(book);
+          F.mentors.unshift({ name: soldierName(s), job: jobOf(s), level: s.level, skill: legendBookText(pick), at: Date.now() });
+          F.mentors.length = Math.min(F.mentors.length, LEGEND.mentors);
+          if (!commitLegend()) {
+            // 保存できなければ引退をやめる（兵士も秘伝書も前のまま）
+            soldiers = before.soldiers;
+            squads = before.squads;
+            squads.forEach((x, i) => (x.slot = before.slots[i]));
+            soldierSave.soldiers = before.saveSoldiers;
+            soldierSave.squads = before.saveSquads;
+            F.legendBooks = before.books;
+            F.lseq = before.lseq;
+            F.mentors = before.mentors;
+            F.items = before.items;
+            for (const [k, v] of Object.entries(before.heroes)) if (heroState[k]) Object.assign(heroState[k], v);
+            selectedSquad = before.selected;
+            gameSaveBatch = null;
+            gameSaveBatchActive = false;
+            return "保存できなかったため、引退をやめました。空き容量を確認してください。";
+          }
+          logHistory(s, "指導員として引退");
+          refreshSiege();
+          return null;
+        }
+        function useLegendBookError(s, uid) {
+          const b = forgeSave().legendBooks.find((x) => x.uid === uid);
+          if (!b) return "その秘伝書はありません（もう使ったかもしれません）。";
+          if (!s || !s.alive) return "その兵士には使えません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
+          if (b.type === "skill" && learnedOf(s).includes(b.id)) return "そのスキルはもう習得しています。";
+          if (b.type !== "skill" && s.legend && (b.type === "stat" ? s.legend.stats : s.legend.abil).length >= LEGEND.maxEach) return "これ以上は覚えられません。";
+          return legendBusyError();
+        }
+        // 伝承の秘伝書を使う：書の数値のまま習得し、書は1冊なくなる（保存できなければ使わない）
+        function useLegendBook(s, uid) {
+          const err = useLegendBookError(s, uid);
+          if (err) return err;
+          const F = forgeSave(),
+            b = F.legendBooks.find((x) => x.uid === uid),
+            saved = savedSoldier(s.id),
+            before = {
+              learned: learnedOf(s).slice(),
+              skills: s.skills.slice(),
+              legend: s.legend ? JSON.parse(JSON.stringify(s.legend)) : null,
+              saved: Object.assign({}, saved),
+              books: F.legendBooks.slice(),
+            };
+          if (b.type === "skill") {
+            learnedOf(s).push(b.id);
+            if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push(b.id);
+          } else addLegend(s, { type: b.type, k: b.k, v: b.v });
+          logHistory(s, "伝承の秘伝書で" + legendBookText(b).replace(/（.*$/, "") + "を習得");
+          Object.assign(saved, pickSaved(s));
+          F.legendBooks = F.legendBooks.filter((x) => x.uid !== uid);
+          if (!commitLegend()) {
+            s.learned = before.learned;
+            s.skills = before.skills;
+            s.legend = before.legend;
+            for (const k of Object.keys(saved)) delete saved[k];
+            Object.assign(saved, before.saved);
+            F.legendBooks = before.books;
+            gameSaveBatch = null;
+            gameSaveBatchActive = false;
+            return "保存できなかったため、秘伝書は使いませんでした。空き容量を確認してください。";
+          }
+          zukanSync();
+          return null;
+        }
+        // 有効にする能力値を切り替える（兵士1人につき1つだけ）
+        function setLegendStat(s, i) {
+          if (!s || !s.alive || !s.legend || !s.legend.stats[i]) return "その能力値はありません。";
+          s.legend.on = s.legend.on === i ? -1 : i;
+          s.hp = Math.min(s.hp, soldierStats(s).maxHp);
+          patchSavedSoldier(s, { legend: JSON.parse(JSON.stringify(s.legend)) });
+          return null;
+        }
+        // 試作：終盤の特殊装備を小判で作る（正式版では最終盤の素材を集めて錬成する予定）
+        function craftEndgame(id) {
+          const F = forgeSave(),
+            g = GEAR[id];
+          if (!endgameOn()) return "終盤（天下統一と三大裏ボスの討伐）で解放されます。";
+          if (!g || !g.endgame) return "その装備は作れません。";
+          if (gearBusy()) return gearBusy();
+          if ((F.koban || 0) < LEGEND.gearCost) return "小判が足りません（" + kobanText(LEGEND.gearCost) + "）。";
+          if (F.items.filter((it) => !GEAR[it.id].boss).length >= FORGE.maxItems) return "装備倉庫がいっぱいです。";
+          F.koban -= LEGEND.gearCost;
+          F.seq++;
+          F.items.push({ uid: F.seq, id, owner: null, lock: true });
+          if (!persistHeroes()) {
+            F.koban += LEGEND.gearCost;
+            F.items.pop();
+            F.seq--;
+            return "保存できなかったため、作りませんでした。";
+          }
+          return null;
+        }
+        // 兵士の札の下に出す「伝説の能力」
+        function legendBlock(s) {
+          const L = s.legend;
+          if (!L && !endgameOn()) return "";
+          let html = '<div class="legend-box"><p><b>⚡ 伝説の能力</b>' + (L ? "" : ' <small class="muted">（レベルアップで習得することがある）</small>') + "</p>";
+          if (L) {
+            if (L.stats.length)
+              html +=
+                '<p class="legend-stats"><small>能力値（有効にできるのは1つ）</small><br>' +
+                L.stats
+                  .map(
+                    (st, i) =>
+                      '<button type="button" data-legend-on="' +
+                      s.id +
+                      ":" +
+                      i +
+                      '" aria-pressed="' +
+                      (L.on === i) +
+                      '">' +
+                      (L.on === i ? "✅ " : "") +
+                      legendStatText(st) +
+                      "</button>",
+                  )
+                  .join("") +
+                "</p>";
+            if (L.abil.length)
+              html +=
+                '<p class="legend-abil"><small>特殊能力（重ねて使える）</small><br>' +
+                L.abil
+                  .map(
+                    (a) =>
+                      '<span class="legend-tag" title="' +
+                      esc(LEGEND.abil[a.k].text(a.v)) +
+                      '">' +
+                      legendAbilName(a) +
+                      "</span>",
+                  )
+                  .join("") +
+                "</p>";
+          }
+          return html + "</div>";
+        }
         function soldierWhere(s) {
           const q = squadById(s.squadId);
           if (!q) return "所属なし";
@@ -12285,6 +13031,7 @@ OFF</button>
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
           act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
           act += '<button data-gear-open="' + s.id + '">🎒 装備</button>';
+          if (endgameOn() && !isHeroSoldier(s)) act += '<button data-retire="' + s.id + '">🎓 指導員に</button>';
           if (act) act = '<div class="card-actions">' + act + "</div>";
           return (
             '<div class="s-card' +
@@ -12321,7 +13068,9 @@ OFF</button>
             "<p>スキル " +
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
-            "</p><p><small>出陣 " +
+            "</p>" +
+            legendBlock(s) +
+            "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
             s.kills +
@@ -12343,7 +13092,32 @@ OFF</button>
           $("tabFallen").classList.toggle("active", soldierTab === "fallen");
           $("tabLive").setAttribute("aria-selected", soldierTab === "live");
           $("tabFallen").setAttribute("aria-selected", soldierTab === "fallen");
+          $("tabMentor").classList.toggle("active", soldierTab === "mentor");
+          $("tabMentor").setAttribute("aria-selected", soldierTab === "mentor");
           let html = "";
+          if (soldierTab === "mentor") {
+            // 指導員名簿：引退した兵士（名前・職業・到達レベル・残したスキル）
+            const list = forgeSave().mentors;
+            $("soldierHint").textContent = "指導員として引退した兵士（" + list.length + "名）。残したスキルは「🎒 装備倉庫 → 📜 スキルの書」の伝承の秘伝書から使えます。";
+            $("soldierList").innerHTML = list.length
+              ? list
+                  .map(
+                    (m) =>
+                      '<div class="s-card mentor"><h3>🎓 ' +
+                      esc(m.name) +
+                      " <small>" +
+                      JOBS[m.job].icon +
+                      JOBS[m.job].name +
+                      "・到達Lv" +
+                      m.level +
+                      "</small></h3><p><small>残したスキル：" +
+                      esc(m.skill) +
+                      "</small></p></div>",
+                  )
+                  .join("")
+              : '<p class="muted">まだいません。' + (endgameOn() ? "在籍の兵士の「🎓 指導員に」から引退させられます。" : "終盤（天下統一と三大裏ボスの討伐）で解放されます。") + "</p>";
+            return;
+          }
           if (soldierTab === "live") {
             const list = soldiers
               .filter((s) => s.alive && squadById(s.squadId))
@@ -12405,12 +13179,23 @@ OFF</button>
         $("soldierClose").onclick = closeSoldierSheet;
         $("tabLive").onclick = () => openSoldierSheet("live");
         $("tabFallen").onclick = () => openSoldierSheet("fallen");
+        $("tabMentor").onclick = () => openSoldierSheet("mentor");
         $("soldierSheet").addEventListener("click", (ev) => {
           if (ev.target === $("soldierSheet")) return closeSoldierSheet();
           const go = ev.target.closest("[data-gear-open]");
           if (go) return openGear(+go.dataset.gearOpen);
           const jo = ev.target.closest("[data-job-open]");
           if (jo) return openJobSheet(+jo.dataset.jobOpen);
+          const lo = ev.target.closest("[data-legend-on]");
+          if (lo) {
+            const [sid, i] = lo.dataset.legendOn.split(":").map(Number),
+              err = setLegendStat(soldierById(sid), i);
+            if (err) msg(err);
+            renderSoldierSheet();
+            return;
+          }
+          const rt = ev.target.closest("[data-retire]");
+          if (rt) return openRetire(+rt.dataset.retire);
           const mh = ev.target.closest("[data-make-hero]");
           if (mh) {
             const err = setHeroSoldier(+mh.dataset.makeHero);
@@ -12431,6 +13216,148 @@ OFF</button>
           const err = nameSoldier(s.id, v);
           msg(err || (s.name ? soldierName(s) + " と名付けた。" : "名前を外した。"));
           renderSoldierSheet();
+          updateUI();
+        });
+        // ===== 指導員として引退（確認画面） =====
+        let retireId = null,
+          retirePick = null;
+        function renderRetire() {
+          const s = soldierById(retireId);
+          if (!s || !s.alive) {
+            $("retireBody").innerHTML = '<p class="muted">兵士が見つかりません。</p>';
+            return;
+          }
+          const err = retireError(s),
+            list = inheritables(s);
+          let html =
+            "<p><b>" +
+            esc(soldierName(s)) +
+            "</b> " +
+            JOBS[jobOf(s)].icon +
+            jobName(s) +
+            "・Lv" +
+            s.level +
+            '</p><p class="muted"><small>引退すると戦闘部隊から外れ、もう戦えません（元に戻せません）。習得したスキルか伝説の能力を1つ選んで「伝承の秘伝書」に残せます（数値もそのまま）。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。</small></p>';
+          if (err) html += '<p class="injured">' + esc(err) + "</p>";
+          html +=
+            '<div class="retire-list">' +
+            list
+              .map(
+                (b, i) =>
+                  '<button data-retire-pick="' +
+                  i +
+                  '" aria-pressed="' +
+                  (retirePick === i) +
+                  '"' +
+                  (err ? " disabled" : "") +
+                  ">" +
+                  (retirePick === i ? "☑ " : "☐ ") +
+                  esc(legendBookText(b)) +
+                  "</button>",
+              )
+              .join("") +
+            "</div>";
+          if (retirePick != null && list[retirePick] && !err)
+            html +=
+              '<div class="forge-confirm"><p><b>' +
+              esc(soldierName(s)) +
+              " を指導員として引退させますか？</b><br>残すスキル：" +
+              esc(legendBookText(list[retirePick])) +
+              '</p><p class="injured">引退した兵士は戻せません。</p><div class="card-actions"><button data-retire-go>🎓 引退させる</button><button data-retire-cancel>やめる</button></div></div>';
+          $("retireBody").innerHTML = html;
+        }
+        function openRetire(id) {
+          retireId = id;
+          retirePick = null;
+          renderRetire();
+          $("retireSheet").hidden = false;
+          $("retireClose").focus();
+        }
+        const closeRetire = () => ($("retireSheet").hidden = true);
+        $("retireClose").onclick = closeRetire;
+        $("retireSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("retireSheet")) return closeRetire();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "retireClose") return;
+          const d = b.dataset;
+          if (d.retirePick) retirePick = +d.retirePick;
+          else if (d.retireCancel !== undefined) retirePick = null;
+          else if (d.retireGo !== undefined) {
+            const s = soldierById(retireId),
+              name = s ? soldierName(s) : "",
+              err = retireSoldier(retireId, retirePick);
+            if (err) {
+              msg("⚠ " + err);
+              toast(err);
+            } else {
+              msg("🎓 " + name + " が指導員として引退し、伝承の秘伝書を残しました（🎒 装備倉庫 → 📜 スキルの書）。");
+              closeRetire();
+              if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
+              updateUI();
+              return;
+            }
+          }
+          renderRetire();
+        });
+        // ===== 試作：終盤の確認（試作版 WD_PREVIEW だけ。公開版には出ない） =====
+        function renderPreview() {
+          $("previewBody").innerHTML =
+            '<p>終盤：<b>' +
+            (endgameOn() ? "解放中" : "未解放") +
+            '</b><br><small class="muted">本番では天下統一と三大裏ボスの討伐で解放されます。ここは試作の確認用です。</small></p>' +
+            '<div class="card-actions preview-actions">' +
+            '<button data-pv="toggle">' +
+            (legendForce ? "🔒 終盤の解放を戻す" : "🔓 終盤を解放する") +
+            "</button>" +
+            '<button data-pv="money">💰 軍資金 +50,000G・小判 +20,000両</button>' +
+            '<button data-pv="grant"' +
+            (endgameOn() ? "" : " disabled") +
+            ">🎲 在籍の兵士全員に伝説の能力を1つ（抽選）</button>" +
+            '<button data-pv="all4"' +
+            (endgameOn() ? "" : " disabled") +
+            ">⚡ 在籍の兵士全員に特殊能力4種をすべて</button>" +
+            "</div>";
+        }
+        if (PREVIEW) $("previewOpen").hidden = false;
+        $("previewOpen").onclick = () => {
+          renderPreview();
+          $("previewSheet").hidden = false;
+        };
+        $("previewClose").onclick = () => ($("previewSheet").hidden = true);
+        $("previewSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("previewSheet")) return ($("previewSheet").hidden = true);
+          const b = ev.target.closest("[data-pv]");
+          if (!b || b.disabled) return;
+          const k = b.dataset.pv;
+          if (k === "toggle") {
+            legendForce = !legendForce;
+            try {
+              if (legendForce) localStorage.setItem("worldDefense.preview.v1", "endgame");
+              else localStorage.removeItem("worldDefense.preview.v1");
+            } catch (err) {
+              /* 保存できなくてもこの間は試せる */
+            }
+            msg(legendForce ? "🧪 終盤を解放しました（試作）。" : "🧪 終盤の解放を戻しました。");
+          } else if (k === "money") {
+            gold += 50000;
+            forgeSave().koban = Math.min(KOBAN_MAX, (forgeSave().koban || 0) + 20000);
+            persistHeroes();
+            msg("🧪 軍資金 +50,000G・小判 +20,000両");
+          } else if (k === "grant" || k === "all4") {
+            let n = 0;
+            for (const s of soldiers.filter((x) => x.alive)) {
+              if (k === "grant") addLegend(s, rollLegend());
+              else
+                for (const a of Object.keys(LEGEND.abil)) {
+                  const c = LEGEND.abil[a];
+                  addLegend(s, { type: "abil", k: a, v: Math.round((c.min + legendRng() * (c.max - c.min)) * 100) / 100 });
+                }
+              if (savedSoldier(s.id)) patchSavedSoldier(s, { legend: JSON.parse(JSON.stringify(s.legend)) });
+              n++;
+            }
+            msg("🧪 " + n + "人に伝説の能力を授けました（兵士名簿で確認できます）。");
+          }
+          renderPreview();
           updateUI();
         });
         // ===== 攻城部隊編成 =====
@@ -14835,6 +15762,13 @@ OFF</button>
                   s.kills++;
                   gainXp(s, SQUAD_RULES.xpPerKill + Math.round(target.reward / 2));
                 }
+                // 伝説の特殊能力（守備隊に当たったとき）
+                legendStrike(s, g, target, dmg, B.garrison.filter((e) => e.hp > 0 && !e.dead), (e, d) => {
+                  if (battleHitGarrison(e, d, s)) {
+                    s.kills++;
+                    gainXp(s, SQUAD_RULES.xpPerKill + Math.round(e.reward / 2));
+                  }
+                });
               } else if (tower) battleHitTower(tower, dmg);
               else B.castleHp -= dmg;
             }
@@ -16558,7 +17492,9 @@ OFF</button>
         });
         document.addEventListener("keydown", (ev) => {
           if (ev.key !== "Escape") return;
-          if (!$("goalSheet").hidden) closeGoal();
+          if (!$("retireSheet").hidden) closeRetire();
+          else if (!$("previewSheet").hidden) $("previewSheet").hidden = true;
+          else if (!$("goalSheet").hidden) closeGoal();
           else if (!$("zukanSheet").hidden) closeZukan();
           else if (!$("mapSheet").hidden) closeMap();
           else if (!$("forgeSheet").hidden) closeForge();
@@ -16634,6 +17570,23 @@ OFF</button>
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            legendApi: {
+              LEGEND,
+              endgameOn,
+              setForce: (v) => (legendForce = !!v),
+              setRng: (f) => (legendRng = f || Math.random),
+              rollLegend,
+              addLegend,
+              legendStrike,
+              inheritables,
+              retireSoldier,
+              useLegendBook,
+              useLegendBookError,
+              setLegendStat,
+              craftEndgame,
+              cleanLegend,
+              effects: () => effects,
             },
             namedApi: {
               NAMED_RULES,
