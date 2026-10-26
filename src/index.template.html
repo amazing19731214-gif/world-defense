@@ -1796,6 +1796,10 @@
         opacity: 0.85;
         white-space: normal;
       }
+      .forge-super {
+        color: #ffe6a0;
+        font-weight: bold;
+      }
       .retire-list {
         display: grid;
         gap: 6px;
@@ -2414,7 +2418,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v53（爆炎の鉄砲は天下統一・幻影の指輪は天魔機神）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v53（超秘伝書・爆炎の鉄砲は天下統一・幻影の指輪は天魔機神）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4517,11 +4521,25 @@ OFF</button>
           shadowMax: 0.8,
           gearCost: 2000, // 試作：終盤の特殊装備を作る小判
           retireLevel: 100, // このレベルから指導員として引退できる（上限なし。終盤の解放とは関係なく、最初から使える）
+          // 超秘伝書（伝説の特殊能力が入った伝承の秘伝書。強さは習得と同じ範囲で抽選）。手に入るのはいつでも、使えるのは終盤の解放後
+          superBeam: 0.03, // 指導員として引退したとき、選んだ書とは別に「貫通ビームサーベル」の超秘伝書が出る確率
+          superChain: 0.01, // SSR武将のカードで秘伝錬成したとき、結果とは別に「連鎖雷撃」の超秘伝書が出る確率
           books: 200, // 伝承の秘伝書を持てる数
           mentors: 100, // 指導員名簿に残す人数
           maxEach: 200, // 1人が持てる能力値・特殊能力の数（保存の安全のため）
         };
         let legendRng = Math.random; // 伝説の能力の抽選・影分身の確率（テストで差し替え可能）
+        let superRng = Math.random; // 超秘伝書が出るかの抽選（テストで差し替え可能）
+        // 超秘伝書を1冊作る（呼んだ側で保存する）
+        function superBook(k, from) {
+          const F = forgeSave(),
+            c = LEGEND.abil[k];
+          if (F.legendBooks.length >= LEGEND.books) return null;
+          F.lseq++;
+          const b = { uid: F.lseq, type: "abil", k, v: Math.round((c.min + Math.random() * (c.max - c.min)) * 100) / 100, from, super: true };
+          F.legendBooks.push(b);
+          return b;
+        }
         // 試作の確認用：?debug のときと、試作版（WD_PREVIEW）のときだけ、解放の状態を切り替えられる（公開版では切り替えない）
         const PREVIEW = window.WD_PREVIEW === true;
         let legendForce = false;
@@ -4809,7 +4827,9 @@ OFF</button>
           if (b.type === "skill") return SOLDIER_SKILLS[b.id] && !SOLDIER_SKILLS[b.id].future ? { uid: b.uid, type: "skill", id: b.id, from } : null;
           const c = b.type === "stat" ? LEGEND.stats[b.k] : b.type === "abil" ? LEGEND.abil[b.k] : null;
           if (!c || !Number.isFinite(b.v) || b.v < c.min || b.v > c.max) return null;
-          return { uid: b.uid, type: b.type, k: b.k, v: b.type === "stat" ? Math.round(b.v) : b.v, from };
+          const o = { uid: b.uid, type: b.type, k: b.k, v: b.type === "stat" ? Math.round(b.v) : b.v, from };
+          if (b.super === true) o.super = true;
+          return o;
         }
         function cleanForge(d) {
           const o = d && typeof d === "object" ? d : {};
@@ -6845,6 +6865,8 @@ OFF</button>
           }
           F.history.unshift({ w: wid, kind, tier: res.tier, got: res.book || res.gear || "shard" });
           F.history.length = Math.min(F.history.length, FORGE.historySize);
+          // まれに（SSR武将のカードだけ）、結果とは別に「連鎖雷撃」の超秘伝書。同じ保存で確定する
+          if (WARLORDS[wid].rarity === "SSR" && superRng() < LEGEND.superChain) res.superBook = superBook("chain", WARLORDS[wid].name);
           const saved = persistHeroes();
           return Object.assign({ wid, kind, uid, starsBefore, stars: stars(wid), saved }, res);
         }
@@ -11387,7 +11409,11 @@ OFF</button>
             (r.tier === "jackpot" ? "✨ 大当たり！ ✨" : FORGE.tierName[r.tier]) +
             "</p><p>" +
             got +
-            '</p><p class="muted"><small>' +
+            "</p>" +
+            (r.superBook
+              ? '<p class="forge-super">🌟 さらに超秘伝書「' + esc(legendAbilName(r.superBook)) + "」を手に入れた！<br><small>使えるのは終盤（天下統一と三大裏ボスの討伐）の解放後</small></p>"
+              : "") +
+            '<p class="muted"><small>' +
             esc(WARLORDS[r.wid].name) +
             " のカードを1枚使いました（★" +
             r.starsBefore +
@@ -11403,7 +11429,10 @@ OFF</button>
           let html =
             (forgeNote ? '<p class="saved">' + esc(forgeNote) + "</p>" : "") +
             '<p class="muted">武将カードの重複分（2枚目以降）を1枚使って、抽選でアイテムを手に入れます。最初の1枚は使えません。' +
-            "重複カードは★にも数えられているので、使うと★がその分下がります（★上限を超えた分なら下がりません）。錬成は無料です。</p>" +
+            "重複カードは★にも数えられているので、使うと★がその分下がります（★上限を超えた分なら下がりません）。錬成は無料です。" +
+            "SSR武将のカードでは、まれに（" +
+            Math.round(LEGEND.superChain * 100) +
+            "%）🌟超秘伝書「連鎖雷撃」も手に入ります。</p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "") +
             '<div class="forge-kinds" role="group" aria-label="錬成の種類">' +
             '<button data-forge-kind="book" aria-pressed="' +
@@ -12822,11 +12851,12 @@ OFF</button>
         });
         // ===== 終盤（試作）：伝説の能力の表示・指導員の引退・伝承の秘伝書・特殊装備 =====
         const legendBookText = (b) =>
-          b.type === "skill"
+          (b.super ? "🌟超秘伝 " : "") +
+          (b.type === "skill"
             ? "「" + SOLDIER_SKILLS[b.id].name + "」（" + SOLDIER_SKILLS[b.id].text + "）"
             : b.type === "stat"
               ? "⚡" + legendStatText(b)
-              : legendAbilName(b);
+              : legendAbilName(b));
         // 引退で残せるスキル：習得したスキル（通常・固有・職業・秘伝）と伝説の能力。ネームド兵士・武将の専用の能力は残せない
         function inheritables(s) {
           const out = [];
@@ -12862,6 +12892,7 @@ OFF</button>
           persistHeroes();
           return commitGameSaveBatch();
         }
+        let retireBonus = null; // 直前の引退で出た超秘伝書（お知らせ用）
         // 指導員として引退：選んだスキル1つを伝承の秘伝書として残し、兵士は部隊から外れる（元に戻せない）
         function retireSoldier(id, pickIndex) {
           const s = soldierById(id),
@@ -12904,7 +12935,9 @@ OFF</button>
             F.lseq++;
             F.legendBooks.push(Object.assign({ uid: F.lseq, from: soldierName(s) }, pick));
           }
-          F.mentors.unshift({ name: soldierName(s), job: jobOf(s), level: s.level, skill: legendBookText(pick), at: Date.now() });
+          // まれに、選んだ書とは別に「貫通ビームサーベル」の超秘伝書（Lv100以上の引退だけ）
+          const bonus = s.level >= LEGEND.retireLevel && superRng() < LEGEND.superBeam ? superBook("beam", soldierName(s)) : null;
+          F.mentors.unshift({ name: soldierName(s), job: jobOf(s), level: s.level, skill: legendBookText(pick) + (bonus ? "＋" + legendBookText(bonus) : ""), at: Date.now() });
           F.mentors.length = Math.min(F.mentors.length, LEGEND.mentors);
           if (!commitLegend()) {
             // 保存できなければ引退をやめる（兵士も秘伝書も前のまま）
@@ -12926,6 +12959,7 @@ OFF</button>
           }
           logHistory(s, "指導員として引退");
           refreshSiege();
+          retireBonus = bonus;
           return null;
         }
         function useLegendBookError(s, uid) {
@@ -13284,7 +13318,7 @@ OFF</button>
             jobName(s) +
             "・Lv" +
             s.level +
-            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。</small></p>';
+            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。まれに（' + Math.round(LEGEND.superBeam * 100) + '%）、別に🌟超秘伝書「貫通ビームサーベル」も手に入ります（使えるのは終盤の解放後）。</small></p>';
           if (err) html += '<p class="injured">' + esc(err) + "</p>";
           html +=
             '<div class="retire-list">' +
@@ -13337,7 +13371,13 @@ OFF</button>
               msg("⚠ " + err);
               toast(err);
             } else {
-              msg("🎓 " + name + " が指導員として引退し、書を残しました（🎒 装備倉庫 → 📜 スキルの書）。");
+              msg(
+                "🎓 " +
+                  name +
+                  " が指導員として引退し、書を残しました（🎒 装備倉庫 → 📜 スキルの書）。" +
+                  (retireBonus ? " さらに " + legendBookText(retireBonus) + " を手に入れた！" : ""),
+              );
+              if (retireBonus) toast("🌟 超秘伝書「" + LEGEND.abil[retireBonus.k].name + "」を手に入れた！");
               closeRetire();
               if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
               updateUI();
@@ -17613,6 +17653,7 @@ OFF</button>
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
         if (/[?&]debug\b/.test(location.search)) {
+          superRng = () => 1; // 確認用では超秘伝書を出さない（legendApi.setSuperRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             state: () => ({
@@ -17653,6 +17694,7 @@ OFF</button>
               endgameOn,
               setForce: (v) => (legendForce = !!v),
               setRng: (f) => (legendRng = f || Math.random),
+              setSuperRng: (f) => (superRng = f || Math.random),
               rollLegend,
               addLegend,
               legendStrike,
