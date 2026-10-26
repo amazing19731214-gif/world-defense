@@ -1509,6 +1509,9 @@
         gap: 6px;
         margin: 6px 0 8px;
       }
+      .forge-kinds.three {
+        grid-template-columns: repeat(3, 1fr);
+      }
       .forge-kinds button {
         min-height: 52px;
         font-size: 15px;
@@ -2415,7 +2418,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v58（超秘伝書「貫通ビームサーベル」は引退の0.1%）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v59（小判の商店・能力の実・書の売却）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4630,7 +4633,24 @@ OFF</button>
         const legendStatText = (st) => LEGEND.stats[st.k].name + " +" + st.v + LEGEND.stats[st.k].unit;
         const legendAbilName = (a) => LEGEND.abil[a.k].icon + LEGEND.abil[a.k].name + "（" + lpct(a.v) + "）";
         // 最大HPに伝説の能力値（有効なもの）を足す
-        const legendHp = (s, hp) => Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat"));
+        // ===== 小判の商店：能力の実（使うと、その兵士の能力がずっと 1 上がる）と、書の売値 =====
+        const SHOP = {
+          fruits: {
+            // up：実1個で上がる量
+            atk: { name: "攻撃の実", icon: "🍎", stat: "攻撃", up: 1 },
+            def: { name: "防御の実", icon: "🍐", stat: "防御", up: 1 },
+            hp: { name: "体力の実", icon: "🍑", stat: "最大HP", up: 10 },
+            rng: { name: "射程の実", icon: "🍇", stat: "射程", up: 1 },
+          },
+          fruitPrice: 5000, // 実の値段（両）
+          maxStock: 999, // 倉庫に置ける実の数（種類ごと）
+          maxEat: 1e6, // 兵士1人が食べられる数（種類ごと・保存の安全のため）
+          bookSell: { skill: 150, legend: 500, super: 3000 }, // 書の売値（両）：スキルの書・伝承の秘伝書・🌟超秘伝書
+        };
+        const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
+        const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
+        const legendHp = (s, hp) =>
+          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp"));
         function rollLegend() {
           const between = (min, max) => min + legendRng() * (max - min),
             pick = (o) => {
@@ -4916,6 +4936,11 @@ OFF</button>
             bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
             koban: int(o.koban, KOBAN_MAX), // 小判（両）：装備の売却で増える永続の通貨（以前の保存データは 0 から）
+            fruits: Object.fromEntries(
+              Object.keys(SHOP.fruits)
+                .map((k) => [k, int(o.fruits && o.fruits[k], SHOP.maxStock)])
+                .filter(([, n]) => n > 0),
+            ), // 商店で買った能力の実（まだ使っていない数）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -6401,6 +6426,10 @@ OFF</button>
           out.atk = out.atk * (1 + lv2("atkPct") / 100) + lv2("atkFlat");
           out.def = out.def * (1 + lv2("defPct") / 100) + lv2("defFlat");
           out.range = out.range * (1 + lv2("rngPct") / 100) + lv2("rngFlat");
+          // 能力の実：食べた数 × 1 を足す（最大HPは legendHp で足す）
+          out.atk += fruitUp(s, "atk");
+          out.def += fruitUp(s, "def");
+          out.range += fruitUp(s, "rng");
           return out;
         }
         // 能力の表示（衛生兵は攻撃のかわりに回復量と間隔）
@@ -7123,6 +7152,80 @@ OFF</button>
             return { error: "保存できなかったので売却をやめました（装備と小判は元のまま）。" };
           }
           return { n: list.length, total, koban: F.koban };
+        }
+        // ===== 書の売却・商店（能力の実） =====
+        const bookPrice = (b) => (b.super ? SHOP.bookSell.super : SHOP.bookSell.legend);
+        // 書を売る：書を消すことと小判を足すことを1回の保存で確定（保存できなければ売らない）
+        function sellBook(kind, key) {
+          const busy = gearBusy();
+          if (busy) return busy.replace("装備を変更", "書を売ることは");
+          const F = forgeSave(),
+            before = { books: Object.assign({}, F.books), legendBooks: F.legendBooks.slice(), koban: F.koban };
+          let price;
+          if (kind === "skill") {
+            if (!(F.books[key] > 0)) return "そのスキルの書はありません。";
+            price = SHOP.bookSell.skill;
+            if (--F.books[key] <= 0) delete F.books[key];
+          } else {
+            const b = F.legendBooks.find((x) => x.uid === key);
+            if (!b) return "その書はありません（もう売ったかもしれません）。";
+            if (b.owner != null) return "装備中の書は売れません（先に外してください）。";
+            price = bookPrice(b);
+            F.legendBooks = F.legendBooks.filter((x) => x !== b);
+          }
+          F.koban = Math.min(KOBAN_MAX, (F.koban || 0) + price);
+          if (!persistHeroes()) {
+            Object.assign(F, before);
+            return "保存できなかったので売却をやめました（書と小判は元のまま）。";
+          }
+          lastSale = price;
+          return null;
+        }
+        let lastSale = 0;
+        // 能力の実を買う（倉庫に入る）
+        function buyFruit(k) {
+          const F = forgeSave(),
+            f = SHOP.fruits[k];
+          if (!f) return "その品はありません。";
+          F.fruits = F.fruits || {};
+          if ((F.koban || 0) < SHOP.fruitPrice) return "小判が足りません（" + kobanText(SHOP.fruitPrice) + "）。";
+          if ((F.fruits[k] || 0) >= SHOP.maxStock) return "これ以上は持てません（" + SHOP.maxStock + "個まで）。";
+          F.koban -= SHOP.fruitPrice;
+          F.fruits[k] = (F.fruits[k] || 0) + 1;
+          if (persistHeroes()) return null;
+          F.koban += SHOP.fruitPrice;
+          if (--F.fruits[k] <= 0) delete F.fruits[k];
+          return "保存できなかったので買いませんでした（小判は元のまま）。";
+        }
+        function useFruitError(s, k) {
+          const F = forgeSave();
+          if (!SHOP.fruits[k]) return "その品はありません。";
+          if (!((F.fruits || {})[k] > 0)) return SHOP.fruits[k].name + "を持っていません。";
+          if (!s || !s.alive) return "その兵士には使えません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
+          if (fruitOf(s, k) >= SHOP.maxEat) return "これ以上は食べられません。";
+          return legendBusyError();
+        }
+        // 能力の実を兵士に使う：その兵士の能力がずっと 1 上がる（実は1個減る）。兵士と倉庫を同じ保存で確定する
+        function useFruit(s, k) {
+          const err = useFruitError(s, k);
+          if (err) return err;
+          const F = forgeSave(),
+            saved = savedSoldier(s.id),
+            before = { fruit: s.fruit ? Object.assign({}, s.fruit) : null, saved: saved.fruit, stock: F.fruits[k] };
+          s.fruit = Object.assign({}, s.fruit, { [k]: fruitOf(s, k) + 1 });
+          saved.fruit = Object.assign({}, s.fruit);
+          if (--F.fruits[k] <= 0) delete F.fruits[k];
+          if (!commitLegend()) {
+            s.fruit = before.fruit;
+            saved.fruit = before.saved;
+            F.fruits[k] = before.stock;
+            gameSaveBatch = null;
+            gameSaveBatchActive = false;
+            return "保存できなかったので使いませんでした（実は残っています）。";
+          }
+          logHistory(s, SHOP.fruits[k].name + "を食べた（" + SHOP.fruits[k].stat + " +" + SHOP.fruits[k].up + "）");
+          return null;
         }
         // 並び替え・絞り込み（攻撃・防御は装備の「攻撃 +％」「防御 +％」の値で比べる。特殊効果は数えない。同じなら手に入れた順）
         const GEAR_SORTS = {
@@ -7964,9 +8067,20 @@ OFF</button>
           "prof",
           "named",
           "legend",
+          "fruit",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
+        // 能力の実を食べた数（種類ごと。なければ null）
+        function cleanFruit(f) {
+          if (!f || typeof f !== "object") return null;
+          const o = {};
+          for (const k of Object.keys(SHOP.fruits)) {
+            const n = intIn(f[k], 0, SHOP.maxEat, 0);
+            if (n) o[k] = n;
+          }
+          return Object.keys(o).length ? o : null;
+        }
         function cleanSkills(list, type) {
           if (!Array.isArray(list)) return [];
           const out = [];
@@ -8108,6 +8222,7 @@ OFF</button>
                 lastSurvivor: v.lastSurvivor === true,
                 heals: intIn(v.heals, 0, 1e6, 0),
                 legend: cleanLegend(v.legend),
+                fruit: cleanFruit(v.fruit),
                 history: (Array.isArray(v.history) ? v.history : [])
                   .filter((h) => typeof h === "string")
                   .map((h) => h.slice(0, 80))
@@ -11666,6 +11781,7 @@ OFF</button>
           gearPickUid = null, // 倉庫から装備させる兵士を選んでいる装備
           gearPickBook = null, // 倉庫から使う兵士を選んでいる書
           gearPickLBook = null, // 使う兵士を選んでいる伝承の秘伝書（uid）
+          gearPickFruit = null, // 使う兵士を選んでいる能力の実（種類）
           gearNote = "",
           sellMode = false, // 売却モード（複数を選んで売る）
           sellPick = new Set(), // 選んだ装備
@@ -11776,6 +11892,13 @@ OFF</button>
             fmt(st.rate) +
             "秒・射程" +
             Math.round(st.range) +
+            (s.fruit
+              ? "<br>能力の実：" +
+                Object.entries(SHOP.fruits)
+                  .filter(([k]) => fruitOf(s, k))
+                  .map(([k, f]) => f.icon + f.stat + " +" + fruitUp(s, k))
+                  .join("・")
+              : "") +
             "</small></p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "") +
             (savedSoldier(s.id) ? "" : '<p class="injured">雇ったばかりの兵士は、準備中に「途中保存」するか、ウェーブをクリアしてから装備できます。</p>');
@@ -11922,11 +12045,13 @@ OFF</button>
             '<button data-pick-cancel>やめる</button></div>'
           );
         }
+        const lbookSellBtn = (b) =>
+          '<button data-lbook-sell="' + b.uid + '"' + (gearBusy() ? " disabled" : "") + ">🪙 売る（" + kobanText(bookPrice(b)) + "）</button>";
         function renderGearStore() {
           const F = forgeSave(),
             busy = gearBusy();
           let html =
-            '<div class="forge-kinds" role="group" aria-label="倉庫"><button data-gear-tab="gear" aria-pressed="' +
+            '<div class="forge-kinds three" role="group" aria-label="倉庫"><button data-gear-tab="gear" aria-pressed="' +
             (gearTab === "gear") +
             '">⚔️ 装備 <small>' +
             F.items.length +
@@ -11935,11 +12060,58 @@ OFF</button>
             (gearTab === "books") +
             '">📜 スキルの書 <small>' +
             Object.values(F.books).reduce((a, b) => a + b, 0) +
-            "冊</small></button></div>" +
+            "冊</small></button>" +
+            '<button data-gear-tab="shop" aria-pressed="' +
+            (gearTab === "shop") +
+            '">🏪 商店</button></div>' +
             '<p class="koban" aria-label="小判の残高">🪙 小判 <b>' +
             kobanText(F.koban || 0) +
-            "</b> <small>（装備の売却で増える・保存される）</small></p>" +
+            "</b> <small>（装備・書の売却で増える・保存される）</small></p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
+          if (gearTab === "shop") {
+            const st = F.fruits || {};
+            html +=
+              '<p class="muted"><small>能力の実：兵士に使うと、その兵士の能力がずっと上がります（攻撃・防御・射程は +1、最大HPは +10。何個でも・転職しても消えない）。1個 ' +
+              kobanText(SHOP.fruitPrice) +
+              "。買った実は倉庫に入り、ここから兵士に使えます。</small></p>" +
+              '<div class="gear-list">' +
+              Object.entries(SHOP.fruits)
+                .map(
+                  ([k, f]) =>
+                    '<div class="gear-line"><div class="gear-row static g3"><span class="zk-icon g3">' +
+                    f.icon +
+                    '</span><span class="gr-main"><span class="gr-name">' +
+                    f.name +
+                    "</span><small>" +
+                    f.stat +
+                    " +" +
+                    f.up +
+                    "・" +
+                    kobanText(SHOP.fruitPrice) +
+                    "・持っている数 " +
+                    (st[k] || 0) +
+                    "</small></span></div>" +
+                    '<div class="card-actions"><button data-fruit-buy="' +
+                    k +
+                    '"' +
+                    ((F.koban || 0) < SHOP.fruitPrice ? " disabled" : "") +
+                    ">🪙 買う</button>" +
+                    (gearPickFruit === k
+                      ? "</div>" + soldierPicker((x) => !useFruitError(x, k), "fruit-to", k)
+                      : '<button data-fruit-pick="' + k + '"' + (st[k] ? "" : " disabled") + ">使う…</button></div>") +
+                    "</div>",
+                )
+                .join("") +
+              "</div>" +
+              '<p class="muted"><small>書の売値：スキルの書 ' +
+              kobanText(SHOP.bookSell.skill) +
+              "・伝承の秘伝書 " +
+              kobanText(SHOP.bookSell.legend) +
+              "・🌟超秘伝書 " +
+              kobanText(SHOP.bookSell.super) +
+              "（📜 スキルの書から売れます。装備中の書は売れません）</small></p>";
+            return html;
+          }
           if (gearTab === "gear" && sellConfirm) {
             // 売却の確認：数・一覧・合計・元に戻せないこと
             const list = sellConfirm.map(itemByUid).filter(Boolean),
@@ -12127,7 +12299,15 @@ OFF</button>
                       "</div>" +
                       (gearPickBook === id
                         ? soldierPicker((s) => !useBookError(s, id), "book-to", id)
-                        : '<button data-book-pick="' + id + '">使う…</button>') +
+                        : '<div class="card-actions"><button data-book-pick="' +
+                          id +
+                          '">使う…</button><button data-book-sell="' +
+                          id +
+                          '"' +
+                          (busy ? " disabled" : "") +
+                          ">🪙 売る（" +
+                          kobanText(SHOP.bookSell.skill) +
+                          "）</button></div>") +
                       "</div>"
                     );
                   })
@@ -12154,12 +12334,16 @@ OFF</button>
                           (!equipBookable(b)
                             ? gearPickLBook === b.uid
                               ? soldierPicker((x) => !useLegendBookError(x, b.uid), "lbook-to", b.uid)
-                              : '<button data-lbook-pick="' + b.uid + '">使う…</button>'
+                              : '<div class="card-actions"><button data-lbook-pick="' + b.uid + '">使う…</button>' + lbookSellBtn(b) + "</div>"
                             : b.owner != null
                               ? '<button data-lbook-off="' + b.uid + '"' + (gearBusy() ? " disabled" : "") + ">外す</button>"
                               : gearPickLBook === b.uid
                                 ? soldierPicker((x) => !equipBookError(x, b.uid), "lbook-eq", b.uid)
-                                : '<button data-lbook-pick="' + b.uid + '">装備する…</button>') +
+                                : '<div class="card-actions"><button data-lbook-pick="' +
+                                  b.uid +
+                                  '">装備する…</button>' +
+                                  lbookSellBtn(b) +
+                                  "</div>") +
                           "</div>",
                       )
                       .join("") +
@@ -12263,9 +12447,27 @@ OFF</button>
             }
           } else if (d.gearPick) gearPickUid = +d.gearPick;
           else if (d.bookPick) gearPickBook = d.bookPick;
-          else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = null;
+          else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = gearPickFruit = null;
           else if (d.lbookPick) gearPickLBook = +d.lbookPick;
-          else if (d.lbookEq) {
+          else if (d.fruitBuy) {
+            err = buyFruit(d.fruitBuy);
+            if (!err) gearNote = SHOP.fruits[d.fruitBuy].name + "を買いました（" + kobanText(SHOP.fruitPrice) + "）。";
+          } else if (d.fruitPick) gearPickFruit = d.fruitPick;
+          else if (d.fruitTo) {
+            const s = soldierById(+d.to);
+            err = useFruit(s, d.fruitTo);
+            if (!err) gearNote = soldierName(s) + " は" + SHOP.fruits[d.fruitTo].name + "を食べた（" + SHOP.fruits[d.fruitTo].stat + " +" + SHOP.fruits[d.fruitTo].up + "）。";
+            gearPickFruit = null;
+          } else if (d.bookSell) {
+            if (!confirm("「" + SOLDIER_SKILLS[d.bookSell].name + "」の書を1冊、" + kobanText(SHOP.bookSell.skill) + "で売りますか？（元に戻せません）")) return;
+            err = sellBook("skill", d.bookSell);
+            if (!err) gearNote = "スキルの書を売りました（+" + kobanText(lastSale) + "）。";
+          } else if (d.lbookSell) {
+            const b = forgeSave().legendBooks.find((x) => x.uid === +d.lbookSell);
+            if (b && !confirm(legendBookText(b) + " を" + kobanText(bookPrice(b)) + "で売りますか？（元に戻せません）")) return;
+            err = sellBook("legend", +d.lbookSell);
+            if (!err) gearNote = "書を売りました（+" + kobanText(lastSale) + "）。";
+          } else if (d.lbookEq) {
             const s = soldierById(+d.to);
             err = equipBook(s, +d.lbookEq);
             if (!err) gearNote = soldierName(s) + " に書を装備しました。";
@@ -17904,6 +18106,11 @@ OFF</button>
               useLegendBookError,
               equipBook,
               equipBookError,
+              SHOP,
+              buyFruit,
+              useFruit,
+              useFruitError,
+              sellBook,
               unequipBook,
               booksOf,
               setLegendStat,
