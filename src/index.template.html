@@ -1568,6 +1568,86 @@
         min-height: 44px;
         margin-top: 4px;
       }
+      /* 装備倉庫の一覧：1行にまとめる（同じ装備は ×個数） */
+      .gear-list {
+        display: grid;
+        gap: 6px;
+      }
+      .gear-line {
+        border-radius: 8px;
+      }
+      .gear-line.open {
+        outline: 1px solid #ffd34d88;
+        background: #ffffff08;
+      }
+      .gear-row {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 52px;
+        padding: 6px 8px;
+        text-align: left;
+        border-left: 4px solid var(--gc, #9fb3a8);
+        border-radius: 8px;
+      }
+      .gear-row.static {
+        background: #0e1a1655;
+        border-top: 1px solid #719b8f55;
+        border-right: 1px solid #719b8f55;
+        border-bottom: 1px solid #719b8f55;
+      }
+      .gear-row.g2 {
+        --gc: #5fa8e8;
+      }
+      .gear-row.g3 {
+        --gc: #b07ad8;
+      }
+      .gear-row.g4 {
+        --gc: #e8b64a;
+      }
+      .gear-row .gr-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      .gear-row .gr-name {
+        font-weight: bold;
+      }
+      .gear-row small {
+        font-size: 12px;
+        opacity: 0.85;
+        white-space: normal;
+      }
+      .gear-row .gr-count {
+        font-size: 18px;
+        color: #ffe6a0;
+        padding-left: 4px;
+      }
+      .gear-row .zk-icon {
+        width: 34px;
+        height: 34px;
+        font-size: 18px;
+      }
+      .gear-line > button:not(.gear-row),
+      .gear-detail button {
+        width: 100%;
+        min-height: 44px;
+        margin-top: 4px;
+      }
+      .gear-detail {
+        padding: 2px 8px 8px;
+      }
+      .gear-detail p {
+        margin: 4px 0;
+      }
+      .gear-line [data-sell-stack][aria-pressed="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
       .gear-free summary {
         min-height: 44px;
         display: flex;
@@ -2171,7 +2251,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v47（兵士の入れ替え）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v48（装備のまとめ表示・兵士の入れ替え）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -10807,7 +10887,8 @@ OFF</button>
           gearNote = "",
           sellMode = false, // 売却モード（複数を選んで売る）
           sellPick = new Set(), // 選んだ装備
-          sellConfirm = null; // 確認中の装備の一覧（uid）
+          sellConfirm = null, // 確認中の装備の一覧（uid）
+          gearOpenKey = null; // 一覧で開いている行（まとめた装備）
         const gearSoldiers = () =>
           soldiers.filter((s) => s.alive && savedSoldier(s.id)).sort((a, b) => isHeroSoldier(b) - isHeroSoldier(a) || b.level - a.level);
         function gearItemCard(it, actions) {
@@ -10830,6 +10911,58 @@ OFF</button>
             "</small></p>" +
             actions +
             "</div>"
+          );
+        }
+        // 一覧の行にまとめる：倉庫にある同じ装備（ロックの有無も同じ）を1行に「×個数」でまとめる。装備中のものは持ち主ごとに1行。
+        // 並びは gearView の順（まとまりの最初の1個の位置）
+        function gearStacks(items) {
+          const out = [],
+            byKey = new Map();
+          for (const it of items) {
+            if (it.owner != null) {
+              out.push({ key: "u" + it.uid, items: [it] });
+              continue;
+            }
+            const k = "s:" + it.id + (it.lock ? ":L" : "");
+            let st = byKey.get(k);
+            if (!st) {
+              st = { key: k, items: [] };
+              byKey.set(k, st);
+              out.push(st);
+            }
+            st.items.push(it);
+          }
+          return out;
+        }
+        const stackByKey = (key) => gearStacks(gearView(settings.gear)).find((st) => st.key === key) || null;
+        // 一覧の1行（押すと開いて、詳しい説明と操作を出す）
+        function gearRow(st, open, extra = "") {
+          const it = st.items[0],
+            g = GEAR[it.id],
+            o = it.owner != null ? soldierById(it.owner) : null;
+          return (
+            '<button class="gear-row g' +
+            g.grade +
+            '" data-gear-row="' +
+            st.key +
+            '" aria-expanded="' +
+            open +
+            '"><span class="zk-icon g' +
+            g.grade +
+            '">' +
+            gearIcon(g) +
+            '</span><span class="gr-main"><span class="gr-name">' +
+            gradeTag(g.grade) +
+            " " +
+            esc(g.name) +
+            (it.lock ? " 🔒" : "") +
+            "</span><small>" +
+            esc(g.text) +
+            (o ? "<br>👤 " + esc(soldierName(o)) : "") +
+            "</small></span>" +
+            (st.items.length > 1 ? '<b class="gr-count">×' + st.items.length + "</b>" : "") +
+            extra +
+            "</button>"
           );
         }
         const slotLine = (s) =>
@@ -10874,7 +11007,14 @@ OFF</button>
                 ? gearItemCard(cur, '<button data-gear-off="' + cur.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>")
                 : '<p class="muted">なし</p>');
             const free = F.items.filter((it) => it.owner == null && GEAR[it.id].slot === slot && canWear(jobOf(s), it.id));
-            free.sort((a, b) => GEAR[b.id].grade - GEAR[a.id].grade);
+            free.sort((a, b) => GEAR[b.id].grade - GEAR[a.id].grade || a.uid - b.uid);
+            // 同じ装備は1行にまとめる（装備するのはそのうち1個）
+            const kinds = [];
+            for (const it of free) {
+              const k = kinds.find((x) => x.items[0].id === it.id);
+              if (k) k.items.push(it);
+              else kinds.push({ key: "s:" + it.id, items: [it] });
+            }
             if (free.length)
               html +=
                 '<details class="gear-free"' +
@@ -10884,13 +11024,22 @@ OFF</button>
                 "（" +
                 free.length +
                 "）</summary>" +
-                free
-                  .map((it) =>
-                    gearItemCard(
-                      it,
-                      '<button data-gear-on="' + it.uid + '"' + (equipError(s, it.uid) ? " disabled" : "") + ">装備する</button>",
-                    ),
-                  )
+                kinds
+                  .map((k) => {
+                    const it = k.items.find((x) => !x.lock) || k.items[0];
+                    return (
+                      '<div class="gear-line">' +
+                      gearRow({ key: k.key, items: k.items.map((x) => Object.assign({}, x, { lock: false })) }, false).replace(
+                        /^<button class="gear-row/,
+                        '<div class="gear-row static',
+                      ).replace(/<\/button>$/, "</div>") +
+                      '<button data-gear-on="' +
+                      it.uid +
+                      '"' +
+                      (equipError(s, it.uid) ? " disabled" : "") +
+                      ">装備する</button></div>"
+                    );
+                  })
                   .join("") +
                 "</details>";
           }
@@ -11007,7 +11156,9 @@ OFF</button>
               items.length +
               " / 全 " +
               F.items.length +
-              "個" +
+              "個（" +
+              gearStacks(items).length +
+              "行にまとめて表示。行を押すと詳しく・操作）" +
               (sellMode ? "・売値：並 " + SELL_PRICE[1] + "両・良 " + SELL_PRICE[2] + "両・名品 " + SELL_PRICE[3] + "両（伝説は売れない）" : "") +
               "</small></p>";
             if (sellMode) {
@@ -11024,68 +11175,113 @@ OFF</button>
                 (picked.length && !busy ? "" : " disabled") +
                 ">売却する…</button></div>";
             }
-            html += items.length
-              ? items
-                  .map((it) => {
-                    const why = sellError(it);
-                    let act;
-                    if (sellMode)
-                      act = why
-                        ? '<button disabled>売れない：' + esc(why.replace(/（.*）/, "")) + "</button>"
-                        : '<button data-sell-toggle="' +
-                          it.uid +
-                          '" aria-pressed="' +
-                          sellPick.has(it.uid) +
-                          '">' +
-                          (sellPick.has(it.uid) ? "☑ 選択中" : "☐ 選ぶ") +
-                          "（" +
-                          GEAR[it.id].name +
-                          "・" +
-                          sellPrice(it) +
-                          "両）</button>";
-                    else
+            const stacks = gearStacks(items);
+            html += stacks.length
+              ? '<div class="gear-list">' +
+                stacks
+                  .map((st) => {
+                    const it = st.items[0],
+                      n = st.items.length,
+                      uids = st.items.map((x) => x.uid),
+                      why = sellError(it),
+                      open = gearOpenKey === st.key,
+                      price = sellPrice(it);
+                    if (sellMode) {
+                      // 売却モード：行ごと（まとめた個数ぶん）選ぶ
+                      const on = !why && uids.every((u) => sellPick.has(u));
+                      return (
+                        '<div class="gear-line">' +
+                        gearRow(st, false).replace(/^<button class="gear-row/, '<div class="gear-row static').replace(/<\/button>$/, "</div>") +
+                        (why
+                          ? "<button disabled>売れない：" + esc(why.replace(/（.*）/, "")) + "</button>"
+                          : '<button data-sell-stack="' +
+                            st.key +
+                            '" aria-pressed="' +
+                            on +
+                            '">' +
+                            (on ? "☑ 選択中" : "☐ 選ぶ") +
+                            (n > 1 ? " ×" + n : "") +
+                            "・" +
+                            price * n +
+                            "両</button>") +
+                        "</div>"
+                      );
+                    }
+                    let act = "";
+                    if (open) {
+                      const free = st.items.find((x) => x.owner == null);
                       act =
-                        (gearPickUid === it.uid
-                          ? soldierPicker((s) => !equipError(s, it.uid), "gear-to", it.uid)
+                        '<div class="gear-detail"><p><small>装備できる職業：' +
+                        gearJobs(it.id) +
+                        "<br>" +
+                        (it.owner != null
+                          ? "装備者：" + esc(soldierName(soldierById(it.owner))) + "（" + jobName(soldierById(it.owner)) + "）"
+                          : "倉庫に " + n + "個") +
+                        (it.lock ? "・🔒 ロック中（売却できない）" : "") +
+                        "</small></p>" +
+                        (gearPickUid != null && uids.includes(gearPickUid)
+                          ? soldierPicker((s) => !equipError(s, gearPickUid), "gear-to", gearPickUid)
                           : it.owner != null
                             ? '<button data-gear-off="' + it.uid + '"' + (busy ? " disabled" : "") + ">外す（倉庫へ）</button>"
-                            : '<button data-gear-pick="' + it.uid + '"' + (busy ? " disabled" : "") + ">装備させる…</button>") +
-                        '<div class="card-actions"><button data-gear-lock="' +
-                        it.uid +
-                        '" aria-pressed="' +
-                        !!it.lock +
+                            : '<button data-gear-pick="' + free.uid + '"' + (busy ? " disabled" : "") + ">装備させる…" + (n > 1 ? "（1個）" : "") + "</button>") +
+                        '<div class="card-actions"><button data-gear-lock-stack="' +
+                        st.key +
                         '">' +
-                        (it.lock ? "🔒 ロック中（外す）" : "🔓 ロックする") +
+                        (it.lock ? "🔒 ロックを外す" : "🔓 ロックする") +
+                        (n > 1 ? "（" + n + "個）" : "") +
                         "</button>" +
-                        (why ? "" : '<button data-sell-one="' + it.uid + '"' + (busy ? " disabled" : "") + ">🪙 売却 " + sellPrice(it) + "両</button>") +
-                        "</div>";
-                    return gearItemCard(it, act);
+                        (why
+                          ? ""
+                          : '<button data-sell-one="' +
+                            it.uid +
+                            '"' +
+                            (busy ? " disabled" : "") +
+                            ">🪙 1個売却 " +
+                            price +
+                            "両</button>" +
+                            (n > 1
+                              ? '<button data-sell-stack-all="' + st.key + '"' + (busy ? " disabled" : "") + ">🪙 " + n + "個まとめて売却 " + price * n + "両</button>"
+                              : "")) +
+                        "</div></div>";
+                    }
+                    return '<div class="gear-line' + (open ? " open" : "") + '">' + gearRow(st, open) + act + "</div>";
                   })
-                  .join("")
+                  .join("") +
+                "</div>"
               : F.items.length
                 ? '<p class="muted">条件に合う装備がありません。絞り込みを変えてください。</p>'
                 : '<p class="muted">装備がありません。🔥 秘伝錬成の「装備錬成」で手に入ります。</p>';
           } else {
-            const books = Object.keys(F.books);
+            const books = Object.keys(F.books).sort(
+              (a, b) => SOLDIER_SKILLS[b].book - SOLDIER_SKILLS[a].book || SOLDIER_SKILLS[a].name.localeCompare(SOLDIER_SKILLS[b].name, "ja"),
+            );
             html += books.length
-              ? books
-                  .map(
-                    (id) =>
-                      '<div class="gear-card g' +
-                      SOLDIER_SKILLS[id].book +
-                      '"><p>' +
-                      bookName(id) +
-                      " ×" +
-                      F.books[id] +
-                      "<br><small>［秘伝スキル］" +
-                      esc(SOLDIER_SKILLS[id].text) +
-                      "。どの職業でも装備できる。一度習得したら転職・主人公の戦死でも消えない</small></p>" +
+              ? '<p class="muted"><small>どの職業でも装備できる秘伝スキル。一度習得したら転職・主人公の戦死でも消えない</small></p><div class="gear-list">' +
+                books
+                  .map((id) => {
+                    const k = SOLDIER_SKILLS[id];
+                    return (
+                      '<div class="gear-line"><div class="gear-row static g' +
+                      k.book +
+                      '"><span class="zk-icon g' +
+                      k.book +
+                      '">📜</span><span class="gr-main"><span class="gr-name">' +
+                      gradeTag(k.book) +
+                      " " +
+                      esc(k.name) +
+                      "の書</span><small>" +
+                      esc(k.text) +
+                      "</small></span>" +
+                      (F.books[id] > 1 ? '<b class="gr-count">×' + F.books[id] + "</b>" : "") +
+                      "</div>" +
                       (gearPickBook === id
                         ? soldierPicker((s) => !useBookError(s, id), "book-to", id)
                         : '<button data-book-pick="' + id + '">使う…</button>') +
-                      "</div>",
-                  )
-                  .join("")
+                      "</div>"
+                    );
+                  })
+                  .join("") +
+                "</div>"
               : '<p class="muted">スキルの書がありません。🔥 秘伝錬成の「秘伝書錬成」で手に入ります。</p>';
           }
           return html;
@@ -11100,6 +11296,7 @@ OFF</button>
         function openGear(id = null) {
           gearSoldierId = id;
           gearPickUid = gearPickBook = null;
+          gearOpenKey = null;
           sellMode = false;
           sellPick.clear();
           sellConfirm = null;
@@ -11127,11 +11324,36 @@ OFF</button>
           if (d.gearTab) {
             gearTab = d.gearTab;
             sellConfirm = null;
+            gearOpenKey = null;
+          } else if (d.gearRow) {
+            gearOpenKey = gearOpenKey === d.gearRow ? null : d.gearRow;
+            gearPickUid = null;
+          } else if (d.gearLockStack) {
+            const st = stackByKey(d.gearLockStack);
+            if (st) {
+              const to = !st.items[0].lock;
+              for (const it of st.items) it.lock = to;
+              persistHeroes();
+              gearNote = (to ? "🔒 ロックしました（売却できません）" : "🔓 ロックを外しました") + (st.items.length > 1 ? "（" + st.items.length + "個）。" : "。");
+              const it = st.items[0];
+              gearOpenKey = it.owner != null ? "u" + it.uid : "s:" + it.id + (to ? ":L" : "");
+            }
+          } else if (d.sellStack) {
+            const st = stackByKey(d.sellStack);
+            if (st) {
+              const uids = st.items.map((x) => x.uid),
+                on = uids.every((u) => sellPick.has(u));
+              for (const u of uids) on ? sellPick.delete(u) : sellPick.add(u);
+            }
+          } else if (d.sellStackAll) {
+            const st = stackByKey(d.sellStackAll);
+            if (st) sellConfirm = st.items.map((x) => x.uid);
           } else if (d.gearLock) {
             err = toggleLock(+d.gearLock);
             if (!err) gearNote = itemByUid(+d.gearLock).lock ? "🔒 ロックしました（売却できません）。" : "🔓 ロックを外しました。";
           } else if (d.sellMode !== undefined) {
             sellMode = !sellMode;
+            gearOpenKey = null;
             sellPick.clear();
             sellConfirm = null;
           } else if (d.sellToggle) {
@@ -11157,14 +11379,24 @@ OFF</button>
           } else if (d.gearPick) gearPickUid = +d.gearPick;
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = null;
-          else if (d.gearOff) err = unequipItem(+d.gearOff) || ((gearNote = "装備を外して倉庫に戻しました。"), null);
+          else if (d.gearOff) {
+            err = unequipItem(+d.gearOff);
+            if (!err) {
+              gearNote = "装備を外して倉庫に戻しました。";
+              const it = itemByUid(+d.gearOff);
+              if (gearOpenKey) gearOpenKey = "s:" + it.id + (it.lock ? ":L" : ""); // 開いていた行は、倉庫のまとまりの行として開いたまま
+            }
+          }
           else if (d.gearOn && cur) {
             err = equipItem(cur, +d.gearOn);
             if (!err) gearNote = GEAR[itemByUid(+d.gearOn).id].name + " を装備しました。";
           } else if (d.gearTo) {
             const s = soldierById(+d.to);
             err = equipItem(s, +d.gearTo);
-            if (!err) gearNote = soldierName(s) + " が " + GEAR[itemByUid(+d.gearTo).id].name + " を装備しました。";
+            if (!err) {
+              gearNote = soldierName(s) + " が " + GEAR[itemByUid(+d.gearTo).id].name + " を装備しました。";
+              gearOpenKey = "u" + d.gearTo; // 装備した1個の行を開く（装備者・外すボタン）
+            }
             gearPickUid = null;
           } else if (d.bookUse && cur) {
             err = useBook(cur, d.bookUse);
