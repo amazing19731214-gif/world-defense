@@ -1198,10 +1198,11 @@ check(
 if (shots) await page.screenshot({ path: path.join(shots, "f2-forge.png") });
 await page.tap("#forgeClose");
 await page.tap("#gearOpen");
+await page.tap("[data-gear-row]"); // 一覧の行を押して開く
 text = await page.textContent("#gearBody");
 check(
-  "装備倉庫：伝説の品・品質・効果・装備できる職業・装備者",
-  /伝説/.test(text) && /装備できる職業/.test(text) && /装備者：なし（倉庫）/.test(text),
+  "装備倉庫：伝説の品・品質・効果・装備できる職業・倉庫の個数",
+  /伝説/.test(text) && /装備できる職業/.test(text) && /倉庫に 1個/.test(text),
   text.slice(0, 300),
 );
 const uid = await ev(page, () => WD_DEBUG.forgeApi.save().items[0].uid);
