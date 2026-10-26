@@ -859,7 +859,7 @@ check(
   String(layout.panelH),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "s4-mobile.png"), fullPage: true });
-await page.tap("#sqOrganize");
+await page.tap("#organize");
 const sheet = await page.evaluate(() => {
   const r = document.querySelector("#squadSheet .sheet").getBoundingClientRect();
   return {
