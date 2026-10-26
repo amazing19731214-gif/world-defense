@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 超秘伝書：Lv100以上の指導員の引退で3%「貫通ビームサーベル」、SSR武将の秘伝錬成で1%「連鎖雷撃」。
-// 手に入るのはいつでも・使えるのは終盤の解放後・強さは抽選・保存（失敗したら出ない）・画面の表示
+// 手に入るのも使えるのもいつでも（終盤の解放前でも働く）・強さは抽選・保存（失敗したら出ない）・画面の表示
+// 指導員の能力値の書（攻撃・防御・体力・射程の書。数値は引退のときに抽選）
 //   node tools/test-super-books.mjs
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -109,27 +110,37 @@ check(
 );
 check("指導員名簿にも超秘伝書を記録", /＋🌟超秘伝 🗡️貫通ビームサーベル/.test(r.mentor), r.mentor);
 
-console.log("■ 使えるのは終盤の解放後");
+console.log("■ 終盤の解放前でも使える");
 r = await ev((uid) => {
   const L = WD_DEBUG.legendApi,
-    s = WD_DEBUG.state().soldiers.find((x) => x.id === 11);
-  const locked = L.useLegendBook(s, uid);
-  L.setForce(true);
+    s = WD_DEBUG.state().soldiers.find((x) => x.id === 11),
+    hits = [];
   const ok = L.useLegendBook(s, uid);
-  L.setForce(false);
+  L.legendStrike(
+    s,
+    { x: 0, y: 0 },
+    { x: 40, y: 0 },
+    100,
+    [
+      { x: 40, y: 0 },
+      { x: 120, y: 0 },
+    ],
+    (e, d) => hits.push(d),
+  );
   return {
-    locked,
+    on: L.endgameOn(),
     ok,
     legend: s.legend,
+    hits: hits.length,
     left: WD_DEBUG.forgeApi.save().legendBooks.some((b) => b.uid === uid),
   };
 }, sb.uid);
-check("解放前は使えない", /終盤/.test(r.locked || ""), r.locked);
 check(
-  "解放後に使うと、同じ強さで習得し、書はなくなる",
-  r.ok === null && r.legend.abil.some((a) => a.k === "beam" && a.v === sb.v) && !r.left,
+  "解放前でも使えて、同じ強さで習得し、書はなくなる",
+  r.on === false && r.ok === null && r.legend.abil.some((a) => a.k === "beam" && a.v === sb.v) && !r.left,
   JSON.stringify(r),
 );
+check("解放前でも貫通ビームサーベルが発動する（一直線上の敵に当たる）", r.hits > 0, JSON.stringify(r));
 
 console.log("■ SSR武将の秘伝錬成");
 r = await ev(() => {
@@ -177,7 +188,9 @@ await page.tap("[data-forge-go]");
 text = await page.textContent("#forgeBody");
 check(
   "錬成の結果に「🌟 さらに超秘伝書…を手に入れた！」",
-  /🌟 さらに超秘伝書「⚡連鎖雷撃（\d+%）」を手に入れた！/.test(text) && /終盤/.test(text),
+  /🌟 さらに超秘伝書「⚡連鎖雷撃（\d+%）」を手に入れた！/.test(text) &&
+    /兵士に使える/.test(text) &&
+    !/終盤/.test(text),
   text.slice(0, 300),
 );
 await page.tap("#forgeClose");
@@ -208,6 +221,92 @@ const bs = await ev(() => {
   return { hScroll: document.documentElement.scrollWidth > innerWidth };
 });
 check("375×667：横にはみ出さない", !bs.hScroll);
+
+console.log("■ 指導員の能力値の書");
+r = await ev(() => {
+  const L = WD_DEBUG.legendApi,
+    F = WD_DEBUG.forgeApi,
+    a = WD_DEBUG.squadApi,
+    find = (id) => WD_DEBUG.state().soldiers.find((x) => x.id === id);
+  const seq = (arr) => {
+    let i = 0;
+    return () => arr[i++ % arr.length];
+  };
+  L.setSuperRng(() => 1); // 超秘伝書は出さない
+  const list = L.inheritables(find(5))
+    .filter((b) => b.type === "statRoll")
+    .map((b) => b.g);
+  const idx = (s, g) => L.inheritables(s).findIndex((b) => b.type === "statRoll" && b.g === g);
+  L.setRng(seq([0.7, 0.999999])); // 割合・最大 → 攻撃 +15%
+  const e1 = L.retireSoldier(5, idx(find(5), "atk"));
+  const atkBook = F.save().legendBooks.at(-1);
+  L.setRng(seq([0.2, 0])); // 固定・最小 → 射程 +1
+  const e2 = L.retireSoldier(6, idx(find(6), "rng"));
+  const rngBook = F.save().legendBooks.at(-1);
+  L.setRng(seq([0.3, 0.5])); // 固定・中央 → 最大HP +255
+  const e3 = L.retireSoldier(7, idx(find(7), "hp"));
+  const hpBook = F.save().legendBooks.at(-1);
+  L.setRng();
+  const s = find(12),
+    base = a.soldierStats(s).atk;
+  const use = L.useLegendBook(s, atkBook.uid);
+  return {
+    list: list.join(),
+    e: [e1, e2, e3],
+    atkBook,
+    rngBook,
+    hpBook,
+    use,
+    ratio: a.soldierStats(s).atk / base,
+    on: s.legend && s.legend.on,
+    mentor: F.save().mentors[1].skill, // 新しい順（[0] は体力の書）
+    left: F.save().legendBooks.some((b) => b.uid === atkBook.uid),
+  };
+});
+check("どの兵士でも能力値の書4種（攻撃・防御・体力・射程）を選べる", r.list === "atk,def,hp,rng", r.list);
+check(
+  "引退のときに数値が決まる（攻撃 +15%・射程 +1・最大HP +255）",
+  r.e.every((e) => e === null) &&
+    r.atkBook.k === "atkPct" &&
+    r.atkBook.v === 15 &&
+    r.rngBook.k === "rngFlat" &&
+    r.rngBook.v === 1 &&
+    r.hpBook.k === "hpFlat" &&
+    r.hpBook.v === 255,
+  JSON.stringify(r),
+);
+check("指導員名簿に「🎯射程の書（射程 +1）」と記録", /🎯射程の書（射程 \+1）/.test(r.mentor), r.mentor);
+check(
+  "攻撃の書を使うと、解放前でも攻撃 +15% が働く（有効な能力値になる・書はなくなる）",
+  r.use === null && Math.abs(r.ratio - 1.15) < 0.02 && r.on === 0 && !r.left,
+  JSON.stringify(r),
+);
+if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
+await page.tap("#soldiers");
+await page.tap("#tabLive");
+await page.tap('[data-retire="8"]');
+text = await page.textContent("#retireBody");
+check(
+  "引退の画面に能力値の書（数値の範囲つき）と説明",
+  /⚔️攻撃の書（攻撃 \+1〜100 か \+1〜15%・引退のときに決まる）/.test(text) &&
+    /🎯射程の書/.test(text) &&
+    /能力値の書（攻撃・防御・体力・射程の書）も選べます/.test(text) &&
+    !/終盤の解放後/.test(text),
+  text,
+);
+const pick = await ev(() =>
+  [...document.querySelectorAll("[data-retire-pick]")].findIndex((b) => /🛡️防御の書/.test(b.textContent)),
+);
+await page.tap(`[data-retire-pick="${pick}"]`);
+await page.tap("[data-retire-go]");
+check(
+  "引退すると、決まった数値を知らせる",
+  /🛡️防御の書（防御 \+\d+%?） を残しました/.test(await page.textContent("#msg")),
+  await page.textContent("#msg"),
+);
+r = await ev(() => document.documentElement.scrollWidth > innerWidth);
+check("375×667：横にはみ出さない（引退の画面）", !r);
+await page.tap("#retireClose").catch(() => {});
 
 console.log("■ 保存と再読み込み");
 await reload();

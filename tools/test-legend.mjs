@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 終盤（試作）：伝説の兵士の確認
-// 解放の条件（天下統一＋三大裏ボス）・解放前は使えない・レベルアップで伝説の能力（数値は抽選して固定・能力値は1つだけ有効）・
+// 解放の条件（天下統一＋三大裏ボス）・解放前の扱い・レベルアップで伝説の能力（数値は抽選して固定・能力値は1つだけ有効）・
 // 特殊能力（貫通ビームサーベル・連鎖雷撃・爆炎斬・影分身）の効果と演出・重ね掛け・無限に連鎖しない・防衛戦/攻城戦/修練場・
 // 終盤の特殊装備・指導員の引退と伝承の秘伝書（数値のまま継承）・保存の失敗で消えない/二重にならない・再読み込み・以前の保存データ・画面
 //   node tools/test-legend.mjs
@@ -247,13 +247,13 @@ r = await ev(page, () => {
   };
 });
 check(
-  "伝説の能力は解放前は働かない（攻撃 +40 も連鎖雷撃も効かない）",
-  r.lockedDiff === 0 && r.hits === 0,
+  "伝説の能力は解放前でも働く（攻撃 +40・連鎖雷撃。習得はレベルアップなら解放後・書ならいつでも）",
+  r.lockedDiff === 40 && r.hits > 0,
   JSON.stringify(r),
 );
 check(
-  "伝説の能力を書に残すことはできるが、解放前は使えない",
-  r.e === null && /終盤/.test(r.use || ""),
+  "伝説の能力を書に残せて、解放前でも別の兵士に使える",
+  r.e === null && r.use === null,
   JSON.stringify(r),
 );
 check("解放すると伝説の能力が働く（攻撃 +40）", Math.abs(r.unlocked - 40) < 1e-6, JSON.stringify(r));
@@ -296,7 +296,7 @@ r = await ev(page, () => ({
 }));
 check(
   "再読み込みしても：指導員名簿・引退・受け継いだスキル・残った書",
-  r.mentors === 3 && r.gone && r.l11.includes("spearMaster") && r.books.join() === "abil",
+  r.mentors === 3 && r.gone && r.l11.includes("spearMaster") && r.books.join() === "",
   JSON.stringify(r),
 );
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
@@ -689,17 +689,18 @@ r = await ev(page, () => {
     S = WD_DEBUG.state();
   return {
     a: L.inheritables(S.soldiers.find((x) => x.id === 1)).map(
-      (b) => b.type + ":" + (b.id || b.k + "=" + b.v),
+      (b) => b.type + ":" + (b.id || b.g || b.k + "=" + b.v),
     ),
     named: L.inheritables(S.soldiers.find((x) => x.id === 2)).length,
   };
 });
 check(
-  "残せるスキル：習得したスキルと伝説の能力（数値つき）",
-  r.a.join() === "skill:spearMaster,skill:ironWall,stat:atkFlat=77,abil:beam=0.93",
+  "残せるスキル：習得したスキルと伝説の能力（数値つき）・能力値の書4種",
+  r.a.join() ===
+    "skill:spearMaster,skill:ironWall,stat:atkFlat=77,abil:beam=0.93,statRoll:atk,statRoll:def,statRoll:hp,statRoll:rng",
   r.a.join(),
 );
-check("ネームド兵士の固有能力は残せない（吉川元春は残せるものがない）", r.named === 0, String(r.named));
+check("ネームド兵士の固有能力は残せない（吉川元春は能力値の書4種だけ）", r.named === 4, String(r.named));
 await page.tap("#soldiers");
 r = await ev(page, () => ({
   box: document.querySelector(".s-card .legend-box")
@@ -721,7 +722,7 @@ r = await ev(page, () => ({
 }));
 check(
   "引退の画面：残すスキルを選ぶ（まだ引退のボタンは出ない）",
-  r.open && r.picks === 4 && r.go === 0,
+  r.open && r.picks === 8 && r.go === 0,
   JSON.stringify(r),
 );
 await page.tap('[data-retire-pick="3"]');
