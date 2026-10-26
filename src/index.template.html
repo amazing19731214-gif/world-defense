@@ -2418,7 +2418,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v60（修練場でも AUTO）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v61（ラッキー足軽・黄金足軽）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -5373,6 +5373,7 @@ OFF</button>
           const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
           const armor = Math.max(0, e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0);
           damage *= (1 + vulnerability) * 30 / (30 + armor * (1 - Math.min(1, ignore)));
+          if (e.rare) damage = Math.min(damage, RARE.hitDamage); // 特別な敵はとても硬い（1回で 1 だけ）
           const hpBefore = e.hp;
           e.hp -= damage;
           // 修練場：兵士は実際に減らしたHPの分だけ経験値（倒れた敵をさらに攻撃しても増えない）
@@ -5867,6 +5868,96 @@ OFF</button>
             best = Math.min(best, Math.hypot(x - (ax + dx * t), y - (ay + dy * t)));
           }
           return best;
+        }
+        // ===== 乱入する特別な敵：ラッキー足軽（経験値）・黄金足軽（小判） =====
+        // ウェーブの途中に低い確率で1体だけ現れる。とても硬く（1回の攻撃で 1 しか減らない）、足止めされず、城を攻撃しない。
+        // 逃げる（時間切れ・城まで走り抜ける）と報酬なし。城のハートは減らない。確率・強さ・報酬はここで調整する
+        const RARE = {
+          minWave: 3, // 通常の防衛戦で出始めるウェーブ（修練場は1から）
+          inTraining: true, // 修練場でも出す
+          hitDamage: 1, // 1回の攻撃で減るHP（会心・特殊能力でも同じ）
+          lucky: {
+            name: "ラッキー足軽",
+            icon: "🍀",
+            chance: 0.04, // 1ウェーブに出る確率
+            hp: 12, // 倒すのに必要な攻撃の回数
+            speed: 120,
+            escape: 9, // この秒数で逃げる
+            xpShare: 0.5, // 倒すと、出撃中の兵士それぞれが「次のレベルまでの経験値」のこの割合をもらう（1ウェーブの上限の対象外）
+            color: "#9dffb0",
+          },
+          gold: {
+            name: "黄金足軽",
+            icon: "💰",
+            chance: 0.03,
+            hp: 20,
+            speed: 105,
+            escape: 10,
+            koban: (w) => Math.min(5000, 300 + w * 5), // 倒したときの小判（±20%）。ウェーブ940で上限
+            color: "#ffd34d",
+          },
+        };
+        let rareRng = Math.random, // 出るかどうかの抽選（テストで差し替え可能）
+          rarePlan = null; // このウェーブに出す特別な敵 { wave, kind, at }
+        // ウェーブの開始時に、出すかどうか・何体目のあとに出すかを決める（1ウェーブに最大1体）
+        function planRare() {
+          rarePlan = null;
+          if (battle || (training ? !RARE.inTraining : wave < RARE.minWave)) return;
+          const r = rareRng();
+          const kind = r < RARE.lucky.chance ? "lucky" : r < RARE.lucky.chance + RARE.gold.chance ? "gold" : null;
+          if (kind) rarePlan = { wave, kind, at: Math.max(1, Math.floor(spawnTotal * (0.2 + 0.5 * rareRng()))) };
+        }
+        function spawnRare(kind) {
+          const c = RARE[kind],
+            branch = rareRng() < 0.5 ? upper : lower;
+          const e = {
+            path: branch,
+            d: 0,
+            x: 0,
+            y: 300,
+            kind: "goblin", // 絵と動きは足軽（攻撃はしない）
+            rare: kind,
+            rareLeft: c.escape,
+            hp: c.hp,
+            max: c.hp,
+            armor: 0,
+            speed: c.speed,
+            reward: 0,
+            xpWorth: 0,
+            color: c.color,
+            r: 13,
+            slow: 0,
+          };
+          enemies.push(e);
+          msg(c.icon + " " + c.name + "が現れた！ " + c.escape + "秒で逃げる、早く倒せ！");
+          toast(c.icon + " " + c.name + "が現れた！");
+          return e;
+        }
+        // 倒した：ラッキーは出撃中の兵士みんなに経験値、黄金は小判（保存する）
+        function rareKilled(e) {
+          const c = RARE[e.rare];
+          if (e.rare === "lucky") {
+            const list = soldiers.filter((s) => s.alive && s.inWave && !s.out);
+            for (const s of list) gainXp(s, Math.max(1, Math.round(SQUAD_RULES.xpToLevel(s.level) * c.xpShare)), true);
+            msg(c.icon + " " + c.name + "を倒した！ 出撃中の兵士 " + list.length + "人が大量の経験値を得た！");
+            toast(c.icon + " " + c.name + "を倒した！ 経験値ボーナス！");
+          } else {
+            const F = forgeSave(),
+              n = Math.round(c.koban(wave) * (0.8 + 0.4 * rareRng()));
+            F.koban = Math.min(KOBAN_MAX, (F.koban || 0) + n);
+            persistHeroes();
+            msg(c.icon + " " + c.name + "を倒した！ 小判 +" + kobanText(n) + "（🎒 装備倉庫）");
+            toast(c.icon + " 小判 +" + kobanText(n) + "！");
+          }
+          burst(e.x, e.y - 10, c.color, "fire"); // 色つきの輪と粒
+        }
+        function rareEscaped(e) {
+          e.gone = true;
+          e.hp = -999;
+          const c = RARE[e.rare];
+          msg(c.icon + " " + c.name + "は逃げてしまった…");
+          toast(c.icon + " " + c.name + "は逃げてしまった…");
+          burst(e.x, e.y, c.color, "vanish");
         }
         function createEnemy() {
           if (training) return enemies.push(trainingEnemy(training, spawned, spawnTotal));
@@ -7469,7 +7560,7 @@ OFF</button>
         }
         function assignBlocks() {
           for (const e of enemies) {
-            if (e.gone || e.blockedBy || e.hp <= 0 || e.breakthrough > 0) continue;
+            if (e.gone || e.blockedBy || e.hp <= 0 || e.breakthrough > 0 || e.rare) continue; // 特別な敵は足止めされない
             const fast = (ENEMY_VS_UNIT[e.kind] || {}).unblockable; // 敵の騎兵は騎兵でしか止められない
             for (const q of squads) {
               if (fast && !hasType(q, (c) => c.blocksCavalry)) continue;
@@ -7755,7 +7846,7 @@ OFF</button>
           }
           // 敵の攻撃：足止めしている部隊 → 届く範囲の部隊 → 届く範囲の塔（道の上から。道を外れて塔へは向かわない）
           for (const e of enemies) {
-            if (e.gone || e.hp <= 0 || e.stun > 0 || e.silence > 0) continue;
+            if (e.gone || e.hp <= 0 || e.stun > 0 || e.silence > 0 || e.rare) continue; // 特別な敵は攻撃しない
             const a = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin;
             e.unitCd = (e.unitCd || 0) - dt;
             if (e.unitCd > 0) continue;
@@ -8456,12 +8547,20 @@ OFF</button>
           while (spawned < spawnTotal && spawnClock <= 0) {
             createEnemy();
             spawned++;
+            if (rarePlan && rarePlan.wave === wave && spawned === rarePlan.at) {
+              spawnRare(rarePlan.kind);
+              rarePlan = null;
+            }
             spawnClock += Math.max(0.35, 0.95 - wave * 0.015);
           }
           assignBlocks();
           updateBlocks(dt);
           for (const e of enemies) {
             e.slow = Math.max(0, e.slow - dt);
+            if (e.rare && !e.gone && e.hp > 0 && (e.rareLeft -= dt) <= 0) {
+              rareEscaped(e); // 時間切れで逃げる（止められていても）
+              continue;
+            }
             if (e.hp <= 0 || e.stun > 0) continue;
             if (e.blockedBy) continue; // 足止め中は移動しない（上限時間・解除は updateBlocks / releaseBlocks）
             if (e.siege) {
@@ -8473,6 +8572,10 @@ OFF</button>
             e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
+              if (e.rare) {
+                rareEscaped(e); // 城まで走り抜けて逃げる（ハートは減らない）
+                continue;
+              }
               hp--;
               e.gone = true;
               e.hp = -999;
@@ -8504,6 +8607,7 @@ OFF</button>
               const rewardHero = e.lastTowerHero && heroState[e.lastTowerHero];
               if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
+              if (e.rare) rareKilled(e);
               if (e.kind === "boss" && !training && (!heroSave.defense || (heroSave.defense.bossRewardThrough || 0) < wave)) {
                 if (heroSave.defense) heroSave.defense.bossRewardThrough = wave;
                 grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
@@ -9223,6 +9327,20 @@ OFF</button>
         }
         // 修練場の敵：体力バーの上に敵レベル、中ボス・大将は赤い札
         function enemyTag(e, y) {
+          if (e.rare) {
+            const c = RARE[e.rare],
+              label = c.icon + c.name + " " + Math.max(0, Math.ceil(e.rareLeft)) + "秒";
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.font = "bold 12px system-ui";
+            const w = ctx.measureText(label).width + 8;
+            ctx.fillStyle = "#1f2a22ee";
+            ctx.fillRect(e.x - w / 2, y - 14, w, 14);
+            ctx.fillStyle = c.color;
+            ctx.fillText(label, e.x, y - 3);
+            ctx.restore();
+            return;
+          }
           if (!e.lv) return;
           ctx.save();
           ctx.textAlign = "center";
@@ -10241,10 +10359,31 @@ OFF</button>
               y: e.y,
               draw: () => {
                 ctx.save();
+                if (e.rare) {
+                  // 特別な敵：足元の光と、きらめき
+                  const c = RARE[e.rare],
+                    pulse = reduced ? 0.6 : 0.5 + 0.3 * Math.sin(combatClock * 8);
+                  ctx.globalAlpha = pulse;
+                  ellipse(e.x, e.y - 8, e.r + 16, e.r + 20, c.color + "aa");
+                  ctx.globalAlpha = 1;
+                  ctx.strokeStyle = c.color;
+                  ctx.lineWidth = 2;
+                  ctx.beginPath();
+                  ctx.ellipse(e.x, e.y + 10, e.r + 10, 6, 0, 0, 7);
+                  ctx.stroke();
+                  if (!reduced)
+                    for (let i = 0; i < 4; i++) {
+                      const a = combatClock * 3 + (i * Math.PI) / 2;
+                      ellipse(e.x + Math.cos(a) * (e.r + 12), e.y - 16 + Math.sin(a) * 14, 3, 3, "#ffffff");
+                    }
+                  ctx.shadowColor = c.color; // 絵のまわりを光らせる
+                  ctx.shadowBlur = 14;
+                }
                 if (!drawEnemySprite(e)) {
                   ctx.translate(0, reduced ? 0 : Math.sin(e.d * 0.17) * 2);
                   soldierFallback(e);
                 }
+                ctx.shadowBlur = 0;
                 if (e.poisonLeft > 0) ellipse(e.x, e.y + 10, e.r + 3, 4, "#b989c499");
                 if (e.stun > 0 || e.silence > 0) { ctx.fillStyle = "#fff1a3"; ctx.font = "bold 14px system-ui"; ctx.fillText(e.stun > 0 ? "停止" : "封", e.x - 10, e.y - 25); }
                 if (ownedHeroes().some((h) => activeKind(h, "focus") && h.skillTarget === e)) { ctx.strokeStyle = "#ffcf72"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke(); }
@@ -10538,6 +10677,7 @@ OFF</button>
           paused = false;
           $("pause").textContent = "⏸ 停止";
           if (training) trainingWaveStart();
+          planRare(); // 特別な敵（ラッキー・黄金）を出すか
           squadsWaveStart();
           if (!training) msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
           renderAuto();
@@ -18063,6 +18203,7 @@ OFF</button>
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
         if (/[?&]debug\b/.test(location.search)) {
           superRng = () => 1; // 確認用では超秘伝書を出さない（legendApi.setSuperRng で出せる）
+          rareRng = () => 1; // 確認用では特別な敵を出さない（rareApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             state: () => ({
@@ -18097,6 +18238,13 @@ OFF</button>
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            rareApi: {
+              RARE,
+              setRng: (f) => (rareRng = f || Math.random),
+              spawnRare,
+              plan: () => rarePlan,
+              hit: (e, d) => dealEnemyDamage(e, d),
             },
             legendApi: {
               LEGEND,
