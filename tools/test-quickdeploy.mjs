@@ -254,7 +254,7 @@ const lay = await page.evaluate(() => {
     ...document.querySelectorAll(
       "[data-chip], [data-u], #hireToggle, #organize, #start, #speed, #pause, .menu-tools button, [data-t]",
     ),
-  ];
+  ].filter((b) => b.getClientRects().length); // 出していないボタン（試作版だけのボタンなど）は数えない
   return {
     hScroll: document.documentElement.scrollWidth > innerWidth,
     minH: Math.min(...els.map((b) => b.getBoundingClientRect().height)),
