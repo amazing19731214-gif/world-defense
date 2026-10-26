@@ -6,6 +6,14 @@ Tower Defense Game
 
 開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
 
+## 兵士の入れ替え（v47）
+
+「📋 編成」で兵士の「移籍」を押すと、ほかの部隊の兵士に「⇄ 入れ替え」が出る。押すと2人の所属を交換する。
+- 満員（10人）の部隊どうしでも入れ替えられる（人数は変わらない）。空きのある部隊へは今までどおり「ここへ編入」。
+- 部隊が上限（4つ）のときは「新しい部隊へ」を出さない。移籍中の兵士は金の枠で表示。
+- 戦歴に入れ替えを記録。ウェーブ中・攻城戦中はできない。保存は今までどおりウェーブのクリア時。
+- `node tools/test-swap.mjs` で確認できる。
+
 ## 10人で雇用（v41）
 
 新しく部隊を雇うと、最初から10人（1部隊の上限）になった。
@@ -652,6 +660,7 @@ node tools/test-zukan.mjs       # 戦国図鑑の確認
 node tools/test-named.mjs       # ネームド兵士の確認
 node tools/test-wave-goal.mjs   # 目標ウェーブの確認
 node tools/test-bulk-wipe.mjs   # まとめて移籍・データ消去の確認
+node tools/test-swap.mjs        # 兵士の入れ替えの確認
 ```
 
 iPhone から更新する場合は、生成済みの `index.html` をそのままアップロードすれば動きます。
