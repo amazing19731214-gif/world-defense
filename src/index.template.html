@@ -2415,7 +2415,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v56（指導員の能力値の書・秘伝書はいつでも使える）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v57（能力値・特殊能力の書は装備式・1人4冊まで）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4527,6 +4527,7 @@ OFF</button>
           superBeam: 0.03, // 指導員として引退したとき、選んだ書とは別に「貫通ビームサーベル」の超秘伝書が出る確率
           superChain: 0.01, // SSR武将のカードで秘伝錬成したとき、結果とは別に「連鎖雷撃」の超秘伝書が出る確率
           books: 200, // 伝承の秘伝書を持てる数
+          equipBooks: 4, // 兵士1人が装備できる書（能力値・特殊能力の書）の数
           mentors: 100, // 指導員名簿に残す人数
           maxEach: 200, // 1人が持てる能力値・特殊能力の数（保存の安全のため）
         };
@@ -4583,10 +4584,31 @@ OFF</button>
           const L = s && s.legend;
           return L && L.on >= 0 && L.stats[L.on] ? L.stats[L.on] : null;
         }
-        const legendStatVal = (s, k) => {
-          const st = legendActiveStat(s);
-          return st && st.k === k ? st.v : 0;
-        };
+        // 装備している書（能力値・特殊能力の伝承の秘伝書は、装備のように付け外しする。消費しない）
+        let bookMap = null,
+          bookMapOf = null;
+        function booksOf(id) {
+          const list = forgeSave().legendBooks;
+          if (!bookMap || bookMapOf !== list) {
+            bookMap = new Map();
+            bookMapOf = list;
+            for (const b of list)
+              if (b.owner != null) {
+                if (!bookMap.has(b.owner)) bookMap.set(b.owner, []);
+                bookMap.get(b.owner).push(b);
+              }
+          }
+          return bookMap.get(id) || [];
+        }
+        const equipBookable = (b) => !!b && (b.type === "stat" || b.type === "abil");
+        // 効いている能力値：自分の有効な1つ＋装備している能力値の書すべて（同じ種類は足し算）
+        function legendStatsOf(s) {
+          const st = legendActiveStat(s),
+            out = st ? [st] : [];
+          if (s && s.id != null) for (const b of booksOf(s.id)) if (b.type === "stat") out.push(b);
+          return out;
+        }
+        const legendStatVal = (s, k) => legendStatsOf(s).reduce((n, st) => n + (st.k === k ? st.v : 0), 0);
         // 指導員の引退で選べる能力値の書（固定の数か割合かは半々、数値は伝説の能力と同じ範囲で抽選）
         const STAT_BOOKS = {
           atk: { name: "攻撃の書", icon: "⚔️", keys: ["atkFlat", "atkPct"] },
@@ -4850,6 +4872,7 @@ OFF</button>
           if (!c || !Number.isFinite(b.v) || b.v < c.min || b.v > c.max) return null;
           const o = { uid: b.uid, type: b.type, k: b.k, v: b.type === "stat" ? Math.round(b.v) : b.v, from };
           if (b.super === true) o.super = true;
+          if (Number.isInteger(b.owner)) o.owner = b.owner; // 装備している兵士（いなければ起動時に倉庫へ戻す）
           return o;
         }
         function cleanForge(d) {
@@ -6321,6 +6344,7 @@ OFF</button>
           if (s.named && NAMED_SOLDIERS[s.named]) n += NAMED_SOLDIERS[s.named].skill[key] || 0; // ネームド兵士の固有スキル
           const legendKey = LEGEND_KEYS.has(key);
           if (s.legend && legendKey) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す）
+          if (legendKey && s.id != null) for (const b of booksOf(s.id)) if (b.type === "abil" && b.k === key) n += b.v; // 装備している特殊能力の書
           const g = s.id != null && gearOf(s.id);
           if (g) for (const d of g) if (!legendKey || !d.endgame || gearUnlocked(d)) n += d.fx[key] || 0; // 終盤の装備の特殊効果は解放後だけ
           return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
@@ -6372,17 +6396,11 @@ OFF</button>
             // 衛生兵の回復量（ほかの兵種は 0）
             heal: ((c.heal || 0) + ((c.grow && c.grow.heal) || 0) * lv) * (1 + skillSum(s, "healMul")) * support.heal,
           };
-          // 伝説の能力値（有効な1つだけ）：固定値は足し、割合は掛ける
-          const ls2 = legendActiveStat(s);
-          if (ls2) {
-            const v = ls2.v;
-            if (ls2.k === "atkFlat") out.atk += v;
-            else if (ls2.k === "atkPct") out.atk *= 1 + v / 100;
-            else if (ls2.k === "defFlat") out.def += v;
-            else if (ls2.k === "defPct") out.def *= 1 + v / 100;
-            else if (ls2.k === "rngFlat") out.range += v;
-            else if (ls2.k === "rngPct") out.range *= 1 + v / 100;
-          }
+          // 伝説の能力値（自分の有効な1つ＋装備している書）：割合は足してから掛け、固定値は足す
+          const lv2 = (k) => legendStatVal(s, k);
+          out.atk = out.atk * (1 + lv2("atkPct") / 100) + lv2("atkFlat");
+          out.def = out.def * (1 + lv2("defPct") / 100) + lv2("defFlat");
+          out.range = out.range * (1 + lv2("rngPct") / 100) + lv2("rngFlat");
           return out;
         }
         // 能力の表示（衛生兵は攻撃のかわりに回復量と間隔）
@@ -6995,8 +7013,20 @@ OFF</button>
               it.owner = null;
             } else used.add(key);
           }
+          // 装備している書：持ち主がいない・1人の上限を超えた書は倉庫へ戻す
+          const count = new Map();
+          for (const b of forgeSave().legendBooks) {
+            if (b.owner == null) continue;
+            const v = savedSoldier(b.owner),
+              s = soldierById(b.owner),
+              n = count.get(b.owner) || 0;
+            if (!equipBookable(b) || !v || (s && !s.alive) || n >= LEGEND.equipBooks) {
+              back.push({ book: b, owner: b.owner });
+              delete b.owner;
+            } else count.set(b.owner, n + 1);
+          }
           if (back.length) {
-            gearMap = null;
+            gearMap = bookMap = null;
             persistHeroes();
           }
           return back;
@@ -8119,6 +8149,7 @@ OFF</button>
           }
           // 戦死・解散でいなくなった兵士、転職で使えなくなった装備は倉庫へ
           for (const b of checkGear()) {
+            if (!b.it) continue; // 書は黙って倉庫へ
             const g = GEAR[b.it.id],
               o = soldierById(b.owner);
             if (o && o.alive) msg(soldierName(o) + " の" + g.name + "は使えなくなったので装備倉庫に戻しました。");
@@ -11794,6 +11825,52 @@ OFF</button>
                   .join("") +
                 "</details>";
           }
+          // 能力値・特殊能力の書（装備のように付け外し・1人4冊まで）
+          const mine = booksOf(s.id),
+            spare = F.legendBooks.filter((b) => equipBookable(b) && b.owner == null);
+          if (mine.length || spare.length)
+            html +=
+              '<h3 class="hg-h">📚 書（' +
+              mine.length +
+              "/" +
+              LEGEND.equipBooks +
+              "）</h3>" +
+              (mine.length
+                ? mine
+                    .map(
+                      (b) =>
+                        '<div class="pick-row"><span>' +
+                        esc(legendBookText(b)) +
+                        "</span>" +
+                        '<button data-lbook-off="' +
+                        b.uid +
+                        '"' +
+                        (busy ? " disabled" : "") +
+                        ">外す</button></div>",
+                    )
+                    .join("")
+                : '<p class="muted">なし</p>') +
+              (spare.length
+                ? '<details class="gear-free"' +
+                  (mine.length < LEGEND.equipBooks ? " open" : "") + // 空きがあれば開いておく
+                  "><summary>倉庫の書（" +
+                  spare.length +
+                  "）</summary>" +
+                  spare
+                    .map(
+                      (b) =>
+                        '<div class="pick-row"><span>' +
+                        esc(legendBookText(b)) +
+                        "</span>" +
+                        '<button data-lbook-on="' +
+                        b.uid +
+                        '"' +
+                        (equipBookError(s, b.uid) ? " disabled" : "") +
+                        ">装備する</button></div>",
+                    )
+                    .join("") +
+                  "</details>"
+                : "");
           const books = Object.keys(F.books);
           html +=
             '<h3 class="hg-h">スキルの書</h3>' +
@@ -12072,15 +12149,25 @@ OFF</button>
                           esc(legendBookText(b)) +
                           "</span><small>" +
                           esc(b.from ? b.from + " が残した書" : "伝承の秘伝書") +
+                          (b.owner != null ? "・🎖 装備中：" + esc(soldierName(soldierById(b.owner)) || "") : "") +
                           "</small></span></div>" +
-                          (gearPickLBook === b.uid
-                            ? soldierPicker((x) => !useLegendBookError(x, b.uid), "lbook-to", b.uid)
-                            : '<button data-lbook-pick="' + b.uid + '">使う…</button>') +
+                          (!equipBookable(b)
+                            ? gearPickLBook === b.uid
+                              ? soldierPicker((x) => !useLegendBookError(x, b.uid), "lbook-to", b.uid)
+                              : '<button data-lbook-pick="' + b.uid + '">使う…</button>'
+                            : b.owner != null
+                              ? '<button data-lbook-off="' + b.uid + '"' + (gearBusy() ? " disabled" : "") + ">外す</button>"
+                              : gearPickLBook === b.uid
+                                ? soldierPicker((x) => !equipBookError(x, b.uid), "lbook-eq", b.uid)
+                                : '<button data-lbook-pick="' + b.uid + '">装備する…</button>') +
                           "</div>",
                       )
                       .join("") +
                     "</div>"
-                  : '<p class="muted">まだありません。兵士を「🎓 指導員に」すると、スキルを1つ書に残せます。</p>');
+                  : '<p class="muted">まだありません。兵士を「🎓 指導員に」すると、スキルを1つ書に残せます。</p>') +
+                '<p class="muted"><small>能力値の書（攻撃・防御・体力・射程）と特殊能力の書（超秘伝書など）は、装備のように付け外しでき、なくなりません。1人' +
+                LEGEND.equipBooks +
+                "冊まで、付けた書は全部効きます。スキルの書は使うと習得します（書はなくなります）。</small></p>";
           }
           return html;
         }
@@ -12178,7 +12265,19 @@ OFF</button>
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = null;
           else if (d.lbookPick) gearPickLBook = +d.lbookPick;
-          else if (d.lbookTo) {
+          else if (d.lbookEq) {
+            const s = soldierById(+d.to);
+            err = equipBook(s, +d.lbookEq);
+            if (!err) gearNote = soldierName(s) + " に書を装備しました。";
+            gearPickLBook = null;
+          } else if (d.lbookOn) {
+            const s = soldierById(gearSoldierId);
+            err = equipBook(s, +d.lbookOn);
+            if (!err) gearNote = "書を装備しました。";
+          } else if (d.lbookOff) {
+            err = unequipBook(+d.lbookOff);
+            if (!err) gearNote = "書を外して倉庫に戻しました。";
+          } else if (d.lbookTo) {
             const s = soldierById(+d.to);
             err = useLegendBook(s, +d.lbookTo);
             if (!err) gearNote = soldierName(s) + " は伝承の秘伝書で能力を受け継ぎました。";
@@ -12955,6 +13054,7 @@ OFF</button>
               saveSquads: soldierSave.squads.map((v) => Object.assign({}, v)),
               slots: squads.map((x) => x.slot),
               books: F.legendBooks.slice(),
+              bookOwners: F.legendBooks.map((b) => b.owner),
               oldBooks: Object.assign({}, F.books),
               lseq: F.lseq,
               mentors: F.mentors.slice(),
@@ -12964,6 +13064,8 @@ OFF</button>
             };
           soldiers = soldiers.filter((x) => x !== s);
           soldierSave.soldiers = soldierSave.soldiers.filter((v) => v.id !== s.id);
+          for (const b of booksOf(s.id)) delete b.owner; // 装備していた書は倉庫へ
+          bookMap = null;
           if (q && !roster(q).length) {
             releaseBlocks(q);
             releaseHeroFromSquad(q);
@@ -12993,6 +13095,8 @@ OFF</button>
             soldierSave.soldiers = before.saveSoldiers;
             soldierSave.squads = before.saveSquads;
             F.legendBooks = before.books;
+            F.legendBooks.forEach((b, i) => (before.bookOwners[i] == null ? delete b.owner : (b.owner = before.bookOwners[i])));
+            bookMap = null;
             F.books = before.oldBooks;
             F.lseq = before.lseq;
             F.mentors = before.mentors;
@@ -13014,6 +13118,7 @@ OFF</button>
           if (!b) return "その秘伝書はありません（もう使ったかもしれません）。";
           if (!s || !s.alive) return "その兵士には使えません。";
           if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
+          if (equipBookable(b)) return "能力値・特殊能力の書は、使うのではなく装備します（「装備する…」から）。";
           if (b.type === "skill" && learnedOf(s).includes(b.id)) return "そのスキルはもう習得しています。";
           if (b.type !== "skill" && s.legend && (b.type === "stat" ? s.legend.stats : s.legend.abil).length >= LEGEND.maxEach) return "これ以上は覚えられません。";
           return legendBusyError();
@@ -13053,6 +13158,44 @@ OFF</button>
           zukanSync();
           return null;
         }
+        // 能力値・特殊能力の書を装備する（消費しない・兵士1人に4冊まで・付けた書は全部効く）
+        function equipBookError(s, uid) {
+          const b = forgeSave().legendBooks.find((x) => x.uid === uid);
+          if (!b) return "その書はありません。";
+          if (!equipBookable(b)) return "スキルの書は「使う」で習得します。";
+          if (!s || !s.alive) return "その兵士には装備できません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから装備できます。";
+          if (b.owner === s.id) return "すでに装備しています。";
+          if (b.owner != null) return (soldierName(soldierById(b.owner)) || "ほかの兵士") + " が装備中です。先に外してください。";
+          if (booksOf(s.id).length >= LEGEND.equipBooks) return "書は1人" + LEGEND.equipBooks + "冊までです。先にどれかを外してください。";
+          return gearBusy();
+        }
+        function setBookOwner(b, owner) {
+          const prev = b.owner;
+          if (owner == null) delete b.owner;
+          else b.owner = owner;
+          bookMap = null;
+          const s = soldierById(owner ?? prev);
+          if (s && s.alive) s.hp = Math.min(s.hp, soldierStats(s).maxHp);
+          if (persistHeroes()) return true;
+          if (prev == null) delete b.owner;
+          else b.owner = prev;
+          bookMap = null;
+          return false;
+        }
+        function equipBook(s, uid) {
+          const err = equipBookError(s, uid);
+          if (err) return err;
+          const b = forgeSave().legendBooks.find((x) => x.uid === uid);
+          return setBookOwner(b, s.id) ? null : "保存できなかったため、装備しませんでした。";
+        }
+        function unequipBook(uid) {
+          const b = forgeSave().legendBooks.find((x) => x.uid === uid);
+          if (!b || b.owner == null) return "その書は装備されていません。";
+          const busy = gearBusy();
+          if (busy) return busy;
+          return setBookOwner(b, null) ? null : "保存できなかったため、外しませんでした。";
+        }
         // 有効にする能力値を切り替える（兵士1人につき1つだけ）
         function setLegendStat(s, i) {
           if (!s || !s.alive || !s.legend || !s.legend.stats[i]) return "その能力値はありません。";
@@ -13084,12 +13227,22 @@ OFF</button>
         }
         // 兵士の札の下に出す「伝説の能力」
         function legendBlock(s) {
-          const L = s.legend;
-          if (!L && !endgameOn()) return "";
+          const L = s.legend,
+            eq = booksOf(s.id);
+          if (!L && !eq.length && !endgameOn()) return "";
           let html =
             '<div class="legend-box"><p><b>⚡ 伝説の能力</b>' +
-            (L ? "" : ' <small class="muted">（レベルアップで習得することがある）</small>') +
+            (L || eq.length ? "" : ' <small class="muted">（レベルアップで習得することがある）</small>') +
             "</p>";
+          if (eq.length)
+            html +=
+              '<p class="legend-abil"><small>装備している書（' +
+              eq.length +
+              "/" +
+              LEGEND.equipBooks +
+              "・全部効く）</small><br>" +
+              eq.map((b) => '<span class="legend-tag">' + esc(legendBookText(b)) + "</span>").join("") +
+              "</p>";
           if (L) {
             if (L.stats.length)
               html +=
@@ -13363,7 +13516,7 @@ OFF</button>
             jobName(s) +
             "・Lv" +
             s.level +
-            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。かわりに能力値の書（攻撃・防御・体力・射程の書）も選べます。数値は引退のときに決まります（固定の数か割合）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。まれに（' + Math.round(LEGEND.superBeam * 100) + '%）、別に🌟超秘伝書「貫通ビームサーベル」も手に入ります。</small></p>';
+            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。かわりに能力値の書（攻撃・防御・体力・射程の書）も選べます。数値は引退のときに決まります（固定の数か割合）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます（能力値・特殊能力の書は装備のように付け外しでき、なくなりません。1人' + LEGEND.equipBooks + '冊まで）。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。まれに（' + Math.round(LEGEND.superBeam * 100) + '%）、別に🌟超秘伝書「貫通ビームサーベル」も手に入ります。</small></p>';
           if (err) html += '<p class="injured">' + esc(err) + "</p>";
           html +=
             '<div class="retire-list">' +
@@ -17749,6 +17902,10 @@ OFF</button>
               retireSoldier,
               useLegendBook,
               useLegendBookError,
+              equipBook,
+              equipBookError,
+              unequipBook,
+              booksOf,
               setLegendStat,
               craftEndgame,
               endgameCraftable,

@@ -232,7 +232,7 @@ r = await ev(page, () => {
   );
   const e = L.retireSoldier(5, 1); // 連鎖雷撃（伝説の能力）を書に
   const book = WD_DEBUG.forgeApi.save().legendBooks.find((b) => b.type === "abil");
-  const use = book ? L.useLegendBook(find(13), book.uid) : "no book";
+  const use = book ? L.equipBook(find(13), book.uid) : "no book";
   L.setForce(true);
   const s6 = find(6);
   L.addLegend(s6, { type: "stat", k: "atkFlat", v: 40 });
@@ -252,7 +252,7 @@ check(
   JSON.stringify(r),
 );
 check(
-  "伝説の能力を書に残せて、解放前でも別の兵士に使える",
+  "伝説の能力を書に残せて、解放前でも別の兵士に装備できる",
   r.e === null && r.use === null,
   JSON.stringify(r),
 );
@@ -296,7 +296,7 @@ r = await ev(page, () => ({
 }));
 check(
   "再読み込みしても：指導員名簿・引退・受け継いだスキル・残った書",
-  r.mentors === 3 && r.gone && r.l11.includes("spearMaster") && r.books.join() === "",
+  r.mentors === 3 && r.gone && r.l11.includes("spearMaster") && r.books.join() === "abil",
   JSON.stringify(r),
 );
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
@@ -781,14 +781,15 @@ await page.tap("#soldierClose");
 await page.tap("#gearOpen");
 await page.tap('[data-gear-tab="books"]');
 await page.tap("[data-lbook-pick]");
-const target = await ev(page, () => +document.querySelector("[data-lbook-to]").dataset.to);
-await page.tap(`[data-lbook-to][data-to="${target}"]`);
+const target = await ev(page, () => +document.querySelector("[data-lbook-eq]").dataset.to);
+await page.tap(`[data-lbook-eq][data-to="${target}"]`);
 r = await ev(
   page,
   (id) => {
     const s = WD_DEBUG.state().soldiers.find((x) => x.id === id);
     return {
-      legend: s.legend,
+      eq: WD_DEBUG.legendApi.booksOf(id).map((b) => b.k + "=" + b.v),
+      beam: WD_DEBUG.squadApi.skillSum(s, "beam"),
       books: WD_DEBUG.forgeApi.save().legendBooks.length,
       note: document.getElementById("gearBody").textContent,
     };
@@ -796,11 +797,8 @@ r = await ev(
   target,
 );
 check(
-  "伝承の秘伝書を別の兵士に使う：同じ数値で習得し、書は1冊なくなる",
-  r.legend &&
-    r.legend.abil.some((a) => a.k === "beam" && a.v === 0.93) &&
-    r.books === 0 &&
-    /受け継ぎました/.test(r.note),
+  "特殊能力の書を別の兵士に装備：同じ数値で効き、書はなくならない（装備中と表示）",
+  r.eq.join() === "beam=0.93" && Math.abs(r.beam - 0.93) < 1e-9 && r.books === 1 && /装備しました/.test(r.note) && /装備中/.test(r.note),
   JSON.stringify(r),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "l3-book.png") });
@@ -811,7 +809,7 @@ r = await ev(
   (id) => {
     const s = WD_DEBUG.state().soldiers.find((x) => x.id === id);
     return {
-      legend: s.legend,
+      eq: WD_DEBUG.legendApi.booksOf(id).map((b) => b.k + "=" + b.v),
       books: WD_DEBUG.forgeApi.save().legendBooks.length,
       mentors: WD_DEBUG.forgeApi.save().mentors.length,
       old: WD_DEBUG.state().soldiers.some((x) => x.id === 1),
@@ -820,10 +818,9 @@ r = await ev(
   target,
 );
 check(
-  "再読み込み後も：受け継いだ能力・書の消費・指導員名簿・引退が残る",
-  r.legend &&
-    r.legend.abil.some((a) => a.k === "beam" && a.v === 0.93) &&
-    r.books === 0 &&
+  "再読み込み後も：装備した書・指導員名簿・引退が残る",
+  r.eq.join() === "beam=0.93" &&
+    r.books === 1 &&
     r.mentors === 1 &&
     !r.old,
   JSON.stringify(r),
@@ -874,14 +871,14 @@ r = await ev(
   (uid) => {
     const L = WD_DEBUG.legendApi,
       s = WD_DEBUG.state().soldiers.find((x) => x.id === 11);
-    const err = L.useLegendBook(s, uid);
-    return { err, legend: s.legend, books: WD_DEBUG.forgeApi.save().legendBooks.length };
+    const err = L.equipBook(s, uid);
+    return { err, eq: L.booksOf(11).length, books: WD_DEBUG.forgeApi.save().legendBooks.length };
   },
   uid,
 );
 check(
-  "保存に失敗したら秘伝書を使わない（能力も増えず、書も残る）",
-  /保存できなかった/.test(r.err || "") && !r.legend && r.books === 1,
+  "保存に失敗したら書を装備しない（倉庫に残る）",
+  /保存できなかった/.test(r.err || "") && r.eq === 0 && r.books === 1,
   JSON.stringify(r),
 );
 await failSave(false);
@@ -890,10 +887,11 @@ r = await ev(page, () => ({
   books: WD_DEBUG.forgeApi.save().legendBooks.map((b) => b.k + "=" + b.v),
   s11: WD_DEBUG.state().soldiers.find((x) => x.id === 11).legend,
   s1: WD_DEBUG.state().soldiers.some((x) => x.id === 1),
+  eq: WD_DEBUG.legendApi.booksOf(11).length,
 }));
 check(
-  "読み込み直すと、引退は確定・秘伝書は1冊のまま（二重にならない）・使えなかった能力は付いていない",
-  r.books.join() === "atkFlat=77" && !r.s11 && !r.s1,
+  "読み込み直すと、引退は確定・秘伝書は1冊のまま（二重にならない）・装備できなかった書は倉庫のまま",
+  r.books.join() === "atkFlat=77" && !r.s11 && !r.s1 && r.eq === 0,
   JSON.stringify(r),
 );
 r = await ev(page, () => {
@@ -901,16 +899,18 @@ r = await ev(page, () => {
   const L = WD_DEBUG.legendApi,
     s = WD_DEBUG.state().soldiers.find((x) => x.id === 11),
     uid = WD_DEBUG.forgeApi.save().legendBooks[0].uid;
-  const e1 = L.useLegendBook(s, uid),
-    e2 = L.useLegendBook(
+  const base = WD_DEBUG.squadApi.soldierStats(s).atk;
+  const e1 = L.equipBook(s, uid),
+    on = WD_DEBUG.squadApi.soldierStats(s).atk - base,
+    e2 = L.equipBook(
       WD_DEBUG.state().soldiers.find((x) => x.id === 12),
       uid,
     );
-  return { e1, e2, legend: s.legend };
+  return { e1, e2, on, legend: s.legend };
 });
 check(
-  "同じ秘伝書は二度使えない",
-  r.e1 === null && /ありません/.test(r.e2 || "") && r.legend.stats[0].v === 77,
+  "同じ書は2人には装備できない（攻撃 +77 が効く・兵士の能力は増えない）",
+  r.e1 === null && /装備中/.test(r.e2 || "") && Math.abs(r.on - 77) < 1e-6 && !r.legend,
   JSON.stringify(r),
 );
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
