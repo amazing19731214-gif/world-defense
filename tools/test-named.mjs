@@ -101,7 +101,7 @@ let r = await ev(page, () => {
     ),
   };
 });
-check("15人・名前の重複なし", r.n === 15 && r.unique, JSON.stringify(r.names));
+check("18人・名前の重複なし", r.n === 18 && r.unique, JSON.stringify(r.names));
 check("武将ガチャの30人と重ならない（本多忠勝も入れない）", r.dup.length === 0 && !r.tadakatsu, r.dup.join());
 check("すべて今ある兵種で登場する", r.badType.length === 0, r.badType.join());
 check("人物ごとに固有スキルが1つ（控えめな効果）", r.noSkill.length === 0 && r.weak, r.noSkill.join());
@@ -123,7 +123,7 @@ r = await ev(page, () => {
     for (let i = 0; i < n; i++) if (N.rollNamed(type)) hit++;
     return hit / n;
   };
-  const out = { spear: rate("spearman", 40000), medic: rate("medic", 5000) };
+  const out = { spear: rate("spearman", 40000), medic: rate("medic", 40000) };
   N.NAMED_RULES.chance = 0.1;
   out.ten = rate("cavalry", 20000);
   N.NAMED_RULES.chance = 0.02;
@@ -139,12 +139,19 @@ r = await ev(page, () => {
     if (id) ash[id] = 1;
   }
   out.ash = Object.keys(ash).sort().join();
+  const med = {};
+  for (let i = 0; i < 40000; i++) {
+    const id = N.rollNamed("medic");
+    if (id) med[id] = 1;
+  }
+  out.med = Object.keys(med).sort().join();
   N.setRng(() => 1);
   return out;
 });
 check("設定確率（2%）に従って抽選される", r.spear > 0.017 && r.spear < 0.023, String(r.spear));
 check("確率は後から変えられる（10%にすると約10%）", r.ten > 0.09 && r.ten < 0.11, String(r.ten));
-check("その兵種の人物がいない兵種（衛生兵）では出ない", r.medic === 0, String(r.medic));
+check("衛生兵でも約2%で出る", r.medic > 0.017 && r.medic < 0.023, String(r.medic));
+check("衛生兵では衛生兵の人物（細川藤孝・曲直瀬玄朔・田代三喜）だけが選ばれる", r.med === "fujitaka,gensaku,sanki", r.med);
 check("騎兵では騎兵の人物（馬場信春・山県昌景）だけが選ばれる", r.cav === "masakage,nobuharu", r.cav);
 check(
   "足軽では足軽の人物（服部半蔵・風魔小太郎・猿飛佐助・吉川元春）だけが選ばれる",
@@ -263,7 +270,7 @@ check(
   r.z === "danemon,dosetsu,magoichi,nagayoshi,narimasa,saizo,sakon,ujitsuna",
   r.z,
 );
-check("ネームド兵士図鑑：8/15", r.c.found === 8 && r.c.total === 15, JSON.stringify(r.c));
+check("ネームド兵士図鑑：8/18", r.c.found === 8 && r.c.total === 18, JSON.stringify(r.c));
 const zSaved = await ev(page, (k) => JSON.parse(localStorage.getItem(k)).named, ZKEY);
 check("発見の記録を保存", Object.keys(zSaved || {}).length === 8, JSON.stringify(zSaved));
 
@@ -389,8 +396,8 @@ r = await ev(page, () => ({
 }));
 check("ネームド兵士のない以前の保存データをそのまま読める", r.n === 6 && r.named === 0, JSON.stringify(r));
 check(
-  "以前の図鑑の記録もそのまま（ネームド兵士は 0/15 から）",
-  r.jobs && r.c.found === 0 && r.c.total === 15,
+  "以前の図鑑の記録もそのまま（ネームド兵士は 0/18 から）",
+  r.jobs && r.c.found === 0 && r.c.total === 18,
   JSON.stringify(r),
 );
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
@@ -553,7 +560,9 @@ r = await ev(page, () => {
     text: body.textContent.replace(/\s/g, ""),
     tiles: body.querySelectorAll(".zk-tile").length,
     locked: body.querySelectorAll(".zk-tile.lock").length,
-    hidden: !/雑賀孫市|小早川隆景|島左近/.test(body.innerHTML),
+    lockText: [...body.querySelectorAll(".zk-tile.lock")].map((b) => b.textContent.replace(/\s/g, "")),
+    gotText: [...body.querySelectorAll(".zk-tile:not(.lock)")].map((b) => b.textContent.replace(/\s/g, "")),
+    secret: /雑賀撃ち|智将の采配|鬼左近/.test(body.innerHTML),
     hScroll: document.documentElement.scrollWidth > innerWidth,
     tabsFit: tabs.every(
       (b) => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= innerWidth,
@@ -562,13 +571,18 @@ r = await ev(page, () => {
   };
 });
 check(
-  "図鑑に「ネームド兵士」の分類：4/15・総合は179",
-  /ネームド兵士図鑑4\/15/.test(r.text) && /総合[0-9]+\/179/.test(r.text),
+  "図鑑に「ネームド兵士」の分類：4/18・総合は182",
+  /ネームド兵士図鑑4\/18/.test(r.text) && /総合[0-9]+\/182/.test(r.text),
   r.text.slice(0, 160),
 );
 check(
-  "未発見の人物は「???」で名前を出さない",
-  r.tiles === 15 && r.locked === 11 && r.hidden,
+  "未発見の人物も名前と兵種を出し「未習得」・発見済みは「習得済」（固有スキルは出さない）",
+  r.tiles === 18 &&
+    r.locked === 14 &&
+    r.lockText.includes("No.001💥雑賀孫市鉄砲兵・未習得") &&
+    r.lockText.includes("No.018🩹田代三喜衛生兵・未習得") &&
+    r.gotText.includes("No.011🗡服部半蔵足軽・習得済") &&
+    !r.secret,
   JSON.stringify(r),
 );
 check(
