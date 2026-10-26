@@ -1968,6 +1968,10 @@
       .zk-tile.lock {
         opacity: 0.55;
       }
+      .zk-state.got {
+        color: #7ee08a;
+        font-weight: bold;
+      }
       .zk-tile.sel {
         outline: 2px solid #ffd34d;
       }
@@ -2418,7 +2422,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v53（超秘伝書・爆炎の鉄砲は天下統一・幻影の指輪は天魔機神）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v54（衛生兵のネームド・図鑑にネームドの名前）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4474,6 +4478,9 @@ OFF</button>
           sasuke: { name: "猿飛佐助", type: "ashigaru", color: "#d9822b", skill: { name: "猿飛の術", rangedGuard: 0.15, text: "遠距離攻撃のダメージ -15%" } },
           takakage: { name: "小早川隆景", type: "archer", color: "#2f8f8a", skill: { name: "智将の采配", range: 0.06, text: "射程 +6%" } },
           motoharu: { name: "吉川元春", type: "ashigaru", color: "#9c2f2f", skill: { name: "鬼吉川", atk: 0.06, text: "攻撃力 +6%" } },
+          fujitaka: { name: "細川藤孝", type: "medic", color: "#5b7fc2", skill: { name: "文武両道", def: 0.06, text: "防御 +6%" } },
+          gensaku: { name: "曲直瀬玄朔", type: "medic", color: "#3fa37a", skill: { name: "啓迪院の秘方", healMul: 0.1, text: "回復量 +10%" } },
+          sanki: { name: "田代三喜", type: "medic", color: "#a3843f", skill: { name: "後世派の祖", haste: 0.05, text: "治療の間隔 -5%" } },
         };
         // 人物どうしのゆかり（将来、同時に在籍すると特別な効果を起こすためのデータ。今回は図鑑に表示するだけで効果はない）
         //   named … ネームド兵士、warlords … 武将ガチャの武将（ゆかりの相手として）
@@ -4484,6 +4491,8 @@ OFF</button>
           { id: "hojo", name: "北条家", named: ["ujitsuna"], warlords: ["ujiyasu"], text: "小田原の北条家（氏綱と子の氏康）" },
           { id: "tachibana", name: "立花家", named: ["dosetsu"], warlords: ["muneshige"], text: "雷神・道雪と養子の宗茂" },
           { id: "sekigahara", name: "石田家の重臣", named: ["sakon"], warlords: ["mitsunari"], text: "「三成に過ぎたるもの」島左近" },
+          { id: "idou", name: "医の道", named: ["sanki", "gensaku"], warlords: [], text: "田代三喜に学んだ曲直瀬道三が、養子の玄朔へ伝えた医術" },
+          { id: "hosokawa", name: "細川と明智", named: ["fujitaka"], warlords: ["mitsuhide"], text: "親しい間柄で、子の忠興と光秀の娘・玉が結ばれた" },
           { id: "oda", name: "織田家の猛将", named: ["nagayoshi", "narimasa"], warlords: ["nobunaga"], text: "信長に仕えた森長可・佐々成政" },
         ];
         // ===== 終盤：伝説の兵士（試作） =====
@@ -12490,6 +12499,21 @@ OFF</button>
             }
             const found = zukanFound(zukanTab, e),
               no = "No." + String(i + 1).padStart(3, "0");
+            if (!found && zukanTab === "named") {
+              // ネームド兵士は未発見でも名前と兵種を出す（固有スキル・ゆかりは発見してから）
+              const p = NAMED_SOLDIERS[e.key];
+              html +=
+                '<button class="zk-tile lock" disabled><small>' +
+                no +
+                '</small><span class="zk-icon">' +
+                SOLDIER_TYPES[p.type].icon +
+                "</span><b>" +
+                esc(p.name) +
+                "</b><small>" +
+                SOLDIER_TYPES[p.type].name +
+                '・<span class="zk-state">未習得</span></small></button>';
+              return;
+            }
             if (!found) {
               html += '<button class="zk-tile lock" disabled><small>' + no + '</small><span class="zk-icon">?</span><b>???</b></button>';
               return;
@@ -12524,7 +12548,11 @@ OFF</button>
               icon +
               "<b>" +
               esc(name) +
-              "</b></button>";
+              "</b>" +
+              (zukanTab === "named"
+                ? "<small>" + SOLDIER_TYPES[NAMED_SOLDIERS[e.key].type].name + '・<span class="zk-state got">習得済</span></small>'
+                : "") +
+              "</button>";
           });
           html += "</div>";
           $("zukanBody").innerHTML = html;
