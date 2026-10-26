@@ -90,17 +90,13 @@ let r = await ev(page, () => {
     on: L.endgameOn(),
     legend: s.legend || null,
     craft: L.craftEndgame("lightMuramasa"),
-    retire: L.retireSoldier(s.id, 0),
+    level: s.level,
     preview: document.getElementById("previewOpen").hidden,
   };
 });
 check("解放前は endgameOn = false", r.on === false);
 check("解放前はレベルアップしても伝説の能力を習得しない", r.legend === null, JSON.stringify(r.legend));
-check(
-  "解放前は終盤の装備を作れない・引退できない",
-  /終盤/.test(r.craft) && /終盤/.test(r.retire),
-  JSON.stringify(r),
-);
+check("解放前は終盤の装備を作れない", /終盤/.test(r.craft) && r.level >= 100, JSON.stringify(r));
 check("公開版（試作版でない）には試作のボタンを出さない（?debug でも）", r.preview === true);
 await page.tap("#soldiers");
 r = await ev(page, () => ({
@@ -108,8 +104,8 @@ r = await ev(page, () => ({
   legend: document.querySelectorAll(".legend-box").length,
 }));
 check(
-  "解放前は名簿に「指導員に」も伝説の能力の欄も出さない",
-  r.retire === 0 && r.legend === 0,
+  "解放前は伝説の能力の欄を出さない（指導員はLv100の兵士だけ押せる：解放とは関係なし）",
+  r.retire === 1 && r.legend === 0,
   JSON.stringify(r),
 );
 await page.tap("#soldierClose");
@@ -143,6 +139,168 @@ for (const [label, cq, want] of [
   check(label + " → " + (want ? "解放" : "まだ"), r === want, String(r));
   await context.close();
 }
+
+console.log("■ 指導員の引退はLv100から（天下統一・裏ボスの前でも）");
+{
+  const lv = roster();
+  const set = (id, o) => Object.assign(lv.soldiers[id - 1], o);
+  set(1, { level: 99, learned: ["spearMaster"], skills: ["spearMaster"], name: "九十九" });
+  set(2, { level: 100, learned: ["spearMaster"], skills: ["spearMaster"], name: "百" });
+  set(3, { level: 250, learned: ["shingan"], skills: ["shingan"], name: "二百五十" }); // 秘伝スキル（スキルの書で覚える）
+  set(4, { level: 300, learned: ["ironWall"], skills: ["ironWall"], name: "主人公" });
+  set(5, {
+    level: 1000,
+    learned: [],
+    skills: [],
+    name: "千",
+    legend: { stats: [{ k: "atkFlat", v: 40 }], on: 0, abil: [{ k: "chain", v: 0.6 }] },
+  });
+  lv.heroId = 4;
+  ({ page, errors, context } = await newContext({ [SKEY]: JSON.stringify(lv) }, 375, 667));
+}
+r = await ev(page, () => {
+  const L = WD_DEBUG.legendApi,
+    find = (id) => WD_DEBUG.state().soldiers.find((s) => s.id === id);
+  return {
+    on: L.endgameOn(),
+    e99: L.retireSoldier(1, 0),
+    hero: L.retireSoldier(4, 0),
+    e100: L.retireSoldier(2, 0),
+    e250: L.retireSoldier(3, 0),
+    alive: [1, 2, 3, 4].map((id) => !!find(id)),
+    books: WD_DEBUG.forgeApi.save().legendBooks.map((b) => b.type + ":" + b.id),
+    oldBooks: WD_DEBUG.forgeApi.save().books,
+    mentors: WD_DEBUG.forgeApi.save().mentors.map((m) => m.name + ":Lv" + m.level),
+  };
+});
+check("（まだ解放していない）", r.on === false);
+check("Lv99では引退できない（Lv100から）", /Lv100から/.test(r.e99 || "") && r.alive[0], JSON.stringify(r));
+check("主人公は引退できない", /主人公/.test(r.hero || "") && r.alive[3], r.hero);
+check("Lv100で引退できる（天下統一の前でも）", r.e100 === null && !r.alive[1], JSON.stringify(r));
+check("Lv250でも引退できる（上限なし）", r.e250 === null && !r.alive[2], JSON.stringify(r));
+check("通常のスキルは伝承の秘伝書に（槍の達人）", r.books.join() === "skill:spearMaster", r.books.join());
+check(
+  "秘伝スキルは今までの「スキルの書」として残る（心眼の書 +1）",
+  r.oldBooks.shingan === 1,
+  JSON.stringify(r.oldBooks),
+);
+check("指導員名簿に引退レベル", r.mentors.join() === "🎖二百五十:Lv250,🎖百:Lv100", r.mentors.join());
+r = await ev(page, () => {
+  const L = WD_DEBUG.legendApi,
+    F = WD_DEBUG.forgeApi,
+    find = (id) => WD_DEBUG.state().soldiers.find((s) => s.id === id),
+    to = find(11),
+    uid = F.save().legendBooks[0].uid;
+  const e1 = L.useLegendBook(to, uid),
+    e2 = F.useBook(find(12), "shingan");
+  return {
+    e1,
+    e2,
+    l11: find(11).learned,
+    l12: find(12).learned,
+    books: F.save().legendBooks.length,
+    old: F.save().books.shingan || 0,
+  };
+});
+check(
+  "通常スキルの秘伝書を別の兵士に渡せる（1冊なくなる）",
+  r.e1 === null && r.l11.includes("spearMaster") && r.books === 0,
+  JSON.stringify(r),
+);
+check(
+  "秘伝スキルの書は、今までどおりの使い方で別の兵士に使える",
+  r.e2 === null && r.l12.includes("shingan") && r.old === 0,
+  JSON.stringify(r),
+);
+r = await ev(page, () => {
+  const L = WD_DEBUG.legendApi,
+    a = WD_DEBUG.squadApi,
+    find = (id) => WD_DEBUG.state().soldiers.find((s) => s.id === id),
+    s = find(5),
+    locked = a.soldierStats(s).atk;
+  const hits = [];
+  L.legendStrike(
+    s,
+    { x: 0, y: 18 },
+    { x: 50, y: 0 },
+    100,
+    [
+      { x: 50, y: 0 },
+      { x: 120, y: 0 },
+    ],
+    (e, d) => hits.push(d),
+  );
+  const e = L.retireSoldier(5, 1); // 連鎖雷撃（伝説の能力）を書に
+  const book = WD_DEBUG.forgeApi.save().legendBooks.find((b) => b.type === "abil");
+  const use = book ? L.useLegendBook(find(13), book.uid) : "no book";
+  L.setForce(true);
+  const s6 = find(6);
+  L.addLegend(s6, { type: "stat", k: "atkFlat", v: 40 });
+  const unlocked = a.soldierStats(s6).atk - a.soldierStats(Object.assign({}, s6, { legend: null })).atk;
+  L.setForce(false);
+  return {
+    lockedDiff: locked - a.soldierStats(Object.assign({}, s, { legend: null })).atk,
+    hits: hits.length,
+    e,
+    use,
+    unlocked,
+  };
+});
+check(
+  "伝説の能力は解放前は働かない（攻撃 +40 も連鎖雷撃も効かない）",
+  r.lockedDiff === 0 && r.hits === 0,
+  JSON.stringify(r),
+);
+check(
+  "伝説の能力を書に残すことはできるが、解放前は使えない",
+  r.e === null && /終盤/.test(r.use || ""),
+  JSON.stringify(r),
+);
+check("解放すると伝説の能力が働く（攻撃 +40）", Math.abs(r.unlocked - 40) < 1e-6, JSON.stringify(r));
+await page.tap("#soldiers");
+r = await ev(page, () => {
+  const card = [...document.querySelectorAll(".s-card")].find((c) => /九十九/.test(c.textContent)),
+    lock = card.querySelector(".retire-locked"),
+    hero = [...document.querySelectorAll(".s-card")].find((c) =>
+      /主人公/.test(c.querySelector("h3").textContent),
+    ),
+    bs = [...document.querySelectorAll("#soldierList .card-actions button")].filter((b) => b.getClientRects().length);
+  return {
+    lock: lock && lock.disabled && lock.textContent,
+    heroBtn: hero ? hero.querySelectorAll("[data-retire], .retire-locked").length : -1,
+    minH: Math.min(...bs.map((b) => b.getBoundingClientRect().height)),
+    fit: bs.every((b) => b.getBoundingClientRect().right <= innerWidth + 0.5),
+    hScroll: document.documentElement.scrollWidth > innerWidth,
+  };
+});
+check("Lv99の兵士は「🎓 指導員に（Lv100〜）」を押せない", /Lv100〜/.test(r.lock || ""), JSON.stringify(r));
+check("主人公には引退のボタンを出さない", r.heroBtn === 0, JSON.stringify(r));
+check(
+  "375×667：名簿のボタンは44px以上・はみ出さない",
+  r.minH >= 44 && r.fit && !r.hScroll,
+  JSON.stringify(r),
+);
+if (shots) {
+  await page.evaluate(() =>
+    [...document.querySelectorAll(".s-card")].find((c) => /九十九/.test(c.textContent)).scrollIntoView(),
+  );
+  await page.screenshot({ path: path.join(shots, "l0-locked.png") });
+}
+await page.tap("#soldierClose");
+await reload(page);
+r = await ev(page, () => ({
+  mentors: WD_DEBUG.forgeApi.save().mentors.length,
+  gone: [2, 3, 5].every((id) => !WD_DEBUG.state().soldiers.some((s) => s.id === id)),
+  l11: WD_DEBUG.state().soldiers.find((s) => s.id === 11).learned,
+  books: WD_DEBUG.forgeApi.save().legendBooks.map((b) => b.type),
+}));
+check(
+  "再読み込みしても：指導員名簿・引退・受け継いだスキル・残った書",
+  r.mentors === 3 && r.gone && r.l11.includes("spearMaster") && r.books.join() === "abil",
+  JSON.stringify(r),
+);
+check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
+await context.close();
 
 console.log("■ レベルアップで伝説の能力");
 ({ page, errors, context } = await newContext({ [SKEY]: JSON.stringify(roster()) }));
@@ -512,6 +670,7 @@ await context.close();
 
 console.log("■ 指導員の引退と伝承の秘伝書（375×667）");
 const sv = roster();
+sv.soldiers[0].level = 120;
 sv.soldiers[0].learned = ["spearMaster", "ironWall"];
 sv.soldiers[0].skills = ["spearMaster", "ironWall"];
 sv.soldiers[0].name = "老兵";
@@ -611,7 +770,7 @@ check(
 );
 check(
   "指導員名簿に名前・到達レベル・残したスキル",
-  r.tab && /老兵/.test(r.list) && /到達Lv60/.test(r.list) && /貫通ビームサーベル（93%）/.test(r.list),
+  r.tab && /老兵/.test(r.list) && /引退Lv120/.test(r.list) && /貫通ビームサーベル（93%）/.test(r.list),
   r.list,
 );
 await page.tap("#soldierClose");

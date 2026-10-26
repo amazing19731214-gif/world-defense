@@ -2414,7 +2414,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v51（試作：伝説の兵士）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v51（試作：伝説の兵士・Lv100で指導員）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4511,6 +4511,7 @@ OFF</button>
           blastRadius: 70,
           shadowMax: 0.8,
           gearCost: 2000, // 試作：終盤の特殊装備を作る小判
+          retireLevel: 100, // このレベルから指導員として引退できる（上限なし。終盤の解放とは関係なく、最初から使える）
           books: 200, // 伝承の秘伝書を持てる数
           mentors: 100, // 指導員名簿に残す人数
           maxEach: 200, // 1人が持てる能力値・特殊能力の数（保存の安全のため）
@@ -4528,14 +4529,20 @@ OFF</button>
         // 終盤の解放：天下統一の報酬を受け取り、三大裏ボスをすべて倒した
         function endgameOn() {
           if (legendForce) return true;
-          return !!(
-            conquestMeta.tenka &&
-            Object.keys(BOSSES).every((id) => conquestMeta.bosses[id] && conquestMeta.bosses[id].wins > 0)
-          );
+          try {
+            return !!(
+              conquestMeta.tenka &&
+              Object.keys(BOSSES).every((id) => conquestMeta.bosses[id] && conquestMeta.bosses[id].wins > 0)
+            );
+          } catch (err) {
+            return false; // 起動の途中（全国の記録を読む前）は未解放として扱う
+          }
         }
+        // 伝説の能力（能力値・特殊能力）と終盤の特殊装備の効果は、終盤の解放後だけ働く
+        const LEGEND_KEYS = new Set(["beam", "chain", "blast", "shadow"]);
         function legendActiveStat(s) {
           const L = s && s.legend;
-          return L && L.on >= 0 && L.stats[L.on] ? L.stats[L.on] : null;
+          return L && L.on >= 0 && L.stats[L.on] && endgameOn() ? L.stats[L.on] : null;
         }
         const legendStatVal = (s, k) => {
           const st = legendActiveStat(s);
@@ -6252,7 +6259,9 @@ OFF</button>
           let n = 0;
           for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
           if (s.named && NAMED_SOLDIERS[s.named]) n += NAMED_SOLDIERS[s.named].skill[key] || 0; // ネームド兵士の固有スキル
-          if (s.legend) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す）
+          const legendKey = LEGEND_KEYS.has(key);
+          if (legendKey && !endgameOn()) return 0; // 伝説の特殊能力・終盤の装備の効果は、終盤の解放後だけ
+          if (s.legend && legendKey) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す）
           const g = s.id != null && gearOf(s.id);
           if (g) for (const d of g) n += d.fx[key] || 0;
           return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
@@ -11982,7 +11991,7 @@ OFF</button>
                 "</div>"
               : '<p class="muted">スキルの書がありません。🔥 秘伝錬成の「秘伝書錬成」で手に入ります。</p>';
             // 伝承の秘伝書（指導員が残した書。数値もそのまま）
-            if (F.legendBooks.length || endgameOn())
+            if (F.legendBooks.length || soldiers.some((x) => x.alive && x.level >= LEGEND.retireLevel))
               html +=
                 '<h3 class="hg-h">🎓 伝承の秘伝書 <small>' +
                 F.legendBooks.length +
@@ -12818,14 +12827,16 @@ OFF</button>
           return null;
         }
         function retireError(s) {
-          if (!endgameOn()) return "終盤（天下統一と三大裏ボスの討伐）で解放されます。";
           if (!s || !s.alive) return "その兵士は引退できません。";
           if (isHeroSoldier(s)) return "主人公は引退できません。";
+          if (s.level < LEGEND.retireLevel) return "Lv" + LEGEND.retireLevel + "から指導員として引退できます（今 Lv" + s.level + "）。";
           if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから引退できます。";
           if (!inheritables(s).length) return "残せるスキルがありません。";
           if (forgeSave().legendBooks.length >= LEGEND.books) return "伝承の秘伝書がいっぱいです（" + LEGEND.books + "冊まで）。";
           return legendBusyError();
         }
+        // 秘伝スキル（スキルの書で覚えるスキル）は、今までの「スキルの書」として残す（同じ倉庫・同じ使い方）
+        const asOldBook = (pick) => pick.type === "skill" && SOLDIER_SKILLS[pick.id].book;
         // 武将・兵士の保存データをまとめて確定する（どちらかだけ保存されることはない）。失敗したら false
         function commitLegend() {
           beginGameSaveBatch();
@@ -12840,6 +12851,8 @@ OFF</button>
           if (err) return err;
           const pick = inheritables(s)[pickIndex];
           if (!pick) return "残すスキルを選んでください。";
+          if (asOldBook(pick) && (forgeSave().books[pick.id] || 0) >= FORGE.maxBooks)
+            return "その「スキルの書」はもういっぱいです（" + FORGE.maxBooks + "冊まで）。";
           const F = forgeSave(),
             q = squadById(s.squadId),
             before = {
@@ -12849,6 +12862,7 @@ OFF</button>
               saveSquads: soldierSave.squads.map((v) => Object.assign({}, v)),
               slots: squads.map((x) => x.slot),
               books: F.legendBooks.slice(),
+              oldBooks: Object.assign({}, F.books),
               lseq: F.lseq,
               mentors: F.mentors.slice(),
               items: F.items.map((it) => Object.assign({}, it)),
@@ -12866,9 +12880,12 @@ OFF</button>
             for (const v of soldierSave.squads) if (squadById(v.id)) v.slot = squadById(v.id).slot;
             if (selectedSquad === q) selectedSquad = null;
           } else if (q) refreshSquadType(q);
-          F.lseq++;
-          const book = Object.assign({ uid: F.lseq, from: soldierName(s) }, pick);
-          F.legendBooks.push(book);
+          if (asOldBook(pick)) {
+            F.books[pick.id] = (F.books[pick.id] || 0) + 1;
+          } else {
+            F.lseq++;
+            F.legendBooks.push(Object.assign({ uid: F.lseq, from: soldierName(s) }, pick));
+          }
           F.mentors.unshift({ name: soldierName(s), job: jobOf(s), level: s.level, skill: legendBookText(pick), at: Date.now() });
           F.mentors.length = Math.min(F.mentors.length, LEGEND.mentors);
           if (!commitLegend()) {
@@ -12879,6 +12896,7 @@ OFF</button>
             soldierSave.soldiers = before.saveSoldiers;
             soldierSave.squads = before.saveSquads;
             F.legendBooks = before.books;
+            F.books = before.oldBooks;
             F.lseq = before.lseq;
             F.mentors = before.mentors;
             F.items = before.items;
@@ -12898,6 +12916,7 @@ OFF</button>
           if (!s || !s.alive) return "その兵士には使えません。";
           if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
           if (b.type === "skill" && learnedOf(s).includes(b.id)) return "そのスキルはもう習得しています。";
+          if (b.type !== "skill" && !endgameOn()) return "伝説の能力の書は、終盤（天下統一と三大裏ボスの討伐）の解放後に使えます。";
           if (b.type !== "skill" && s.legend && (b.type === "stat" ? s.legend.stats : s.legend.abil).length >= LEGEND.maxEach) return "これ以上は覚えられません。";
           return legendBusyError();
         }
@@ -12968,7 +12987,11 @@ OFF</button>
         function legendBlock(s) {
           const L = s.legend;
           if (!L && !endgameOn()) return "";
-          let html = '<div class="legend-box"><p><b>⚡ 伝説の能力</b>' + (L ? "" : ' <small class="muted">（レベルアップで習得することがある）</small>') + "</p>";
+          let html =
+            '<div class="legend-box"><p><b>⚡ 伝説の能力</b>' +
+            (L ? "" : ' <small class="muted">（レベルアップで習得することがある）</small>') +
+            (endgameOn() ? "" : '<br><small class="injured">終盤（天下統一と三大裏ボスの討伐）の解放後に効果があります</small>') +
+            "</p>";
           if (L) {
             if (L.stats.length)
               html +=
@@ -13031,7 +13054,12 @@ OFF</button>
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
           act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
           act += '<button data-gear-open="' + s.id + '">🎒 装備</button>';
-          if (endgameOn() && !isHeroSoldier(s)) act += '<button data-retire="' + s.id + '">🎓 指導員に</button>';
+          // 指導員として引退：Lv100から（主人公は引退できない）。Lv99以下は押せないボタンで条件を見せる
+          if (!isHeroSoldier(s))
+            act +=
+              s.level >= LEGEND.retireLevel
+                ? '<button data-retire="' + s.id + '">🎓 指導員に</button>'
+                : '<button disabled class="retire-locked" title="Lv' + LEGEND.retireLevel + 'から引退できます">🎓 指導員に（Lv' + LEGEND.retireLevel + "〜）</button>";
           if (act) act = '<div class="card-actions">' + act + "</div>";
           return (
             '<div class="s-card' +
@@ -13108,14 +13136,14 @@ OFF</button>
                       " <small>" +
                       JOBS[m.job].icon +
                       JOBS[m.job].name +
-                      "・到達Lv" +
+                      "・引退Lv" +
                       m.level +
                       "</small></h3><p><small>残したスキル：" +
                       esc(m.skill) +
                       "</small></p></div>",
                   )
                   .join("")
-              : '<p class="muted">まだいません。' + (endgameOn() ? "在籍の兵士の「🎓 指導員に」から引退させられます。" : "終盤（天下統一と三大裏ボスの討伐）で解放されます。") + "</p>";
+              : '<p class="muted">まだいません。' + "Lv" + LEGEND.retireLevel + "以上の兵士は、兵士名簿の「🎓 指導員に」から引退させられます。" + "</p>";
             return;
           }
           if (soldierTab === "live") {
@@ -13237,7 +13265,7 @@ OFF</button>
             jobName(s) +
             "・Lv" +
             s.level +
-            '</p><p class="muted"><small>引退すると戦闘部隊から外れ、もう戦えません（元に戻せません）。習得したスキルか伝説の能力を1つ選んで「伝承の秘伝書」に残せます（数値もそのまま）。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。</small></p>';
+            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。</small></p>';
           if (err) html += '<p class="injured">' + esc(err) + "</p>";
           html +=
             '<div class="retire-list">' +
@@ -13290,7 +13318,7 @@ OFF</button>
               msg("⚠ " + err);
               toast(err);
             } else {
-              msg("🎓 " + name + " が指導員として引退し、伝承の秘伝書を残しました（🎒 装備倉庫 → 📜 スキルの書）。");
+              msg("🎓 " + name + " が指導員として引退し、書を残しました（🎒 装備倉庫 → 📜 スキルの書）。");
               closeRetire();
               if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
               updateUI();
