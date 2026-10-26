@@ -253,20 +253,42 @@ r = await page.evaluate(() => {
 check("ゲームオーバー後は自動で始めない", r.over && r.w0 === r.w1 && !r.playing, JSON.stringify(r));
 await page.evaluate(() => document.getElementById("reset").click());
 r = await page.evaluate(() => {
-  // 修練場では使わない
-  const T = WD_DEBUG.trainingApi;
+  // 修練場でも使える：ウェーブをクリアすると5秒後に次のウェーブ。修練場が終わったら始めない
+  const T = WD_DEBUG.trainingApi,
+    clear = () => {
+      WD_DEBUG.stopSpawning();
+      WD_DEBUG.state().enemies.length = 0;
+      WD_DEBUG.step(0.1);
+    };
   T.startTraining("beginner");
   document.getElementById("start").click();
-  WD_DEBUG.stopSpawning();
-  WD_DEBUG.state().enemies.length = 0;
-  WD_DEBUG.step(0.1);
-  const w0 = WD_DEBUG.state().wave;
+  clear();
+  const w0 = WD_DEBUG.state().wave,
+    counting = document.getElementById("start").textContent;
+  WD_DEBUG.step(3);
+  const w3 = WD_DEBUG.state().wave;
+  WD_DEBUG.step(3);
+  const w1 = WD_DEBUG.state().wave,
+    playing1 = WD_DEBUG.state().playing,
+    disabled = document.getElementById("autoWave").disabled;
+  // 最後のウェーブまでクリアすると修練場は終わり、次は始めない
+  for (let i = 0; i < 40 && T.training() && !T.training().done; i++) {
+    clear();
+    WD_DEBUG.step(6);
+  }
+  const done = !T.training() || T.training().done,
+    wd = WD_DEBUG.state().wave;
   WD_DEBUG.step(8);
-  const out = { w0, w1: WD_DEBUG.state().wave, disabled: document.getElementById("autoWave").disabled };
-  T.endTraining("retreat");
+  const out = { w0, w3, w1, playing1, disabled, counting, done, wd, wEnd: WD_DEBUG.state().wave, playingEnd: WD_DEBUG.state().playing };
+  if (T.training() && !T.training().done) T.endTraining("retreat");
   return out;
 });
-check("修練場では自動で始めない（ボタンも押せない）", r.w0 === r.w1 && r.disabled, JSON.stringify(r));
+check(
+  "修練場でもAUTOが使える（ボタンを押せる・クリアの5秒後に次のウェーブ）",
+  !r.disabled && /次のWAVEまで\s*5秒/.test(r.counting) && r.w3 === r.w0 && r.w1 === r.w0 + 1 && r.playing1,
+  JSON.stringify(r),
+);
+check("修練場が終わったら（最後のウェーブのクリア）、次のウェーブは始めない", r.done && r.wEnd === r.wd && !r.playingEnd, JSON.stringify(r));
 r = await page.evaluate(() => {
   // 攻城戦の最中も押せない・攻城戦の後に勝手に始まらない
   const a = WD_DEBUG.squadApi;

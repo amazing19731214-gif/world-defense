@@ -2332,7 +2332,7 @@
       <div class="tools play-tools" aria-label="ウェーブ">
         <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
         ><button id="pause">⏸ 停止</button
-        ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める">AUTO
+        ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める（防衛戦・修練場）">AUTO
 OFF</button>
       </div>
       <section id="towerPanel" class="panel dock" hidden aria-label="選択中の塔">
@@ -2418,7 +2418,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v59（小判の商店・能力の実・書の売却）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v60（修練場でも AUTO）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -8552,6 +8552,7 @@ OFF</button>
             if (training) {
               // 修練場：ウェーブの報酬・反撃・負傷の回復・ガチャ券は通常の防衛戦だけ
               trainingWaveCleared();
+              autoArm(); // AUTO ON なら次のウェーブまで数える（修練場が終わったら数えない）
               updateUI();
               return;
             }
@@ -10386,9 +10387,10 @@ OFF</button>
               updateUI();
             }),
         );
-        // ===== ウェーブの自動開始（通常の防衛戦だけ） =====
+        // ===== ウェーブの自動開始（通常の防衛戦と修練場） =====
         // AUTO ON：ウェーブをクリアすると5秒数えて、いつもの「ウェーブ開始」を押したのと同じ処理で次のウェーブを始める。
-        // 一時停止中・ほかの画面（シート）を開いている間は数えない。目標ウェーブのクリア後・ゲームオーバー・攻城戦・修練場・討伐戦では始めない
+        // 一時停止中・ほかの画面（シート）を開いている間は数えない。目標ウェーブのクリア後・ゲームオーバー・攻城戦・討伐戦では始めない。
+        // 修練場では、終わる（クリア・撤退・敗北）まで続ける（無限なら負けるか撤退するまで）
         const SETTINGS_KEY = "worldDefense.settings.v1";
         const AUTO_DELAY = 5;
         function loadSettings() {
@@ -10420,7 +10422,8 @@ OFF</button>
           }
         }
         let autoLeft = null; // 次のウェーブまでの残り秒数（数えていないときは null）
-        const autoCanRun = () => settings.auto && !playing && !over && !battle && !training && wave >= 1 && wave < waveGoal;
+        const autoCanRun = () =>
+          settings.auto && !playing && !over && !battle && (training ? !training.done && wave >= 1 : wave >= 1 && wave < waveGoal);
         function autoArm() {
           autoLeft = autoCanRun() ? AUTO_DELAY : null;
           renderAuto();
@@ -10441,10 +10444,10 @@ OFF</button>
         }
         function renderAuto() {
           const b = $("autoWave"),
-            off = !!(battle || training);
+            off = !!battle;
           b.textContent = settings.auto ? "AUTO\nON" : "AUTO\nOFF";
           b.setAttribute("aria-pressed", String(settings.auto));
-          b.disabled = off; // 攻城戦・修練場・討伐戦では使わない
+          b.disabled = off; // 攻城戦・討伐戦では使わない
           const st = $("start"),
             counting = autoLeft != null;
           st.classList.toggle("counting", counting);
@@ -10515,7 +10518,11 @@ OFF</button>
           saveSettings();
           if (settings.auto) autoArm(); // ウェーブの合間にONにしたら、そこから数える
           else autoLeft = null;
-          msg(settings.auto ? "AUTO ON：ウェーブが終わると5秒後に次のウェーブを始めます。" : "AUTO OFF：ウェーブは「ウェーブ開始」で始めます。");
+          msg(
+            settings.auto
+              ? "AUTO ON：ウェーブが終わると5秒後に次のウェーブを始めます（修練場でも）。"
+              : "AUTO OFF：ウェーブは「ウェーブ開始」で始めます。",
+          );
           renderAuto();
         };
         $("start").onclick = () => {
