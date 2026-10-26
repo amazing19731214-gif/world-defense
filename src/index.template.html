@@ -2447,7 +2447,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v62（裏ボスの乱入・八玉）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v63（八玉の交換：復活の書・召喚の書）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4985,6 +4985,9 @@ OFF</button>
             gems: Object.fromEntries(
               GEMS.map((g) => [g.k, int(o.gems && o.gems[g.k], GEM_MAX)]).filter(([, n]) => n > 0),
             ), // 八玉（種類ごとの数）
+            scrolls: Object.fromEntries(
+              ["revive", "summon"].map((k) => [k, int(o.scrolls && o.scrolls[k], 99)]).filter(([, n]) => n > 0),
+            ), // 八玉で作った書（復活の書・召喚の書）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -6107,6 +6110,127 @@ OFF</button>
           const a = ENEMY_VS_UNIT.boss;
           for (const q of fieldSquads()) if (dist(q, e) <= P.radius) damageSquad(q, a.damage * e.atkMul * P.power, false, "boss", e);
           burst(e.x, e.y, INTRUDER.color, "cannon");
+        }
+        // ===== 八玉の交換：復活の書・召喚の書 =====
+        // 八玉を1つずつ（8種類）使って1冊作る。書は倉庫に残り、ウェーブの合間に使う
+        const GEM_CRAFT = {
+          revive: { name: "復活の書", icon: "📕", text: "英霊名鑑の兵士を1人、戦死したときのレベル・スキル・育成のまま復活させる" },
+          summon: { name: "召喚の書", icon: "📗", text: "好きなネームド兵士を1人、Lv1・固有スキルつきで召喚する（同じ人物は1人まで）" },
+        };
+        const SCROLL_MAX = 99;
+        const scrollCount = (k) => ((forgeSave().scrolls || {})[k] || 0);
+        const gemsComplete = () => GEMS.every((g) => gemCount(g.k) > 0);
+        function craftScroll(k) {
+          if (!GEM_CRAFT[k]) return "その品は作れません。";
+          if (!gemsComplete()) return "八玉が8種類そろっていません（" + gemKinds() + "/8）。";
+          if (scrollCount(k) >= SCROLL_MAX) return "これ以上は持てません。";
+          const F = forgeSave(),
+            before = { gems: Object.assign({}, F.gems), scrolls: Object.assign({}, F.scrolls) };
+          for (const g of GEMS) if (--F.gems[g.k] <= 0) delete F.gems[g.k];
+          F.scrolls = F.scrolls || {};
+          F.scrolls[k] = scrollCount(k) + 1;
+          if (persistHeroes()) return null;
+          F.gems = before.gems;
+          F.scrolls = before.scrolls;
+          return "保存できなかったので作りませんでした（八玉は元のまま）。";
+        }
+        // 兵士を加えられる部隊（空きのある部隊。兵種が違えば混成部隊になる）
+        const roomSquads = () => squads.filter((q) => roster(q).length < SQUAD_RULES.squadSize);
+        function scrollUseError(k, q) {
+          if (!(scrollCount(k) > 0)) return GEM_CRAFT[k].name + "を持っていません。";
+          const busy = legendBusyError();
+          if (busy) return busy;
+          if (!q || !squads.includes(q)) return "加える部隊を選んでください。";
+          if (roster(q).length >= SQUAD_RULES.squadSize) return squadName(q) + " は満員です。";
+          return null;
+        }
+        // 兵士を部隊に加え、兵士と倉庫（書）を同じ保存で確定する。保存できなければ取り消す
+        function addScrollSoldier(k, q, make, after) {
+          const F = forgeSave(),
+            before = {
+              soldiers: soldiers.slice(),
+              save: soldierSave.soldiers.slice(),
+              fallen: soldierSave.fallen.slice(),
+              scrolls: Object.assign({}, F.scrolls),
+              seq: soldierSeq,
+            };
+          const s = make();
+          refreshSquadType(q);
+          if (after) after();
+          if (--F.scrolls[k] <= 0) delete F.scrolls[k];
+          beginGameSaveBatch();
+          saveRoster();
+          persistHeroes();
+          if (commitGameSaveBatch()) {
+            zukanSync();
+            return s;
+          }
+          soldiers = before.soldiers;
+          soldierSave.soldiers = before.save;
+          soldierSave.fallen = before.fallen;
+          F.scrolls = before.scrolls;
+          soldierSeq = before.seq;
+          gameSaveBatch = null;
+          gameSaveBatchActive = false;
+          refreshSquadType(q);
+          return null;
+        }
+        // 召喚できるネームド兵士（今いない人物だけ）
+        const summonable = () => Object.keys(NAMED_SOLDIERS).filter((id) => !soldiers.some((x) => x.alive && x.named === id));
+        function summonNamed(id, q) {
+          const p = NAMED_SOLDIERS[id];
+          if (!p) return "その人物はいません。";
+          const err = scrollUseError("summon", q);
+          if (err) return err;
+          if (!summonable().includes(id)) return p.name + " はもう部隊にいます（同じ人物は1人まで）。";
+          const s = addScrollSoldier("summon", q, () => {
+            const x = newSoldier(p.type, q.id, false);
+            x.named = id;
+            x.name = p.name;
+            x.hp = soldierStats(x).maxHp;
+            logHistory(x, "召喚の書で仕官");
+            return x;
+          });
+          return s ? null : "保存できなかったので召喚しませんでした（書は残っています）。";
+        }
+        // 復活できる英霊（同じネームド兵士が今いれば、その人物は復活できない）
+        const revivable = () => soldierSave.fallen.filter((f) => !f.named || !soldiers.some((x) => x.alive && x.named === f.named));
+        function reviveFallen(id, q) {
+          const rec = soldierSave.fallen.find((f) => f.id === id);
+          if (!rec) return "その英霊はいません。";
+          const err = scrollUseError("revive", q);
+          if (err) return err;
+          if (!revivable().includes(rec)) return rec.name + " はもう部隊にいます（同じ人物は1人まで）。";
+          const s = addScrollSoldier(
+            "revive",
+            q,
+            () => {
+              const x = newSoldier(rec.type, q.id, false),
+                v = rec.snap || {},
+                level = rec.level,
+                learned = cleanLearned([...(Array.isArray(v.learned) ? v.learned : []), ...rec.skills], rec.type);
+              Object.assign(x, {
+                level,
+                bestLevel: Math.max(level, intIn(v.bestLevel, 1, SQUAD_RULES.maxLevel, 1)),
+                learned,
+                skills: cleanSkills(rec.skills, rec.type).filter((sk) => learned.includes(sk)),
+                skillLv: cleanSkillLv(v.skillLv, learned),
+                pts: cleanPoints(v.pts, level),
+                ...cleanJob(Object.assign({}, v, { type: rec.type })),
+                legend: cleanLegend(v.legend),
+                fruit: cleanFruit(v.fruit),
+                name: rec.name,
+                named: rec.named || null,
+                battles: rec.battles,
+                kills: rec.kills,
+              });
+              x.hp = soldierStats(x).maxHp;
+              logHistory(x, "復活の書で復活（Lv" + level + "）");
+              return x;
+            },
+            () => (soldierSave.fallen = soldierSave.fallen.filter((f) => f !== rec)), // 英霊名鑑から外す
+          );
+          return s ? null : "保存できなかったので復活しませんでした（書は残っています）。";
         }
         function createEnemy() {
           if (training) return enemies.push(trainingEnemy(training, spawned, spawnTotal));
@@ -8382,8 +8506,10 @@ OFF</button>
             skills: cleanSkills(f.skills, f.type),
             battles: intIn(f.battles, 0, 1e6, 0),
             kills: intIn(f.kills, 0, 1e6, 0),
-            wave: intIn(f.wave, 0, 999, 0),
+            wave: intIn(f.wave, 0, 1e6, 0),
             named: typeof f.named === "string" && NAMED_SOLDIERS[f.named] ? f.named : null,
+            // 育成の控え（中身は復活するときに確かめる。大きすぎるものは捨てる）
+            snap: f.snap && typeof f.snap === "object" && JSON.stringify(f.snap).length <= 20000 ? f.snap : null,
           };
         }
         // 古い保存データ（5人×最大8部隊）を10人の部隊にまとめる。同じ兵種の部隊どうしを、前の部隊から満員になるまで詰める。
@@ -8562,6 +8688,21 @@ OFF</button>
               kills: s.kills,
               wave: wave,
               named: s.named || null,
+              // 復活の書で戻すための控え（戦死したときの育成の状態。読み込むときに確かめる）
+              snap: JSON.parse(
+                JSON.stringify({
+                  learned: learnedOf(s),
+                  skillLv: s.skillLv || {},
+                  pts: s.pts,
+                  job: s.job,
+                  jobs: s.jobs,
+                  jobHist: s.jobHist,
+                  prof: s.prof,
+                  legend: s.legend || null,
+                  fruit: s.fruit || null,
+                  bestLevel: s.bestLevel,
+                }),
+              ),
             });
             soldierSave.fallen.length = Math.min(soldierSave.fallen.length, SQUAD_RULES.fallenMax);
           }
@@ -12390,6 +12531,87 @@ OFF</button>
         }
         const lbookSellBtn = (b) =>
           '<button data-lbook-sell="' + b.uid + '"' + (gearBusy() ? " disabled" : "") + ">🪙 売る（" + kobanText(bookPrice(b)) + "）</button>";
+        // 八玉タブ：交換（復活の書・召喚の書）と、書を使う（人物 → 部隊を選ぶ）
+        let gemUse = null; // { k, pick }
+        function gemCraftHtml() {
+          const busy = legendBusyError(),
+            ok = gemsComplete();
+          let html =
+            '<h3 class="hg-h">🔁 八玉の交換 <small>（8種類を1つずつ使う）</small></h3>' +
+            Object.entries(GEM_CRAFT)
+              .map(
+                ([k, c]) =>
+                  '<div class="pick-row"><span>' +
+                  c.icon +
+                  " <b>" +
+                  c.name +
+                  "</b> <small>持っている数 " +
+                  scrollCount(k) +
+                  "</small><br><small>" +
+                  esc(c.text) +
+                  '</small></span><button data-scroll-craft="' +
+                  k +
+                  '"' +
+                  (ok ? "" : " disabled") +
+                  ">作る</button></div>",
+              )
+              .join("") +
+            '<p class="muted"><small>三種の神器は、のちの段階で追加します。</small></p>';
+          const own = Object.keys(GEM_CRAFT).filter((k) => scrollCount(k) > 0);
+          if (!own.length) return html;
+          html += '<h3 class="hg-h">📜 書を使う <small>（ウェーブの合間に）</small></h3>' + (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
+          if (!gemUse)
+            return (
+              html +
+              '<div class="card-actions">' +
+              own
+                .map(
+                  (k) =>
+                    '<button data-scroll-use="' + k + '"' + (busy ? " disabled" : "") + ">" + GEM_CRAFT[k].icon + " " + GEM_CRAFT[k].name + "を使う…</button>",
+                )
+                .join("") +
+              "</div>"
+            );
+          const k = gemUse.k;
+          if (gemUse.pick == null) {
+            // 人物を選ぶ
+            const list =
+              k === "summon"
+                ? summonable().map((id) => {
+                    const p = NAMED_SOLDIERS[id];
+                    return { v: id, label: "⭐" + p.name + " <small>" + SOLDIER_TYPES[p.type].name + "・固有「" + esc(p.skill.name) + "」" + esc(p.skill.text) + "</small>" };
+                  })
+                : revivable().map((f) => ({
+                    v: f.id,
+                    label: (f.named ? "⭐" : "🎖") + esc(f.name) + " <small>" + SOLDIER_TYPES[f.type].name + "・Lv" + f.level + "・ウェーブ" + f.wave + "で戦死</small>",
+                  }));
+            return (
+              html +
+              '<div class="gear-pick"><p><small>' +
+              (k === "summon" ? "召喚する人物を選んでください（Lv1から）：" : "復活させる英霊を選んでください：") +
+              "</small></p>" +
+              (list.length
+                ? list.map((x) => '<button data-scroll-pick="' + x.v + '">' + x.label + "</button>").join("")
+                : '<p class="muted">' + (k === "summon" ? "召喚できる人物がいません（全員が部隊にいます）。" : "英霊名鑑に復活できる兵士がいません（名前のある兵士が戦死すると記録されます）。") + "</p>") +
+              "<button data-scroll-cancel>やめる</button></div>"
+            );
+          }
+          // 部隊を選ぶ
+          const qs = roomSquads();
+          return (
+            html +
+            '<div class="gear-pick"><p><small>加える部隊を選んでください（空きのある部隊）：</small></p>' +
+            (qs.length
+              ? qs
+                  .map(
+                    (q) =>
+                      '<button data-scroll-to="' + q.id + '">' + esc(squadName(q)) + " <small>" + roster(q).length + "/" + SQUAD_RULES.squadSize + "人</small></button>",
+                  )
+                  .join("")
+              : '<p class="muted">空きのある部隊がありません。兵士を移籍・解散するか、新しい部隊を雇ってください。</p>') +
+            "<button data-scroll-cancel>やめる</button></div>"
+          );
+        }
         function renderGearStore() {
           const F = forgeSave(),
             busy = gearBusy();
@@ -12444,7 +12666,7 @@ OFF</button>
                   "</small></div>",
               ).join("") +
               "</div>" +
-              '<p class="muted"><small>8種類そろえると、復活の書・召喚の書・三種の神器と交換できるようにする予定です（次の段階）。</small></p>';
+              gemCraftHtml();
             return html;
           }
           if (gearTab === "shop") {
@@ -12771,6 +12993,7 @@ OFF</button>
           gearNote = "";
           if (d.gearTab) {
             gearTab = d.gearTab;
+            gemUse = null;
             sellConfirm = null;
             gearOpenKey = null;
           } else if (d.gearRow) {
@@ -12828,7 +13051,23 @@ OFF</button>
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = gearPickFruit = null;
           else if (d.lbookPick) gearPickLBook = +d.lbookPick;
-          else if (d.fruitBuy) {
+          else if (d.scrollCraft) {
+            err = craftScroll(d.scrollCraft);
+            if (!err) gearNote = GEM_CRAFT[d.scrollCraft].icon + " " + GEM_CRAFT[d.scrollCraft].name + "を作りました（八玉を8種類1つずつ使いました）。";
+          } else if (d.scrollUse) gemUse = { k: d.scrollUse, pick: null };
+          else if (d.scrollPick) gemUse.pick = gemUse.k === "revive" ? +d.scrollPick : d.scrollPick;
+          else if (d.scrollCancel !== undefined) gemUse = null;
+          else if (d.scrollTo) {
+            const q = squadById(+d.scrollTo),
+              { k, pick } = gemUse;
+            const name = k === "summon" ? NAMED_SOLDIERS[pick].name : (soldierSave.fallen.find((f) => f.id === pick) || {}).name;
+            err = k === "summon" ? summonNamed(pick, q) : reviveFallen(pick, q);
+            if (!err) {
+              gearNote = k === "summon" ? "📗 ⭐" + name + " を召喚した！（" + squadName(q) + "）" : "📕 " + name + " が復活した！（" + squadName(q) + "）";
+              toast(gearNote);
+            }
+            gemUse = null;
+          } else if (d.fruitBuy) {
             err = buyFruit(d.fruitBuy);
             if (!err) gearNote = SHOP.fruits[d.fruitBuy].name + "を買いました（" + kobanText(SHOP.fruitPrice) + "）。";
           } else if (d.fruitPick) gearPickFruit = d.fruitPick;
@@ -18471,6 +18710,19 @@ OFF</button>
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            gemApi: {
+              GEM_CRAFT,
+              craftScroll,
+              summonNamed,
+              reviveFallen,
+              summonable,
+              revivable,
+              scrolls: () => Object.assign({}, forgeSave().scrolls),
+              setGems: (o) => {
+                forgeSave().gems = Object.assign({}, o);
+                persistHeroes();
+              },
             },
             intruderApi: {
               INTRUDER,
