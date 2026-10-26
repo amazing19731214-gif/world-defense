@@ -13338,6 +13338,7 @@ OFF</button>
             (legendForce ? "🔒 終盤の解放を戻す" : "🔓 終盤を解放する") +
             "</button>" +
             '<button data-pv="money">💰 軍資金 +50,000G・小判 +20,000両</button>' +
+            '<button data-pv="lv100">🎓 保存済みの兵士全員を Lv100 に（指導員の確認用）</button>' +
             '<button data-pv="grant"' +
             (endgameOn() ? "" : " disabled") +
             ">🎲 在籍の兵士全員に伝説の能力を1つ（抽選）</button>" +
@@ -13371,6 +13372,17 @@ OFF</button>
             forgeSave().koban = Math.min(KOBAN_MAX, (forgeSave().koban || 0) + 20000);
             persistHeroes();
             msg("🧪 軍資金 +50,000G・小判 +20,000両");
+          } else if (k === "lv100") {
+            let n = 0;
+            for (const s of soldiers.filter((x) => x.alive && savedSoldier(x.id) && x.level < LEGEND.retireLevel)) {
+              s.level = LEGEND.retireLevel;
+              s.xp = 0;
+              s.bestLevel = Math.max(s.bestLevel || 1, s.level);
+              s.hp = soldierStats(s).maxHp;
+              patchSavedSoldier(s, { level: s.level, xp: 0, bestLevel: s.bestLevel });
+              n++;
+            }
+            msg("🧪 " + n + "人を Lv" + LEGEND.retireLevel + " にしました（ウェーブをクリアした兵士だけ）。");
           } else if (k === "grant" || k === "all4") {
             let n = 0;
             for (const s of soldiers.filter((x) => x.alive)) {
