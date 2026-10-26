@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 超秘伝書：Lv100以上の指導員の引退で3%「貫通ビームサーベル」、SSR武将の秘伝錬成で1%「連鎖雷撃」。
+// 超秘伝書：Lv100以上の指導員の引退で0.1%「貫通ビームサーベル」、SSR武将の秘伝錬成で1%「連鎖雷撃」。
 // 手に入るのも使えるのもいつでも（終盤の解放前でも働く）・強さは抽選・保存（失敗したら出ない）・画面の表示
 // 指導員の能力値の書（攻撃・防御・体力・射程の書。数値は引退のときに抽選）
 //   node tools/test-super-books.mjs
@@ -76,8 +76,8 @@ const ev = (fn, arg) => page.evaluate(fn, arg);
 console.log("■ 確率の設定");
 let r = await ev(() => WD_DEBUG.legendApi.LEGEND);
 check(
-  "引退の超秘伝書（貫通ビームサーベル）3%・SSRの秘伝錬成（連鎖雷撃）1%",
-  r.superBeam === 0.03 && r.superChain === 0.01,
+  "引退の超秘伝書（貫通ビームサーベル）0.1%・SSRの秘伝錬成（連鎖雷撃）1%",
+  r.superBeam === 0.001 && r.superChain === 0.01,
   JSON.stringify([r.superBeam, r.superChain]),
 );
 
@@ -85,10 +85,10 @@ console.log("■ 指導員の引退（Lv100以上）");
 r = await ev(() => {
   const L = WD_DEBUG.legendApi,
     F = WD_DEBUG.forgeApi;
-  L.setSuperRng(() => 0.031); // 3% より上 → 出ない
+  L.setSuperRng(() => 0.0011); // 0.1% より上 → 出ない
   const e1 = L.retireSoldier(1, 0);
   const n1 = F.save().legendBooks.length;
-  L.setSuperRng(() => 0.029); // 3% より下 → 出る
+  L.setSuperRng(() => 0.0009); // 0.1% より下 → 出る
   const e2 = L.retireSoldier(2, 0);
   L.setSuperRng();
   const books = F.save().legendBooks;
@@ -208,8 +208,8 @@ await page.tap("#soldiers");
 await page.tap('[data-retire="3"]');
 text = await page.textContent("#retireBody");
 check(
-  "引退の画面に「まれに（3%）超秘伝書」の説明",
-  /まれに（3%）、別に🌟超秘伝書「貫通ビームサーベル」/.test(text),
+  "引退の画面に「まれに（0.1%）超秘伝書」の説明",
+  /まれに（0.1%）、別に🌟超秘伝書「貫通ビームサーベル」/.test(text),
   text,
 );
 await page.tap('[data-retire-pick="0"]');
