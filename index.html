@@ -1672,6 +1672,16 @@
       .bulk-bar p {
         margin: 0 0 4px;
       }
+      .soldier-row.moving {
+        outline: 2px solid #ffd34d;
+        border-radius: 8px;
+        background: #ffd34d14;
+      }
+      .moving-tag {
+        color: #ffd34d;
+        font-size: 13px;
+        white-space: nowrap;
+      }
       .soldier-row button.pick.on {
         outline: 2px solid #ffd34d;
         background: #3d5a4a;
@@ -2241,7 +2251,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v47（装備をまとめて表示）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v48（装備のまとめ表示・兵士の入れ替え）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -7135,6 +7145,25 @@ OFF</button>
           }
           return null;
         }
+        // 入れ替え：別の部隊の兵士2人の所属を交換する（満員の部隊どうしでもできる。人数は変わらない）
+        function swapSoldiers(aId, bId) {
+          if (battle) return "攻城戦の最中はできません。";
+          if (playing) return "ウェーブ中は編成できません。";
+          const a = soldierById(aId),
+            b = soldierById(bId);
+          if (!a || !a.alive || !b || !b.alive) return "戦死した兵士は編成できません。";
+          if (a.squadId === b.squadId) return "同じ部隊の兵士どうしは入れ替えられません。";
+          const qa = squadById(a.squadId),
+            qb = squadById(b.squadId);
+          if (!qa || !qb) return "部隊が見つかりません。";
+          a.squadId = qb.id;
+          b.squadId = qa.id;
+          refreshSquadType(qa);
+          refreshSquadType(qb);
+          logHistory(a, squadName(qb) + " に編入（" + soldierName(b) + " と入れ替え）");
+          logHistory(b, squadName(qa) + " に編入（" + soldierName(a) + " と入れ替え）");
+          return null;
+        }
         // まとめて移籍：選んだ兵士を順に同じ部隊へ移す（"new" は1人目で新しい部隊を作り、残りもそこへ）。
         // 移す先が満員になったら、入りきらなかった兵士はそのまま残す
         function transferMany(ids, target) {
@@ -10100,7 +10129,7 @@ OFF</button>
           $("squadHint").textContent = bulk
             ? "移籍する兵士を選んで（部隊ごとに「全員を選ぶ」も可）、下の移す先を押してください。選択中 " + picked + "人"
             : movingSoldierId
-            ? soldierName(moving) + " の編入先を選んでください。"
+            ? soldierName(moving) + " の移籍先を選んでください。空きのある部隊へ「ここへ編入」、満員の部隊でも兵士の「⇄ 入れ替え」で交換できます。"
             : playing
               ? "ウェーブ中は配置・撤退のみ。補充と移籍はウェーブの合間にできます。"
               : "補充（兵種を選んで雇用）と移籍ができます。兵種を混ぜた混成部隊もOK。1部隊" + SQUAD_RULES.squadSize + "人まで。";
@@ -10133,7 +10162,9 @@ OFF</button>
               "<button data-bulk-cancel>やめる</button></div></div>";
           } else if (movingSoldierId)
             html +=
-              '<div class="card-actions"><button data-move-to="new">新しい部隊へ</button><button data-cancel-move>取消</button></div>';
+              '<div class="card-actions">' +
+              (squads.length < SQUAD_RULES.maxSquads ? '<button data-move-to="new">新しい部隊へ</button>' : "") +
+              "<button data-cancel-move>取消</button></div>";
           else if (!playing && !battle && soldiers.some((x) => x.alive))
             html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button></div>';
           if (!squads.length)
@@ -10174,7 +10205,9 @@ OFF</button>
               list
                 .map(
                   (s) =>
-                    '<div class="soldier-row"><span>' +
+                    '<div class="soldier-row' +
+                    (moving && moving.id === s.id ? " moving" : "") +
+                    '"><span>' +
                     esc(soldierName(s)) +
                     (s.out ? "（離脱中）" : "") +
                     " Lv" +
@@ -10202,7 +10235,11 @@ OFF</button>
                         "</button>"
                       : !playing && !moving
                         ? '<button data-move="' + s.id + '">移籍</button>'
-                        : "") +
+                        : moving && moving.id === s.id
+                          ? '<span class="moving-tag">移籍中</span>'
+                          : moving && s.squadId !== moving.squadId
+                            ? '<button data-swap="' + s.id + '">⇄ 入れ替え</button>'
+                            : "") +
                     "</div>",
                 )
                 .join("") +
@@ -10311,7 +10348,13 @@ OFF</button>
             bulkPick = null;
           } else if (d.move) movingSoldierId = +d.move;
           else if (d.cancelMove !== undefined) movingSoldierId = null;
-          else if (d.moveTo) {
+          else if (d.swap) {
+            const a = soldierById(movingSoldierId),
+              b = soldierById(+d.swap);
+            err = swapSoldiers(movingSoldierId, +d.swap);
+            if (!err) msg(soldierName(a) + " と " + soldierName(b) + " を入れ替えた。");
+            movingSoldierId = null;
+          } else if (d.moveTo) {
             err = transferSoldier(movingSoldierId, d.moveTo === "new" ? "new" : +d.moveTo);
             if (!err) msg(soldierName(soldierById(movingSoldierId)) + " を編入した。");
             movingSoldierId = null;
@@ -16325,6 +16368,7 @@ OFF</button>
             squadApi: {
               members,
               transferMany,
+              swapSoldiers,
               squadName,
               setHeroSoldier,
               heroSoldier,
