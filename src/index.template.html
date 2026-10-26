@@ -509,13 +509,6 @@
         object-fit: contain;
         transform: scaleX(-1);
       }
-      .panel-actions.four {
-        grid-template-columns: repeat(4, 1fr);
-      }
-      .panel-actions.four button {
-        padding: 6px 2px;
-        line-height: 1.2;
-      }
       .panel-actions small {
         display: block;
         font-size: 14px;
@@ -2375,9 +2368,9 @@ OFF</button>
           <button id="sqHero" aria-expanded="false">👤 武将を選択</button>
         </div>
         <div id="sqHeroPick" class="hero-pick" hidden></div>
-        <div class="panel-actions four">
+        <div class="panel-actions">
           <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
-          ><button id="sqRecruit">＋ 補充</button><button id="sqOrganize">📋 兵士</button>
+          ><button id="sqRecruit">＋ 補充</button>
         </div>
         <button id="sqSkill" class="skill" hidden>
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
@@ -2418,7 +2411,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v53（超秘伝書・爆炎の鉄砲は天下統一・幻影の指輪は天魔機神）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v55（部隊のボタン：撤退に統一・兵士ボタンを外す）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -10740,7 +10733,7 @@ OFF</button>
             $("retreat").classList.toggle("active", placeSquadId === q.id);
           } else {
             $("retreat").disabled = q.state !== "deployed";
-            $("retreat").textContent = playing ? "↩ 撤退" : "↩ 待機へ";
+            $("retreat").textContent = "↩ 撤退"; // ウェーブの合間はすぐ待機へ・ウェーブ中は時間がかかる
             $("retreat").classList.remove("active");
           }
           const rc = recruitCost(q),
@@ -11034,7 +11027,6 @@ OFF</button>
           $("squadSheet").hidden = true;
         }
         $("organize").onclick = openSquadSheet;
-        $("sqOrganize").onclick = openSquadSheet;
         $("squadClose").onclick = closeSquadSheet;
         $("squadSheet").addEventListener("click", (ev) => {
           if (ev.target === $("squadSheet")) return closeSquadSheet();

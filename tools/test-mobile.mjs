@@ -370,9 +370,19 @@ await page.tap("#sqHero");
 await page.tap("#sqHeal");
 r = await ev(page, () => WD_DEBUG.squadApi.roster(WD_DEBUG.state().squads[3]).every((m) => m.hp > 1));
 check("「治療」で全員回復", r);
+r = await ev(page, () => ({
+  label: document.getElementById("retreat").textContent,
+  organize: !!document.getElementById("sqOrganize"),
+  buttons: [...document.querySelectorAll("#squadPanel .panel-actions button")].map((b) => b.textContent.trim()),
+}));
+check(
+  "部隊のボタンは「撤退」「治療」「補充」の3つ（「待機へ」「兵士」はない）",
+  r.label === "↩ 撤退" && !r.organize && r.buttons.length === 3,
+  JSON.stringify(r),
+);
 await page.tap("#retreat");
 r = await ev(page, () => WD_DEBUG.state().squads[3].state);
-check("ウェーブの合間の「待機へ」で待機に戻る", r === "reserve", r);
+check("ウェーブの合間の「撤退」で待機に戻る", r === "reserve", r);
 check(
   "待機に戻ってもパネルは開いたまま（「配置」ボタン）",
   (await page.isVisible("#squadPanel")) && /配置/.test(await page.textContent("#retreat")),
