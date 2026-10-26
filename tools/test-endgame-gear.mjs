@@ -141,12 +141,20 @@ check("天下統一だけで、鉄砲兵に装備すると爆発の効果が働�
 await reload(page);
 r = await guns(page);
 check("再読み込みしても二重には渡さない", r.length === 1, JSON.stringify(r));
-await ev(page, () => {
-  const d = JSON.parse(localStorage.getItem("worldDefense.warlords.v1"));
-  d.forge.items = d.forge.items.filter((it) => it.id !== "blastGun"); // 売った・なくした
-  localStorage.setItem("worldDefense.warlords.v1", JSON.stringify(d));
+// 売った・なくした保存データを、別の環境で開き直す（動いているページの保存データを書き換えると、ゲームの保存で上書きされることがある）
+const sold = await ev(page, () => {
+  const out = Object.fromEntries(
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("worldDefense."))
+      .map((k) => [k, localStorage.getItem(k)]),
+  );
+  const d = JSON.parse(out["worldDefense.warlords.v1"]);
+  d.forge.items = d.forge.items.filter((it) => it.id !== "blastGun");
+  out["worldDefense.warlords.v1"] = JSON.stringify(d);
+  return out;
 });
-await reload(page);
+await context.close();
+({ page, errors, context } = await newContext(sold));
 r = await guns(page);
 check("手放した後は、もう一度は渡さない（1回だけの報酬）", r.length === 0, JSON.stringify(r));
 check("エラーなし", errors.length === 0, errors.join(" / "));
