@@ -1512,6 +1512,35 @@
       .forge-kinds.three {
         grid-template-columns: repeat(3, 1fr);
       }
+      .forge-kinds.four {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .forge-kinds.four button {
+        padding-left: 2px;
+        padding-right: 2px;
+        font-size: 14px;
+      }
+      .gem-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .gem {
+        border: 2px solid #ffffff22;
+        border-radius: 12px;
+        padding: 8px 2px;
+        text-align: center;
+        background: #0f1d1a;
+      }
+      .gem b {
+        display: block;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+      .gem.none {
+        opacity: 0.4;
+      }
       .forge-kinds button {
         min-height: 52px;
         font-size: 15px;
@@ -2418,7 +2447,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v61（ラッキー足軽・黄金足軽）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v62（裏ボスの乱入・八玉）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4647,6 +4676,18 @@ OFF</button>
           maxEat: 1e6, // 兵士1人が食べられる数（種類ごと・保存の安全のため）
           bookSell: { skill: 150, legend: 500, super: 3000 }, // 書の売値（両）：スキルの書・伝承の秘伝書・🌟超秘伝書
         };
+        // 八玉（乱入する裏ボスを倒すと手に入る。保存は秘伝錬成のデータ forge.gems）
+        const GEMS = [
+          { k: "jin", name: "仁", color: "#ff7a7a" },
+          { k: "gi", name: "義", color: "#ffb04d" },
+          { k: "rei", name: "礼", color: "#ffe35a" },
+          { k: "chi", name: "智", color: "#7ee08a" },
+          { k: "chu", name: "忠", color: "#5fd6d6" },
+          { k: "shin", name: "信", color: "#6fa8ff" },
+          { k: "ko", name: "孝", color: "#b48cff" },
+          { k: "tei", name: "悌", color: "#ff8fd0" },
+        ];
+        const GEM_MAX = 99; // 1種類の玉を持てる数
         const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
         const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
         const legendHp = (s, hp) =>
@@ -4941,6 +4982,9 @@ OFF</button>
                 .map((k) => [k, int(o.fruits && o.fruits[k], SHOP.maxStock)])
                 .filter(([, n]) => n > 0),
             ), // 商店で買った能力の実（まだ使っていない数）
+            gems: Object.fromEntries(
+              GEMS.map((g) => [g.k, int(o.gems && o.gems[g.k], GEM_MAX)]).filter(([, n]) => n > 0),
+            ), // 八玉（種類ごとの数）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -5958,6 +6002,111 @@ OFF</button>
           msg(c.icon + " " + c.name + "は逃げてしまった…");
           toast(c.icon + " " + c.name + "は逃げてしまった…");
           burst(e.x, e.y, c.color, "vanish");
+        }
+        // ===== 乱入する裏ボスと八玉 =====
+        // 通常の防衛戦（ウェーブ50から）で、ごく低い確率でウェーブの途中に乱入する。倒すと八玉（仁義礼智忠信孝悌）を1つ。
+        // 持っていない種類の玉が出やすい。逃げずに城を目指し、たどり着くとハートを大きく減らす。修練場・攻城戦では出ない。
+        // 乱入したら、すぐに保存する（読み込み直しても、そのウェーブの始めから同じ裏ボスが必ず乱入する＝戦いは避けられない）
+        const INTRUDER = {
+          minWave: 50, // 乱入し始めるウェーブ
+          chance: 0.02, // 1ウェーブに乱入する確率
+          name: "怨霊・玉梓",
+          icon: "👹",
+          hpMul: 6, // 同じウェーブの大将の何倍のHPか
+          armor: 24,
+          atkMul: 2.5, // 同じウェーブの大将の何倍の攻撃か
+          speed: 26,
+          heart: 3, // 城にたどり着いたときに減るハート
+          pulse: { every: 8, warn: 1.5, radius: 150, power: 3 }, // 怨念の波動：every 秒ごと（warn 秒前に予兆）、周りの部隊に攻撃の power 倍
+          gemBias: 3, // 持っていない種類の玉は、持っている種類の何倍出やすいか
+          color: "#c060ff",
+        };
+        let intrudeRng = Math.random, // 乱入の抽選・玉の抽選（テストで差し替え可能）
+          intruderPlan = null, // このウェーブに乱入させるか { wave, at, forced }
+          pendingIntruder = null; // 読み込み直す前に乱入していたウェーブ（同じウェーブで必ず乱入させる）
+        const gemCount = (k) => ((forgeSave().gems || {})[k] || 0);
+        const gemKinds = () => GEMS.filter((g) => gemCount(g.k) > 0).length;
+        function planIntruder() {
+          intruderPlan = null;
+          if (training || battle) return;
+          const forced = pendingIntruder === wave;
+          if (!forced && (wave < INTRUDER.minWave || !(intrudeRng() < INTRUDER.chance))) return;
+          intruderPlan = { wave, at: Math.max(1, Math.floor(spawnTotal * 0.5)), forced };
+        }
+        function spawnIntruder() {
+          const c = INTRUDER,
+            armor = c.armor,
+            max = 650 * (1 + (wave - 1) * 0.19) * c.hpMul,
+            e = {
+              path: intrudeRng() < 0.5 ? upper : lower,
+              d: 0,
+              x: 0,
+              y: 300,
+              kind: "boss", // 絵・攻撃の仕方は大将（強さは atkMul・HP は hpMul）
+              intruder: true,
+              hp: max,
+              max,
+              armor,
+              speed: c.speed,
+              reward: 300,
+              color: c.color,
+              r: 30,
+              slow: 0,
+              atkMul: c.atkMul * (1 + (wave - 1) * 0.05),
+              pulseClock: 0,
+            };
+          enemies.push(e);
+          // 乱入を保存する：読み込み直しても、このウェーブの始めから必ず乱入する
+          if (heroSave.defense) {
+            heroSave.defense.intruder = { wave };
+            persistHeroes();
+          }
+          pendingIntruder = null;
+          msg("⚠ 裏ボス「" + c.icon + c.name + "」が乱入した！ 倒せば八玉が手に入る。城にたどり着かれるとハート -" + c.heart + "！");
+          toast("⚠ 裏ボス「" + c.name + "」が乱入！");
+          return e;
+        }
+        // 乱入の決着（倒した・城にたどり着いた）。保存の印を消す
+        function intruderDone() {
+          if (heroSave.defense && heroSave.defense.intruder) {
+            heroSave.defense.intruder = null;
+            persistHeroes();
+          }
+        }
+        // 玉を1つ選ぶ：持っていない種類は gemBias 倍出やすい（上限の種類は出ない）
+        function rollGem() {
+          const list = GEMS.filter((g) => gemCount(g.k) < GEM_MAX);
+          if (!list.length) return null;
+          const w = list.map((g) => (gemCount(g.k) ? 1 : INTRUDER.gemBias)),
+            total = w.reduce((a, b) => a + b, 0);
+          let r = intrudeRng() * total;
+          for (let i = 0; i < list.length; i++) if ((r -= w[i]) < 0) return list[i];
+          return list[list.length - 1];
+        }
+        function intruderKilled(e) {
+          const F = forgeSave(),
+            g = rollGem();
+          if (g) {
+            F.gems = F.gems || {};
+            F.gems[g.k] = gemCount(g.k) + 1;
+          }
+          intruderDone(); // 玉と決着を同じ保存で
+          const n = gemKinds();
+          msg("🎉 裏ボス「" + INTRUDER.name + "」を倒した！" + (g ? " 八玉「" + g.name + "」を手に入れた（" + n + "/8種類）" : ""));
+          toast(g ? "📿 八玉「" + g.name + "」を手に入れた！（" + n + "/8種類）" : "裏ボスを倒した！");
+          burst(e.x, e.y - 20, g ? g.color : INTRUDER.color, "fire");
+        }
+        // 怨念の波動：一定の間隔で、周りの部隊を攻撃する（予兆の輪が出る）
+        function tickIntruder(e, dt) {
+          const P = INTRUDER.pulse;
+          e.pulseClock += dt;
+          e.pulseWarn = e.pulseClock >= P.every - P.warn;
+          if (e.pulseClock < P.every) return;
+          e.pulseClock = 0;
+          e.pulseWarn = false;
+          const a = ENEMY_VS_UNIT.boss;
+          for (const q of fieldSquads()) if (dist(q, e) <= P.radius) damageSquad(q, a.damage * e.atkMul * P.power, false, "boss", e);
+          burst(e.x, e.y, INTRUDER.color, "cannon");
         }
         function createEnemy() {
           if (training) return enemies.push(trainingEnemy(training, spawned, spawnTotal));
@@ -8551,12 +8700,17 @@ OFF</button>
               spawnRare(rarePlan.kind);
               rarePlan = null;
             }
+            if (intruderPlan && intruderPlan.wave === wave && spawned === intruderPlan.at) {
+              spawnIntruder();
+              intruderPlan = null;
+            }
             spawnClock += Math.max(0.35, 0.95 - wave * 0.015);
           }
           assignBlocks();
           updateBlocks(dt);
           for (const e of enemies) {
             e.slow = Math.max(0, e.slow - dt);
+            if (e.intruder && !e.gone && e.hp > 0 && e.stun <= 0) tickIntruder(e, dt);
             if (e.rare && !e.gone && e.hp > 0 && (e.rareLeft -= dt) <= 0) {
               rareEscaped(e); // 時間切れで逃げる（止められていても）
               continue;
@@ -8575,6 +8729,12 @@ OFF</button>
               if (e.rare) {
                 rareEscaped(e); // 城まで走り抜けて逃げる（ハートは減らない）
                 continue;
+              }
+              if (e.intruder) {
+                hp -= INTRUDER.heart - 1; // 下の hp-- と合わせて INTRUDER.heart
+                intruderDone();
+                msg("💥 裏ボス「" + INTRUDER.name + "」が城に攻め込んだ！ ハート -" + INTRUDER.heart);
+                toast("💥 裏ボスが城に攻め込んだ！ ハート -" + INTRUDER.heart);
               }
               hp--;
               e.gone = true;
@@ -8608,7 +8768,8 @@ OFF</button>
               if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
               if (e.rare) rareKilled(e);
-              if (e.kind === "boss" && !training && (!heroSave.defense || (heroSave.defense.bossRewardThrough || 0) < wave)) {
+              if (e.intruder) intruderKilled(e);
+              if (e.kind === "boss" && !e.intruder && !training && (!heroSave.defense || (heroSave.defense.bossRewardThrough || 0) < wave)) {
                 if (heroSave.defense) heroSave.defense.bossRewardThrough = wave;
                 grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
               } // 修練場ではガチャ券なし
@@ -9327,6 +9488,19 @@ OFF</button>
         }
         // 修練場の敵：体力バーの上に敵レベル、中ボス・大将は赤い札
         function enemyTag(e, y) {
+          if (e.intruder) {
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.font = "bold 13px system-ui";
+            const label = "⚠裏ボス " + INTRUDER.name,
+              w = ctx.measureText(label).width + 10;
+            ctx.fillStyle = "#3a0f4aee";
+            ctx.fillRect(e.x - w / 2, y - 16, w, 16);
+            ctx.fillStyle = "#f4d0ff";
+            ctx.fillText(label, e.x, y - 4);
+            ctx.restore();
+            return;
+          }
           if (e.rare) {
             const c = RARE[e.rare],
               label = c.icon + c.name + " " + Math.max(0, Math.ceil(e.rareLeft)) + "秒";
@@ -10359,6 +10533,26 @@ OFF</button>
               y: e.y,
               draw: () => {
                 ctx.save();
+                if (e.intruder) {
+                  // 裏ボス：紫の妖気と、波動の予兆の輪
+                  const pulse = reduced ? 0.5 : 0.4 + 0.25 * Math.sin(combatClock * 5);
+                  ctx.globalAlpha = pulse;
+                  ellipse(e.x, e.y - 18, e.r + 18, e.r + 30, INTRUDER.color + "aa");
+                  ctx.globalAlpha = 1;
+                  if (e.pulseWarn) {
+                    const P = INTRUDER.pulse,
+                      k = Math.min(1, (e.pulseClock - (P.every - P.warn)) / P.warn);
+                    ctx.strokeStyle = "#ff5af0";
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([8, 6]);
+                    ctx.beginPath();
+                    ctx.ellipse(e.x, e.y + 8, P.radius * k, P.radius * 0.45 * k, 0, 0, 7);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                  }
+                  ctx.shadowColor = INTRUDER.color;
+                  ctx.shadowBlur = 18;
+                }
                 if (e.rare) {
                   // 特別な敵：足元の光と、きらめき
                   const c = RARE[e.rare],
@@ -10678,6 +10872,7 @@ OFF</button>
           $("pause").textContent = "⏸ 停止";
           if (training) trainingWaveStart();
           planRare(); // 特別な敵（ラッキー・黄金）を出すか
+          planIntruder(); // 裏ボスを乱入させるか（読み込み直す前に乱入していたら必ず）
           squadsWaveStart();
           if (!training) msg("ウェーブ " + wave + " 開始！ 敵が分岐ルートを進んできます。");
           renderAuto();
@@ -10740,6 +10935,7 @@ OFF</button>
           heartPurchases = 0;
           closeHearts();
           wave = 0;
+          rarePlan = intruderPlan = pendingIntruder = null; // 最初からやり直すと、未決着の乱入もなくなる
           selectedTower = null;
           towers = [];
           enemies = [];
@@ -12198,7 +12394,7 @@ OFF</button>
           const F = forgeSave(),
             busy = gearBusy();
           let html =
-            '<div class="forge-kinds three" role="group" aria-label="倉庫"><button data-gear-tab="gear" aria-pressed="' +
+            '<div class="forge-kinds four" role="group" aria-label="倉庫"><button data-gear-tab="gear" aria-pressed="' +
             (gearTab === "gear") +
             '">⚔️ 装備 <small>' +
             F.items.length +
@@ -12210,11 +12406,47 @@ OFF</button>
             "冊</small></button>" +
             '<button data-gear-tab="shop" aria-pressed="' +
             (gearTab === "shop") +
-            '">🏪 商店</button></div>' +
+            '">🏪 商店</button>' +
+            '<button data-gear-tab="gems" aria-pressed="' +
+            (gearTab === "gems") +
+            '">📿 八玉 <small>' +
+            gemKinds() +
+            "/8</small></button></div>" +
             '<p class="koban" aria-label="小判の残高">🪙 小判 <b>' +
             kobanText(F.koban || 0) +
             "</b> <small>（装備・書の売却で増える・保存される）</small></p>" +
             (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
+          if (gearTab === "gems") {
+            const n = gemKinds();
+            html +=
+              '<p class="muted"><small>八玉（仁・義・礼・智・忠・信・孝・悌）：防衛戦のウェーブ' +
+              INTRUDER.minWave +
+              "から、ごくまれに乱入する裏ボス「" +
+              INTRUDER.icon +
+              INTRUDER.name +
+              "」を倒すと1つ手に入ります（持っていない種類が出やすい）。乱入した裏ボスとの戦いは、読み込み直しても避けられません。</small></p>" +
+              '<p><b>集めた種類 ' +
+              n +
+              "/8</b></p>" +
+              '<div class="gem-grid">' +
+              GEMS.map(
+                (g) =>
+                  '<div class="gem' +
+                  (gemCount(g.k) ? "" : " none") +
+                  '" style="border-color:' +
+                  (gemCount(g.k) ? g.color : "#ffffff22") +
+                  '"><b style="color:' +
+                  g.color +
+                  '">' +
+                  g.name +
+                  "</b><small>" +
+                  (gemCount(g.k) ? "×" + gemCount(g.k) : "未所持") +
+                  "</small></div>",
+              ).join("") +
+              "</div>" +
+              '<p class="muted"><small>8種類そろえると、復活の書・召喚の書・三種の神器と交換できるようにする予定です（次の段階）。</small></p>';
+            return html;
+          }
           if (gearTab === "shop") {
             const st = F.fruits || {};
             html +=
@@ -18204,6 +18436,7 @@ OFF</button>
         if (/[?&]debug\b/.test(location.search)) {
           superRng = () => 1; // 確認用では超秘伝書を出さない（legendApi.setSuperRng で出せる）
           rareRng = () => 1; // 確認用では特別な敵を出さない（rareApi.setRng で出せる）
+          intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             state: () => ({
@@ -18238,6 +18471,16 @@ OFF</button>
             trainingEnemies: (w, total) => {
               const t = Object.assign({}, training, { wave: w });
               return Array.from({ length: total }, (_, i) => trainingEnemy(t, i, total));
+            },
+            intruderApi: {
+              INTRUDER,
+              GEMS,
+              setRng: (f) => (intrudeRng = f || Math.random),
+              spawnIntruder,
+              rollGem,
+              plan: () => intruderPlan,
+              pending: () => pendingIntruder,
+              gems: () => Object.assign({}, forgeSave().gems),
             },
             rareApi: {
               RARE,
@@ -18555,6 +18798,8 @@ OFF</button>
           return {
             version: 1, wave, waveGoal, gold, hp, heartPurchases, speed, runId, clock: combatClock,
             bossRewardThrough: old && old.runId === runId ? old.bossRewardThrough || 0 : 0,
+            // 乱入して決着がつく前に保存し直すことはない（ウェーブの始めだけ保存する）。念のため同じ流れの未決着は引き継ぐ
+            intruder: old && old.runId === runId && old.intruder && old.intruder.wave > wave ? old.intruder : null,
             towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
             squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
             soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0 })),
@@ -18638,6 +18883,9 @@ OFF</button>
             s.cd = v ? v.cd : 0;
           }
           playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;
+          // 乱入した裏ボスとの戦いの途中で閉じた：次のウェーブ（同じウェーブ）で必ず乱入させる
+          pendingIntruder = d.intruder && Number.isInteger(d.intruder.wave) && d.intruder.wave === d.wave + 1 ? d.intruder.wave : null;
+          if (pendingIntruder) defenseSaveMessage = "⚠ 前回、裏ボス「" + INTRUDER.name + "」が乱入したウェーブです。次のウェーブで必ず乱入します。";
           $("pause").textContent = "▶ 再開"; $("speed").textContent = "⏩ x" + speed;
           msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < MAX_WAVE ? "目標達成済みです。WAVEから目標を延ばせます。" : "全" + MAX_WAVE + "ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
           return true;
