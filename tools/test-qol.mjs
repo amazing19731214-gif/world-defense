@@ -634,19 +634,31 @@ check(
     /表示 12 \/ 全 12個/.test(text),
   text.slice(0, 200),
 );
+r = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll("#gearBody [data-gear-row]")];
+  return { rows: rows.length, locked: rows.filter((b) => /🔒/.test(b.textContent)).length };
+});
+await page.tap('[data-gear-row="s:domaru"]');
 check(
-  "ロック中の表示とロックのボタン",
-  /🔒 ロック中/.test(text) && (await page.$$("[data-gear-lock]")).length === 12,
+  "一覧は1行ずつ（同じ装備はまとめる）・ロック中の🔒・行を開くとロックのボタン",
+  r.rows === 12 && r.locked === 3 && (await page.$$("[data-gear-lock-stack]")).length === 1,
+  JSON.stringify(r),
 );
+await page.tap('[data-gear-row="s:domaru"]'); // 閉じる
 await page.selectOption('[data-gear-opt="type"]', "armor");
 await page.selectOption('[data-gear-opt="sort"]', "def");
 r = await page.evaluate(() =>
-  [...document.querySelectorAll("#gearBody .gear-card")].map((c) => c.dataset.uid).join(","),
+  [...document.querySelectorAll("#gearBody [data-gear-row]")].map((c) => c.dataset.gearRow).join(","),
 );
-check("画面で絞り込み（鎧）と並び替え（防御の高い順）", r === "7,9,5,2", r);
+check(
+  "画面で絞り込み（鎧）と並び替え（防御の高い順）",
+  r === "s:tosei,s:byakkoArmor:L,s:haramaki,s:domaru",
+  r,
+);
 r = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).gear, SETKEY);
 check("並び替え・絞り込みの設定を保存", r.type === "armor" && r.sort === "def", JSON.stringify(r));
 await page.selectOption('[data-gear-opt="type"]', "all");
+await page.tap('[data-gear-row="s:domaru"]');
 await page.tap('[data-sell-one="2"]');
 text = await page.textContent(".sell-confirm");
 check(
@@ -665,13 +677,13 @@ check(
   text,
 );
 r = await page.evaluate(() =>
-  [...document.querySelectorAll("#gearBody .gear-card button[disabled]")].map((b) => b.textContent).join("|"),
+  [...document.querySelectorAll("#gearBody .gear-line button[disabled]")].map((b) => b.textContent).join("|"),
 );
 check("装備中・ロック中・伝説は選べない（理由を表示）", /装備中/.test(r) && /伝説/.test(r), r);
 await page.tap("[data-sell-none]");
 await page.tap('[data-sell-grade="1"]');
 check("品質ごとに選ぶ（並をすべて：50×4）", /選択 4個・合計 200両/.test(await page.textContent(".sell-bar")));
-await page.tap('[data-sell-toggle="2"]');
+await page.tap('[data-sell-stack="s:domaru"]');
 check("1つずつ選択を外せる", /選択 3個・合計 150両/.test(await page.textContent(".sell-bar")));
 const g0 = await page.evaluate(() => ({ koban: WD_DEBUG.forgeApi.koban(), gold: WD_DEBUG.state().gold }));
 await page.tap("[data-sell-ask]");
@@ -745,8 +757,8 @@ await page.tap("#gearOpen");
 await page.tap("[data-sell-mode]");
 r = await page.evaluate(() => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
-  names: [...document.querySelectorAll("[data-sell-toggle]")].every((b) =>
-    /（.+・\d+両）/.test(b.textContent),
+  names: [...document.querySelectorAll("[data-sell-stack]")].every(
+    (b) => /\d+両/.test(b.textContent) && /\S/.test(b.closest(".gear-line").querySelector(".gr-name").textContent),
   ),
 }));
 check("390×844：横にはみ出さない・選ぶボタンに装備名と売値", !r.hScroll && r.names, JSON.stringify(r));
