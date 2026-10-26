@@ -2414,7 +2414,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v51（試作：伝説の兵士・Lv100で指導員）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v53（爆炎の鉄砲は天下統一・幻影の指輪は天魔機神）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -2887,7 +2887,10 @@ OFF</button>
             fx: { phoenix: 1 },
             text: "致命傷を1回だけ耐える（HP30%で踏みとどまる。ウェーブ・攻城戦ごとに1回。もう一度倒れれば戦死）",
           },
-          // ----- 終盤の特殊装備（試作）：天下統一と三大裏ボスの討伐で解放。秘伝錬成の装備錬成からは出ない（endgame） -----
+          // ----- 終盤の特殊装備（試作）：秘伝錬成の装備錬成からは出ない（endgame） -----
+          //   村正・雷神の槍：終盤の解放（天下統一と三大裏ボス）で作れる・効果がある
+          //   爆炎の鉄砲（unlock: tenka）：天下統一の報酬で1つもらえる・天下統一で効果がある
+          //   幻影の指輪（unlock: fuji）：最後の裏ボス（零式・天魔機神）を倒すと小判で作れる・効果がある
           lightMuramasa: {
             name: "光刃・村正",
             slot: "weapon",
@@ -2912,6 +2915,7 @@ OFF</button>
             wtype: "teppo",
             grade: 4,
             endgame: true,
+            unlock: "tenka",
             fx: { atk: 0.12, blast: 0.6 },
             text: "攻撃 +12%・着弾で爆発し、周りの敵に攻撃の60%",
           },
@@ -2920,6 +2924,7 @@ OFF</button>
             slot: "accessory",
             grade: 4,
             endgame: true,
+            unlock: "fuji",
             fx: { shadow: 0.3 },
             text: "30%の確率で影分身が現れ、同じ威力でもう一度攻撃",
           },
@@ -4538,7 +4543,20 @@ OFF</button>
             return false; // 起動の途中（全国の記録を読む前）は未解放として扱う
           }
         }
-        // 伝説の能力（能力値・特殊能力）と終盤の特殊装備の効果は、終盤の解放後だけ働く
+        // 終盤の特殊装備の解放：爆炎の鉄砲は天下統一、幻影の指輪は最後の裏ボス（天魔機神）の討伐、ほかは終盤の解放
+        function gearUnlocked(g) {
+          if (legendForce) return true;
+          try {
+            if (g.unlock === "tenka") return !!conquestMeta.tenka;
+            if (g.unlock === "fuji") return !!(conquestMeta.bosses.fuji && conquestMeta.bosses.fuji.wins > 0);
+          } catch (err) {
+            return false;
+          }
+          return endgameOn();
+        }
+        // 小判で作れる終盤の装備（爆炎の鉄砲は天下統一の報酬だけ）
+        const endgameCraftable = (id) => !!(GEAR[id] && GEAR[id].endgame && GEAR[id].unlock !== "tenka" && gearUnlocked(GEAR[id]));
+        // 伝説の能力（能力値・特殊能力）の効果は終盤の解放後だけ、終盤の特殊装備の効果はその装備の解放後だけ働く
         const LEGEND_KEYS = new Set(["beam", "chain", "blast", "shadow"]);
         function legendActiveStat(s) {
           const L = s && s.legend;
@@ -4809,7 +4827,8 @@ OFF</button>
               lock: typeof it.lock === "boolean" ? it.lock : GEAR[it.id].grade >= 4,
             });
             // 初回限定報酬は通常の倉庫枠とは別に保持する（満杯でも消さない）。
-            if (items.filter((v) => !GEAR[v.id].boss).length > FORGE.maxItems && !GEAR[it.id].boss) items.pop();
+            const extra = (g) => g.boss || g.unlock === "tenka"; // 裏ボス・天下統一の報酬
+            if (items.filter((v) => !extra(GEAR[v.id])).length > FORGE.maxItems && !extra(GEAR[it.id])) items.pop();
           }
           const books = {};
           if (o.books && typeof o.books === "object")
@@ -4820,7 +4839,7 @@ OFF</button>
             for (const [id, n] of Object.entries(o.used)) if (WARLORDS[id] && int(n, 1e6) > 0) used[id] = int(n, 1e6);
           const bossRewards = {};
           if (o.bossRewards && typeof o.bossRewards === "object")
-            for (const id of ["hiei", "yomi", "fuji"]) if (o.bossRewards[id] === true) bossRewards[id] = true;
+            for (const id of ["hiei", "yomi", "fuji", "tenka"]) if (o.bossRewards[id] === true) bossRewards[id] = true; // tenka：天下統一の爆炎の鉄砲
           // 旧版で「受領済み」だけ残り、上限処理で消えた限定報酬も復元する。
           for (const boss of Object.keys(bossRewards)) {
             const reward = Object.keys(GEAR).find((id) => GEAR[id].boss === boss);
@@ -6260,10 +6279,9 @@ OFF</button>
           for (const id of s.skills || []) n += (SOLDIER_SKILLS[id] && SOLDIER_SKILLS[id][key]) || 0;
           if (s.named && NAMED_SOLDIERS[s.named]) n += NAMED_SOLDIERS[s.named].skill[key] || 0; // ネームド兵士の固有スキル
           const legendKey = LEGEND_KEYS.has(key);
-          if (legendKey && !endgameOn()) return 0; // 伝説の特殊能力・終盤の装備の効果は、終盤の解放後だけ
-          if (s.legend && legendKey) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す）
+          if (s.legend && legendKey && endgameOn()) for (const a of s.legend.abil) if (a.k === key) n += a.v; // 伝説の特殊能力（重複も足す・終盤の解放後だけ）
           const g = s.id != null && gearOf(s.id);
-          if (g) for (const d of g) n += d.fx[key] || 0;
+          if (g) for (const d of g) if (!legendKey || !d.endgame || gearUnlocked(d)) n += d.fx[key] || 0; // 終盤の装備の特殊効果は解放後だけ
           return key in SKILL_CAPS ? Math.min(SKILL_CAPS[key], n) : n;
         }
         const hasSkill = (s, id) => (s.skills || []).includes(id);
@@ -11810,13 +11828,13 @@ OFF</button>
               '</ul><p class="injured">売却した装備は元に戻せません。売値は小判（両）で受け取り、保存されます。</p>' +
               '<div class="card-actions"><button data-sell-go>🪙 売却する</button><button data-sell-cancel>キャンセル</button></div></div>';
           } else if (gearTab === "gear") {
-            if (endgameOn())
+            const crafts = Object.keys(GEAR).filter(endgameCraftable);
+            if (crafts.length)
               html +=
                 '<div class="legend-forge"><p><b>⚡ 終盤の特殊装備（試作）</b><br><small>小判 ' +
                 kobanText(LEGEND.gearCost) +
-                "で1つ作る（正式版では最終盤の素材を集めて錬成する予定）</small></p>" +
-                Object.keys(GEAR)
-                  .filter((id) => GEAR[id].endgame)
+                "で1つ作る（正式版では最終盤の素材を集めて錬成する予定）。光刃・村正と雷神の槍は終盤の解放後、幻影の指輪は零式・天魔機神を倒すと作れる。爆炎の鉄砲は天下統一の報酬</small></p>" +
+                crafts
                   .map(
                     (id) =>
                       '<button data-endgame-craft="' +
@@ -12967,8 +12985,9 @@ OFF</button>
         function craftEndgame(id) {
           const F = forgeSave(),
             g = GEAR[id];
-          if (!endgameOn()) return "終盤（天下統一と三大裏ボスの討伐）で解放されます。";
-          if (!g || !g.endgame) return "その装備は作れません。";
+          if (!g || !g.endgame || g.unlock === "tenka") return "その装備は作れません。";
+          if (!endgameCraftable(id))
+            return g.unlock === "fuji" ? "最後の裏ボス（零式・天魔機神）を倒すと作れます。" : "終盤（天下統一と三大裏ボスの討伐）で解放されます。";
           if (gearBusy()) return gearBusy();
           if ((F.koban || 0) < LEGEND.gearCost) return "小判が足りません（" + kobanText(LEGEND.gearCost) + "）。";
           if (F.items.filter((it) => !GEAR[it.id].boss).length >= FORGE.maxItems) return "装備倉庫がいっぱいです。";
@@ -15235,6 +15254,23 @@ OFF</button>
             (e.phase === 3 ? (e.form === "guard" ? "・🛡 防御形態（攻撃が通りにくい）" : "・⚔️ 攻撃形態（攻め時）") : "")
           );
         }
+        // 天下統一の報酬：爆炎の鉄砲を1つ（ロック済み・倉庫の枠とは別）。1回だけ。
+        // 以前に天下統一した保存データには、起動時に渡す。保存できなければ渡さない（次の起動で渡す）
+        function grantTenkaGun() {
+          if (!conquestMeta.tenka) return false;
+          const F = forgeSave();
+          F.bossRewards = F.bossRewards || {};
+          if (F.bossRewards.tenka) return false;
+          F.bossRewards.tenka = true;
+          F.items.push({ uid: ++F.seq, id: "blastGun", owner: null, lock: true });
+          gearMap = null;
+          if (persistHeroes()) return true;
+          delete F.bossRewards.tenka;
+          F.items.pop();
+          F.seq--;
+          gearMap = null;
+          return false;
+        }
         // 勝敗の記録と報酬。初回の専用装備は錬成と同じ保存データに1回で書く（二重には入らない）
         function finishBoss(B, result) {
           const id = B.boss,
@@ -15995,6 +16031,7 @@ OFF</button>
           }
           if (B.unified) grantTickets(UNIFY_TICKETS, "7か国を統一", true);
           if (B.tenka) grantTickets(TENKA_TICKETS, "天下統一", true);
+          if (B.tenka && grantTenkaGun()) toast("🔥 天下統一の報酬：爆炎の鉄砲を手に入れた！（🎒 装備倉庫）");
           battle = null;
           updateUI();
         }
@@ -16063,7 +16100,7 @@ OFF</button>
                 PROVINCE_ORDER.length +
                 "か国を制覇した！ 🎴 ガチャ券 +" +
                 TENKA_TICKETS +
-                "</p></div>"
+                "</p><p>🔥 報酬：<b>爆炎の鉄砲</b>（🎒 装備倉庫）</p></div>"
               : "") +
             (B.secrets || [])
               .map(
@@ -17625,6 +17662,9 @@ OFF</button>
               useLegendBookError,
               setLegendStat,
               craftEndgame,
+              endgameCraftable,
+              gearUnlocked: (id) => gearUnlocked(GEAR[id]),
+              grantTenkaGun,
               cleanLegend,
               effects: () => effects,
             },
@@ -17681,6 +17721,7 @@ OFF</button>
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
               members,
+              skillSum,
               transferMany,
               swapSoldiers,
               squadName,
@@ -18024,6 +18065,7 @@ OFF</button>
         new MutationObserver(syncViewport).observe($("towerPanel"), { attributes: true, attributeFilter: ["hidden"] });
         syncViewport();
         restoreDefenseCheckpoint();
+        if (grantTenkaGun()) setTimeout(() => toast("🔥 天下統一の報酬：爆炎の鉄砲を手に入れた！（🎒 装備倉庫）"), 600);
         updateUI();
         requestAnimationFrame(frame);
       })();

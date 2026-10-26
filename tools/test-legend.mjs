@@ -620,22 +620,24 @@ console.log("■ 終盤の特殊装備");
     owned: {},
     tickets: 0,
     history: [],
-    forge: { items: [], seq: 0, koban: 9000 },
+    forge: { items: [], seq: 0, koban: 7000 },
   }),
 }));
 r = await ev(page, () => {
   const L = WD_DEBUG.legendApi,
     F = WD_DEBUG.forgeApi;
   L.setForce(true);
-  const ids = ["lightMuramasa", "raijinSpear", "blastGun", "phantomRing"];
+  const ids = ["lightMuramasa", "raijinSpear", "phantomRing"];
   const errs = ids.map((id) => L.craftEndgame(id));
-  const poor = L.craftEndgame("lightMuramasa"); // 9000 − 2000×4 = 1000 では足りない
+  const gun = L.craftEndgame("blastGun"); // 爆炎の鉄砲は天下統一の報酬だけ
+  const poor = L.craftEndgame("lightMuramasa"); // 7000 − 2000×3 = 1000 では足りない
   const items = F.save().items.map((it) => it.id + ":" + it.lock);
   const s = WD_DEBUG.state().soldiers[0];
   const it = F.save().items.find((x) => x.id === "lightMuramasa");
   const eq = F.equipItem ? F.equipItem(s, it.uid) : "n/a";
   return {
     errs,
+    gun,
     poor,
     items,
     koban: F.koban(),
@@ -651,13 +653,14 @@ r = await ev(page, () => {
   };
 });
 check(
-  "解放後は小判で4つの特殊装備を作れる（ロック済み）",
+  "解放後は小判で3つの特殊装備を作れる（ロック済み）",
   r.errs.every((e) => e === null) &&
-    r.items.length === 4 &&
+    r.items.length === 3 &&
     r.items.every((x) => x.endsWith(":true")) &&
     r.koban === 1000,
   JSON.stringify(r),
 );
+check("爆炎の鉄砲は小判では作れない（天下統一の報酬）", /作れません/.test(r.gun || ""), r.gun);
 check("小判が足りなければ作れない", /小判が足りません/.test(r.poor || ""), r.poor);
 check(
   "光刃・村正は刀、雷神の槍は槍、爆炎の鉄砲は鉄砲、幻影の指輪は装飾品",
