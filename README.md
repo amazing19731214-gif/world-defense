@@ -6,6 +6,11 @@ Tower Defense Game
 
 開発状況と今後の計画は [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) にまとめています。
 
+## スキルの説明（v50）
+
+「🪖 兵士」の名簿（在籍の兵士・英霊名鑑）で、スキルの札を押すと、その下に説明を出す：名前・分類（兵士のスキル／固有スキル／職業スキル／秘伝スキル）・効果・習得のしかた。
+同じ札をもう一度押すと閉じる。別の札を押すと切り替わる。`node tools/test-skill-info.mjs` で確認できる。
+
 ## 騎馬の上級職（v49）
 
 騎兵の動き（攻城戦の進軍×1.8・撤退が速い）を持つ上級職を4つ追加した。Lv30から転職できる（条件は今までどおり。一度なった職業にはいつでも戻れる）。
@@ -692,6 +697,7 @@ node tools/test-bulk-wipe.mjs   # まとめて移籍・データ消去の確認
 node tools/test-gear-stack.mjs  # 装備のまとめ表示の確認
 node tools/test-swap.mjs        # 兵士の入れ替えの確認
 node tools/test-cavalry-jobs.mjs # 騎馬の上級職の確認
+node tools/test-skill-info.mjs  # スキルの説明の確認
 ```
 
 iPhone から更新する場合は、生成済みの `index.html` をそのままアップロードすれば動きます。
