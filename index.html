@@ -890,6 +890,28 @@
         border: 1px solid #91ac92;
         font-size: 13px;
       }
+      button.skill-tag {
+        min-height: 32px;
+        padding: 3px 9px;
+        color: inherit;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        box-shadow: none;
+      }
+      .skill-tag[aria-expanded="true"] {
+        outline: 2px solid #ffd34d;
+        background: #3d5a4a;
+      }
+      .skill-info {
+        margin: 2px 0 6px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #0e1a16cc;
+        border: 1px solid #ffd34d88;
+        font-size: 13px;
+        line-height: 1.5;
+      }
       .skill-tag.unique {
         border-color: #ffd77d;
         color: #ffe3a0;
@@ -2309,7 +2331,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v49（騎馬の上級職）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v50（スキルの説明）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -12188,16 +12210,56 @@ OFF</button>
             ? ids
                 .map(
                   (id) =>
-                    '<span class="skill-tag' +
+                    '<button type="button" class="skill-tag' +
                     (SOLDIER_SKILLS[id].unique ? " unique" : "") +
-                    '" title="' +
+                    '" data-skill-info="' +
+                    id +
+                    '" aria-expanded="false" title="' +
                     esc(SOLDIER_SKILLS[id].text) +
                     '">' +
                     SOLDIER_SKILLS[id].name +
-                    "</span>",
+                    "</button>",
                 )
                 .join("")
             : '<span class="muted">なし（Lv' + SQUAD_RULES.skillLevels[0] + "で習得）</span>";
+        // スキルの説明（押したスキルの下に出す）：分類・効果・習得のしかた
+        function skillInfoHtml(id) {
+          const k = SOLDIER_SKILLS[id];
+          const kind = k.job
+            ? "職業スキル（" + JOBS[k.job].name + "）"
+            : k.book
+              ? "秘伝スキル（" + GRADES[k.book].name + "の書）"
+              : k.unique
+                ? "固有スキル（Lv" + SQUAD_RULES.uniqueLevel + "〜）"
+                : "兵士のスキル";
+          const how = k.job
+            ? JOBS[k.job].name + "の熟練度 " + JOBS[k.job].skills.find((x) => x[0] === id)[1] + " で習得。習得後はどの職業でも装備できる"
+            : k.book
+              ? "スキルの書（🔥 秘伝錬成）を使って習得。どの職業でも装備できる"
+              : "レベルアップで習得（" + k.types.map((t) => SOLDIER_TYPES[t].name).join("・") + "）";
+          return "<b>「" + esc(k.name) + "」</b> <small>" + kind + "</small><br>" + esc(k.text) + "<br><small>" + how + "</small>";
+        }
+        // スキルの札を押すと説明を開く（同じ札でもう一度押すと閉じる。別の札なら切り替え）
+        document.addEventListener("click", (ev) => {
+          const b = ev.target.closest("[data-skill-info]");
+          if (!b) return;
+          const box = b.parentElement,
+            open = b.getAttribute("aria-expanded") === "true";
+          for (const o of box.querySelectorAll('[data-skill-info][aria-expanded="true"]')) o.setAttribute("aria-expanded", "false");
+          let info = box.nextElementSibling && box.nextElementSibling.classList.contains("skill-info") ? box.nextElementSibling : null;
+          if (open) {
+            if (info) info.remove();
+            return;
+          }
+          if (!info) {
+            info = document.createElement("p");
+            info.className = "skill-info";
+            info.setAttribute("role", "status");
+            box.after(info);
+          }
+          info.innerHTML = skillInfoHtml(b.dataset.skillInfo);
+          b.setAttribute("aria-expanded", "true");
+        });
         function soldierWhere(s) {
           const q = squadById(s.squadId);
           if (!q) return "所属なし";
