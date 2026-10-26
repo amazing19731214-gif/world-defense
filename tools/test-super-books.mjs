@@ -115,7 +115,7 @@ r = await ev((uid) => {
   const L = WD_DEBUG.legendApi,
     s = WD_DEBUG.state().soldiers.find((x) => x.id === 11),
     hits = [];
-  const ok = L.useLegendBook(s, uid);
+  const ok = L.equipBook(s, uid);
   L.legendStrike(
     s,
     { x: 0, y: 0 },
@@ -130,14 +130,19 @@ r = await ev((uid) => {
   return {
     on: L.endgameOn(),
     ok,
-    legend: s.legend,
+    eq: L.booksOf(11).map((b) => b.k + "=" + b.v),
+    beam: WD_DEBUG.squadApi.skillSum(s, "beam"),
     hits: hits.length,
-    left: WD_DEBUG.forgeApi.save().legendBooks.some((b) => b.uid === uid),
+    left: WD_DEBUG.forgeApi.save().legendBooks.some((b) => b.uid === uid && b.owner === 11),
   };
 }, sb.uid);
 check(
-  "解放前でも使えて、同じ強さで習得し、書はなくなる",
-  r.on === false && r.ok === null && r.legend.abil.some((a) => a.k === "beam" && a.v === sb.v) && !r.left,
+  "解放前でも装備できて、同じ強さで効き、書はなくならない（装備中）",
+  r.on === false &&
+    r.ok === null &&
+    r.eq.join() === "beam=" + sb.v &&
+    Math.abs(r.beam - sb.v) < 1e-9 &&
+    r.left,
   JSON.stringify(r),
 );
 check("解放前でも貫通ビームサーベルが発動する（一直線上の敵に当たる）", r.hits > 0, JSON.stringify(r));
@@ -158,7 +163,7 @@ r = await ev(() => {
     ssr2: ssr2.superBook || null,
     chain: F.save().legendBooks.filter((b) => b.super && b.k === "chain").length,
     saved: JSON.parse(localStorage.getItem("worldDefense.warlords.v1")).forge.legendBooks.filter(
-      (b) => b.super,
+      (b) => b.super && b.k === "chain",
     ).length,
   };
 });
@@ -249,7 +254,7 @@ r = await ev(() => {
   L.setRng();
   const s = find(12),
     base = a.soldierStats(s).atk;
-  const use = L.useLegendBook(s, atkBook.uid);
+  const use = L.equipBook(s, atkBook.uid);
   return {
     list: list.join(),
     e: [e1, e2, e3],
@@ -258,9 +263,10 @@ r = await ev(() => {
     hpBook,
     use,
     ratio: a.soldierStats(s).atk / base,
-    on: s.legend && s.legend.on,
+    on: (F.save().legendBooks.find((b) => b.uid === atkBook.uid) || {}).owner,
     mentor: F.save().mentors[1].skill, // 新しい順（[0] は体力の書）
     left: F.save().legendBooks.some((b) => b.uid === atkBook.uid),
+    sid: s.id,
   };
 });
 check("どの兵士でも能力値の書4種（攻撃・防御・体力・射程）を選べる", r.list === "atk,def,hp,rng", r.list);
@@ -277,8 +283,8 @@ check(
 );
 check("指導員名簿に「🎯射程の書（射程 +1）」と記録", /🎯射程の書（射程 \+1）/.test(r.mentor), r.mentor);
 check(
-  "攻撃の書を使うと、解放前でも攻撃 +15% が働く（有効な能力値になる・書はなくなる）",
-  r.use === null && Math.abs(r.ratio - 1.15) < 0.02 && r.on === 0 && !r.left,
+  "攻撃の書を装備すると、解放前でも攻撃 +15% が働く（書はなくならない）",
+  r.use === null && Math.abs(r.ratio - 1.15) < 0.02 && r.on === r.sid && r.left,
   JSON.stringify(r),
 );
 if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
@@ -308,6 +314,131 @@ r = await ev(() => document.documentElement.scrollWidth > innerWidth);
 check("375×667：横にはみ出さない（引退の画面）", !r);
 await page.tap("#retireClose").catch(() => {});
 
+console.log("■ 書の装備（1人4冊まで・付けた書は全部効く・外せる）");
+r = await ev(() => {
+  const L = WD_DEBUG.legendApi,
+    F = WD_DEBUG.forgeApi,
+    a = WD_DEBUG.squadApi,
+    s = WD_DEBUG.state().soldiers.find((x) => x.id === 13),
+    st = () => a.soldierStats(s),
+    free = (pred) => F.save().legendBooks.filter((b) => b.owner == null && pred(b)),
+    base = st();
+  const rng = free((b) => b.k === "rngFlat")[0],
+    hp = free((b) => b.k === "hpFlat")[0],
+    def = free((b) => b.k === "defFlat" || b.k === "defPct")[0],
+    chains = free((b) => b.k === "chain");
+  const errs = [rng, hp, def, chains[0]].map((b) => L.equipBook(s, b.uid));
+  const full = st(),
+    fifth = L.equipBook(s, chains[1].uid),
+    off = L.unequipBook(hp.uid),
+    afterOff = st(),
+    again = L.equipBook(s, chains[1].uid);
+  return {
+    errs,
+    n: L.booksOf(13).length,
+    range: full.range - base.range,
+    hp: full.maxHp - base.maxHp,
+    def: full.def > base.def,
+    fifth,
+    off,
+    hpBack: afterOff.maxHp - base.maxHp,
+    hpOwner: F.save().legendBooks.find((b) => b.uid === hp.uid).owner,
+    again,
+    chain: a.skillSum(s, "chain"),
+    chainWant: chains[0].v + chains[1].v,
+    hpUid: hp.uid,
+  };
+});
+check(
+  "能力値の書3冊＋特殊能力の書1冊を装備できる（4冊）",
+  r.errs.every((e) => e === null) && r.n === 4,
+  JSON.stringify(r),
+);
+check(
+  "付けた書は全部効く（射程 +1・最大HP +255・防御）",
+  Math.abs(r.range - 1) < 1e-6 && r.hp === 255 && r.def,
+  JSON.stringify(r),
+);
+check("5冊目は装備できない（1人4冊まで）", /4冊まで/.test(r.fifth || ""), r.fifth);
+check(
+  "外すと効果がなくなり、倉庫に戻る",
+  r.off === null && r.hpBack === 0 && r.hpOwner === undefined,
+  JSON.stringify(r),
+);
+check(
+  "同じ特殊能力の書を2冊付けると足し算（連鎖雷撃）",
+  r.again === null && Math.abs(r.chain - r.chainWant) < 1e-9,
+  JSON.stringify(r),
+);
+r = await ev((uid) => {
+  const L = WD_DEBUG.legendApi;
+  L.setSuperRng(() => 1);
+  const e1 = L.equipBook(
+    WD_DEBUG.state().soldiers.find((x) => x.id === 9),
+    uid,
+  );
+  const e2 = L.retireSoldier(9, 0);
+  L.setSuperRng();
+  return { e1, e2, owner: WD_DEBUG.forgeApi.save().legendBooks.find((b) => b.uid === uid).owner };
+}, r.hpUid);
+check(
+  "装備していた兵士が引退すると、書は倉庫に戻る",
+  r.e1 === null && r.e2 === null && r.owner === undefined,
+  JSON.stringify(r),
+);
+if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
+await page.tap("#soldiers");
+await page.tap("#tabLive");
+text = await ev(
+  () =>
+    [...document.querySelectorAll(".s-card")].find((c) => c.querySelector('[data-gear-open="13"]'))
+      .textContent,
+);
+check(
+  "名簿の札に「装備している書（4/4・全部効く）」",
+  /装備している書（4\/4・全部効く）/.test(text),
+  text.slice(0, 300),
+);
+await page.tap('[data-gear-open="13"]');
+text = await page.textContent("#gearBody");
+r = await ev(() => ({
+  off: document.querySelectorAll("#gearBody [data-lbook-off]").length,
+  on: [...document.querySelectorAll("#gearBody [data-lbook-on]")].map((b) => b.disabled),
+  h: document.documentElement.scrollWidth > innerWidth,
+}));
+check(
+  "兵士の装備の画面に「📚 書（4/4）」・外すボタン・倉庫の書（満杯なので押せない）",
+  /📚 書（4\/4）/.test(text) && r.off === 4 && r.on.length > 0 && r.on.every(Boolean) && !r.h,
+  JSON.stringify(r),
+);
+await page.tap("#gearBody [data-lbook-off]");
+r = await ev(() => ({
+  n: WD_DEBUG.legendApi.booksOf(13).length,
+  text: document.getElementById("gearBody").textContent,
+}));
+check(
+  "画面から外せる（3/4 になる）",
+  r.n === 3 && /外して倉庫に戻しました/.test(r.text) && /📚 書（3\/4）/.test(r.text),
+  r.text.slice(0, 200),
+);
+await page.tap("#gearBody [data-lbook-on]:not([disabled])");
+r = await ev(() => WD_DEBUG.legendApi.booksOf(13).length);
+check("画面から装備できる（4/4 に戻る）", r === 4, String(r));
+await page.tap("#gearClose");
+if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
+await page.tap("#gearOpen");
+await page.tap('[data-gear-tab="books"]');
+text = await page.textContent("#gearBody");
+check(
+  "倉庫の一覧：装備中の書は「🎖 装備中」と「外す」、説明に「なくなりません」「1人4冊まで」",
+  /🎖 装備中/.test(text) && /なくなりません/.test(text) && /1人4冊まで/.test(text),
+  text.slice(0, 300),
+);
+await page.tap("#gearClose");
+await reload();
+r = await ev(() => WD_DEBUG.legendApi.booksOf(13).length);
+check("再読み込みしても装備したまま", r === 4, String(r));
+
 console.log("■ 保存と再読み込み");
 await reload();
 r = await ev(() =>
@@ -318,7 +449,7 @@ r = await ev(() =>
 );
 check(
   "再読み込みしても超秘伝書（印つき）が残る",
-  r.sort().join() === "beam:true,chain:true,chain:true",
+  r.sort().join() === "beam:true,beam:true,chain:true,chain:true",
   r.join(),
 );
 await ev(() => {
