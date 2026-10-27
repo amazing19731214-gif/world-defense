@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 兵士の育成・命名・スキル・英霊名鑑・武将の負傷の動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test-soldiers.mjs
 //   SCREENSHOTS=dir node tools/test-soldiers.mjs … 画面写真も保存
@@ -407,7 +408,7 @@ check("名前を保存", sv.soldiers.find((v) => v.id === r.id).name === "権兵
 const namedId = r.id;
 
 console.log("■ 兵士名簿の画面（390px）");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 check("「兵士」ボタンで兵士名簿を開く", await page.isVisible("#soldierSheet"));
 let html = await page.innerHTML("#soldierList");
 let text = await page.textContent("#soldierList");
@@ -534,7 +535,7 @@ r = await ev(page, () => {
   });
 });
 check("クリアしていないウェーブの経験値は保存されない（やり直しで稼げない）", r);
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap("#tabFallen");
 text = await page.textContent("#soldierList");
 check(
@@ -609,7 +610,7 @@ check(
   r.msg,
 );
 check("負傷は保存される", (await stored(page, WKEY)).injured.yukimura === 3);
-await page.tap("#roster");
+await openInfoEntry(page, '#roster');
 text = await page.textContent("#heroList");
 check(
   "武将一覧に負傷中・復帰までのウェーブを表示",

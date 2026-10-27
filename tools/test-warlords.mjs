@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 戦国武将ガチャと、武将の配属（塔・兵士部隊）の動作確認（Playwright / Chromium・iPhone相当の画面幅）
 //   node tools/test-warlords.mjs
 //   SCREENSHOTS=dir node tools/test-warlords.mjs … 画面写真も保存
@@ -123,7 +124,7 @@ let sv = await save(page);
 check("所持武将は0人（武将はガチャでのみ獲得）", Object.keys(sv.owned).length === 0);
 check("初回だけガチャ券3枚を配布", sv.tickets === 3);
 check("ガチャボタンに券の枚数", /ガチャ\(3\)/.test(await page.textContent("#gacha")));
-await page.tap("#roster");
+await openInfoEntry(page, '#roster');
 check(
   "武将一覧：未所持なら案内とガチャへのボタン",
   /まだ武将がいません/.test(await page.textContent("#sheetHint")) &&
@@ -544,7 +545,7 @@ console.log("■ 武将30人（第2弾の20人を含む）");
     ].every((n) => info.names.includes(n)),
   );
   check("名前の重複なし", new Set(info.names).size === 30);
-  await page.tap("#roster");
+  await openInfoEntry(page, '#roster');
   const roster = await page.evaluate(() => ({
     hint: document.getElementById("sheetHint").textContent,
     cards: document.querySelectorAll("#heroList .hero-card").length,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 秘伝錬成・装備・スキルの書の動作確認：重複武将カードの消費（最初の1枚は保護・★と二重に使わない）、
 // レア度別の抽選確率、外れの欠片と交換、武将の傾向、装備（3枠・1つの装備は1人だけ・職業の制限）、
 // 装備の戦闘効果（防衛戦・攻城戦・修練場）、転職・戦死・解散で倉庫へ戻る、スキルの書、保存と再読み込み、画面
@@ -1276,7 +1277,7 @@ check(
   (await page.isHidden("#gearSheet")) && !(await page.isHidden("#heroGrowthSheet")),
 );
 await page.tap("#hgClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap('[data-gear-open="11"]');
 check(
   "兵士名簿から装備画面を開ける",

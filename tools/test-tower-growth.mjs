@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // Six-tower cap, persistent type research, combat integration and save failures.
 import {createRequire} from 'node:module';
 import {readFileSync,mkdirSync} from 'node:fs';
@@ -105,12 +106,12 @@ try{
   const r=await p.evaluate(()=>{const D=WD_DEBUG;document.getElementById('start').click();D.stopSpawning();D.state().enemies.length=0;const e=D.addEnemy({d:400,hp:1000,speed:0,armor:0});D.step(.05);return {damage:1000-e.hp,xp:D.towerGrowthApi.research().arrow};});check('Actual fired arrow applies Lv1000 damage before victory XP is granted',near(r.damage,26.1)&&r.xp>0,r);await c.close();
  }
  for(const [width,height] of [[375,560],[390,844],[430,932],[1280,800]]){
-  const {page:p,context:c}=await setup({},width,height);await p.locator('#towerGrowthOpen').scrollIntoViewIfNeeded();width<700?await p.tap('#towerGrowthOpen'):await p.click('#towerGrowthOpen');
+  const {page:p,context:c}=await setup({},width,height);await openInfoEntry(p, '#towerGrowthOpen');
   const r=await p.evaluate(()=>{const sheet=document.querySelector('#towerGrowthSheet .sheet'),b=document.getElementById('towerGrowthClose').getBoundingClientRect();return {visible:!document.getElementById('towerGrowthSheet').hidden,cards:document.querySelectorAll('[data-growth]').length,overflow:document.documentElement.scrollWidth>innerWidth,fit:[...document.querySelectorAll('.tower-growth-card')].every(el=>el.getBoundingClientRect().right<=innerWidth),button:b.height>=44,sheet:sheet.scrollHeight>sheet.clientHeight};});
   check(`${width}×${height} research dialog opens with four readable cards and no horizontal overflow`,r.visible&&r.cards===4&&!r.overflow&&r.fit&&r.button,r);
   if(process.env.SCREENSHOTS){mkdirSync(process.env.SCREENSHOTS,{recursive:true});await p.screenshot({path:`${process.env.SCREENSHOTS}/tower-growth-${width}.png`});}
   await p.keyboard.press('Tab');check(`${width}px keyboard reaches the rules control`,await p.evaluate(()=>document.activeElement.matches('#towerGrowthSheet summary')));
-  await p.keyboard.press('Escape');check(`${width}px dialog closes and restores opener focus`,await p.evaluate(()=>document.getElementById('towerGrowthSheet').hidden&&document.activeElement.id==='towerGrowthOpen'));await c.close();
+  await p.keyboard.press('Escape');check(`${width}px dialog closes and restores opener focus`,await p.evaluate(()=>document.getElementById('towerGrowthSheet').hidden&&document.activeElement.id==='infoOpen'));await c.close();
  }
  check('No JavaScript errors in all browser cases',errors.length===0,errors);
  console.log(`結果: ${passes} 件成功 / ${failures} 件失敗`);process.exitCode=failures?1:0;
