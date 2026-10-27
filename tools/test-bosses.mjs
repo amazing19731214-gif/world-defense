@@ -253,8 +253,11 @@ check("落雷は狙われた部隊の全員に当たる", r.all && r.n > 1, JSON
 check("守りの陣で落雷のダメージが半分", Math.abs(r.ratio - 0.5) < 1e-9, JSON.stringify(r));
 r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi,
-    e = a.bossOf(),
-    d0 = e.d;
+    e = a.bossOf();
+  // 端で外向きに跳ぶと境界へ補正され、同じ位置に留まる。どちらの方向にも跳べる中央から確認する。
+  e.d = 720;
+  Object.assign(e, WD_DEBUG.pathAt(e.path, e.d));
+  const d0 = e.d;
   a.battle().warn = null;
   e.leap = 0;
   WD_DEBUG.step(0.05);
