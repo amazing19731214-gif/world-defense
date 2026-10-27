@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v71（塔育成・マップ内通知）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v72（武将の永続育成・自然回復）</small>
     </main>
     <div id="towerGrowthSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="towerGrowthTitle">
@@ -3269,18 +3269,16 @@ OFF</button>
     "favorite": "medic",
     "role": "範囲ヒーラー",
     "squadPassive": {
-      "kind": "hideyoshi",
-      "healAura": 1.2,
+      "regenAura": 0.005,
       "radius": 160
     },
     "towerPassive": {
-      "kind": "hideyoshi",
-      "regen": 0.01,
+      "regenAura": 0.005,
       "radius": 160
     },
-    "squadText": "半径160の衛生兵の回復量 +20%（同じ効果は重複しない）",
-    "towerText": "半径160の生存兵を毎秒最大HPの1%回復",
-    "passiveText": "部隊：半径160の衛生兵の回復量 +20%（同じ効果は重複しない）／塔：半径160の生存兵を毎秒最大HPの1%回復",
+    "squadText": "配属先を中心に半径160の生存兵・全壊していない味方の塔を毎秒最大HP・耐久の0.5%自然回復",
+    "towerText": "配属先を中心に半径160の生存兵・全壊していない味方の塔を毎秒最大HP・耐久の0.5%自然回復",
+    "passiveText": "配属先を中心に半径160の生存兵・全壊していない味方の塔を毎秒最大HP・耐久の0.5%自然回復（戦闘中。自然回復の合計は毎秒2.5%まで）",
     "skill": {
       "name": "天下人の大救護",
       "kind": "greatAid",
@@ -3295,7 +3293,7 @@ OFF</button>
     "siegePassive": {
       "damageMul": 1.1,
       "defMul": 1,
-      "text": "攻撃 +10%・防御 +0%（★の攻撃補正は別途適用）"
+      "text": "出撃中、半径160の生存兵を毎秒最大HPの0.5%自然回復（魂喰い中は無効）"
     }
   },
   "yukimura": {
@@ -3339,18 +3337,14 @@ OFF</button>
     "favorite": "medic",
     "role": "主力ヒーラー",
     "squadPassive": {
-      "kind": "kanetsugu",
-      "healMul": 1.3,
-      "healInterval": 0.8
+      "regen": 0.01
     },
     "towerPassive": {
-      "kind": "kanetsugu",
-      "medicRangeMul": 1.2,
-      "radius": 140
+      "regen": 0.01
     },
-    "squadText": "配属した衛生兵の回復量 +30%、回復間隔 -20%",
-    "towerText": "半径140の衛生兵の回復射程 +20%（同じ効果は重複しない）",
-    "passiveText": "部隊：配属した衛生兵の回復量 +30%、回復間隔 -20%／塔：半径140の衛生兵の回復射程 +20%（同じ効果は重複しない）",
+    "squadText": "配属した部隊の生存兵、または配属した塔を毎秒最大HP・耐久の1%自然回復",
+    "towerText": "配属した部隊の生存兵、または配属した塔を毎秒最大HP・耐久の1%自然回復",
+    "passiveText": "配属した部隊の生存兵、または配属した塔を毎秒最大HP・耐久の1%自然回復（戦闘中。自然回復の合計は毎秒2.5%まで）",
     "skill": {
       "name": "愛の救護陣",
       "kind": "healingField",
@@ -3365,7 +3359,7 @@ OFF</button>
     "siegePassive": {
       "damageMul": 1,
       "defMul": 1,
-      "text": "攻撃 +0%・防御 +0%（★の攻撃補正は別途適用）"
+      "text": "出撃中、自部隊の生存兵を毎秒最大HPの1%自然回復（魂喰い中は無効）"
     }
   },
   "masamune": {
@@ -5151,6 +5145,113 @@ OFF</button>
               .slice(0, FORGE.historySize),
           };
         }
+        // 武将の永続育成。★（重複カード）とは別。Lv1の既存能力は維持し、成長は対数で抑える。
+        const WARLORD_LEVEL_RULES = { maxLevel: 9999, xpPerSecond: 2, waveCap: 20, battleCap: 60, regenCap: 0.025 };
+        const WARLORD_LEVEL_CACHE = new Map(), WARLORD_GROWTH_CACHE = new Map();
+        const WARLORD_XP_TOTAL = [0, 0];
+        for (let lv = 1; lv < WARLORD_LEVEL_RULES.maxLevel; lv++)
+          WARLORD_XP_TOTAL[lv + 1] = WARLORD_XP_TOTAL[lv] + 40 + 4 * Math.floor(Math.sqrt(lv - 1));
+        const WARLORD_XP_MAX = WARLORD_XP_TOTAL[WARLORD_LEVEL_RULES.maxLevel];
+        // Lv9999での追加値。hp/atk/def/range/speedは倍率への加算、guard/evadeは確率への加算。
+        const WARLORD_GROWTH = {
+          nobunaga: { speed: 0.15, special: 0.5 }, shingen: { def: 0.35, guard: 0.06 },
+          kenshin: { evade: 0.12, speed: 0.08 }, motoyasu: { hp: 0.35, guard: 0.08 },
+          hideyoshi: { regen: 1, aura: 0.25 }, yukimura: { hp: 0.4, def: 0.25 },
+          kanetsugu: { regen: 1 }, masamune: { speed: 0.12, atk: 0.15 },
+          tadakatsu: { hp: 0.3, guard: 0.1 }, mitsuhide: { range: 0.2, special: 0.5 },
+          mitsunari: { range: 0.15, special: 0.5 }, yoshihiro: { special: 0.5, atk: 0.1 },
+          motochika: { range: 0.1, special: 0.5 }, kiyomasa: { hp: 0.2, special: 0.5 },
+          hanbei: { guard: 0.08, range: 0.15 }, muneshige: { atk: 0.2, range: 0.1 },
+          kanbei: { special: 0.5, range: 0.1 }, motonari: { special: 0.5, speed: 0.08 },
+          keiji: { atk: 0.2, evade: 0.08 }, ujiyasu: { hp: 0.25, def: 0.35 },
+          masanori: { special: 0.5, atk: 0.15 }, kansuke: { range: 0.2, def: 0.2 },
+          yoshiaki: { range: 0.15, special: 0.5 }, yoshikage: { regen: 1, hp: 0.15 },
+          dosan: { special: 0.5, range: 0.1 }, yoshikata: { guard: 0.1, special: 0.5 },
+          haruhisa: { atk: 0.2, special: 0.5 }, sorin: { range: 0.15, special: 0.5 },
+          takanobu: { guard: 0.1, def: 0.2 }, terumoto: { hp: 0.2, special: 0.5 },
+        };
+        function cleanWarlordProgress(data, owned) {
+          return Object.fromEntries(Object.keys(owned).map(id => [id, data && Number.isFinite(data[id])
+            ? Math.max(0, Math.min(WARLORD_XP_MAX, Math.floor(data[id]))) : 0]));
+        }
+        function warlordLevel(id) {
+          const total = heroSave.warlordProgress[id] || 0;
+          const cached = WARLORD_LEVEL_CACHE.get(id); if (cached && cached.total === total) return cached;
+          let lo = 1, hi = WARLORD_LEVEL_RULES.maxLevel;
+          while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (WARLORD_XP_TOTAL[mid] <= total) lo = mid; else hi = mid - 1; }
+          const out = { level: lo, total, xp: total - WARLORD_XP_TOTAL[lo], need: lo < WARLORD_LEVEL_RULES.maxLevel ? WARLORD_XP_TOTAL[lo + 1] - WARLORD_XP_TOTAL[lo] : 0 };
+          WARLORD_LEVEL_CACHE.set(id, out); return out;
+        }
+        function warlordGrowth(id) {
+          const level = warlordLevel(id).level, cached = WARLORD_GROWTH_CACHE.get(id);
+          if (cached && cached.level === level) return cached.growth;
+          const progress = Math.log10(level) / 4;
+          const growth = Object.fromEntries(Object.entries(WARLORD_GROWTH[id] || {}).map(([key, val]) => [key, val * progress]));
+          WARLORD_GROWTH_CACHE.set(id, {level, growth}); return growth;
+        }
+        const warlordSpecial = id => 1 + (warlordGrowth(id).special || 0);
+        const warlordCooldown = id => WARLORDS[id].skill.cooldown * (1 - 0.1 * Math.log10(warlordLevel(id).level) / 4);
+        function warlordGrowthText(id) {
+          const labels = { hp: '最大HP・耐久', atk: '攻撃', def: '防御', range: '射程', speed: '攻撃速度', guard: '被ダメージ軽減', evade: '回避率', regen: '自然回復量', aura: '回復範囲', special: '固有効果の追加分' };
+          const specialNames = { nobunaga: '追撃威力', mitsuhide: '初撃ボーナス', mitsunari: '連携ボーナス', yoshihiro: '近距離ボーナス', motochika: '弱体持続', kiyomasa: '追撃威力', kanbei: '弱点・連撃', motonari: '連携追加威力', masanori: '初撃ボーナス', yoshiaki: '迎撃ボーナス', dosan: '毒の威力', yoshikata: '対弓兵ボーナス', haruhisa: '突破追撃ボーナス', sorin: '貫通効果', terumoto: '補給効果' };
+          labels.special = specialNames[id] || labels.special;
+          if (warlordLevel(id).level === 1) return Object.keys(WARLORD_GROWTH[id]).map(k => labels[k]).join('・') + 'がLvで成長／必殺技の待ちも短縮';
+          const g = warlordGrowth(id), fmtPct = n => (n * 100).toFixed(1).replace(/\.0$/, '');
+          const current = Object.entries(WARLORD_GROWTH[id]).map(([key]) => labels[key] + ' +' + fmtPct(g[key]) + '%').join('・');
+          const regen = id === 'kanetsugu' ? '／配属先を毎秒' + fmtPct(0.01 * (1 + (g.regen || 0))) + '%自然回復' : id === 'hideyoshi' ? '／半径' + Math.round(160 * (1 + (g.aura || 0))) + '・毎秒' + fmtPct(0.005 * (1 + (g.regen || 0))) + '%自然回復' : '';
+          return current + regen + '／必殺技の待ち -' + fmtPct(1 - warlordCooldown(id) / WARLORDS[id].skill.cooldown) + '%';
+        }
+        function warlordLevelHtml(id) {
+          const p = warlordLevel(id);
+          return '<p class="muted warlord-growth" data-warlord-level="' + id + '"><b>Lv' + p.level + '</b> ' + (p.need ? 'EXP ' + p.xp + ' / ' + p.need : 'MAX') + '<br>育成：' + esc(warlordGrowthText(id)) + '</p>';
+        }
+        function gainWarlordXp(id, amount) {
+          if (!heroSave.owned[id] || !Number.isFinite(amount) || amount <= 0) return false;
+          const before = warlordLevel(id).level;
+          // 最大HPの成長で全回復させず、現在HPの割合を保つ。
+          const targets = [];
+          const h = heroState[id];
+          if (h && h.tower && !h.tower.destroyed) targets.push({ obj: h.tower, max: towerMaxHp(h.tower), tower: true });
+          if (!battle && h && h.squad) for (const m of members(h.squad)) targets.push({ obj: m, max: rawMaxHp(m) });
+          if (battle) for (const g of battle.groups) if (g.hero === id) for (const m of groupAlive(g))
+            if (!targets.some(t => t.obj === m)) targets.push({ obj: m, max: battleStats(g, m).maxHp, group: g });
+          heroSave.warlordProgress[id] = Math.min(WARLORD_XP_MAX, (heroSave.warlordProgress[id] || 0) + Math.floor(amount));
+          const after = warlordLevel(id).level;
+          if (after <= before) return false;
+          for (const t of targets) {
+            const max = t.tower ? towerMaxHp(t.obj) : t.group ? battleStats(t.group, t.obj).maxHp : rawMaxHp(t.obj);
+            t.obj.hp = Math.min(max, t.obj.hp * max / t.max);
+          }
+          queueLevelNews({ key: 'warlord:' + id, kind: 'warlord', heroId: id, level: after });
+          return true;
+        }
+        function awardWarlordWaveXp() {
+          for (const h of ownedHeroes()) {
+            if (h.waveSeconds > 0) gainWarlordXp(h.id, Math.min(WARLORD_LEVEL_RULES.waveCap, Math.floor(h.waveSeconds * WARLORD_LEVEL_RULES.xpPerSecond)));
+            h.waveSeconds = 0; // 同じクリアの再呼び出しでは経験値を増やさない。
+          }
+        }
+        function tickWarlordRegen(dt, siege = false) {
+          const sources = siege ? battle.groups.filter(groupActive).filter(g => g.hero).map(g => ({ id: g.hero, pos: g, group: g }))
+            : ownedHeroes().filter(h => heroPos(h) && (!h.tower || !h.tower.destroyed)).map(h => ({ id: h.id, pos: heroPos(h), h }));
+          if (siege && battle.soulEat) return;
+          const healers = sources.filter(src => src.id === "kanetsugu" || src.id === "hideyoshi");
+          if (!healers.length) return;
+          const targets = siege ? battle.groups.filter(groupActive).flatMap(g => groupAlive(g).map(m => ({ obj: m, pos: g, max: battleStats(g, m).maxHp, group: g })))
+            : [...fieldSquads().flatMap(q => members(q).map(m => ({ obj: m, pos: q, max: rawMaxHp(m), q }))),
+              ...towers.filter(t => !t.destroyed).map(t => ({ obj: t, pos: t, max: towerMaxHp(t), tower: true }))];
+          for (const t of targets) {
+            let rate = 0;
+            for (const src of healers) {
+              const grow = warlordGrowth(src.id);
+              if (src.id === 'kanetsugu' && (siege ? src.group === t.group : src.h.tower === t.obj || src.h.squad === t.q)) rate += 0.01 * (1 + (grow.regen || 0));
+              if (src.id === 'hideyoshi' && dist(src.pos, t.pos) <= 160 * (1 + (grow.aura || 0))) rate += 0.005 * (1 + (grow.regen || 0));
+            }
+            // 回復増幅も含めた自然回復の合計上限。戦死・全壊した対象は上の一覧に入れない。
+            const heal = t.max * Math.min(WARLORD_LEVEL_RULES.regenCap, rate * (t.tower ? 1 : healTakenMul(t.obj))) * dt;
+            if (heal > 0) t.obj.hp = Math.min(t.max, t.obj.hp + heal);
+          }
+        }
         function loadWarlordSave() {
           const fresh = () => ({
             owned: {},
@@ -5160,6 +5261,7 @@ OFF</button>
             injured: {},
             forge: cleanForge(null),
             towerResearch: cleanTowerResearch(null),
+            warlordProgress: {},
           });
           let raw = null;
           try {
@@ -5195,12 +5297,13 @@ OFF</button>
               injured,
               defense: data.defense || null,
               towerResearch: cleanTowerResearch(data.towerResearch),
+              warlordProgress: cleanWarlordProgress(data.warlordProgress, owned),
               forge: cleanForge(data.forge), // 以前の保存データには無い（重複カードは今の枚数のまま。錬成で使った分は減っている）
             };
           } catch (err) {
             // 壊れた保存データ：所持はなしで開始（初回配布の券は二重に配らない）
             console.warn("武将の保存データを読み込めないため初期化します", err);
-            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), towerResearch: cleanTowerResearch(null), broken: true };
+            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), towerResearch: cleanTowerResearch(null), warlordProgress: {}, broken: true };
           }
         }
         // ===== 戦国図鑑（発見の記録） =====
@@ -5287,6 +5390,7 @@ OFF</button>
                 forge: heroSave.forge,
                 defense: heroSave.defense || null,
                 towerResearch: heroSave.towerResearch,
+                warlordProgress: heroSave.warlordProgress,
               }),
             );
             saveOk = true;
@@ -5310,7 +5414,7 @@ OFF</button>
         const ownedHeroes = () => ownedIds().map((id) => heroState[id]);
         // 武将が戦場で効果を出せる位置（塔、または道に出ている部隊）。待機中の部隊なら null
         function heroPos(h) {
-          if (h.tower) return h.tower;
+          if (h.tower && !h.tower.destroyed) return h.tower;
           if (h.squad && h.squad.state === "deployed") return h.squad;
           return null;
         }
@@ -5423,9 +5527,10 @@ OFF</button>
           out.heal *= aura;
           return out;
         }
+        const squadWarlordHp = q => { const h = q && heroOnSquad(q); return h ? 1 + (warlordGrowth(h.id).hp || 0) : 1; };
         const rawMaxHp = (s) => {
           const c = unitOf(s), lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
-          return legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1)));
+          return legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1) * squadWarlordHp(squadById(s.squadId))));
         };
         const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)) * (t.npc ? 1 : towerGrowth(t.type).hp));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
@@ -5464,11 +5569,12 @@ OFF</button>
           const p = types[t.type], h = heroOn(t);
           let damage = p.damage * (1 + 0.55 * (t.level - 1)) * (t.npc ? 1 : towerGrowth(t.type).damage), range = p.range, speedMul = 1;
           if (h) {
-            damage *= starMul(h.id);
-            if (h.id === "keiji" && !towers.some((o) => o !== t && !o.destroyed && dist(o, t) < 140)) damage *= 1.2;
-            if (h.id === "mitsunari" && towers.some((o) => o !== t && !o.destroyed && o.type !== t.type && dist(o, t) <= 150)) range *= 1.15;
-            if (h.id === "kansuke" && nearBend(t)) range *= 1.15;
-            if (h.id === "yoshiaki" && dist(t, { x: 960, y: 300 }) <= 250) speedMul /= 0.85;
+            const grow = warlordGrowth(h.id);
+            damage *= starMul(h.id) * (1 + (grow.atk || 0)); range *= 1 + (grow.range || 0); speedMul *= 1 + (grow.speed || 0);
+            if (h.id === "keiji" && !towers.some((o) => o !== t && !o.destroyed && dist(o, t) < 140)) damage *= 1 + 0.2 * warlordSpecial(h.id);
+            if (h.id === "mitsunari" && towers.some((o) => o !== t && !o.destroyed && o.type !== t.type && dist(o, t) <= 150)) range *= 1 + 0.15 * warlordSpecial(h.id);
+            if (h.id === "kansuke" && nearBend(t)) range *= 1 + 0.15 * warlordSpecial(h.id);
+            if (h.id === "yoshiaki" && dist(t, { x: 960, y: 300 }) <= 250) speedMul /= 1 - 0.15 * warlordSpecial(h.id);
           }
           damage *= stagedBonus(t).atk;
           return { range, damage, splash: CANNON_SPLASH, rate: p.rate / Math.min(2.5, speedMul), speedMul, aura: 0 };
@@ -5483,18 +5589,20 @@ OFF</button>
             out.atk *= favorite(h, q) ? 1.25 : 1.15;
             out.def *= favorite(h, q) ? 1.3 : 1.2;
           }
-          if (h.id === "mitsunari" && fieldSquads().some((o) => o !== q && o.type === q.type && dist(o, q) <= 150)) out.atk *= 1.15;
+          if (h.id === "mitsunari" && fieldSquads().some((o) => o !== q && o.type === q.type && dist(o, q) <= 150)) out.atk *= 1 + 0.15 * warlordSpecial(h.id);
           if (h.id === "muneshige" && fieldSquads().some((o) => o !== q && dist(o, q) <= 150 && blockCount(o))) out.atk *= favorite(h, q) ? 1.25 : 1.15;
           if (h.id === "kansuke" && nearBend(q)) out.def *= 1.2;
           if (h.id === "yukimura") out.def *= 1.2;
           out.def *= WARLORDS[h.id].squadPassive.defMul || 1;
+          const grow = warlordGrowth(h.id);
+          out.atk *= 1 + (grow.atk || 0); out.def *= 1 + (grow.def || 0); out.range *= 1 + (grow.range || 0); out.speed *= 1 + (grow.speed || 0);
           out.atk *= stagedBonus(q).atk;
           return out;
         }
         function soldierHeroAtk(s) { return 1; }
-        function passiveTextFor(id, target) {
+        function passiveTextFor(id, target, includeGrowth = true) {
           const c = WARLORDS[id];
-          return towers.includes(target) ? c.towerText : squads.includes(target) ? c.squadText : c.passiveText;
+          return (towers.includes(target) ? c.towerText : squads.includes(target) ? c.squadText : c.passiveText) + (includeGrowth ? "／Lv" + warlordLevel(id).level + "：" + warlordGrowthText(id) : "");
         }
         function endSkill(h) {
           h.active = 0;
@@ -5541,25 +5649,25 @@ OFF</button>
           let damage = raw, ignore = options.ignoreArmor || 0;
           if (normal && h) {
             const token = (s ? "s" + s.id : "tower") + ":" + enemyToken(e), fresh = !seenTarget(h, token);
-            if (q && h.id === "mitsuhide" && e.hp >= e.max - 0.001) damage *= favorite(h, q) ? 1.5 : 1.25;
-            if (h.id === "masanori" && fresh && (!q || hasType(q, (c) => c.block))) damage *= t ? 1.3 : favorite(h, q) ? 1.35 : 1.2;
+            if (q && h.id === "mitsuhide" && e.hp >= e.max - 0.001) damage *= 1 + (favorite(h, q) ? 0.5 : 0.25) * warlordSpecial(h.id);
+            if (h.id === "masanori" && fresh && (!q || hasType(q, (c) => c.block))) damage *= 1 + (t ? 0.3 : favorite(h, q) ? 0.35 : 0.2) * warlordSpecial(h.id);
             if (h.id === "masamune" && fresh) {
               if (s) s.cd *= favorite(h, q) ? 0.55 : 0.75;
               else if (t) t.nextRateMul = 0.65;
             }
-            if (q && h.id === "yoshihiro" && dist(q, e) <= 60) damage *= favorite(h, q) ? 1.35 : 1.15;
-            if (t && h.id === "yoshihiro") damage *= 1 + 0.3 * Math.max(0, 1 - dist(t, e) / towerStats(t).range);
-            if (q && h.id === "yoshiaki") damage *= 1 + Math.min(1, e.d / pathLength(e.path)) * (favorite(h, q) ? 0.3 : 0.2);
+            if (q && h.id === "yoshihiro" && dist(q, e) <= 60) damage *= 1 + (favorite(h, q) ? 0.35 : 0.15) * warlordSpecial(h.id);
+            if (t && h.id === "yoshihiro") damage *= 1 + 0.3 * warlordSpecial(h.id) * Math.max(0, 1 - dist(t, e) / towerStats(t).range);
+            if (q && h.id === "yoshiaki") damage *= 1 + Math.min(1, e.d / pathLength(e.path)) * (favorite(h, q) ? 0.3 : 0.2) * warlordSpecial(h.id);
             if (t && h.id === "muneshige" && e.blockedBy) damage *= 1.25;
-            if (t && h.id === "haruhisa" && (e.recentBreak || 0) > 0) damage *= 1.3;
-            if (t && h.id === "yoshikata" && e.kind === "dragon") damage *= 1.2;
+            if (t && h.id === "haruhisa" && (e.recentBreak || 0) > 0) damage *= 1 + 0.3 * warlordSpecial(h.id);
+            if (t && h.id === "yoshikata" && e.kind === "dragon") damage *= 1 + 0.2 * warlordSpecial(h.id);
             if (t && h.id === "kanbei") {
               h.chain = h.chainTarget === e ? Math.min(5, h.chain + 1) : 0;
               h.chainTarget = e;
-              damage *= 1 + h.chain * 0.06;
+              damage *= 1 + h.chain * 0.06 * warlordSpecial(h.id);
             }
-            if (t && h.id === "motonari" && e.lastTowerId !== undefined && e.lastTowerId !== t.id && combatClock - e.lastTowerAt <= 1) damage *= 1.2;
-            if (q && h.id === "sorin") ignore = Math.max(ignore, favorite(h, q) ? 0.4 : 0.2);
+            if (t && h.id === "motonari" && e.lastTowerId !== undefined && e.lastTowerId !== t.id && combatClock - e.lastTowerAt <= 1) damage *= 1 + 0.2 * warlordSpecial(h.id);
+            if (q && h.id === "sorin") ignore = Math.max(ignore, Math.min(0.6, (favorite(h, q) ? 0.4 : 0.2) * warlordSpecial(h.id)));
           }
           if (s) ignore = Math.max(ignore, skillSum(s, "armorPierce")); // 貫通射撃
           const focus = ownedHeroes().some((v) => activeKind(v, "focus") && v.skillTarget === e);
@@ -5577,19 +5685,19 @@ OFF</button>
           if (t) { e.lastTowerId = t.id; e.lastTowerAt = combatClock; }
           if (h) h.lastActivity = combatClock;
           if (normal && h && e.hp > 0) {
-            if (q && h.id === "kanbei") putWeakness(e, 0.08, 2);
-            if (h.id === "dosan") putPoison(e, raw * 0.06, 3, source);
-            if (q && h.id === "motochika") putSlow(e, 0.85, favorite(h, q) ? 1 : 0.5);
-            if (t && h.id === "motochika") putAttackDebuff(e, 0.12, 2);
+            if (q && h.id === "kanbei") putWeakness(e, 0.08 * warlordSpecial(h.id), 2);
+            if (h.id === "dosan") putPoison(e, raw * 0.06 * warlordSpecial(h.id), 3, source);
+            if (q && h.id === "motochika") putSlow(e, 0.85, (favorite(h, q) ? 1 : 0.5) * warlordSpecial(h.id));
+            if (t && h.id === "motochika") putAttackDebuff(e, 0.12, 2 * warlordSpecial(h.id));
             if (q && h.id === "motonari" && s) {
               e.comboByHero ||= {};
               const ids = e.comboByHero[h.id] ||= [];
               if (!ids.includes(s.id)) ids.push(s.id);
-              if (ids.length >= 3) { ids.length = 0; dealEnemyDamage(e, raw * 0.35, source, { normal: false }); }
+              if (ids.length >= 3) { ids.length = 0; dealEnemyDamage(e, raw * 0.35 * warlordSpecial(h.id), source, { normal: false }); }
             }
             if (q && h.id === "kiyomasa" && hasType(q, (c) => c.block)) {
               const other = aliveEnemies().find((a) => a !== e && dist(a, e) < 30);
-              if (other) dealEnemyDamage(other, raw * (favorite(h, q) ? 0.35 : 0.2), source, { normal: false });
+              if (other) dealEnemyDamage(other, raw * (favorite(h, q) ? 0.35 : 0.2) * warlordSpecial(h.id), source, { normal: false });
             }
           }
           return damage;
@@ -5599,12 +5707,12 @@ OFF</button>
           if (!h) return;
           h.shots++;
           if (h.shots % 4 === 0 && h.id === "nobunaga" && e.hp > 0) {
-            dealEnemyDamage(e, damage * 0.6, { t, h }, { normal: false });
+            dealEnemyDamage(e, damage * 0.6 * warlordSpecial(h.id), { t, h }, { normal: false });
             burst(e.x, e.y, "#ffbd77", "slash");
           }
           if (h.shots % 4 === 0 && h.id === "sorin") {
             const end = { x: t.x + (e.x - t.x) * 2, y: t.y + (e.y - t.y) * 2 };
-            for (const other of lineTargets(t, end, 22)) if (other !== e && dist(t, other) >= dist(t, e)) dealEnemyDamage(other, damage * 0.5, { t, h }, { normal: false });
+            for (const other of lineTargets(t, end, 22)) if (other !== e && dist(t, other) >= dist(t, e)) dealEnemyDamage(other, damage * 0.5 * warlordSpecial(h.id), { t, h }, { normal: false });
           }
         }
         function heroGuard(target, isRanged, enemy) {
@@ -5614,6 +5722,8 @@ OFF</button>
           let multiplier = 1;
           if (h) {
             h.lastActivity = combatClock;
+            const grow = warlordGrowth(h.id);
+            multiplier *= (1 - (grow.guard || 0)) / (t ? 1 + (grow.def || 0) : 1);
             if (activeKind(h, "redGuard")) multiplier *= 0.5;
             if (t) multiplier *= 1 - (WARLORDS[h.id].towerPassive.guard || 0);
             if (activeKind(h, "taunt")) multiplier *= 0.7;
@@ -5776,7 +5886,7 @@ OFF</button>
           const target = resolveSkillTarget(h, input);
           if (!target) return false;
           const c = WARLORDS[h.id], s = c.skill, pos = heroPos(h);
-          h.active = s.duration; h.cd = s.cooldown; h.skillTarget = target.enemy || null;
+          h.active = s.duration; h.cd = warlordCooldown(h.id); h.skillTarget = target.enemy || null;
           h.field = { x: target.point ? target.point.x : pos.x, y: target.point ? target.point.y : pos.y };
           h.pulses = 0; h.pulseClock = 0; h.triggered = false;
           if (s.kind === "redeploy") {
@@ -5835,6 +5945,7 @@ OFF</button>
         }
         function tickHeroes(dt) {
           combatClock += dt;
+          tickWarlordRegen(dt);
           for (const e of aliveEnemies()) {
             for (const key of ["weakLeft", "debuffLeft", "heroSlowLeft", "attackSlowLeft", "silence", "stun", "recentBreak"]) e[key] = Math.max(0, (e[key] || 0) - dt);
             if (!e.heroSlowLeft) e.heroSlow = 1;
@@ -5847,6 +5958,7 @@ OFF</button>
           for (const h of ownedHeroes()) {
             h.cd = Math.max(0, h.cd - dt);
             const pos = heroPos(h);
+            if (pos) h.waveSeconds = Math.min(WARLORD_LEVEL_RULES.waveCap / WARLORD_LEVEL_RULES.xpPerSecond, (h.waveSeconds || 0) + dt);
             if (h.id === "kenshin" && pos) {
               h.passiveClock += dt;
               const interval = h.tower ? 8 : favorite(h, h.squad) ? 4 : 6;
@@ -5861,12 +5973,8 @@ OFF</button>
               }
             }
             if (pos && h.id === "yoshikage" && combatClock - h.lastActivity >= 3) {
-              if (h.tower) healTarget(h.tower, towerMaxHp(h.tower) * 0.007 * dt, null, true);
-              else for (const m of members(h.squad)) healTarget(m, rawMaxHp(m) * 0.01 * dt, null, true);
-            }
-            if (pos && h.tower && WARLORDS[h.id].towerPassive.regen) {
-              const p = WARLORDS[h.id].towerPassive;
-              for (const q of fieldSquads()) if (inHeroArea(h, q, p.radius)) for (const m of members(q)) healTarget(m, rawMaxHp(m) * p.regen * dt, null, true);
+              if (h.tower) healTarget(h.tower, towerMaxHp(h.tower) * 0.007 * (1 + (warlordGrowth(h.id).regen || 0)) * dt, null, true);
+              else for (const m of members(h.squad)) healTarget(m, rawMaxHp(m) * 0.01 * (1 + (warlordGrowth(h.id).regen || 0)) * dt, null, true);
             }
             if (h.active <= 0) continue;
             if (!pos) { endSkill(h); continue; }
@@ -6088,6 +6196,7 @@ OFF</button>
           levelNews.set(news.key, news);
         }
         function levelNewsText(news) {
+          if (news.kind === "warlord") return "✨ " + WARLORDS[news.heroId].name + " Lv" + news.level + "！";
           if (news.kind === "tower") {
             const t = towers.find(t => t.id === news.towerId && !t.destroyed);
             if (news.research ? towerResearch(news.type).level < news.level : !t || t.level < news.level) return "";
@@ -6100,6 +6209,10 @@ OFF</button>
           return "✨ " + (q ? squadName(q) : "部隊") + " " + people.length + "人がLv UP！";
         }
         function levelNewsAnchor(news) {
+          if (news.kind === "warlord") {
+            const g = battle && battle.groups.find(g => g.hero === news.heroId && groupActive(g));
+            return g || heroPos(heroState[news.heroId]) || { x: W / 2, y: 140 };
+          }
           if (news.kind === "tower") return towers.find(t => !t.destroyed && (news.research ? t.type === news.type : t.id === news.towerId)) || { x: W / 2, y: 140 };
           if (battle) {
             const g = battle.groups.find(g => g.list.some(s => news.people.has(s.id)) && (g.state === "march" || g.state === "fight"));
@@ -6705,7 +6818,7 @@ OFF</button>
               hp,
               gold,
               over,
-              towers: towers.map((t) => ({ t, f: { type: t.type, x: t.x, y: t.y, level: t.level, spent: t.spent, hp: t.hp, destroyed: t.destroyed, cd: t.cd } })),
+              towers: towers.map((t) => ({ t, max: towerMaxHp(t), f: { type: t.type, x: t.x, y: t.y, level: t.level, spent: t.spent, hp: t.hp, destroyed: t.destroyed, cd: t.cd } })),
               towerLevels: towerLevels(),
             },
           };
@@ -6775,7 +6888,7 @@ OFF</button>
           for (const t of towers) if (!keepSet.has(t)) { const h = heroOn(t); if (h) { endSkill(h); h.tower = null; } }
           for (const x of K.towers) {
             Object.assign(x.t, x.f);
-            if (Number.isFinite(x.t.hp)) x.t.hp = scaleSavedTowerHp(x.t, K.towerLevels);
+            if (Number.isFinite(x.t.hp)) x.t.hp = x.max > 0 ? x.t.hp * towerMaxHp(x.t) / x.max : scaleSavedTowerHp(x.t, K.towerLevels);
           }
           towerWaveTypes.clear();
           towers = K.towers.map((x) => x.t);
@@ -7460,8 +7573,9 @@ OFF</button>
         const coolLeft = (until, now, len) => (until > now && until - now <= len ? until - now : 0);
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
         function evadeHit(s, now) {
-          const p = skillSum(s, "evade");
-          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p * procMul(s))) return false;
+          const id = battle ? battle.groups.find(g => g.list.includes(s))?.hero : heroOnSquad(squadById(s.squadId))?.id;
+          const p = skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
+          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p)) return false;
           s.evadeUntil = now + 2;
           return true;
         }
@@ -7745,7 +7859,7 @@ OFF</button>
               version: 1, owned: heroSave.owned, tickets: heroSave.tickets,
               history: heroSave.history, lastHero: heroSave.lastHero,
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
-              forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch,
+              forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch, warlordProgress: heroSave.warlordProgress,
             });
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
               heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
@@ -8523,7 +8637,7 @@ OFF</button>
           earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
-          for (const h of ownedHeroes()) { h.seen.clear(); h.economyGold = 0; if (h.couponWave < wave) h.couponWave = -1; }
+          for (const h of ownedHeroes()) { h.waveSeconds = 0; h.seen.clear(); h.economyGold = 0; if (h.couponWave < wave) h.couponWave = -1; }
           for (const q of squads) joinWave(q);
         }
         // ウェーブ終了：生存者だけが成長する。戦死者は復活しない。HPは一部だけ回復
@@ -8548,7 +8662,7 @@ OFF</button>
             s.unyieldUsed = false;
             s.phoenixUsed = false;
             const max = soldierStats(s).maxHp;
-            const q = squadById(s.squadId), extra = q && heroHas(heroOnSquad(q), "terumoto") ? 0.15 : 0;
+            const q = squadById(s.squadId), extra = q && heroHas(heroOnSquad(q), "terumoto") ? 0.15 * warlordSpecial("terumoto") : 0;
             s.hp = Math.min(max, s.hp + max * (SQUAD_RULES.waveEndHeal + extra));
             s.heroShield = s.heroRegen = null;
           }
@@ -9044,7 +9158,7 @@ OFF</button>
         zukanReady = true;
         zukanSync(); // 図鑑：今の所持・習得・職業と履歴から登録（以前の保存データからの移行も同じ）
         // ===== 防衛塔の耐久 =====
-        const towerMaxHp = (t) => Math.round(baseTowerMax(t) * (towerPassive(t).hpMul || (heroHas(heroOn(t), "kiyomasa") ? 1.15 : 1)));
+        const towerMaxHp = (t) => Math.round(baseTowerMax(t) * (towerPassive(t).hpMul || (heroHas(heroOn(t), "kiyomasa") ? 1.15 : 1)) * (heroOn(t) ? 1 + (warlordGrowth(heroOn(t).id).hp || 0) : 1));
         function towerHp(t) {
           if (t.hp == null) t.hp = towerMaxHp(t);
           return t.hp;
@@ -9055,6 +9169,8 @@ OFF</button>
             : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - territoryBonus("repair")) * (1 - towerHp(t) / towerMaxHp(t)) * serviceFactor("repair", t));
         function damageTower(t, dmg, ranged = false, enemy = null) {
           if (t.destroyed) return;
+          const h = heroOn(t), evade = h ? warlordGrowth(h.id).evade || 0 : 0;
+          if (evade && !coolLeft(t.warlordEvadeUntil || 0, combatClock, 2) && Math.random() < evade) { t.warlordEvadeUntil = combatClock + 2; return; }
           t.hp = towerHp(t) - absorbShield(t, dmg * heroGuard(t, ranged, enemy), ranged);
           if (t.hp <= 0) consumeWard(t);
           t.hitFlash = 0.25;
@@ -9199,7 +9315,7 @@ OFF</button>
               e.gone = true;
               gold += e.reward;
               const rewardHero = e.lastTowerHero && heroState[e.lastTowerHero];
-              if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < WARLORD_RULES.maxExtraGold && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
+              if (heroHas(rewardHero, "terumoto") && rewardHero.economyGold < Math.floor(WARLORD_RULES.maxExtraGold * warlordSpecial(rewardHero.id)) && Math.random() < WARLORD_RULES.extraGoldChance) { gold++; rewardHero.economyGold++; }
               creditKill(e);
               if (e.rare) rareKilled(e);
               if (e.intruder) intruderKilled(e);
@@ -9249,6 +9365,7 @@ OFF</button>
             if (!training) beginGameSaveBatch();
             squadsWaveEnd();
             const towerLeveled = awardTowerWaveXp();
+            awardWarlordWaveXp();
             if (training) {
               persistHeroes(); // 修練場の塔そのものは戻すが、種類別の成長は保存する
               // 修練場：ウェーブの報酬・反撃・負傷の回復・ガチャ券は通常の防衛戦だけ
@@ -15257,7 +15374,7 @@ OFF</button>
                       "<br>攻城 " +
                       (where >= 0 ? SIEGE_RULES.names[where] : "未配置") +
                       (h && (h.tower || h.squad) ? "・防衛 " + esc(postLabel(h)) : "")) +
-                  "</small></span>" +
+                  "</small>" + warlordLevelHtml(id) + "</span>" +
                   btn +
                   "</div>"
                 );
@@ -17449,6 +17566,11 @@ OFF</button>
             const c = WARLORDS[g.hero];
             st.atk *= (c.siegePassive.damageMul || 1) * starMul(g.hero);
             st.def *= c.siegePassive.defMul || 1;
+            const grow = warlordGrowth(g.hero);
+            st.atk *= 1 + (grow.atk || 0); st.def *= 1 + (grow.def || 0);
+            st.maxHp *= 1 + (grow.hp || 0); st.range *= 1 + (grow.range || 0); st.rate /= 1 + (grow.speed || 0);
+            // 固有追撃などの成長は攻城戦の既存の攻撃補正に加算して反映する。
+            st.atk *= 1 + (grow.special || 0) * 0.2;
           }
           if (g.rally > 0) st.atk *= SIEGE_SKILL.rally.atk;
           return st;
@@ -17565,14 +17687,14 @@ OFF</button>
               else if (type === "guard") o.guard = S.duration;
               else
                 for (const m of groupAlive(o)) {
-                  const max = soldierStats(m).maxHp;
+                  const max = battleStats(o, m).maxHp;
                   m.hp = Math.min(max, m.hp + max * S.heal * healTakenMul(m));
                 }
               burst(o.x, o.y - 20, type === "heal" ? "#7be08a" : type === "guard" ? "#8fd0ff" : "#ffd36a", "heal");
             }
             done = gs.map((o) => o.name.replace("部隊", "")).join("・");
           }
-          g.skillCd = c.skill.cooldown;
+          g.skillCd = warlordCooldown(g.hero);
           cutin = { id: g.hero, age: 0, duration: 1.3 };
           B.skillUses = (B.skillUses || 0) + 1;
           msg(c.name + "「" + c.skill.name + "」（" + S.name + "）！ " + done);
@@ -17619,6 +17741,7 @@ OFF</button>
           s.hp -=
             ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
             (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
+            (1 - (g.hero ? warlordGrowth(g.hero).guard || 0 : 0)) *
             (1 - skillSum(s, "guard")) *
             (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) * (unitOf(s).rangedWeak || 1) : 1) *
             (kind === "thunder" ? 1 - Math.min(0.8, skillSum(s, "thunderGuard")) : 1) *
@@ -17696,13 +17819,14 @@ OFF</button>
           const B = battle;
           if (!B || B.result) return;
           B.t += dt;
+          tickWarlordRegen(dt, true);
           while (B.nextUnit < B.groups.length && B.t >= B.nextUnit * SIEGE_BATTLE.interval) {
             const g = B.groups[B.nextUnit++];
             if (g.state === "wait") launchGroup(g);
           }
           for (const e of B.garrison) e.atkAnim = Math.max(0, e.atkAnim - dt);
           for (const g of B.groups) {
-            if (groupActive(g)) g.skillCd = Math.max(0, g.skillCd - dt); // 出撃してから進む
+            if (groupActive(g)) { g.skillCd = Math.max(0, g.skillCd - dt); g.warlordSeconds = (g.warlordSeconds || 0) + dt; } // 出撃してから進む
             g.rally = Math.max(0, g.rally - dt);
             g.guard = Math.max(0, g.guard - dt);
           }
@@ -17758,7 +17882,7 @@ OFF</button>
                   if (!groupActive(o) || Math.hypot(o.x - g.x, o.y - g.y) > st.range) continue;
                   for (const m of groupAlive(o)) {
                     if (m === s) continue;
-                    const r = m.hp / soldierStats(m).maxHp;
+                    const r = m.hp / battleStats(o, m).maxHp;
                     if (r < ratio) {
                       ratio = r;
                       best = { m, o };
@@ -17771,7 +17895,7 @@ OFF</button>
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
-                if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), soldierStats(best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
+                if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
                 if (effects.length >= 80) effects.shift();
@@ -17964,7 +18088,13 @@ OFF</button>
           B.result = result;
           B.chapter = B.boss ? null : PROVINCES[provinceOf(B.castleId)].chapter;
           const overseas = B.chapter && B.chapter !== "japan";
-          if (overseas) beginGameSaveBatch(); // 海外の制圧・発見・章報酬・兵士の成長を同じログで確定
+          beginGameSaveBatch(); // 勝敗・報酬・兵士と武将の成長を同じログで確定
+          const earned = new Set();
+          for (const g of B.groups) if (g.hero && !earned.has(g.hero) && result !== "retreat") {
+            earned.add(g.hero);
+            gainWarlordXp(g.hero, Math.min(result === "win" ? WARLORD_LEVEL_RULES.battleCap : WARLORD_LEVEL_RULES.waveCap, Math.floor((g.warlordSeconds || 0) * WARLORD_LEVEL_RULES.xpPerSecond)));
+          }
+          persistHeroes();
           B.castleHp = Math.max(0, B.castleHp);
           const report = [];
           for (const g of B.groups) {
@@ -18007,8 +18137,9 @@ OFF</button>
             // 秘境の討伐戦：討伐の記録と報酬（占領・反撃はない）
             finishBoss(B, result);
             shots = [];
-            showBattleResult(B);
             if (B.tickets) grantTickets(B.tickets, BOSSES[B.boss].name + "を討伐", true);
+            B.savePending = !commitGameSaveBatch();
+            showBattleResult(B);
             battle = null;
             updateUI();
             return;
@@ -18051,7 +18182,7 @@ OFF</button>
           if (B.unified) grantTickets(UNIFY_TICKETS, "7か国を統一", true);
           if (B.tenka) grantTickets(TENKA_TICKETS, "天下統一", true);
           if (B.tenka && grantTenkaGun()) toast("🔥 天下統一の報酬：爆炎の鉄砲を手に入れた！（🎒 装備倉庫）");
-          if (overseas) B.savePending = !commitGameSaveBatch();
+          B.savePending = !commitGameSaveBatch();
           showBattleResult(B);
           battle = null;
           updateUI();
@@ -19144,7 +19275,7 @@ OFF</button>
               Math.ceil(h.cd) +
               "秒" +
               (playing && !paused ? "" : "（戦闘中に進行）");
-            ratio = 1 - h.cd / s.cooldown;
+            ratio = 1 - h.cd / warlordCooldown(h.id);
             state = "";
           } else {
             label =
@@ -19241,7 +19372,7 @@ OFF</button>
                   " <b>" +
                   WARLORDS[id].name +
                   "</b>" +
-                  starText(id) +
+                  starText(id) + " Lv" + warlordLevel(id).level +
                   "<small>" +
                   esc(WARLORDS[id].role) +
                   "・" +
@@ -19311,14 +19442,14 @@ OFF</button>
                 c.name +
                 ' <span class="stars">' +
                 starText(id) +
-                "</span></h3><p>常時：" +
-                esc(passiveTextFor(id, t)) +
+                "</span></h3>" + warlordLevelHtml(id) + "<p>常時：" +
+                esc(passiveTextFor(id, t, false)) +
                 "</p><p>必殺技「" +
                 c.skill.name +
                 "」：" +
                 c.skillText +
                 "（再使用 " +
-                c.skill.cooldown +
+                Math.round(warlordCooldown(id) * 10) / 10 +
                 "秒）</p>" +
                 '<p class="where">' +
                 where +
@@ -19332,7 +19463,7 @@ OFF</button>
             .join("");
           if (!ids.length)
             html = '<div class="card-actions"><button data-open-gacha>🎴 武将ガチャへ</button></div>';
-          $("heroList").innerHTML = html;
+          $("heroList").innerHTML = '<p class="muted">配属して戦うと成長（上限Lv9999）。★とは別に保存し、負傷・再配置でもLvは残ります。自然回復では戦死・全壊を復活できません。</p>' + html;
         }
         function openSheet(target) {
           closeGacha();
@@ -19429,7 +19560,7 @@ OFF</button>
               c.name +
               ' <span class="stars">' +
               (lastPull.isNew ? "NEW!" : "★" + lastPull.stars) +
-              "</span></h3><p>常時：" +
+              "</span></h3>" + warlordLevelHtml(lastPull.id) + "<p>常時：" +
               c.passiveText +
               "</p><p>必殺技「" +
               c.skill.name +
@@ -19507,7 +19638,7 @@ OFF</button>
             cards = Object.entries(WARLORDS)
               .sort(([, a], [, b]) => order[a.rarity] - order[b.rarity])
               .filter(([, c]) => [c.name, c.rarity, c.passiveText, c.skill.name, c.skillText].join(" ").toLocaleLowerCase().includes(query))
-              .map(([id, c]) => '<article class="guide-card" data-guide-hero="' + id + '"><div class="guide-card-head">' + avatarHtml(id) + '<h3>' + rarityTag(id) + ' ' + esc(c.name) + '</h3></div><p class="guide-meta">' + esc(c.role) + (c.favorite ? '／得意：' + esc(SOLDIER_TYPES[c.favorite].name) : '／全兵種') + '</p><p><b>常時効果：</b>' + '部隊：' + esc(c.squadText) + '<br>塔：' + esc(c.towerText) + '</p><p><b>必殺技「' + esc(c.skill.name) + '」</b><br>' + esc(c.skillText) + '</p><p><b>攻城戦：</b>' + esc(c.siegePassive.text.replace(/（.*）$/, '')) + '<br>必殺技は' + esc(SIEGE_SKILL[siegeSkillType(id)].name + '：' + SIEGE_SKILL[siegeSkillType(id)].text) + '</p><p class="guide-meta">再使用まで ' + c.skill.cooldown + '秒（戦闘中のみ進行）</p></article>');
+              .map(([id, c]) => '<article class="guide-card" data-guide-hero="' + id + '"><div class="guide-card-head">' + avatarHtml(id) + '<h3>' + rarityTag(id) + ' ' + esc(c.name) + '</h3></div>' + warlordLevelHtml(id) + '<p class="guide-meta">' + esc(c.role) + (c.favorite ? '／得意：' + esc(SOLDIER_TYPES[c.favorite].name) : '／全兵種') + '</p><p><b>常時効果：</b>' + '部隊：' + esc(c.squadText) + '<br>塔：' + esc(c.towerText) + '</p><p><b>必殺技「' + esc(c.skill.name) + '」</b><br>' + esc(c.skillText) + '</p><p><b>攻城戦：</b>' + esc(c.siegePassive.text.replace(/（.*）$/, '')) + '<br>必殺技は' + esc(SIEGE_SKILL[siegeSkillType(id)].name + '：' + SIEGE_SKILL[siegeSkillType(id)].text) + '</p><p class="guide-meta">再使用まで ' + (Math.round(warlordCooldown(id) * 10) / 10) + '秒（戦闘中のみ進行）</p></article>');
           } else {
             cards = Object.entries(SOLDIER_SKILLS)
               .filter(([, c]) =>
@@ -19871,6 +20002,7 @@ OFF</button>
               disbandSquad,
               battle: () => battle,
               startBattle,
+              battleStats, tickBattle,
               useSiegeSkill,
               siegeSkillType,
               SIEGE_SKILL,
@@ -20008,6 +20140,7 @@ OFF</button>
             config: { WARLORDS, HERO_RULES, GACHA },
             heroApi: {
               save: () => heroSave,
+              warlordLevel, warlordGrowth, gainWarlordXp, awardWarlordWaveXp, tickWarlordRegen, persistHeroes, WARLORD_GROWTH, WARLORD_LEVEL_RULES, WARLORD_XP_TOTAL, warlordCooldown,
               heroState: () => heroState,
               pullGacha,
               rollWarlord,
@@ -20088,6 +20221,7 @@ OFF</button>
             intruder: old && old.runId === runId && old.intruder && old.intruder.wave > wave ? old.intruder : null,
             towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
             towerLevels: towerLevels(),
+            warlordLevels: Object.fromEntries(ownedIds().map(id => [id, warlordLevel(id).level])),
             squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
             soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0 })),
             heroes: ownedHeroes().map(h => ({ id:h.id, tower:h.tower ? h.tower.id : null, squad:h.squad ? h.squad.id : null, cd:h.cd })),
@@ -20162,11 +20296,16 @@ OFF</button>
             if (!key || posts.has(key)) continue;
             posts.add(key); h.tower = t || null; h.squad = t ? null : q || null;
           }
-          for (const t of towers) t.hp = Math.min(t.hp,towerMaxHp(t));
+          const warlordHpRatio = id => {
+            if (!id) return 1;
+            const old = d.warlordLevels && Number.isInteger(d.warlordLevels[id]) && d.warlordLevels[id] >= 1 && d.warlordLevels[id] <= WARLORD_LEVEL_RULES.maxLevel ? d.warlordLevels[id] : 1;
+            return (1 + (warlordGrowth(id).hp || 0)) / (1 + (WARLORD_GROWTH[id].hp || 0) * Math.log10(old) / 4);
+          };
+          for (const t of towers) t.hp = Math.min(t.hp * warlordHpRatio(heroOn(t)?.id), towerMaxHp(t));
           // 現在の兵士保存データが正本。戦死・解散した兵士を復活させない。
           for (const s of soldiers) {
             const v = d.soldiers.find(x=>x.id === s.id);
-            s.hp = v ? Math.min(v.hp,rawMaxHp(s)) : rawMaxHp(s);
+            s.hp = v ? Math.min(v.hp * warlordHpRatio(heroOnSquad(squadById(s.squadId))?.id),rawMaxHp(s)) : rawMaxHp(s);
             s.cd = v ? v.cd : 0;
           }
           playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;

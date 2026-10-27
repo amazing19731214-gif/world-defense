@@ -72,6 +72,11 @@ async function newPage(width, height) {
   return { page, errors, context };
 }
 async function tapMap(page, x, y) {
+  // パネルの説明文の長さでページがスクロールした場合も、実際に見える道をタップする。
+  await page.evaluate(() => {
+    const top = document.getElementById("game").getBoundingClientRect().top;
+    window.scrollBy(0, top - document.querySelector("header").getBoundingClientRect().height - 8);
+  });
   const p = await page.evaluate(
     ([x, y]) => {
       const c = document.getElementById("game"),
