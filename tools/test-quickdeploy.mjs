@@ -92,17 +92,14 @@ const squadState = (page, id) =>
 console.log("■ 部隊がまだ無いとき");
 let { page, errors, context } = await newContext(null);
 check("部隊チップは無い", (await chips(page)).length === 0);
-check("雇用ボタンは最初から開いている", await page.isVisible('[data-u="ashigaru"]'));
-check("「＋ 雇う」は押せない（閉じると雇えなくなるため）", await page.isDisabled("#hireToggle"));
-await page.tap('[data-u="ashigaru"]');
-await tapMap(page, 650, 300);
-let c = await chips(page);
-check(
-  "雇うと部隊チップが現れる（出陣中）",
-  c.length === 1 && /出陣中/.test(c[0].text) && /\bout\b/.test(c[0].cls),
-  JSON.stringify(c),
-);
-check("兵種を選んでいる間は雇用ボタンを開いたまま", await page.isVisible('[data-u="ashigaru"]'));
+check("兵種の選択ボタンなし", await page.locator('[data-u]').count()===0);
+check("「＋ 雇う」は1クリックで購入できる", await page.isEnabled('#hireToggle'));
+await page.tap('#hireToggle');
+let c=await chips(page);
+check("雇うと待機中の部隊チップが現れる",c.length===1&&/1人·待機/.test(c[0].text),JSON.stringify(c));
+await page.tap('[data-chip="1"]');await tapMap(page,650,300);
+c=await chips(page);
+check("チップと道の2タップで出陣",/出陣中/.test(c[0].text));
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
@@ -146,19 +143,12 @@ check(
 );
 check(
   "チップに人数と状態（平均Lvは読み上げ用の説明に。第一部隊：Lv2・3・2・3・2 → 5人・Lv2）",
-  /5人·待機/.test(c[0].text) && /第一部隊（足軽）・待機中・5人・平均Lv2/.test(c[0].label),
+  /5人·待機/.test(c[0].text) && /第一部隊・待機中・5人・平均Lv2/.test(c[0].label),
   JSON.stringify(c[0]),
 );
 check("チップに兵種の絵", (await page.$$('[data-chip="1"] img')).length === 1);
-check("部隊があるときは雇用ボタンを畳む", !(await page.isVisible('[data-u="ashigaru"]')));
-check("「＋ 雇う」ボタン", (await page.textContent("#hireToggle")).trim() === "＋ 雇う");
-await page.tap("#hireToggle");
-check(
-  "「＋ 雇う」で雇用ボタンが開く（「閉じる」に変わる）",
-  (await page.isVisible('[data-u="cavalry"]')) && /閉じる/.test(await page.textContent("#hireToggle")),
-);
-await page.tap("#hireToggle");
-check("もう一度押すと畳む", !(await page.isVisible('[data-u="cavalry"]')));
+check("部隊があっても兵種選択を出さない",await page.locator('[data-u]').count()===0);
+check("「＋ 雇う」に費用を表示",/24G/.test(await page.textContent('#hireToggle')));
 
 console.log("■ チップ → 道をタップで配置（2タップ）");
 await page.tap('[data-chip="2"]');
@@ -169,7 +159,7 @@ let r = await page.evaluate(() => ({
 check("チップを押すと配置する部隊に選ばれる", r.place === 2, JSON.stringify(r));
 check(
   "道をタップするよう画面の上に表示",
-  /第二部隊（槍兵）：道をタップして配置しよう/.test(r.toast),
+  /第二部隊：道をタップして配置しよう/.test(r.toast),
   r.toast,
 );
 check("選んだチップが目立つ", /active/.test((await chips(page))[1].cls));
@@ -182,7 +172,7 @@ check(
   /出陣中/.test(c[1].text) && /\bout\b/.test(c[1].cls),
   JSON.stringify(c[1]),
 );
-check("配置 1/4 になる", /配置 1\/4/.test(await page.textContent("#unitCount")));
+check("配置 1/8 になる", /配置 1\/8/.test(await page.textContent("#unitCount")));
 check("ゴールドは減らない", (await page.evaluate(() => WD_DEBUG.state().gold)) === 500);
 
 console.log("■ 選び直し・取り消し");
@@ -193,8 +183,7 @@ check(
   (await page.evaluate(() => WD_DEBUG.state().placeSquadId)) === null &&
     /配置をやめた/.test(await page.textContent("#msg")),
 );
-await page.tap("#hireToggle");
-await page.tap('[data-u="ashigaru"]');
+await page.evaluate(()=>WD_DEBUG.squadApi.selectUnitForFixture("ashigaru"));
 await page.tap('[data-chip="3"]');
 r = await page.evaluate(() => ({
   place: WD_DEBUG.state().placeSquadId,
@@ -211,7 +200,7 @@ r = await page.evaluate(() => ({
 }));
 check(
   "出陣中のチップを押すと部隊パネルが開く（撤退・治療）",
-  r.panel && /第二部隊（槍兵）/.test(r.title),
+  r.panel && /第二部隊/.test(r.title),
   JSON.stringify(r),
 );
 check("配置の選択は解除", r.place === null);
@@ -248,7 +237,7 @@ await tapMap(page, 650, 300);
 check("ウェーブ中でもチップから配置できる", (await squadState(page, 4)).state === "deployed");
 
 console.log("■ 画面（390px）");
-if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle");
+
 const lay = await page.evaluate(() => {
   const els = [
     ...document.querySelectorAll(

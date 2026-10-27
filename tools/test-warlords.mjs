@@ -24,9 +24,9 @@ const KEY = "worldDefense.warlords.v1";
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -302,7 +302,7 @@ check(
   "部隊パネルの中に武将の選択欄が開く（別の画面を開かない）",
   (await page.isVisible("#sqHeroPick")) &&
     !(await page.isVisible("#heroSheet")) &&
-    /第一部隊（足軽）/.test(await page.textContent("#sqTitle")),
+    /第一部隊/.test(await page.textContent("#sqTitle")),
 );
 check(
   "未配属の武将には「配属」ボタン",

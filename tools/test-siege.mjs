@@ -22,9 +22,9 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -325,32 +325,19 @@ await page.evaluate(() => {
   WD_DEBUG.step(0.1);
 });
 
-console.log("■ 部隊パネルの「＋補充」");
+console.log("■ ランダム雇用と部隊パネル");
 await page.evaluate(() => {
-  const s = WD_DEBUG.state(),
-    q = s.squads[0];
-  const m = WD_DEBUG.squadApi.members(q);
-  m[0].alive = false;
-  m[0].hp = 0;
+ const s=WD_DEBUG.state(), m=WD_DEBUG.squadApi.members(s.squads[0]);m[0].alive=false;m[0].hp=0;
+ let roll=0;WD_DEBUG.recruitApi.setRng(()=>roll++%2===0?.2:0);
 });
-await tapMap(page, 640, 285);
-check(
-  "部隊パネルの「＋ 補充」ボタンに費用（槍兵 24G）",
-  (await page.isVisible("#sqRecruit")) && /24G/.test(await page.textContent("#sqRecruit")),
-);
-if (!(await page.isVisible("#sqMembers"))) await page.tap("#sqMore"); // 兵士の詳細を開く
-check("空き枠があれば「＋補充」を表示", await page.isVisible("[data-recruit-chip]"));
-check("「＋補充」に費用（槍兵 24G）", /24G/.test(await page.textContent("[data-recruit-chip]")));
-const r0 = await page.evaluate(() => ({
-  gold: WD_DEBUG.state().gold,
-  n: WD_DEBUG.squadApi.members(WD_DEBUG.state().squads[0]).length,
-}));
-await page.tap("[data-recruit-chip]");
-const r1 = await page.evaluate(() => ({
-  gold: WD_DEBUG.state().gold,
-  n: WD_DEBUG.squadApi.members(WD_DEBUG.state().squads[0]).length,
-}));
-check("タップで新兵を1人雇って補充（戦死者は戻らない）", r1.n === r0.n + 1 && r0.gold - r1.gold === 24);
+await tapMap(page,640,285);
+check("部隊パネルから兵種を指定する補充操作を削除", await page.locator('#sqRecruit, [data-recruit-chip], [data-recruit-type]').count()===0);
+const r0=await page.evaluate(()=>({gold:WD_DEBUG.state().gold,n:WD_DEBUG.state().soldiers.length}));
+await page.tap('#sqClose');await page.tap('#hireToggle');
+const r1=await page.evaluate(()=>({gold:WD_DEBUG.state().gold,n:WD_DEBUG.state().soldiers.length}));
+check("全体の雇用ボタンで新兵を1人購入",r1.n===r0.n+1&&r0.gold-r1.gold===24);
+await tapMap(page,640,285);
+if (!(await page.isVisible('#sqMembers'))) await page.tap('#sqMore');
 await page.evaluate(() => {
   const a = WD_DEBUG.squadApi,
     q = WD_DEBUG.state().squads[0];
@@ -376,11 +363,8 @@ await page.evaluate(() => {
 await page.tap("#sqClose");
 await startHeld(page);
 await tapMap(page, 640, 285);
-check(
-  "ウェーブ中の「＋補充」は押せない（戦闘後）",
-  (await page.isDisabled("[data-recruit-chip]")) &&
-    /戦闘後/.test(await page.textContent("[data-recruit-chip]")),
-);
+await page.tap('#sqClose');
+check("ウェーブ中のランダム雇用は押せない",await page.isDisabled('#hireToggle')&&await page.evaluate(()=>/ウェーブ/.test(WD_DEBUG.recruitApi.error())));
 if (shots) await page.screenshot({ path: path.join(shots, "s4-recruit.png"), fullPage: true });
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();

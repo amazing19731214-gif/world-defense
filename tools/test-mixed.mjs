@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 混成部隊（1部隊にいろいろな兵種）の動作確認：兵種を選んで補充・移籍・足止め・兵士ごとの戦い方・撤退・保存・攻城戦
+// 異なる兵種が同じ部隊に在籍する動作確認：ランダム雇用・移籍・個別戦闘・撤退・保存・攻城戦
 //   node tools/test-mixed.mjs
 //   SCREENSHOTS=dir node tools/test-mixed.mjs … 画面写真も保存
 import { createRequire } from "node:module";
@@ -77,43 +77,21 @@ const squad = (page) =>
 
 let { page, errors, context } = await newContext(JSON.stringify(save));
 
-console.log("■ 兵種を選んで新兵補充");
+console.log("■ ランダム雇用と兵士ごとの兵種");
 await ev(page, () => WD_DEBUG.setGold(9999));
 await page.tap("#organize");
-await page.tap('[data-recruit="1"]');
-let btns = await page.$$eval("[data-recruit-type]", (bs) => bs.map((b) => b.dataset.recruitType));
-check(
-  "「新兵補充…」で、補充する兵種を選ぶボタン（6兵種・費用つき）",
-  btns.join() === "ashigaru,spearman,archer,gunner,medic,cavalry" &&
-    /弓兵 18G/.test(await page.textContent('[data-recruit-type="archer"]')),
-  btns.join(),
-);
-if (shots) await page.screenshot({ path: path.join(shots, "m1-recruit.png") });
-await page.tap('[data-recruit-type="archer"]');
+check("雇用・補充の兵種選択は無い",await page.locator('[data-u], [data-recruit-type]').count()===0);
+async function addType(type){return ev(page,type=>{const pool=Object.keys(WD_DEBUG.unitConfig.SOLDIER_TYPES).filter(t=>WD_DEBUG.unitConfig.SOLDIER_TYPES[t].enabled);let n=0;WD_DEBUG.recruitApi.setRng(()=>n++%2===0?(pool.indexOf(type)+.5)/pool.length:0);return WD_DEBUG.recruitApi.recruit().error||null;},type);}
+await addType('archer');
 let q = await squad(page);
-check(
-  "弓兵を補充すると混成部隊になる",
-  q.mixed && q.types.filter((t) => t === "archer").length === 1,
-  JSON.stringify(q),
-);
-check("部隊名は「第一部隊（混成）」", q.name === "第一部隊（混成）", q.name);
-check("主な兵種は一番多い槍兵のまま", q.type === "spearman");
-check("費用は弓兵1人分（18G）", (await ev(page, () => WD_DEBUG.state().gold)) === 9999 - 18);
-check(
-  "兵種を選ぶボタンは開いたまま（続けて補充できる）",
-  await page.isVisible('[data-recruit-type="medic"]'),
-);
-await page.tap('[data-recruit-type="medic"]');
-await page.tap('[data-recruit-type="ashigaru"]');
-await page.tap('[data-recruit-type="cavalry"]');
-await page.tap("[data-recruit-cancel]");
-check("「補充をやめる」で兵種の選択を閉じる", !(await page.isVisible("[data-recruit-type]")));
-q = await squad(page);
-check(
-  "槍兵5・弓兵・衛生兵・足軽・騎兵の9人",
-  q.types.length === 9 && ["archer", "medic", "ashigaru", "cavalry"].every((t) => q.types.includes(t)),
-  q.types.join(),
-);
+check("ランダム抽選の弓兵が既存の空き部隊へ入る",q.mixed&&q.types.filter(t=>t==='archer').length===1);
+check("部隊名には兵種や混成の接尾辞を付けない",q.name==='第一部隊');
+check("戦闘用の主な兵種は一番多い槍兵",q.type==='spearman');
+check("雇用費は固定24G",await ev(page,()=>WD_DEBUG.state().gold)===9999-24);
+for(const type of ['medic','ashigaru','cavalry'])await addType(type);
+q=await squad(page);
+check("槍兵5・弓兵・衛生兵・足軽・騎兵の9人",q.types.length===9&&['archer','medic','ashigaru','cavalry'].every(t=>q.types.includes(t)));
+check("画面上に混成と表示しない",!(await page.locator('#squadSheet').innerText()).includes('混成'));
 const lay = await ev(page, () => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
 }));
@@ -222,7 +200,7 @@ r = await ev(page, () => {
 });
 check("攻城戦の第一部隊も同じ混成部隊", r >= 3, String(r));
 await page.tap("#siege");
-check("攻城編成の画面に「（混成）」", /第一部隊（混成）/.test(await page.textContent("#siegeUnit")));
+check("攻城編成も接尾辞のない部隊名", /第一部隊/.test(await page.textContent("#siegeUnit")) && !/混成/.test(await page.textContent("#siegeUnit")));
 await page.tap("#siegeClose");
 check("エラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
@@ -253,7 +231,7 @@ r = await ev(page, () => {
 });
 check(
   "別の兵種の部隊へ移籍できる（混成部隊になる）",
-  r.errs.every((e) => e === null) && r.n1 === 8 && r.n2 === 2 && r.name === "第一部隊（混成）",
+  r.errs.every((e) => e === null) && r.n1 === 8 && r.n2 === 2 && r.name === "第一部隊",
   JSON.stringify(r),
 );
 await page.tap("#organize");

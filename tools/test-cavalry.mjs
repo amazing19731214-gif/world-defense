@@ -22,9 +22,9 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -78,15 +78,9 @@ const clearWave = () =>
 await ev(() => WD_DEBUG.setGold(9999));
 
 console.log("■ 雇用と能力値");
-let text = await page.textContent('[data-u="cavalry"]');
-check("雇用メニューに騎兵（10人 280G）", /騎兵 280G/.test(text), text);
-check(
-  "ボタンに騎兵の絵",
-  await page.$eval(
-    '[data-u="cavalry"] img',
-    (i) => i.naturalWidth > 0 && i.src.startsWith("data:image/webp"),
-  ),
-);
+let text = await page.textContent('#hireToggle');
+check("兵種選択を廃止して雇用費24Gを表示",/24G/.test(text)&&await page.locator('[data-u]').count()===0);
+check("騎兵の素材を読み込み",await ev(()=>WD_DEBUG.unitConfig.UNIT_FRAMES.cavalry.idle.startsWith('data:image/webp')));
 let r = await ev(() => {
   const T = WD_DEBUG.unitConfig.SOLDIER_TYPES,
     F = WD_DEBUG.unitConfig.UNIT_FRAMES;
@@ -99,7 +93,7 @@ check(
 check("騎兵の撤退は速い（1.5秒）・進軍の速さを持つ（攻城戦用）", r.c.retreatTime === 1.5 && r.c.march > 1);
 check("騎兵のコマ（待機・攻撃・戦死）を埋め込み", r.frames === "idle,attack,death", r.frames);
 await tapHire(page, "cavalry");
-check("騎兵を選ぶと説明を表示", /騎馬隊（10人・280G）/.test(await page.textContent("#msg")));
+check("騎兵の戦闘用fixtureを選択",await ev(()=>WD_DEBUG.state().selectedUnitType==="cavalry"));
 await tapMap(650, 300);
 await tapHire(page, "ashigaru");
 await tapMap(400, 165);
@@ -277,12 +271,12 @@ await tapHire(page, "cavalry");
 const lay = await ev(() => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
   minBtn: Math.min(
-    ...[...document.querySelectorAll("[data-u]")].map((b) => b.getBoundingClientRect().height),
+    ...[...document.querySelectorAll("#hireToggle")].map((b) => b.getBoundingClientRect().height),
   ),
-  minW: Math.min(...[...document.querySelectorAll("[data-u]")].map((b) => b.getBoundingClientRect().width)),
+  minW: Math.min(...[...document.querySelectorAll("#hireToggle")].map((b) => b.getBoundingClientRect().width)),
 }));
 check(
-  "雇用ボタン6つでも横スクロールなし・押しやすい大きさ",
+  "雇用ボタンが横スクロールなし・押しやすい大きさ",
   !lay.hScroll && lay.minBtn >= 44 && lay.minW >= 80,
   JSON.stringify(lay),
 );

@@ -381,7 +381,7 @@
         border-color: #6f7f78;
         color: #c9d3cc;
       }
-      /* 1行目：部隊数・「雇う」・「編成」、2行目以降：保有している部隊のチップ（4列）、雇用ボタン（3列・畳める） */
+      /* 1行目：部隊数・「雇う」・「編成」、2〜3行目：8部隊のチップ（4列） */
       .tools.unit-tools {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -398,14 +398,6 @@
         gap: 6px;
       }
       .squad-chips:empty {
-        display: none;
-      }
-      .hire-row {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-      }
-      .hire-row[hidden] {
         display: none;
       }
       .tools.unit-tools .squad-chip {
@@ -438,33 +430,6 @@
         background: #2f5a3d;
         border-color: #ffd28a;
         color: #fff1d0;
-      }
-      .recruit-pick {
-        margin: 8px 0;
-        padding: 8px;
-        border: 1px solid #b99c60;
-        border-radius: 10px;
-      }
-      .recruit-pick p {
-        margin: 0 0 6px;
-        font-size: 14px;
-      }
-      .recruit-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-        margin-bottom: 6px;
-      }
-      .recruit-grid button,
-      .recruit-pick > button {
-        min-height: 44px;
-        min-width: 0;
-        font-size: 14px;
-        white-space: nowrap;
-        padding: 6px 2px;
-      }
-      .recruit-pick > button {
-        width: 100%;
       }
       .squad-chip.wait {
         opacity: 0.55;
@@ -2329,6 +2294,9 @@
       .unit-head #unitCount { font-size: 14px; }
       .unit-head #towerCount { margin-top: 2px; font-size: 14px; }
       #infoOpen { font-size: 12px; }
+      .squad-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
+      .tools.unit-tools .squad-chip { min-width: 0; }
+      #hireToggle { font-size: 14px; }
       #pace, #recoverAll { white-space: pre-line; font-size: 14px; line-height: 1.3; padding: 6px 1px; }
       #pace[data-mode="paused"] { background: #495f62; }
       #infoSheet { z-index: 9; }
@@ -2381,7 +2349,7 @@
         <div class="stats">
           <span id="hp" role="button" tabindex="0" aria-haspopup="dialog" aria-label="城のハートをゴールドで回復">❤️ 20</span><span id="gold">🪙 500G</span>
           <div class="wave-guide-controls">
-            <span id="wave" role="button" tabindex="0" aria-haspopup="dialog" aria-label="目標ウェーブを選ぶ">WAVE 0/20</span><span id="deployStat">配置 0/4</span
+            <span id="wave" role="button" tabindex="0" aria-haspopup="dialog" aria-label="目標ウェーブを選ぶ">WAVE 0/20</span><span id="deployStat">配置 0/8</span
             ><button id="infoOpen" aria-label="情報：武将・兵士・塔の育成とスキル" aria-haspopup="dialog" aria-expanded="false" aria-controls="infoSheet">情報</button>
           </div>
         </div>
@@ -2427,11 +2395,10 @@ OFF</button>
       </section>
       <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
         <div class="unit-head">
-          <div class="row-label"><span id="unitCount">配置 0/4｜保有 0/4</span><span id="towerCount" role="status">塔 0/6</span></div><button id="hireToggle" aria-expanded="false">＋ 雇う</button
+          <div class="row-label"><span id="unitCount">配置 0/8｜保有 0/8</span><span id="towerCount" role="status">塔 0/6</span></div><button id="hireToggle" aria-label="兵種ランダムで兵士を1人雇う">＋ 雇う</button
           ><button id="organize">📋 編成</button>
         </div>
         <div id="squadChips" class="squad-chips" aria-label="保有している部隊（タップして配置）"></div>
-        <div id="hireRow" class="hire-row" aria-label="新しく雇う"></div>
       </div>
       <section id="squadPanel" class="panel dock" hidden aria-label="選択中の部隊">
         <div class="panel-head">
@@ -2449,7 +2416,7 @@ OFF</button>
         <div id="sqHeroPick" class="hero-pick" hidden></div>
         <div class="panel-actions">
           <button id="retreat">↩ 撤退</button><button id="sqHeal">🩹 治療</button
-          ><button id="sqRecruit">＋ 補充</button>
+          >
         </div>
         <button id="sqSkill" class="skill" hidden>
           <span id="sqSkillLabel"></span><span class="bar"><i id="sqSkillBar"></i></span>
@@ -2489,7 +2456,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v74（進行ボタン統合・兵士と塔の一括回復）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v75（8部隊・兵種ランダム雇用）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4129,9 +4096,9 @@ OFF</button>
           squadSize: 10, // 1部隊の上限人数（攻城戦の部隊と同じ）
           hireSize: 10, // 新しく雇うときの人数（1部隊の上限と同じ。戦死などで減った分は「新兵補充」で1人ずつ）
           lastSurvivorFallen: 4, // 最後の生存者：この人数以上が戦死して1人だけ残ったとき（以前の5人で雇う基準のまま）
-          maxDeployed: 4, // 道に同時に出せる部隊数
-          maxSquads: 4, // 保有できる部隊数。防衛戦も攻城戦も同じ第一〜第四部隊を使う
-          slotNames: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
+          maxDeployed: 8, // 道に同時に出せる部隊数
+          maxSquads: 8, // 保有できる部隊数。防衛戦も攻城戦も同じ第一〜第八部隊を使う
+          slotNames: ["第一部隊", "第二部隊", "第三部隊", "第四部隊", "第五部隊", "第六部隊", "第七部隊", "第八部隊"],
           snapDistance: 46, // タップ位置から道の中心線までの許容距離
           minSpacing: 60, // 部隊どうしの最小間隔
           noDeployFromEntry: 170, // 入口からこの距離までは配置不可
@@ -5336,6 +5303,7 @@ OFF</button>
           return out;
         }
         const zukan = loadZukan();
+        let recruitSaving = false;
         let zukanReady = false; // 起動して兵士を読み込むまでは記録しない
         function persistZukan() {
           try {
@@ -5349,7 +5317,7 @@ OFF</button>
         }
         // 図鑑に登録する：今の状態（と履歴）にあるものをすべて記録する。何度呼んでも同じ（増えるだけ）
         function zukanSync() {
-          if (!zukanReady) return 0;
+          if (!zukanReady || recruitSaving) return 0;
           let n = 0;
           const add = (c, id) => {
             if (!zukan[c][id]) {
@@ -6539,7 +6507,7 @@ OFF</button>
           F.scrolls = before.scrolls;
           return "保存できなかったので作りませんでした（八玉は元のまま）。";
         }
-        // 兵士を加えられる部隊（空きのある部隊。兵種が違えば混成部隊になる）
+        // 兵士を加えられる部隊（空きのある部隊。兵種が違えば同じ部隊で戦う）
         const roomSquads = () => squads.filter((q) => roster(q).length < SQUAD_RULES.squadSize);
         function scrollUseError(k, q) {
           if (!(scrollCount(k) > 0)) return GEM_CRAFT[k].name + "を持っていません。";
@@ -7096,7 +7064,7 @@ OFF</button>
         const roster = (q) => soldiers.filter((s) => s.alive && s.squadId === q.id);
         const onField = (q) => q.state === "deployed" || q.state === "retreating";
         const fieldSquads = () => squads.filter(onField);
-        // ===== 混成部隊 =====
+        // ===== 部隊内の兵種 =====
         // 1部隊にいろいろな兵種を入れられる。兵士は1人ずつ自分の兵種として戦う。
         // q.type は部隊の「主な兵種」（一番人数の多い兵種）。表示・武将の得意兵種に使う
         const squadTypes = (q) => [...new Set(roster(q).map((s) => s.type))];
@@ -7108,12 +7076,8 @@ OFF</button>
           const best = Math.max(0, ...Object.values(n));
           if (best && n[q.type] !== best) q.type = Object.keys(n).find((t) => n[t] === best);
         }
-        const squadTypeLabel = (q) => (isMixed(q) ? "混成" : SOLDIER_TYPES[q.type].name);
-        // 部隊名は枠（第一〜第四部隊）と兵種。古い保存データから移した枠外の部隊は「予備隊」
-        const squadName = (q) =>
-          q.slot >= 0
-            ? SQUAD_RULES.slotNames[q.slot] + "（" + squadTypeLabel(q) + "）"
-            : "予備隊 #" + q.id + "（" + squadTypeLabel(q) + "）";
+        // 部隊名は枠（第一〜第八部隊）のみ。古い保存データから移した枠外の部隊は「予備隊」
+        const squadName = (q) => q.slot >= 0 ? SQUAD_RULES.slotNames[q.slot] : "予備隊 #" + q.id;
         const slotShort = (q) => (q.slot >= 0 ? SQUAD_RULES.slotNames[q.slot].replace("部隊", "") : "予備");
         // プレイヤーが付けた名前があればその名前（名前付きの兵士は 🎖 で特別に表示）
         // 主人公には 👑 を付ける
@@ -7288,7 +7252,7 @@ OFF</button>
           fixSlots();
           return q;
         }
-        // 第一〜第四部隊の枠を決める（保存済みの枠を優先し、空いた枠を前から使う）。表示も枠の順にそろえる
+        // 第一〜第八部隊の枠を決める（保存済みの枠を優先し、空いた枠を前から使う）。表示も枠の順にそろえる
         function fixSlots() {
           const used = new Set();
           for (const q of squads) {
@@ -8181,7 +8145,53 @@ OFF</button>
         }
         // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × hireSize
         const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
-        // 新しい部隊を雇用して配置（hireSize 人 × 費用）
+        const RANDOM_RECRUIT = { price: 24 };
+        let recruitRng = Math.random;
+        const randomRecruitCost = () => Math.max(1, Math.round(RANDOM_RECRUIT.price * (1 - territoryBonus("hire"))));
+        function randomRecruitSlots() {
+          const slots = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads && roster(q).length < SQUAD_RULES.squadSize);
+          const used = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads).length;
+          return slots.concat(Array(Math.max(0, SQUAD_RULES.maxSquads - used)).fill(null));
+        }
+        function randomRecruitError() {
+          if (battle || training) return "兵士の雇用は通常防衛戦の準備中に行えます。";
+          if (playing) return "ウェーブの合間に雇えます。";
+          if (hp <= 0) return "ゲームオーバー後は雇えません。";
+          if (!randomRecruitSlots().length) return SQUAD_RULES.maxSquads + "部隊とも満員です（1部隊" + SQUAD_RULES.squadSize + "人まで）。";
+          if (gold < randomRecruitCost()) return "軍資金が足りません（雇用 " + randomRecruitCost() + "G）。";
+          return null;
+        }
+        function randomRecruit() {
+          const error = randomRecruitError();
+          if (error) return { error };
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return { error: "未保存の進行があります。先に途中保存をやり直してください。" };
+          const before = { gold, squads: squads.slice(), soldiers: soldiers.slice(), soldierSeq, squadSeq,
+            roster: JSON.parse(JSON.stringify(soldierSave)), defense: heroSave.defense, news: namedNews.length,
+            q: squads.map(q => ({ q, type: q.type, slot: q.slot })), batch: gameSaveBatch, active: gameSaveBatchActive };
+          const pool = enabledUnitTypes(), slots = randomRecruitSlots(), pick = list => list[Math.max(0, Math.min(list.length - 1, Math.floor(recruitRng() * list.length)))];
+          const type = pick(pool), existing = pick(slots), price = randomRecruitCost();
+          recruitSaving = true; // 確定前の抽選を図鑑や攻城編成へ反映しない。
+          const q = existing || newSquad(type), soldier = newSoldier(type, q.id, true);
+          refreshSquadType(q);
+          gold -= price;
+          const saved = saveDefenseCheckpoint();
+          recruitSaving = false;
+          if (!saved) {
+            gold = before.gold; squads = before.squads; soldiers = before.soldiers;
+            soldierSeq = before.soldierSeq; squadSeq = before.squadSeq; heroSave.defense = before.defense;
+            for (const v of before.q) { v.q.type = v.type; v.q.slot = v.slot; }
+            for (const k of Object.keys(soldierSave)) delete soldierSave[k];
+            Object.assign(soldierSave, before.roster); namedNews.length = before.news;
+            gameSaveBatch = before.batch; gameSaveBatchActive = before.active;
+            updateUI();
+            return { error: "保存できなかったため、雇用と支払いを取り消しました。空き容量を確認してください。" };
+          }
+          zukanSync(); refreshSiege();
+          msg(SOLDIER_TYPES[type].name + (soldier.named ? "「" + soldier.name + "」" : "") + "を1人雇い、" + squadName(q) + "へ配属した（" + price + "G）。" + (q.state === "reserve" ? " 部隊ボタンを押して道をタップすると配置できます。" : ""));
+          toast($("msg").textContent); updateUI();
+          return { soldier, squad: q, cost: price };
+        }
+        // 戦闘テスト等で指定した兵種の部隊を作る。通常UIの雇用はrandomRecruitだけを使用。
         function hireSquad(type, x, y) {
           const c = SOLDIER_TYPES[type];
           if (!c || !c.enabled) return (msg("その兵種はまだ使えません。"), null);
@@ -8206,7 +8216,7 @@ OFF</button>
             squadName(q) +
               "（" +
               SQUAD_RULES.hireSize +
-              "人）を雇用して配置した。「編成」の新兵補充で" +
+              "人）をテスト用に配置した。「＋ 雇う」で" +
               SQUAD_RULES.squadSize +
               "人まで増やせる。",
           );
@@ -8231,7 +8241,7 @@ OFF</button>
           if (q.state !== "deployed") return 0;
           const list = members(q),
             extra = list.some((s) => skillSum(s, "block") > 0) ? 1 : 0; // 槍衾（部隊に1回まで）
-          // 混成部隊は、生きている兵士の兵種の中で一番多い足止め数（槍兵が全員倒れると減る）
+          // 部隊は、生きている兵士の兵種の中で一番多い足止め数（槍兵が全員倒れると減る）
           const base = Math.max(0, ...list.map((s) => unitOf(s).block || 0));
           const boost = base > 0 ? squadPassive(q).extraBlock || 0 : 0;
           return Math.min(base + extra + boost, list.length);
@@ -8447,7 +8457,7 @@ OFF</button>
             if (q.state !== "deployed" || activeKind(heroOnSquad(q), "rest")) continue;
             for (const s of members(q)) {
               prayerTick(s, members(q), combatClock);
-              const ct = unitOf(s); // 兵士ごとの兵種・職業の戦い方（混成部隊）
+              const ct = unitOf(s); // 兵士ごとの兵種・職業の戦い方（部隊内の各兵士）
               // 騎馬鉄砲：動いたら（配置・移動の直後）、止まって狙いをつけるまで撃たない（次の弾込めも待つ）
               if (ct.aim) {
                 const pos = q.x + ":" + q.y;
@@ -8776,7 +8786,7 @@ OFF</button>
           refreshSiege();
           return null;
         }
-        // 新兵補充。兵種を選べる（省略すると部隊の主な兵種）。違う兵種を入れると混成部隊になる
+        // 戦闘の回帰検証用の指定兵種補充。通常UIはrandomRecruitを使用する。
         function recruitInto(q, type = q && q.type) {
           if (battle) return "攻城戦の最中はできません。";
           if (playing) return "ウェーブ中は補充できません。";
@@ -8927,7 +8937,7 @@ OFF</button>
           };
         }
         // 古い保存データ（5人×最大8部隊）を10人の部隊にまとめる。同じ兵種の部隊どうしを、前の部隊から満員になるまで詰める。
-        // 兵士は1人も失わない（兵種が5種類以上あって4部隊に収まらないときは、枠外の「予備隊」として残る）
+        // 兵士は1人も失わない。現行の8枠に入らない旧部隊は「予備隊」として残す。
         function mergeOldSquads(squadsIn, list, count) {
           for (const type of Object.keys(SOLDIER_TYPES)) {
             const qs = squadsIn.filter((q) => q.type === type && count[q.id]);
@@ -8970,7 +8980,7 @@ OFF</button>
               if (!v || typeof v !== "object") continue;
               const q = squadsIn.find((x) => x.id === v.squadId);
               const id = intIn(v.id, 1, 1e9, 0);
-              // 所属部隊が無い・使えない兵種・満員・ID重複の兵士は読み込まない（部隊と違う兵種は混成部隊として読む）
+              // 所属部隊が無い・使えない兵種・満員・ID重複の兵士は読み込まない（部隊と違う兵種は各兵士の兵種を保って読む）
               if (!q || !SOLDIER_TYPES[v.type] || !SOLDIER_TYPES[v.type].enabled || !id || ids.has(id)) continue;
               if ((count[q.id] || 0) >= SQUAD_RULES.squadSize) continue;
               ids.add(id);
@@ -9078,7 +9088,7 @@ OFF</button>
           soldierSave.seq = Math.max(soldierSave.seq, soldierSeq);
           soldierSave.squadSeq = Math.max(soldierSave.squadSeq, squadSeq);
           writeSoldierSave();
-          if (siegeReady) refreshSiege(); // 保存された新兵も攻城の部隊に入る（起動中は攻城編成の読み込み前）
+          if (siegeReady && !recruitSaving) refreshSiege(); // 保存された新兵も攻城の部隊に入る（起動中は攻城編成の読み込み前）
         }
         // 保存済みの兵士だけを書き換える（名前など。戦闘中の経験値はここでは保存しない）
         function patchSavedSoldier(s, fields) {
@@ -11765,44 +11775,7 @@ OFF</button>
           location.reload();
         };
         // ===== 兵士部隊：雇用ボタン・部隊パネル・編成画面 =====
-        // 有効な兵種だけボタンを作る（未実装の兵種は表示しない）
-        for (const type of enabledUnitTypes()) {
-          const c = SOLDIER_TYPES[type],
-            b = document.createElement("button");
-          b.dataset.u = type;
-          b.innerHTML =
-            (UNIT_ASSETS[type] ? '<img alt="" src="' + UNIT_ASSETS[type] + '">' : c.icon + " ") +
-            '<span class="u-label"><span>' +
-            c.name +
-            '</span> <span class="u-cost">' +
-            unitCostLabel(type) +
-            "</span></span>";
-          b.onclick = () => {
-            selectedUnitType = type;
-            placeSquadId = null;
-            selectedTower = null;
-            selectedSquad = null;
-            msg(
-              c.squadName +
-                "（" +
-                SQUAD_RULES.hireSize +
-                "人・" +
-                unitCost(type) * SQUAD_RULES.hireSize +
-                "G）：" +
-                c.text +
-                "。道をタップして配置しよう。",
-            );
-            updateUI();
-          };
-          $("hireRow").appendChild(b);
-        }
-        // 雇用ボタンは畳んでおく（部隊がまだ無いときは開いたまま）
-        let hireOpen = false;
-        $("hireToggle").onclick = () => {
-          hireOpen = !hireOpen;
-          if (!hireOpen && selectedUnitType) selectedUnitType = null;
-          updateUI();
-        };
+        $("hireToggle").onclick = () => { const r = randomRecruit(); if (r.error) { msg(r.error); toast(r.error); } };
         // 部隊チップ：待機中の部隊はタップ→道をタップで配置、出陣中の部隊はパネルを開く
         $("squadChips").addEventListener("click", (ev) => {
           const b = ev.target.closest("[data-chip]"),
@@ -11865,15 +11838,7 @@ OFF</button>
             "</span></button>"
           );
         }
-        function unitCostLabel(type) {
-          return unitCost(type) * SQUAD_RULES.hireSize + "G";
-        }
         function renderSquadUI() {
-          // 雇用ボタンの費用（領土を取ると変わる）
-          document.querySelectorAll("[data-u] .u-cost").forEach((el) => {
-            const v = unitCostLabel(el.closest("[data-u]").dataset.u);
-            if (el.textContent !== v) el.textContent = v;
-          });
           // 道に出せる上限と保有できる上限は別の数（どちらも設定から読む）
           setHtml(
             $("unitCount"),
@@ -11888,15 +11853,11 @@ OFF</button>
           );
           const ds = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
           if ($("deployStat").textContent !== ds) $("deployStat").textContent = ds;
-          const hireShown = hireOpen || !squads.length || !!selectedUnitType;
-          $("hireRow").hidden = !hireShown;
-          $("hireToggle").textContent = hireShown && squads.length ? "▲ 閉じる" : "＋ 雇う";
-          $("hireToggle").setAttribute("aria-expanded", String(hireShown));
-          $("hireToggle").disabled = !squads.length; // 部隊が無いうちは開いたまま
+          $("hireToggle").textContent = "＋ 雇う " + randomRecruitCost() + "G";
+          $("hireToggle").setAttribute("aria-label", "兵種ランダムで兵士を1人雇う・" + randomRecruitCost() + "G");
+          $("hireToggle").title = randomRecruitError() || "兵種はランダム。空きのある部隊へ1人ずつ自動配属します。";
+          $("hireToggle").disabled = !!randomRecruitError();
           setHtml($("squadChips"), squads.map(chipHtml).join(""));
-          document
-            .querySelectorAll("[data-u]")
-            .forEach((b) => b.classList.toggle("active", b.dataset.u === selectedUnitType));
           document
             .querySelectorAll("[data-t]")
             .forEach((b) =>
@@ -11964,14 +11925,7 @@ OFF</button>
                   '%"></i></span></button>'
                 );
               })
-              .join("") +
-              (list.length < SQUAD_RULES.squadSize
-                ? '<button class="chip add" data-recruit-chip' +
-                  (playing || gold < recruitCost(q) ? " disabled" : "") +
-                  ' aria-label="新兵を1人補充"><span>＋補充</span><span class="cost">' +
-                  (playing ? "戦闘後" : recruitCost(q) + "G") +
-                  "</span></button>"
-                : ""),
+              .join("")
           );
           const s = soldierById(selectedSoldierId);
           if (s) {
@@ -12015,13 +11969,6 @@ OFF</button>
             $("retreat").textContent = "↩ 撤退"; // ウェーブの合間はすぐ待機へ・ウェーブ中は時間がかかる
             $("retreat").classList.remove("active");
           }
-          const rc = recruitCost(q),
-            full = roster(q).length >= SQUAD_RULES.squadSize;
-          setHtml(
-            $("sqRecruit"),
-            "＋ 補充<small>" + (full ? "満員" : playing ? "戦闘後" : rc + "G") + "</small>",
-          );
-          $("sqRecruit").disabled = full || playing || !!battle || gold < rc;
           const hc = healCost(q);
           setHtml(
             $("sqHeal"),
@@ -12054,12 +12001,6 @@ OFF</button>
           renderSkillButton($("sqSkill"), $("sqSkillLabel"), $("sqSkillBar"), hh);
         }
         $("sqMembers").addEventListener("click", (ev) => {
-          if (ev.target.closest("[data-recruit-chip]")) {
-            const err = recruitInto(selectedSquad);
-            msg(err || "新兵を1人補充した（" + recruitCost(selectedSquad) + "G）。");
-            updateUI();
-            return;
-          }
           const b = ev.target.closest("[data-soldier]");
           if (!b) return;
           selectedSoldierId = +b.dataset.soldier;
@@ -12089,21 +12030,12 @@ OFF</button>
           } else orderRetreat(q);
           updateUI();
         };
-        $("sqRecruit").onclick = () => {
-          const q = selectedSquad,
-            c = q && recruitCost(q),
-            err = q ? recruitInto(q) : "部隊が見つかりません。";
-          msg(err || squadName(q) + " に新兵を1人補充した（" + c + "G）。兵種を選ぶときは「📋 兵士」から。");
-          toast($("msg").textContent);
-          updateUI();
-        };
         $("sqMore").onclick = () => {
           squadDetailOpen = !squadDetailOpen;
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
         let movingSoldierId = null,
-          recruitPick = null, // 新兵補充で兵種を選んでいる部隊
           bulkPick = null; // まとめて移籍で選んでいる兵士の ID（選ぶモードでないときは null）
         function squadStateText(q) {
           return q.state === "deployed"
@@ -12126,8 +12058,8 @@ OFF</button>
             : movingSoldierId
             ? soldierName(moving) + " の移籍先を選んでください。空きのある部隊へ「ここへ編入」、満員の部隊でも兵士の「⇄ 入れ替え」で交換できます。"
             : playing
-              ? "ウェーブ中は配置・撤退のみ。補充と移籍はウェーブの合間にできます。"
-              : "補充（兵種を選んで雇用）と移籍ができます。兵種を混ぜた混成部隊もOK。1部隊" + SQUAD_RULES.squadSize + "人まで。";
+              ? "ウェーブ中は配置・撤退のみ。雇用と移籍はウェーブの合間にできます。"
+              : "兵士の移籍・入れ替えができます。雇用は「＋ 雇う」からランダムに配属されます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
           let html = "";
           if (bulk) {
             // 移す先：選んだ兵士を受け入れられる部隊（空きのある部隊）と新しい部隊
@@ -12163,7 +12095,7 @@ OFF</button>
           else if (!playing && !battle && soldiers.some((x) => x.alive))
             html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button></div>';
           if (!squads.length)
-            html += '<p class="muted">部隊がありません。兵種を選んで道をタップすると雇用できます。</p>';
+            html += '<p class="muted">部隊がありません。「＋ 雇う」で兵士を雇うと、自動で部隊に配属されます。</p>';
           for (const q of squads) {
             const list = roster(q),
               c = SOLDIER_TYPES[q.type];
@@ -12178,8 +12110,6 @@ OFF</button>
               if (q.state === "reserve" && !q.locked)
                 acts += '<button data-place="' + q.id + '">配置する</button>';
               if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
-              if (!playing && list.length < SQUAD_RULES.squadSize && recruitPick !== q.id)
-                acts += '<button data-recruit="' + q.id + '">新兵補充…</button>';
               if (!playing && q.state === "reserve")
                 acts += '<button data-disband="' + q.id + '">解散</button>';
               if (!playing && healCost(q))
@@ -12239,28 +12169,6 @@ OFF</button>
                 )
                 .join("") +
               (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
-              // 新兵補充：兵種を選ぶ（ほかの操作と分けて並べる）
-              (!bulk && !moving && !playing && recruitPick === q.id && list.length < SQUAD_RULES.squadSize
-                ? '<div class="recruit-pick"><p>補充する兵種を選ぶ（1人ずつ・あと' +
-                  (SQUAD_RULES.squadSize - list.length) +
-                  "人）</p><div class=\"recruit-grid\">" +
-                  enabledUnitTypes()
-                    .map(
-                      (t) =>
-                        '<button data-recruit-type="' +
-                        t +
-                        '" data-recruit-to="' +
-                        q.id +
-                        '">' +
-                        SOLDIER_TYPES[t].icon +
-                        SOLDIER_TYPES[t].name +
-                        " " +
-                        recruitCost(q, t) +
-                        "G</button>",
-                    )
-                    .join("") +
-                  "</div><button data-recruit-cancel>補充をやめる</button></div>"
-                : "") +
               "</div>";
           }
           const fallen = soldiers.filter((s) => !s.alive);
@@ -12294,7 +12202,6 @@ OFF</button>
         }
         function openSquadSheet() {
           movingSoldierId = null;
-          recruitPick = null;
           bulkPick = null;
           renderSquadSheet();
           $("squadSheet").hidden = false;
@@ -12316,7 +12223,6 @@ OFF</button>
           if (d.bulkStart !== undefined) {
             bulkPick = [];
             movingSoldierId = null;
-            recruitPick = null;
           } else if (d.bulkCancel !== undefined) bulkPick = null;
           else if (d.bulkPick) {
             const id = +d.bulkPick;
@@ -12352,15 +12258,6 @@ OFF</button>
             err = transferSoldier(movingSoldierId, d.moveTo === "new" ? "new" : +d.moveTo);
             if (!err) msg(soldierName(soldierById(movingSoldierId)) + " を編入した。");
             movingSoldierId = null;
-          } else if (d.recruitCancel !== undefined) {
-            recruitPick = null;
-          } else if (d.recruitType) {
-            // 兵種を選んで補充（続けて同じ部隊に補充できるよう、選ぶ画面は開いたまま）
-            const q = squadById(+d.recruitTo);
-            err = recruitInto(q, d.recruitType);
-            if (!err) msg(squadName(q) + " に" + SOLDIER_TYPES[d.recruitType].name + "を1人補充した。");
-          } else if (d.recruit) {
-            recruitPick = +d.recruit; // まず兵種を選ぶ
           } else if (d.disband) {
             const q = squadById(+d.disband),
               named = q ? roster(q).filter((s) => s.name) : [];
@@ -14887,7 +14784,7 @@ OFF</button>
               "で精鋭兵。レベルの上限はありません。成長はウェーブクリア時に保存されます。";
             html = list.length
               ? list.map(soldierCard).join("")
-              : '<p class="muted">兵士がいません。兵種を選んで道をタップすると雇用できます。</p>';
+              : '<p class="muted">兵士がいません。「＋ 雇う」で1人ずつ雇えます。部隊ボタンを押してから道をタップすると配置できます。</p>';
           } else {
             const f = soldierSave.fallen;
             $("soldierHint").textContent =
@@ -15130,12 +15027,12 @@ OFF</button>
           updateUI();
         });
         // ===== 攻城部隊編成 =====
-        // 第一〜第四部隊（配列の順＝出撃順）は、防衛戦の第一〜第四部隊と同じ部隊（兵士は自動で決まる）。
+        // 第一〜第八部隊（配列の順＝出撃順）は、防衛戦の第一〜第八部隊と同じ部隊（兵士は自動で決まる）。
         // 出撃するのは「兵士の保存データにいる生存兵」（ウェーブをクリアして保存された兵士）。
         // 武将だけは防衛側の配属（塔・部隊）とは別に選ぶ。防衛で使用中の武将も選べる。負傷中の武将は選べない。
         const SIEGE_KEY = "worldDefense.siege.v1";
         const SIEGE_RULES = {
-          names: ["第一部隊", "第二部隊", "第三部隊", "第四部隊"],
+          names: SQUAD_RULES.slotNames.slice(),
           maxSoldiers: SQUAD_RULES.squadSize,
         };
         const siegeEmpty = () => SIEGE_RULES.names.map(() => ({ soldiers: [], hero: null }));
@@ -15211,7 +15108,7 @@ OFF</button>
         }
         const siegeHeroUnit = (id) => siegeUnits.findIndex((u) => u.hero === id);
         // 兵士の入れ替えは防衛の「編成」で行う（攻城の部隊＝防衛の部隊）
-        const SIEGE_SOLDIER_NOTE = "攻城の部隊は防衛戦の部隊と同じです。兵士の補充・移籍・解散は「📋 編成」で行います。";
+        const SIEGE_SOLDIER_NOTE = "攻城の部隊は防衛戦の部隊と同じです。雇用は「＋ 雇う」、移籍・解散は「📋 編成」で行います。";
         // 武将を部隊に置く（null で外す）。同じ武将は1部隊だけ・負傷中は不可
         function siegeSetHero(i, id, move) {
           if (battle) return "攻城戦の最中は編成を変えられません。";
@@ -15292,7 +15189,6 @@ OFF</button>
           let html =
             '<div class="unit-box"><h3>' +
             SIEGE_RULES.names[i] +
-            (sq ? "（" + squadTypeLabel(sq) + "）" : "") +
             ' <small class="muted">出撃順 ' +
             (i + 1) +
             "番目</small></h3><p>兵士 <b>" +
@@ -15975,7 +15871,7 @@ OFF</button>
           renderSiege();
         });
         // ===== 攻城戦（Phase 4：基本システム） =====
-        // 攻城編成の第一〜第四部隊が、左から順に出撃してNPCの城（右端）を攻める。部隊は自動で戦う。
+        // 攻城編成の第一〜第八部隊が、左から順に出撃してNPCの城（右端）を攻める。部隊は自動で戦う。
         // 防衛戦の地図を使い、NPC側は防衛塔と守備隊（赤い甲冑の兵）を持つ。城の耐久を0にすれば勝利。
         // 経験値・戦死・武将の負傷は防衛戦と同じルール（戦死はその場で保存、経験値は戦いが終わったときに保存）。
         const SIEGE_BATTLE = {
@@ -17018,7 +16914,7 @@ OFF</button>
           return siegeUnits.map((u) => u.soldiers.map(soldierById).filter((s) => s && siegeEligible(s.id)));
         }
         // ===== 秘境の討伐戦（裏ボス） =====
-        // 攻城戦の戦闘をそのまま使う：攻城編成の4部隊が順に出撃し、道の上に立つ裏ボス1体と戦う（塔・城はない）。
+        // 攻城戦の戦闘をそのまま使う：攻城編成の8部隊が順に出撃し、道の上に立つ裏ボス1体と戦う（塔・城はない）。
         // ボスを倒せば勝利、全部隊が倒れる・時間切れ・撤退で敗北。戦死のルールは攻城戦と同じ（一般兵は永久・主人公はLv1から再出発）。
         // 大技は必ず予兆（文字と色）を出してから放つ。守りの陣（被ダメージ -50%）・手当て・衛生兵・装備で備えられる
         // 強さは模擬（4部隊×10人・ステータスポイントは攻撃と防御に半分ずつ）で調整：推奨Lv の少し下は装備・必殺技なしでは負け、
@@ -20161,6 +20057,7 @@ OFF</button>
               deployReserve,
               orderRetreat,
               hireSquad,
+              selectUnitForFixture: type => { selectedUnitType = type; selectedTower = selectedSquad = null; placeSquadId = null; updateUI(); },
               blockCount,
               blockCap,
               retreatTimeOf,
@@ -20311,6 +20208,7 @@ OFF</button>
             heartApi: { buy: buyHeart, price: heartPrice, state: () => ({ purchases: heartPurchases, price: heartPrice(), maxHp: HEART_RULES.maxHp }) },
             playbackApi: { mode: paceMode, setMode: setPaceMode },
             recoveryApi: { plan: recoveryPlan, error: recoveryError, recover: recoverAll },
+            recruitApi: { recruit: randomRecruit, cost: randomRecruitCost, error: randomRecruitError, setRng: fn => { recruitRng = fn || Math.random; }, rules: RANDOM_RECRUIT },
             config: { WARLORDS, HERO_RULES, GACHA },
             heroApi: {
               save: () => heroSave,

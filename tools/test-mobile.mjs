@@ -135,7 +135,7 @@ for (const [w, h] of [
       /❤️/.test(r.stats[0]) &&
       /G/.test(r.stats[1]) &&
       /WAVE/.test(r.stats[2]) &&
-      /配置 0\/4/.test(r.stats[3]),
+      /配置 0\/8/.test(r.stats[3]),
     JSON.stringify(r),
   );
   check("マップは画面の幅いっぱい（左右の余白16px以下）", r.canvas >= w - 16, String(r.canvas));
@@ -263,7 +263,7 @@ await page.tap('[data-chip="1"]');
 check("部隊を押すと下にパネル", await page.isVisible("#squadPanel"));
 check(
   "パネルに部隊名・人数・平均Lv・HP",
-  /第一部隊（槍兵）/.test(await page.textContent("#sqTitle")) &&
+  /第一部隊/.test(await page.textContent("#sqTitle")) &&
     /生存 10人/.test(await page.textContent("#sqSummary")) &&
     /HP \d+\/\d+/.test(await page.textContent("#sqSummary")),
 );
@@ -372,9 +372,12 @@ await page.tap('[data-chip="4"]');
 await tapMap(page, 300, 440);
 check("第四部隊を下の道に配置", (await ev(page, () => WD_DEBUG.state().squads[3].state)) === "deployed");
 r = await ev(page, () => WD_DEBUG.squadApi.roster(WD_DEBUG.state().squads[3]).length);
-await page.tap("#sqRecruit");
+await page.tap("#sqClose");
+await ev(page, () => { let roll=0; WD_DEBUG.recruitApi.setRng(() => roll++ % 2 === 0 ? .999 : 0); });
+await page.tap("#hireToggle");
+await page.tap('[data-chip="4"]');
 let r2 = await ev(page, () => WD_DEBUG.squadApi.roster(WD_DEBUG.state().squads[3]).length);
-check("「＋ 補充」で新兵を1人", r2 === r + 1, `${r} → ${r2}`);
+check("「＋ 雇う」で空き部隊に新兵を1人", r2 === r + 1, `${r} → ${r2}`);
 await ev(page, () => {
   for (const m of WD_DEBUG.squadApi.roster(WD_DEBUG.state().squads[3])) m.hp = 1;
 });
@@ -389,8 +392,8 @@ r = await ev(page, () => ({
   buttons: [...document.querySelectorAll("#squadPanel .panel-actions button")].map((b) => b.textContent.trim()),
 }));
 check(
-  "部隊のボタンは「撤退」「治療」「補充」の3つ（「待機へ」「兵士」はない）",
-  r.label === "↩ 撤退" && !r.organize && r.buttons.length === 3,
+  "部隊のボタンは「撤退」「治療」の2つ（「待機へ」「兵士」はない）",
+  r.label === "↩ 撤退" && !r.organize && r.buttons.length === 2,
   JSON.stringify(r),
 );
 await page.tap("#retreat");
@@ -400,10 +403,10 @@ check(
   "待機に戻ってもパネルは開いたまま（「配置」ボタン）",
   (await page.isVisible("#squadPanel")) && /配置/.test(await page.textContent("#retreat")),
 );
-check("上の帯の配置数も更新（配置 2/4）", /配置 2\/4/.test(await page.textContent("#deployStat")));
+check("上の帯の配置数も更新（配置 2/8）", /配置 2\/8/.test(await page.textContent("#deployStat")));
 check(
-  "部隊の列に「配置 n/4｜保有 n/4」（設定の上限）",
-  /配置 2\/4｜保有 4\/4/.test(await page.textContent("#unitCount")),
+  "部隊の列に「配置 n/8｜保有 n/8」（設定の上限）",
+  /配置 2\/8｜保有 4\/8/.test(await page.textContent("#unitCount")),
   await page.textContent("#unitCount"),
 );
 check(
