@@ -1761,6 +1761,11 @@
         cursor: pointer;
       }
       /* 全国 */
+      .world-chapters { display: grid; gap: 10px; margin: 12px 0; }
+      .world-chapter { width: 100%; min-height: 90px; text-align: left; white-space: normal; padding: 12px; }
+      .world-chapter b, .world-chapter small { display: block; }
+      .world-chapter small { margin-top: 6px; font-size: 14px; line-height: 1.6; }
+      .road-map.foreign-road-map { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: none; grid-template-rows: none; grid-auto-rows: minmax(64px, auto); }
       .tools.menu-tools #reset {
         grid-column: auto;
       }
@@ -2443,14 +2448,14 @@ OFF</button>
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
         ><button id="roster">👥 武将一覧</button
         ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
-        ><button id="mapOpen">🗾 全国</button><button id="zukanOpen">📖 図鑑</button
+        ><button id="mapOpen">🌏 世界</button><button id="zukanOpen">📖 図鑑</button
         ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v67（攻城戦の敵Lv・装甲・対馬最終解放）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v68（世界地図・朝鮮半島）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -14890,7 +14895,7 @@ OFF</button>
                   PROVINCE_BONUS[p].text
                 : "") +
               "・隣：" +
-              P.adj.map((a) => PROVINCES[a].name).join("・") +
+              P.adj.map((a) => provinceDiscovered(a) ? PROVINCES[a].name : "？？？").join("・") +
               "</small></span>" +
               btn +
               "</div>";
@@ -14991,7 +14996,8 @@ OFF</button>
         $("siegeClose").onclick = closeSiege;
         // ===== 全国（地方の簡易地図・国の一覧・秘境） =====
         // 正確な日本地図の素材はないので、五畿七道をおおよその位置に並べた簡易地図と、地方ごとの国の一覧で表す
-        let mapRoad = null, // 開いている地方
+        let mapChapter = "japan",
+          mapRoad = null, // 開いている地方
           mapProv = null, // 詳しく見ている国
           mapTab = "map", // map：地方 / open：攻略できる国 / secret：秘境
           mapNote = "";
@@ -14999,6 +15005,7 @@ OFF</button>
         const PROV_STATE_TEXT = { own: "🏯 制圧済み", open: "⚔️ 攻略可能", lock: "🔒 未攻略" };
         const roadProvinces = (r) => PROVINCE_ORDER.filter((p) => PROVINCES[p].road === r);
         function provinceDetail(p) {
+          if (!provinceDiscovered(p)) return '<p class="muted">？？？ 周辺を制圧すると発見できます。</p>';
           const P = PROVINCES[p],
             C = P.castle && NPC_CASTLES[P.castle],
             st = provState(p),
@@ -15007,7 +15014,7 @@ OFF</button>
             '<div class="prov-detail"><p><b>' +
             P.name +
             "</b>（" +
-            ROADS[P.road] +
+            CHAPTERS[P.chapter].roads[P.road] +
             "）" +
             PROV_STATE_TEXT[P.home ? "own" : st] +
             "<br><small>城：" +
@@ -15040,8 +15047,8 @@ OFF</button>
               .map(
                 (q) =>
                   (ownsProvince(q) ? "🏯" : canAttackProvince(q) ? "⚔️" : "🔒") +
-                  PROVINCES[q].name +
-                  (P.routes[q] ? "（⛵" + P.routes[q] + "）" : ""),
+                  (provinceDiscovered(q) ? PROVINCES[q].name : "？？？") +
+                  (P.routes[q] ? "（⛵" + (provinceDiscovered(q) ? P.routes[q] : "未開の航路") + "）" : ""),
               )
               .join("・") +
             "</small></p>";
@@ -15065,6 +15072,7 @@ OFF</button>
           const target = targetCastleId(); // 新しい条件で無効になった旧目標には印を付けない
           return list
             .map((p) => {
+              if (!provinceDiscovered(p)) return '<button class="prov-row" disabled><span>？？？</span><small>周辺を制圧すると発見</small></button>';
               const P = PROVINCES[p],
                 C = P.castle && NPC_CASTLES[P.castle],
                 st = P.home ? "own" : provState(p);
@@ -15089,38 +15097,59 @@ OFF</button>
             })
             .join("");
         }
+        function renderWorld() {
+          let html = (mapNote ? '<p class="saved">' + esc(mapNote) + '</p>' : '') + '<p>日本から海を越えて、新しい章へ。育てた兵士・武将・装備をそのまま使えます。</p><div class="world-chapters">';
+          for (const [i, cid] of CHAPTER_ORDER.entries()) {
+            const CH = CHAPTERS[cid], list = chapterProvinces(cid), open = chapterUnlocked(cid), n = ownedCount(list);
+            html += '<button class="world-chapter" data-map-chapter="' + cid + '"' + (open ? '' : ' disabled') + '><b>第' + (i + 1) + '章 ' + (open ? CH.icon + ' ' + CH.name : '🔒 ？？？') + '</b><small>';
+            if (!open) html += '日本を天下統一すると解放';
+            else {
+              html += '制圧 ' + n + '/' + list.length + (cid === "japan" ? 'か国・推奨Lv5〜335' : '拠点・推奨Lv350〜600');
+              if (cid === "japan") html += (conquestMeta.tenka || isTenka()) ? '・天下統一達成' : '';
+              else html += conquestMeta.world.cleared[cid] ? '・初回制覇済み' : '・初回制覇で🎴ガチャ券' + CH.clearTickets + '枚';
+            }
+            html += '</small></button>';
+          }
+          html += '</div><p class="muted">未知の拠点は、周辺を制圧すると姿を現します。一度開いた章や発見した拠点は、領土を失っても残ります。</p>';
+          $("mapBody").innerHTML = html;
+          $("mapTitle").textContent = "🌏 世界";
+        }
         function renderMap() {
-          const n = ownedCount(),
-            all = JAPAN.length,
-            tenka = isTenka();
+          if (mapChapter === "world" || !chapterUnlocked(mapChapter)) return renderWorld();
+          const CH = CHAPTERS[mapChapter], list = chapterProvinces(mapChapter),
+            n = ownedCount(list),
+            all = list.length,
+            tenka = mapChapter === "japan" && isTenka();
           let html =
+            '<button data-world-home>🌏 世界へ戻る</button>' +
             (mapNote ? '<p class="saved">' + esc(mapNote) + "</p>" : "") +
             '<p class="map-progress"><b>制圧 ' +
             n +
             "/" +
             all +
-            "か国</b>" +
+            (mapChapter === "japan" ? "か国</b>" : "拠点</b>") +
             (tenka ? "・🎌 天下統一" : "") +
             '<span class="bar"><i style="width:' +
             Math.round((n / all) * 100) +
             '%"></i></span></p>' +
-            '<p class="muted"><small>三河から、領土の隣の国へ攻め込もう（海峡・島へは ⛵航路で渡れる）。全国' +
+            (mapChapter === "japan" ? '<p class="muted"><small>三河から、領土の隣の国へ攻め込もう（海峡・島へは ⛵航路で渡れる）。全国' +
             all +
             "か国の制覇で天下統一（🎴 ガチャ券 +" +
             TENKA_TICKETS +
-            "）。推奨レベルは目安で、制限はありません。地図は位置をおおまかに表した簡略図です。</small></p>" +
+            "）。推奨レベルは目安で、制限はありません。地図は位置をおおまかに表した簡略図です。</small></p>" : '<p class="muted"><small>対馬から釜山航路へ。領土の隣の拠点を攻略しよう。装甲の高い槍兵には貫通が有効。8拠点の初回制覇で🎴ガチャ券5枚。</small></p>') +
             '<div class="forge-kinds map-tabs" role="group" aria-label="表示">' +
             [
               ["map", "🗾 地方"],
-              ["open", "⚔️ 攻略可能 " + PROVINCE_ORDER.filter(canAttackProvince).length],
+              ["open", "⚔️ 攻略可能 " + list.filter(canAttackProvince).length],
               ["secret", "🗻 秘境 " + Object.keys(conquestMeta.secrets).length + "/" + Object.keys(SECRETS).length],
             ]
+              .filter((t) => mapChapter === "japan" || t[0] !== "secret")
               .map((t) => '<button data-map-tab="' + t[0] + '" aria-pressed="' + (mapTab === t[0]) + '">' + t[1] + "</button>")
               .join("") +
             "</div>";
           if (mapTab === "map") {
-            html += '<div class="road-map">';
-            for (const r of Object.keys(ROADS)) {
+            html += '<div class="road-map' + (mapChapter === "japan" ? '' : ' foreign-road-map') + '">';
+            for (const r of Object.keys(CH.roads)) {
               const list = roadProvinces(r),
                 own = list.filter(ownsProvince).length,
                 open = list.filter(canAttackProvince).length;
@@ -15132,7 +15161,7 @@ OFF</button>
                 '" data-map-road="' +
                 r +
                 '"><b>' +
-                ROADS[r] +
+                CH.roads[r] +
                 "</b><small>" +
                 own +
                 "/" +
@@ -15141,10 +15170,11 @@ OFF</button>
                 "</small></button>";
             }
             html += "</div>";
-            const r = mapRoad || PROVINCES[provinceOf(targetCastleId()) || "mikawa"].road;
+            const targetRoad = PROVINCES[provinceOf(targetCastleId()) || "mikawa"].road,
+              r = CH.roads[mapRoad] ? mapRoad : CH.roads[targetRoad] ? targetRoad : Object.keys(CH.roads)[0];
             html +=
               '<h3 class="hg-h">' +
-              ROADS[r] +
+              CH.roads[r] +
               "（" +
               roadProvinces(r).filter(ownsProvince).length +
               "/" +
@@ -15152,9 +15182,9 @@ OFF</button>
               "）</h3>" +
               provinceRows(roadProvinces(r));
           } else if (mapTab === "open") {
-            const list = PROVINCE_ORDER.filter(canAttackProvince);
-            html += list.length
-              ? provinceRows(list)
+            const open = list.filter(canAttackProvince);
+            html += open.length
+              ? provinceRows(open)
               : '<p class="muted">' + (tenka ? "全国を制覇しました。演習は各国から選べます。" : "攻略できる国がありません。") + "</p>";
           } else {
             // 最終ボス：最初から場所がわかっていて、いつでも挑める
@@ -15224,15 +15254,17 @@ OFF</button>
             }
           }
           $("mapBody").innerHTML = html;
-          $("mapTitle").textContent = "🗾 全国 " + n + "/" + all;
+          $("mapTitle").textContent = (mapChapter === "japan" ? "🗾 全国 " : CH.icon + " " + CH.name + " ") + n + "/" + all;
         }
-        function openMap() {
+        function openMap(destination = "japan") {
+          mapChapter = destination === "world" || CHAPTER_ORDER.includes(destination) ? destination : "japan";
+          mapRoad = null; mapTab = "map";
           mapNote = "";
           mapProv = null;
           // 発見したのにまだお知らせを見ていない秘境（途中で閉じた場合など）は、ここで1回だけ知らせる
           const unseen = unseenSecrets();
           if (unseen.length) {
-            mapNote = "🗻 秘境を発見：" + unseen.map((id) => SECRETS[id].name).join("・") + "（「秘境」で確認できます）";
+            mapNote = "🗻 秘境を発見：" + unseen.map((id) => SECRETS[id].name).join("・") + "（日本の「秘境」で確認できます）";
             markSecretsSeen(unseen);
           }
           renderMap();
@@ -15240,15 +15272,20 @@ OFF</button>
           $("mapClose").focus();
         }
         const closeMap = () => ($("mapSheet").hidden = true);
-        $("mapOpen").onclick = openMap;
+        $("mapOpen").onclick = () => openMap("world");
         $("mapClose").onclick = closeMap;
         $("mapSheet").addEventListener("click", (ev) => {
           if (ev.target === $("mapSheet")) return closeMap();
           const b = ev.target.closest("button");
           if (!b || b.disabled || b.id === "mapClose") return;
           const d = b.dataset;
-          mapNote = "";
-          if (d.mapTab) {
+          if (!mapNote.startsWith("🗻 秘境を発見")) mapNote = "";
+          if (d.worldHome !== undefined) {
+            mapChapter = "world"; mapProv = null;
+          } else if (d.mapChapter && CHAPTER_ORDER.includes(d.mapChapter) && chapterUnlocked(d.mapChapter)) {
+            mapChapter = d.mapChapter; mapRoad = null; mapProv = null; mapTab = "map";
+          } else if (d.mapTab) {
+            if (!["map", "open"].concat(mapChapter === "japan" ? ["secret"] : []).includes(d.mapTab)) return;
             mapTab = d.mapTab;
             mapProv = null;
           } else if (d.mapRoad) {
@@ -15673,10 +15710,41 @@ OFF</button>
         };
         const BONUS_CAPS = { waveGold: 1.5, repair: 0.6, hire: 0.5 };
         const STAGE1 = ["mikawa", "owari", "totomi", "mino", "suruga", "shinano", "kai"]; // 最初の舞台（7か国の統一）
+        // 推奨レベル（目安。入場の制限ではない）と城の強さの対応。
+        // 既存の模擬結果を基準に補間する。Lv100を超えた部分は同じ傾きで延長。
+        const RECLV_POINTS = [
+          [1, 5],
+          [1.6, 10],
+          [4, 35],
+          [6, 65],
+          [8, 100],
+        ];
+        function castlePowerAtLevel(lv) {
+          const pts = RECLV_POINTS;
+          for (let i = 1; i < pts.length; i++)
+            if (lv <= pts[i][1])
+              return pts[i - 1][0] + ((lv - pts[i - 1][1]) / (pts[i][1] - pts[i - 1][1])) * (pts[i][0] - pts[i - 1][0]);
+          return 8 + (lv - 100) / 17.5;
+        }
         // ===== 世界の章（地域） =====
-        // 章ごとに、国の表（KUNI と同じ形）・陸のつながり（KUNI_LAND と同じ形）・航路・地方（道）・城の強さの式を持つ。今は「日本」だけ。
+        // 章ごとに、国の表（KUNI と同じ形）・陸のつながり（KUNI_LAND と同じ形）・航路・地方（道）・城の強さの式を持つ。
         // 海外の章は、同じ形の表を CHAPTERS に足すだけで増やせる（章どうしは CHAPTER_LINKS の航路でつなぐ）。
         // 国ID・城ID・地方IDは、すべての章で重ならないようにする（保存データの占領は城IDで記録する）
+        // 地名は八道を参考にし、城・勢力はゲーム独自の設定。IDは日本と重ねない。
+        const KOREA_LEVELS = {
+          kr_gyeongsang: 350, kr_jeolla: 385, kr_chungcheong: 420, kr_gyeonggi: 455,
+          kr_gangwon: 490, kr_hwanghae: 525, kr_pyeongan: 560, kr_hamgyeong: 600,
+        };
+        const KOREA_KUNI = [
+          ["kr_gyeongsang", "慶尚", "kr_south", "kr_busan", "釜山の海門砦", "海門守備隊", ["sea", "archer"]],
+          ["kr_jeolla", "全羅", "kr_south", "kr_green", "緑潮城", "緑潮の守り手", ["sea", "spear"]],
+          ["kr_chungcheong", "忠清", "kr_central", "kr_river", "清流の関", "清流守備隊", ["archer", "spear"]],
+          ["kr_gyeonggi", "京畿", "kr_central", "kr_moon", "月影の都城", "月影の衛士", ["fortress", "archer"]],
+          ["kr_gangwon", "江原", "kr_central", "kr_ridge", "蒼嶺の砦", "蒼嶺騎士団", ["cavalry", "spear"]],
+          ["kr_hwanghae", "黄海", "kr_north", "kr_gold", "金波城", "金波守備隊", ["sea", "gun"]],
+          ["kr_pyeongan", "平安", "kr_north", "kr_white", "白雲城", "白雲の衛士", ["fortress", "cavalry"]],
+          ["kr_hamgyeong", "咸鏡", "kr_north", "kr_dawn", "暁の北城", "暁の守護者", ["fortress", "warlord", "spear"]],
+        ];
         const CHAPTERS = {
           japan: {
             name: "日本",
@@ -15688,9 +15756,27 @@ OFF</button>
             // 城の強さ：三河からの距離（航路も1つ）で強くなる（1つ遠いごとに ×1.24）・特色の倍率を掛ける
             power: (dist, styles) => 1.1 * 1.24 ** dist * styles.reduce((n, s) => n * (s.power || 1), 1),
           },
+          korea: {
+            name: "朝鮮半島", icon: "🌊", entry: "kr_gyeongsang", clearTickets: 5,
+            kuni: KOREA_KUNI,
+            land: `
+              kr_gyeongsang: kr_jeolla kr_chungcheong kr_gangwon
+              kr_jeolla: kr_gyeongsang kr_chungcheong
+              kr_chungcheong: kr_gyeongsang kr_jeolla kr_gyeonggi kr_gangwon
+              kr_gyeonggi: kr_chungcheong kr_gangwon kr_hwanghae
+              kr_gangwon: kr_gyeongsang kr_chungcheong kr_gyeonggi kr_hwanghae kr_hamgyeong
+              kr_hwanghae: kr_gyeonggi kr_gangwon kr_pyeongan
+              kr_pyeongan: kr_hwanghae kr_hamgyeong
+              kr_hamgyeong: kr_gangwon kr_pyeongan
+            `,
+            sea: [], roads: { kr_south: "南部", kr_central: "中部", kr_north: "北部" },
+            levels: KOREA_LEVELS,
+            power: (dist, styles, id) => castlePowerAtLevel(KOREA_LEVELS[id]),
+            hp: (lv, styles) => Math.round((17000 + (lv - 335) * 35) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
+          },
         };
-        const CHAPTER_ORDER = ["japan"];
-        const CHAPTER_LINKS = []; // [国ID, 国ID, 航路の名前]：章と章をつなぐ（例：対馬 → 朝鮮半島の国）
+        const CHAPTER_ORDER = ["japan", "korea"];
+        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"]];
         (() => {
           for (const cid of CHAPTER_ORDER) {
             const CH = CHAPTERS[cid],
@@ -15732,15 +15818,17 @@ OFF</button>
               P.dist = dist[id];
               if (!castle || NPC_CASTLES[castle]) continue; // 自国と、最初の7か国の城はこれまでのまま
               const st = styles.map((k) => KUNI_STYLE[k]),
-                power = Math.round(CHAPTERS[cid].power(P.dist, st) * 100) / 100,
-                hp = Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
-                tickets = 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0);
+                CH = CHAPTERS[cid],
+                power = CH.levels ? CH.power(P.dist, st, id) : Math.round(CH.power(P.dist, st, id) * 100) / 100,
+                hp = CH.hp ? CH.hp(CH.levels[id], st) : Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
+                tickets = cid === "japan" ? 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0) : id === "kr_hamgyeong" ? 2 : 1;
               const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
+              if (CH.levels) C.level = C.enemyLevel = CH.levels[id];
               C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
               C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
               NPC_CASTLES[castle] = C;
               const b = KUNI_BONUS[styles.find((k) => KUNI_BONUS[k]) || "other"];
-              PROVINCE_BONUS[id] = Object.assign({}, b, { name: name + "の" + b.name });
+              if (cid === "japan") PROVINCE_BONUS[id] = Object.assign({}, b, { name: name + "の" + b.name });
             }
         })();
         // 一覧の並び：最初の7か国 → 章の順 → 三河から近い順（同じ距離は地方の順）
@@ -15758,22 +15846,6 @@ OFF</button>
         const chapterProvinces = (cid) => PROVINCE_ORDER.filter((p) => PROVINCES[p].chapter === cid);
         // 日本の国（天下統一は日本の68か国の制覇。海外の章を足しても変わらない）
         const JAPAN = chapterProvinces("japan");
-        // 推奨レベル（目安。入場の制限ではない）と城の強さの対応。
-        // 既存の模擬結果を基準に補間する。Lv100を超えた部分は同じ傾きで延長。
-        const RECLV_POINTS = [
-          [1, 5],
-          [1.6, 10],
-          [4, 35],
-          [6, 65],
-          [8, 100],
-        ];
-        function castlePowerAtLevel(lv) {
-          const pts = RECLV_POINTS;
-          for (let i = 1; i < pts.length; i++)
-            if (lv <= pts[i][1])
-              return pts[i - 1][0] + ((lv - pts[i - 1][1]) / (pts[i][1] - pts[i - 1][1])) * (pts[i][0] - pts[i - 1][0]);
-          return 8 + (lv - 100) / 17.5;
-        }
         // v66の城IDごとの難易度を固定。海外の航路・並び替えで日本のレベルや耐久を変えない。
         const JAPAN_CASTLE_STATS = {
           kiyosu: { level: 5, hp: 1600 },
@@ -15893,6 +15965,16 @@ OFF</button>
         // 占領の記録（保存キー worldDefense.conquest.v1）
         //   castles: { 城ID: { captured, attempts, wins } }、target: 選んだ攻略目標の城ID、unified: 統一の報酬を受け取った
         const CONQUEST_KEY = "worldDefense.conquest.v1";
+        function loadWorldProgress(src) {
+          const flags = (o, ids) => Object.fromEntries(ids.filter((id) => o && o[id] === true).map((id) => [id, true]));
+          const w = src && typeof src === "object" ? src : {};
+          return {
+            unlocked: { ...flags(w.unlocked, CHAPTER_ORDER), japan: true },
+            discovered: flags(w.discovered, PROVINCE_ORDER),
+            cleared: flags(w.cleared, CHAPTER_ORDER.filter((id) => id !== "japan")),
+            rewards: flags(w.rewards, CHAPTER_ORDER.filter((id) => id !== "japan")),
+          };
+        }
         function loadConquest() {
           const out = {};
           let d = null;
@@ -15913,6 +15995,7 @@ OFF</button>
           conquestMeta.target = d && NPC_CASTLES[d.target] ? d.target : null;
           conquestMeta.unified = !!(d && d.unified === true);
           conquestMeta.tenka = !!(d && d.tenka === true);
+          conquestMeta.world = loadWorldProgress(d && d.world);
           // 秘境：発見済み（領土からも計算し直す）と、発見のお知らせを見たか（別に持つ）
           const flags = (o) => {
             const out = {};
@@ -15925,7 +16008,7 @@ OFF</button>
           conquestMeta.bosses = {};
           const bs = d && d.bosses;
           if (bs && typeof bs === "object")
-            for (const id of Object.keys(SECRETS)) {
+            for (const id of Object.keys(SECRETS).concat("orochi")) {
               const v = bs[id];
               if (!v || typeof v !== "object") continue;
               conquestMeta.bosses[id] = {
@@ -15951,6 +16034,7 @@ OFF</button>
           secrets: {},
           secretSeen: {},
           bosses: {},
+          world: null,
         };
         const conquest = loadConquest();
         function persistConquest() {
@@ -15967,6 +16051,7 @@ OFF</button>
                 secrets: conquestMeta.secrets,
                 secretSeen: conquestMeta.secretSeen,
                 bosses: conquestMeta.bosses,
+                world: conquestMeta.world,
               }),
             );
             return true;
@@ -15987,6 +16072,23 @@ OFF</button>
         territoryReady = true;
         // 全国制覇（天下統一）：今、全部の国を領土にしているか（反撃で失えば外れる。お祝いと報酬は1回だけ）
         const isTenka = () => JAPAN.every(ownsProvince);
+        const chapterUnlocked = (id) => !!conquestMeta.world.unlocked[id];
+        const provinceDiscovered = (p) => !!(PROVINCES[p] && chapterUnlocked(PROVINCES[p].chapter) && (PROVINCES[p].chapter === "japan" || conquestMeta.world.discovered[p]));
+        function syncWorldProgress() {
+          const w = conquestMeta.world, before = JSON.stringify(w);
+          const korea = chapterProvinces("korea");
+          if (conquestMeta.tenka || isTenka() || korea.some((p) => ownsProvince(p) || conquest[PROVINCES[p].castle].wins > 0)) w.unlocked.korea = true;
+          for (const cid of CHAPTER_ORDER) {
+            if (!chapterUnlocked(cid)) continue;
+            const list = chapterProvinces(cid), entry = CHAPTERS[cid].entry;
+            if (entry) w.discovered[entry] = true;
+            for (const p of list)
+              if (cid === "japan" || ownsProvince(p) || PROVINCES[p].adj.some(ownsProvince)) w.discovered[p] = true;
+            if (cid !== "japan" && list.every(ownsProvince)) w.cleared[cid] = true;
+          }
+          return before !== JSON.stringify(w);
+        }
+        if (syncWorldProgress()) persistConquest(); // 旧セーブの天下統一からも章を解放。報酬はここでは渡さない。
         // 秘境の発見：条件の国をすべて領土にしたら発見（1回発見したら残る）。新しく見つけた秘境を返す
         function checkSecrets() {
           const found = [];
@@ -16013,16 +16115,16 @@ OFF</button>
         let counterRng = Math.random; // テストで差し替え可能
         function activeCounter() {
           const c = conquestMeta.counter;
-          if (!c || PROVINCES[c.province].home || !ownsProvince(c.province)) return null;
+          if (!c || PROVINCES[c.province].home || !ownsProvince(c.province) || PROVINCES[c.province].chapter !== PROVINCES[c.from].chapter) return null;
           return c;
         }
         // 境目の領土：自国以外の領土で、まだ取っていない国と隣り合っている国
         // 反撃してくるのは同じ章（地域）の敵国だけ（海を越えた別の章からは来ない）
         const counterFoes = (p) => PROVINCES[p].adj.filter((a) => !ownsProvince(a) && PROVINCES[a].chapter === PROVINCES[p].chapter);
         const borderProvinces = () => PROVINCE_ORDER.filter((p) => !PROVINCES[p].home && ownsProvince(p) && counterFoes(p).length);
-        function maybeCounter() {
+        function maybeCounter(chapter = null) {
           if (activeCounter() || counterRng() >= COUNTER.chance) return null;
-          const list = borderProvinces();
+          const list = borderProvinces().filter((p) => !chapter || PROVINCES[p].chapter === chapter);
           if (!list.length) return null;
           const province = list[Math.min(list.length - 1, Math.floor(counterRng() * list.length))],
             enemies = counterFoes(province),
@@ -16066,11 +16168,13 @@ OFF</button>
         // 対馬は日本の最後。過去に制圧した城の再攻略・旧セーブの演習は制限しない。
         const tsushimaReady = () => conquestMeta.tenka || conquest.kaneishi.wins > 0 || JAPAN.every((p) => p === "tsushima" || ownsProvince(p));
         // 攻められる国：まだ領土でなく、領土の隣にある国（対馬の初回だけ追加条件）
-        const canAttackProvince = (p) => !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince) && (p !== "tsushima" || tsushimaReady());
+        const canAttackProvince = (p) => provinceDiscovered(p) && !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince) && (p !== "tsushima" || tsushimaReady());
         // 城を目標にできるか：攻められる国の城、または占領済みの城（演習）
         function targetError(castleId) {
           const p = provinceOf(castleId);
           if (!p) return "その城はありません。";
+          if (!chapterUnlocked(PROVINCES[p].chapter)) return "まだ解放されていない章です。日本を天下統一すると次の章が開きます。";
+          if (!provinceDiscovered(p)) return "まだ発見していない拠点です。周辺の拠点を制圧すると発見できます。";
           if (ownsProvince(p) || canAttackProvince(p)) return null;
           if (p === "tsushima" && !tsushimaReady()) return "対馬は日本最後の城です。対馬以外の日本67か国を制圧すると解放されます。";
           return PROVINCES[p].name + "は領土の隣ではないので、まだ攻められません。";
@@ -16671,6 +16775,7 @@ OFF</button>
           B.tickets = B.firstClear ? OROCHI.clearTickets : B.firstReward ? BOSS_RULES.firstTickets : BOSS_RULES.repeatTickets;
         }
         function canStartBattle() {
+          if (gameSaveBatch && !commitGameSaveBatch()) return "未保存の進行があります。先に途中保存を再試行してください。";
           if (training) return "修練場の挑戦中は出陣できません。";
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
           if (battle) return "攻城戦の最中です。";
@@ -17325,6 +17430,9 @@ OFF</button>
           const B = battle;
           if (!B || B.result) return;
           B.result = result;
+          B.chapter = B.boss ? null : PROVINCES[provinceOf(B.castleId)].chapter;
+          const overseas = B.chapter && B.chapter !== "japan";
+          if (overseas) beginGameSaveBatch(); // 海外の制圧・発見・章報酬・兵士の成長を同じログで確定
           B.castleHp = Math.max(0, B.castleHp);
           const report = [];
           for (const g of B.groups) {
@@ -17375,6 +17483,7 @@ OFF</button>
           }
           // 占領の記録。初めて攻め落としたときだけ占領・報酬（演習や再戦では増えない）
           const rec = conquest[B.castleId];
+          const firstCapture = rec.wins === 0;
           rec.attempts++;
           if (result === "win") {
             rec.wins++;
@@ -17382,31 +17491,36 @@ OFF</button>
               rec.captured = true;
               B.captured = true;
               if (conquestMeta.target === B.castleId) conquestMeta.target = null; // 次の国を目標に
-              if (STAGE1.every(ownsProvince) && !conquestMeta.unified) {
+              if (!overseas && STAGE1.every(ownsProvince) && !conquestMeta.unified) {
                 conquestMeta.unified = true;
                 B.unified = true;
               }
-              if (isTenka() && !conquestMeta.tenka) {
+              if (!overseas && isTenka() && !conquestMeta.tenka) {
                 conquestMeta.tenka = true;
                 B.tenka = true;
               }
             }
+          }
+          syncWorldProgress();
+          B.captureTickets = B.captured && (!overseas || firstCapture) ? NPC_CASTLES[B.castleId].reward.tickets : 0;
+          if (overseas && result === "win" && conquestMeta.world.cleared[B.chapter] && !conquestMeta.world.rewards[B.chapter]) {
+            conquestMeta.world.rewards[B.chapter] = true;
+            B.chapterClear = { name: CHAPTERS[B.chapter].name, tickets: CHAPTERS[B.chapter].clearTickets };
           }
           persistConquest();
           if (B.captured) {
             B.secrets = checkSecrets(); // 秘境の発見（お知らせは結果画面で1回だけ）
             markSecretsSeen(B.secrets);
           }
-          if (B.captured && !B.unified && !B.tenka) B.counter = maybeCounter(); // 隣の敵国の反撃
+          if (B.captured && !B.unified && !B.tenka) B.counter = maybeCounter(B.chapter); // 同じ章の敵国の反撃
           shots = [];
-          showBattleResult(B);
-          if (B.captured) {
-            const r = NPC_CASTLES[B.castleId].reward;
-            if (r && r.tickets) grantTickets(r.tickets, B.castleName + "を攻略", true);
-          }
+          if (B.captureTickets) grantTickets(B.captureTickets, B.castleName + "を攻略", true);
+          if (B.chapterClear) grantTickets(B.chapterClear.tickets, B.chapterClear.name + "を制覇", true);
           if (B.unified) grantTickets(UNIFY_TICKETS, "7か国を統一", true);
           if (B.tenka) grantTickets(TENKA_TICKETS, "天下統一", true);
           if (B.tenka && grantTenkaGun()) toast("🔥 天下統一の報酬：爆炎の鉄砲を手に入れた！（🎒 装備倉庫）");
+          if (overseas) B.savePending = !commitGameSaveBatch();
+          showBattleResult(B);
           battle = null;
           updateUI();
         }
@@ -17465,13 +17579,15 @@ OFF</button>
                 "（" +
                 C.province +
                 "）を占領した！" +
-                (C.reward && C.reward.tickets ? " 🎴 ガチャ券 +" + C.reward.tickets : "") +
+                (B.captureTickets ? " 🎴 ガチャ券 +" + B.captureTickets : "") +
                 "</p><p>領土 " +
-                ownedCount() +
+                ownedCount(chapterProvinces(B.chapter || "japan")) +
                 "/" +
-                JAPAN.length +
-                "か国</p>"
+                chapterProvinces(B.chapter || "japan").length +
+                (B.chapter === "japan" ? "か国</p>" : "拠点</p>")
               : "") +
+            (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。次の章は今後追加予定です。</p></div>' : '') +
+            (B.savePending ? '<p class="injured">⚠ 進行・報酬が未保存です。ページを閉じずに「途中保存」で保存を再試行してください。</p>' : '') +
             (B.unified
               ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
               : "") +
@@ -19231,7 +19347,12 @@ OFF</button>
               PROVINCE_ORDER,
               CHAPTERS,
               CHAPTER_ORDER,
+              CHAPTER_LINKS,
               chapterProvinces,
+              chapterUnlocked,
+              provinceDiscovered,
+              syncWorldProgress,
+              persistConquest,
               JAPAN,
               LEGACY_PROVINCE_IDS,
               recLevel,

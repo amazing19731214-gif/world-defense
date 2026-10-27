@@ -81,9 +81,9 @@ async function reload(page) {
 }
 const stored = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), key);
 const owned = (page) =>
-  page.evaluate(() => WD_DEBUG.squadApi.PROVINCE_ORDER.filter((p) => WD_DEBUG.squadApi.ownsProvince(p)));
+  page.evaluate(() => WD_DEBUG.squadApi.JAPAN.filter((p) => WD_DEBUG.squadApi.ownsProvince(p)));
 const open = (page) =>
-  page.evaluate(() => WD_DEBUG.squadApi.PROVINCE_ORDER.filter((p) => WD_DEBUG.squadApi.canAttackProvince(p)));
+  page.evaluate(() => WD_DEBUG.squadApi.JAPAN.filter((p) => WD_DEBUG.squadApi.canAttackProvince(p)));
 // 国を攻める（result：win / lose。戦闘はすぐ終える）
 const fight = (page, province, result = "win", counter = 0.99) =>
   page.evaluate(
@@ -108,7 +108,7 @@ const allBut = async (page, except = [], extra = {}) => {
   const castles = await page.evaluate((except) => {
     const a = WD_DEBUG.squadApi,
       out = {};
-    for (const p of a.PROVINCE_ORDER) {
+    for (const p of a.JAPAN) {
       const c = a.PROVINCES[p].castle;
       if (c) out[c] = { captured: !except.includes(p), attempts: 1, wins: 1 };
     }
@@ -123,7 +123,7 @@ console.log("■ 全国のデータ（旧国68か国）");
 let r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi,
     P = a.PROVINCES,
-    ids = Object.keys(P),
+    ids = a.JAPAN,
     roads = {};
   for (const id of ids) roads[P[id].road] = (roads[P[id].road] || 0) + 1;
   const names = new Set(ids.map((id) => P[id].name)),
@@ -141,7 +141,7 @@ let r = await page.evaluate(() => {
   while (queue.length) for (const q of P[queue.shift()].adj) if (!seen.has(q)) (seen.add(q), queue.push(q));
   return {
     n: ids.length,
-    order: a.PROVINCE_ORDER.length,
+    order: a.JAPAN.length,
     names: names.size,
     roads,
     castles: castles.length,
@@ -150,7 +150,7 @@ let r = await page.evaluate(() => {
     sym,
     routes,
     nRoutes: a.SEA_ROUTES.length,
-    reach: seen.size,
+    reach: ids.filter((p) => seen.has(p)).length,
     islands: ["sado", "oki", "awaji", "iki", "tsushima"].every(
       (p) => Object.keys(P[p].routes).length && P[p].adj.every((q) => P[p].routes[q]),
     ),
@@ -223,7 +223,7 @@ r = await page.evaluate(() => {
     P = a.PROVINCES,
     C = (p) => a.NPC_CASTLES[P[p].castle],
     count = (c, kind) => c.garrison.filter((g) => g.kind === kind).reduce((n, g) => n + g.n, 0),
-    newOnes = a.PROVINCE_ORDER.slice(7);
+    newOnes = a.JAPAN.slice(7);
   const byDist = newOnes.every((p) =>
     newOnes.every(
       (q) =>
@@ -374,9 +374,9 @@ let seed = await allBut(page, ["izumo"], {
 await page.evaluate(([k, v]) => localStorage.setItem(k, v), [CKEY, seed]);
 await reload(page);
 r = await page.evaluate(() => ({
-  n: WD_DEBUG.squadApi.PROVINCE_ORDER.filter(WD_DEBUG.squadApi.ownsProvince).length,
+  n: WD_DEBUG.squadApi.JAPAN.filter(WD_DEBUG.squadApi.ownsProvince).length,
   tenka: WD_DEBUG.squadApi.isTenka(),
-  open: WD_DEBUG.squadApi.PROVINCE_ORDER.filter(WD_DEBUG.squadApi.canAttackProvince),
+  open: WD_DEBUG.squadApi.JAPAN.filter(WD_DEBUG.squadApi.canAttackProvince),
 }));
 check(
   "出雲以外の67か国を制圧した状態",
@@ -448,7 +448,7 @@ console.log("■ 以前の保存データの移行");
 r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi;
   return {
-    owned: a.PROVINCE_ORDER.filter(a.ownsProvince).join(),
+    owned: a.JAPAN.filter(a.ownsProvince).join(),
     kiyosu: a.conquest().kiyosu,
     unified: a.conquestMeta().unified,
     tenka: a.conquestMeta().tenka,
@@ -468,7 +468,7 @@ check(
 check("知らない城は読み込まない・秘境はまだない", !r.edo && Object.keys(r.secrets).length === 0);
 await reload(page);
 await reload(page);
-r = await page.evaluate(() => WD_DEBUG.squadApi.PROVINCE_ORDER.filter(WD_DEBUG.squadApi.ownsProvince).length);
+r = await page.evaluate(() => WD_DEBUG.squadApi.JAPAN.filter(WD_DEBUG.squadApi.ownsProvince).length);
 check("何度読み込み直しても同じ（二重の制圧・消失なし）", r === 7, String(r));
 await context.close();
 ({ page, errors, context } = await newContext({
@@ -489,6 +489,7 @@ check(
   JSON.stringify(r),
 );
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 let text = await page.textContent("#mapBody");
 check(
   "まだ知らせていない発見は、全国の画面を開いたときに1回だけ知らせる",
@@ -497,6 +498,7 @@ check(
 );
 await page.tap("#mapClose");
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 check("2回目は知らせない", !/秘境を発見/.test(await page.textContent("#mapBody")));
 await page.tap("#mapClose");
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
@@ -556,8 +558,9 @@ await context.close();
 
 console.log("■ 全国の画面（375×667）");
 ({ page, errors, context } = await newContext({}, 375, 667));
-check("メニューに「🗾 全国」", await page.isVisible("#mapOpen"));
+check("メニューに「🌏 世界」", await page.isVisible("#mapOpen"));
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 text = await page.textContent("#mapBody");
 check(
   "制圧数・地方の簡易地図（五畿七道）・攻略可能・秘境",
@@ -654,6 +657,7 @@ seed = await allBut(page, ["tsushima"], {
 await page.evaluate(([k, v]) => localStorage.setItem(k, v), [CKEY, seed]);
 await reload(page);
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 text = await page.textContent("#mapBody");
 check("制圧 67/68", /制圧 67\/68か国/.test(text), text.slice(0, 60));
 await page.tap('[data-map-tab="secret"]');

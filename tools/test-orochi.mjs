@@ -214,6 +214,7 @@ r = await page.evaluate(() => WD_DEBUG.legendApi.endgameOn());
 check("真・八岐大蛇は三大裏ボスに数えない（倒しただけでは終盤は解放されない）", r === false, String(r));
 await page.evaluate(() => (document.getElementById("battleSheet").hidden = true));
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 await page.tap('[data-map-tab="secret"]');
 const text = await page.textContent("#mapBody");
 r = await page.evaluate(() => ({ h: document.documentElement.scrollWidth > innerWidth }));

@@ -132,6 +132,7 @@ check(
   JSON.stringify(r),
 );
 await page.tap("#mapOpen");
+await page.tap('[data-map-chapter="japan"]');
 await page.tap('[data-map-tab="secret"]');
 r = await page.evaluate(() => ({
   btns: [...document.querySelectorAll("[data-boss-go]")].map((b) => b.dataset.bossGo + ":" + b.disabled),

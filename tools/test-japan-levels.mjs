@@ -53,7 +53,7 @@ try {
     return { owned: a.JAPAN.filter(a.ownsProvince).length, tenka: a.isTenka(), record: a.conquest().kiyosu };
   });
   check('既存の制圧・勝利・天下統一記録を引き継ぐ', r.owned === 68 && r.tenka && r.record.attempts === 3 && r.record.wins === 2, r);
-  await page.locator('#mapOpen').tap();
+  await page.locator('#mapOpen').tap(); await page.locator('[data-map-chapter="japan"]').tap();
   await page.locator('[data-map-road="saikaido"]').tap();
   check('全国画面に最後の城の推奨Lv335を表示', /推奨Lv335/.test(await page.locator('#mapBody').innerText()));
   check('iPhone幅で横にはみ出さない', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
