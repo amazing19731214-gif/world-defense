@@ -323,22 +323,8 @@ for (const [label, raw] of [
 console.log("■ 回帰：20ウェーブ・分岐ルート");
 ({ page, errors } = await newPage());
 await page.evaluate(() => WD_DEBUG.setGold(99999));
-const spots = [
-  A,
-  B,
-  Cc,
-  D,
-  E,
-  [180, 180],
-  [180, 420],
-  [520, 230],
-  [520, 370],
-  [650, 60],
-  [650, 540],
-  [790, 220],
-  [790, 380],
-  [330, 520],
-];
+// Six towers cover both branches and the merged route; placement now matters.
+const spots = [A, B, [650, 220], [650, 380], [790, 220], [790, 380]];
 const kinds = ["magic", "cannon", "arrow", "ice"];
 for (let i = 0; i < spots.length; i++) {
   await deselect(page);
@@ -346,7 +332,7 @@ for (let i = 0; i < spots.length; i++) {
   await tapMap(page, ...spots[i]);
 }
 st = await S(page);
-check("多数の塔を建設", st.towers.length >= 10, String(st.towers.length));
+check("塔の建設は6基で止まる", st.towers.length === 6, String(st.towers.length));
 for (const t of st.towers) {
   await page.evaluate((id) => {
     const t = WD_DEBUG.state().towers.find((t) => t.id === id);
@@ -374,7 +360,7 @@ for (let w = 1; w <= 20; w++) {
   if (st.over) break;
 }
 st = await S(page);
-check("20ウェーブを最後まで進行できる", waveOk && st.wave === 20 && st.over, `wave=${st.wave} hp=${st.hp}`);
+check("20ウェーブを最後まで進行できる", waveOk && st.wave === 20 && st.over && st.hp > 0, `wave=${st.wave} hp=${st.hp}`);
 const winMsg = await page.textContent("#msg");
 check("勝利メッセージ", winMsg.includes("20ウェーブクリア"), winMsg);
 check("上下の分岐ルートの両方を敵が通る", routes.has("north") && routes.has("south"));

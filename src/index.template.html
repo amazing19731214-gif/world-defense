@@ -2337,6 +2337,16 @@
         outline: 2px solid #ffd34d;
         background: #3d5a4a;
       }
+      .tower-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+      .tower-status button { min-height: 44px; }
+      .tower-growth-grid { display: grid; gap: 12px; }
+      .tower-growth-card { padding: 12px; border: 1px solid #82aa8d; border-radius: 12px; }
+      .tower-growth-card h3 { margin: 0 0 8px; font-size: 17px; }
+      .tower-growth-card p { margin: 6px 0; }
+      .tower-growth-card progress { width: 100%; height: 16px; accent-color: #8cd48b; }
+      #towerGrowthSheet summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
+      .t-level { display: block; font-size: 12px; }
+      @media (min-width: 700px) { .tower-growth-grid { grid-template-columns: 1fr 1fr; } }
     </style>
   </head>
   <body>
@@ -2446,6 +2456,10 @@ OFF</button>
           <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
         </button>
       </div>
+      <div class="tower-status">
+        <span id="towerCount" role="status">🏯 塔 0/6</span>
+        <button id="towerGrowthOpen" aria-haspopup="dialog" aria-controls="towerGrowthSheet">🏯 塔育成</button>
+      </div>
       <div class="tools menu-tools">
         <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
         ><button id="gacha">🎴 ガチャ</button
@@ -2459,8 +2473,22 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v70（世界地図・東南アジア編）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v71（塔6基・種類別の永続育成）</small>
     </main>
+    <div id="towerGrowthSheet" class="sheet-back" hidden>
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="towerGrowthTitle">
+        <div class="panel-head"><strong id="towerGrowthTitle">🏯 塔の種類別育成</strong><button id="towerGrowthClose" class="icon-btn" aria-label="塔育成を閉じる">✕ 閉じる</button></div>
+        <p>使った種類がウェーブクリアで成長。同じ種類のすべての塔が強くなります。最大Lv9999、売却・全壊・「最初から」でも育成は残ります。</p>
+        <p id="towerGrowthSave" class="muted" role="status"></p>
+        <div id="towerGrowthCards" class="tower-growth-grid"></div>
+        <details><summary>育成と建設のルール</summary>
+          <p>防衛塔は全種類合わせて6基まで。売却・全壊で枠が空きます。以前の保存で6基を超えている塔は残ります。</p>
+          <p>防衛戦・修練場で実際に攻撃した種類が、ウェーブクリア時に経験値を獲得。同じ種類を複数建てても経験値は同じです。敗北・未クリアのウェーブでは獲得しません。</p>
+          <p>戦闘中の各塔の強化（Lv1〜5）は種類育成とは別です。</p>
+          <p>高Lvほど成長は緩やかです。Lv9999でも攻撃は約+60%・耐久は約+48%。射程・攻撃速度・爆発範囲・水攻めの足止めは変わりません。攻城戦の敵塔には適用されません。</p>
+        </details>
+      </section>
+    </div>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
         class="sheet"
@@ -2690,6 +2718,79 @@ OFF</button>
         };
         const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "鉄砲の塔", ice: "水攻めの塔" };
         const CANNON_SPLASH = 65;
+        // 種類ごとの永続経験値。建設中の塔の Lv1〜5 とは別。増築数で獲得量を増やさない。
+        const TOWER_RULES = { maxBuilt: 6, maxLevel: 9999, attackLog: 0.15, hpLog: 0.12 };
+        const TOWER_XP_TOTAL = [0, 0];
+        for (let lv = 1; lv < TOWER_RULES.maxLevel; lv++)
+          TOWER_XP_TOTAL[lv + 1] = TOWER_XP_TOTAL[lv] + 20 + 2 * Math.floor(Math.sqrt(lv - 1));
+        const TOWER_XP_MAX = TOWER_XP_TOTAL[TOWER_RULES.maxLevel];
+        const towerWaveTypes = new Set();
+        function cleanTowerResearch(data) {
+          return Object.fromEntries(Object.keys(types).map(type => [type,
+            data && Number.isFinite(data[type]) ? Math.max(0, Math.min(TOWER_XP_MAX, Math.floor(data[type]))) : 0]));
+        }
+        function towerResearch(type) {
+          const total = heroSave.towerResearch[type] || 0;
+          let lo = 1, hi = TOWER_RULES.maxLevel;
+          while (lo < hi) {
+            const mid = Math.ceil((lo + hi) / 2);
+            if (TOWER_XP_TOTAL[mid] <= total) lo = mid;
+            else hi = mid - 1;
+          }
+          return { level: lo, total, xp: total - TOWER_XP_TOTAL[lo],
+            need: lo < TOWER_RULES.maxLevel ? TOWER_XP_TOTAL[lo + 1] - TOWER_XP_TOTAL[lo] : 0 };
+        }
+        function towerGrowth(type, level = towerResearch(type).level) {
+          const log = Math.log10(Math.max(1, Math.min(TOWER_RULES.maxLevel, level)));
+          return { damage: 1 + TOWER_RULES.attackLog * log, hp: 1 + TOWER_RULES.hpLog * log };
+        }
+        const towerLevels = () => Object.fromEntries(Object.keys(types).map(type => [type, towerResearch(type).level]));
+        const builtTowerCount = () => towers.filter(t => !t.destroyed).length;
+        function towerWaveXp() {
+          const base = 10 + Math.floor(3 * Math.sqrt(Math.min(1000, Math.max(1, wave))));
+          const trainingMul = training ? Math.min(4, Math.max(1, Math.sqrt(Math.min(160, trainLevel(training, wave)) / 10))) : 1;
+          return Math.floor(base * trainingMul);
+        }
+        function awardTowerWaveXp() {
+          const amount = towerWaveXp(), leveled = [];
+          for (const type of towerWaveTypes) {
+            const before = towerResearch(type).level;
+            const targets = towers.filter(t => t.type === type && !t.destroyed).map(t => ({t, max: towerMaxHp(t)}));
+            heroSave.towerResearch[type] = Math.min(TOWER_XP_MAX, heroSave.towerResearch[type] + amount);
+            const after = towerResearch(type).level;
+            if (after > before) {
+              leveled.push(TOWER_NAMES[type] + " Lv" + after);
+              // 耐久の割合を保つ。Lv上昇を全回復として利用することはできない。
+              for (const {t, max} of targets) t.hp = Math.min(towerMaxHp(t), towerHp(t) * towerMaxHp(t) / max);
+            }
+          }
+          towerWaveTypes.clear(); // 同じクリアに対して二重に配らない
+          return leveled;
+        }
+        function scaleSavedTowerHp(t, levels) {
+          const old = levels && Number.isInteger(levels[t.type]) && levels[t.type] >= 1 && levels[t.type] <= TOWER_RULES.maxLevel ? levels[t.type] : 1;
+          return t.hp * towerGrowth(t.type).hp / towerGrowth(t.type, old).hp;
+        }
+        function renderTowerGrowth() {
+          const count = builtTowerCount();
+          $("towerCount").textContent = "🏯 塔 " + count + "/" + TOWER_RULES.maxBuilt + (count > TOWER_RULES.maxBuilt ? "（旧セーブ）" : "");
+          document.querySelectorAll("[data-t]").forEach(b => {
+            let el = b.querySelector(".t-level");
+            if (!el) { el = document.createElement("span"); el.className = "t-level"; b.querySelector(".t-text").append(el); }
+            el.textContent = "育成Lv" + towerResearch(b.dataset.t).level;
+          });
+          if ($("towerGrowthSheet").hidden) return;
+          $("towerGrowthSave").textContent = !saveOk || gameSaveBatch
+            ? "⚠ 未保存の成長があります。空き容量を確認してください。通常防衛戦の準備中は「途中保存」で再試行できます。"
+            : "種類別の経験値はウェーブクリア時に自動保存します。";
+          setHtml($("towerGrowthCards"), Object.keys(types).map(type => {
+            const r = towerResearch(type), g = towerGrowth(type);
+            return '<article class="tower-growth-card" data-growth="' + type + '"><h3>' + types[type].icon + ' ' + TOWER_NAMES[type] + '　Lv' + r.level + '</h3>'
+              + '<p>攻撃 +' + ((g.damage - 1) * 100).toFixed(1) + '% ／ 耐久 +' + ((g.hp - 1) * 100).toFixed(1) + '%</p>'
+              + '<progress aria-label="' + TOWER_NAMES[type] + 'の育成経験値" max="' + (r.need || 1) + '" value="' + (r.need ? r.xp : 1) + '"></progress>'
+              + '<p>' + (r.need ? '経験値 ' + r.xp + ' / ' + r.need + '（次のLvまで ' + (r.need - r.xp) + '）' : '最大Lvに到達') + '</p></article>';
+          }).join(""));
+        }
 
         // ===== 戦国武将（ガチャで獲得）：調整用設定 =====
         // 武将はガチャでのみ獲得する特別なキャラクター（ゴールドで雇う一般兵士とは別）。
@@ -4904,6 +5005,7 @@ OFF</button>
           renderDefenseSave();
           $("hp").setAttribute("aria-label", "城のハート " + hp + "/" + HEART_RULES.maxHp + "。ゴールドで回復");
           renderHearts();
+          renderTowerGrowth();
         }
         function renderCounterBanner() {
           const c = territoryReady ? activeCounter() : null,
@@ -5029,6 +5131,7 @@ OFF</button>
             lastHero: null,
             injured: {},
             forge: cleanForge(null),
+            towerResearch: cleanTowerResearch(null),
           });
           let raw = null;
           try {
@@ -5063,12 +5166,13 @@ OFF</button>
               lastHero: WARLORDS[data.lastHero] ? data.lastHero : null,
               injured,
               defense: data.defense || null,
+              towerResearch: cleanTowerResearch(data.towerResearch),
               forge: cleanForge(data.forge), // 以前の保存データには無い（重複カードは今の枚数のまま。錬成で使った分は減っている）
             };
           } catch (err) {
             // 壊れた保存データ：所持はなしで開始（初回配布の券は二重に配らない）
             console.warn("武将の保存データを読み込めないため初期化します", err);
-            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), broken: true };
+            return { owned: {}, tickets: 0, history: [], lastHero: null, injured: {}, forge: cleanForge(null), towerResearch: cleanTowerResearch(null), broken: true };
           }
         }
         // ===== 戦国図鑑（発見の記録） =====
@@ -5154,6 +5258,7 @@ OFF</button>
                 injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
                 forge: heroSave.forge,
                 defense: heroSave.defense || null,
+                towerResearch: heroSave.towerResearch,
               }),
             );
             saveOk = true;
@@ -5294,7 +5399,7 @@ OFF</button>
           const c = unitOf(s), lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
           return legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1)));
         };
-        const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)));
+        const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)) * (t.npc ? 1 : towerGrowth(t.type).hp));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
         const targetToken = (o) => (towers.includes(o) ? "t:" : "s:") + o.id;
         function seenTarget(h, token) {
@@ -5329,7 +5434,7 @@ OFF</button>
         }
         function towerStats(t) {
           const p = types[t.type], h = heroOn(t);
-          let damage = p.damage * (1 + 0.55 * (t.level - 1)), range = p.range, speedMul = 1;
+          let damage = p.damage * (1 + 0.55 * (t.level - 1)) * (t.npc ? 1 : towerGrowth(t.type).damage), range = p.range, speedMul = 1;
           if (h) {
             damage *= starMul(h.id);
             if (h.id === "keiji" && !towers.some((o) => o !== t && !o.destroyed && dist(o, t) < 140)) damage *= 1.2;
@@ -6457,10 +6562,12 @@ OFF</button>
               gold,
               over,
               towers: towers.map((t) => ({ t, f: { type: t.type, x: t.x, y: t.y, level: t.level, spent: t.spent, hp: t.hp, destroyed: t.destroyed, cd: t.cd } })),
+              towerLevels: towerLevels(),
             },
           };
           for (const s of soldiers) if (s.alive) training.rec[s.id] = { battle: 0, clear: 0, lv0: s.level };
           wave = 0;
+          towerWaveTypes.clear();
           hp = TRAINING.castleHp;
           over = false;
           enemies = [];
@@ -6522,7 +6629,11 @@ OFF</button>
           const K = T.keep,
             keepSet = new Set(K.towers.map((x) => x.t));
           for (const t of towers) if (!keepSet.has(t)) { const h = heroOn(t); if (h) { endSkill(h); h.tower = null; } }
-          for (const x of K.towers) Object.assign(x.t, x.f);
+          for (const x of K.towers) {
+            Object.assign(x.t, x.f);
+            if (Number.isFinite(x.t.hp)) x.t.hp = scaleSavedTowerHp(x.t, K.towerLevels);
+          }
+          towerWaveTypes.clear();
           towers = K.towers.map((x) => x.t);
           wave = K.wave;
           hp = K.hp;
@@ -7488,7 +7599,7 @@ OFF</button>
               version: 1, owned: heroSave.owned, tickets: heroSave.tickets,
               history: heroSave.history, lastHero: heroSave.lastHero,
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
-              forge: F, defense: heroSave.defense || null,
+              forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch,
             });
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
               heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
@@ -8827,6 +8938,7 @@ OFF</button>
           );
         }
         function fire(t, e) {
+          if (playing && !t.destroyed && e.hp > 0 && !e.gone) towerWaveTypes.add(t.type);
           const p = types[t.type];
           const duration =
             t.type === "cannon" ? 0.52 : t.type === "arrow" ? 0.22 : t.type === "magic" ? 0.12 : 0.38;
@@ -8990,9 +9102,13 @@ OFF</button>
             for (const t of towers) t.heroShield = null;
             if (!training) beginGameSaveBatch();
             squadsWaveEnd();
+            const towerLeveled = awardTowerWaveXp();
             if (training) {
+              persistHeroes(); // 修練場の塔そのものは戻すが、種類別の成長は保存する
               // 修練場：ウェーブの報酬・反撃・負傷の回復・ガチャ券は通常の防衛戦だけ
               trainingWaveCleared();
+              if (towerLeveled.length) $("msg").textContent += " 🏯 " + towerLeveled.join("・") + " に成長！";
+              if (!saveOk) $("msg").textContent += " ⚠ 塔の成長を保存できませんでした。空き容量を確認してください。";
               autoArm(); // AUTO ON なら次のウェーブまで数える（修練場が終わったら数えない）
               updateUI();
               return;
@@ -9005,6 +9121,7 @@ OFF</button>
                 : "ウェーブ " + wave + " クリア！ 次の準備をしよう。",
             );
             if (won) over = true;
+            if (towerLeveled.length) $("msg").textContent += " 🏯 " + towerLeveled.join("・") + " に成長！";
             autoArm(); // AUTO ON なら次のウェーブまで数える（目標ウェーブのクリア後は数えない）
             const held = counterWaveCleared();
             if (held) {
@@ -10866,7 +10983,10 @@ OFF</button>
             return;
           }
           const p = types[selectedType];
-          if (gold < p.cost) {
+          if (builtTowerCount() >= TOWER_RULES.maxBuilt) {
+            msg("防衛塔は全種類合わせて" + TOWER_RULES.maxBuilt + "基までです。売却・全壊で建設枠が空きます。");
+            toast($("msg").textContent);
+          } else if (gold < p.cost) {
             msg("資金が足りません。");
             toast($("msg").textContent);
           } else if (
@@ -11044,6 +11164,7 @@ OFF</button>
           if (playing || over || battle) return;
           if (training && training.done) return;
           if (!training) saveDefenseCheckpoint();
+          towerWaveTypes.clear();
           wave++;
           spawned = 0;
           spawnTotal = 8 + wave * 3;
@@ -11119,6 +11240,7 @@ OFF</button>
           rarePlan = intruderPlan = pendingIntruder = null; // 最初からやり直すと、未決着の乱入もなくなる
           selectedTower = null;
           towers = [];
+          towerWaveTypes.clear();
           enemies = [];
           shots = [];
           effects.length = 0;
@@ -11154,6 +11276,27 @@ OFF</button>
           );
           updateUI();
         };
+        $("towerGrowthOpen").onclick = () => {
+          $("towerGrowthSheet").hidden = false;
+          renderTowerGrowth();
+          $("towerGrowthClose").focus();
+        };
+        function closeTowerGrowth() {
+          $("towerGrowthSheet").hidden = true;
+          $("towerGrowthOpen").focus({preventScroll:true});
+        }
+        $("towerGrowthClose").onclick = closeTowerGrowth;
+        $("towerGrowthSheet").addEventListener("click", ev => { if (ev.target === $("towerGrowthSheet")) closeTowerGrowth(); });
+        document.addEventListener("keydown", ev => {
+          if ($("towerGrowthSheet").hidden) return;
+          if (ev.key === "Escape") { ev.preventDefault(); ev.stopImmediatePropagation(); closeTowerGrowth(); }
+          if (ev.key === "Tab") {
+            const nodes = [...$("towerGrowthSheet").querySelectorAll("button, summary")].filter(el => el.getClientRects().length);
+            const first = nodes[0], last = nodes[nodes.length - 1];
+            if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+            else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+          }
+        });
         // ===== データを全部消す =====
         // 「最初から」と違い、武将・兵士・装備・小判・全国・図鑑・修練場・設定など、このゲームの保存データ（worldDefense.*）をすべて消して読み込み直す。
         // 元に戻せないので2回確かめる
@@ -18764,7 +18907,7 @@ OFF</button>
           const p = types[t.type],
             st = towerStats(t),
             h = heroOn(t);
-          $("tpTitle").textContent = towerLabel(t) + (t.destroyed ? "（破壊）" : "");
+          $("tpTitle").textContent = towerLabel(t) + " ／ 種類育成Lv" + towerResearch(t.type).level + (t.destroyed ? "（破壊）" : "");
           const base = p.damage * (1 + 0.55 * (t.level - 1));
           const mark = (v, b) => (Math.abs(v - b) > 0.01 ? ' class="buff"' : "");
           const thp = towerHp(t),
@@ -19695,6 +19838,8 @@ OFF</button>
             },
             unitConfig: { SOLDIER_TYPES, SQUAD_RULES, TITLES, ENEMY_VS_UNIT, UNIT_FRAMES },
             towerApi: { towerHp, towerMaxHp, damageTower, repairCost, TOWER_HP },
+            towerGrowthApi: { TOWER_RULES, TOWER_XP_TOTAL, TOWER_XP_MAX, towerResearch, towerGrowth, towerWaveXp, builtTowerCount,
+              research: () => ({...heroSave.towerResearch}), fire },
             towerStats,
             setGold: (g) => {
               gold = g;
@@ -19791,6 +19936,7 @@ OFF</button>
             // 乱入して決着がつく前に保存し直すことはない（ウェーブの始めだけ保存する）。念のため同じ流れの未決着は引き継ぐ
             intruder: old && old.runId === runId && old.intruder && old.intruder.wave > wave ? old.intruder : null,
             towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
+            towerLevels: towerLevels(),
             squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
             soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0 })),
             heroes: ownedHeroes().map(h => ({ id:h.id, tower:h.tower ? h.tower.id : null, squad:h.squad ? h.squad.id : null, cd:h.cd })),
@@ -19846,7 +19992,7 @@ OFF</button>
           wave = d.wave; gold = d.gold; hp = d.hp; heartPurchases = d.heartPurchases || 0; speed = d.speed === 2 ? 2 : 1;
           waveGoal = WAVE_GOALS.includes(settings.waveGoal) && settings.waveGoal >= wave ? settings.waveGoal : d.waveGoal;
           runId = d.runId; combatClock = d.clock;
-          towers = d.towers.map(t => ({...t})); towerSeq = Math.max(0, ...towers.map(t=>t.id));
+          towers = d.towers.map(t => ({...t, hp: scaleSavedTowerHp(t, d.towerLevels)})); towerSeq = Math.max(0, ...towers.map(t=>t.id));
           for (const q of squads) {
             const v = d.squads.find(x=>x.id === q.id);
             if (v && v.deployed && roster(q).length && fieldSquads().length < SQUAD_RULES.maxDeployed) {
