@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 世界の章（地域）の土台：日本・朝鮮半島・中国。海外の章を足すときに守る決まり（IDが重ならない・つながりが両向き・
+// 世界の章（地域）の土台：日本・朝鮮半島・中国・東南アジア。海外の章を足すときに守る決まり（IDが重ならない・つながりが両向き・
 // すべての国に行ける・城と地方がそろっている）と、天下統一は日本の68か国のまま・反撃は同じ章の中だけ
 //   node tools/test-world-base.mjs
 import { createRequire } from "node:module";
@@ -51,8 +51,8 @@ let r = await page.evaluate((api) => {
   };
 }, api);
 check(
-  "日本68か国＋朝鮮半島8拠点＋中国20拠点・全96拠点",
-  r.order.join() === "japan,korea,china" && r.japan === 68 && r.all === 96 && r.chapters.join() === "japan,korea,china",
+  "日本68＋朝鮮8＋中国20＋東南アジア12・全108拠点",
+  r.order.join() === "japan,korea,china,southeast" && r.japan === 68 && r.all === 108 && r.chapters.join() === "japan,korea,china,southeast",
   JSON.stringify(r),
 );
 

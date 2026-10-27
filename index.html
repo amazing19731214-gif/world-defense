@@ -2459,7 +2459,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v69（世界地図・中国編）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v70（世界地図・東南アジア編）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -14811,7 +14811,7 @@ OFF</button>
               TC.towers.length +
               "基・守備兵 " +
               TC.garrison.reduce((n, g) => n + g.n, 0) +
-              "人" + (siegeRoleText(TC) ? "<br>" + siegeRoleText(TC) : "") +
+              "人" + (siegeRoleText(TC) ? "<br>" + siegeRoleText(TC) : "") + (siegeTerrainText(TC) ? "<br>地形：" + siegeTerrainText(TC) : "") +
               (done
                 ? "・演習として何度でも攻められます（報酬なし・経験値あり）"
                 : TC.reward && TC.reward.tickets
@@ -15037,7 +15037,7 @@ OFF</button>
               C.power.toFixed(2) +
               "・推奨 Lv" +
               recLevel(C) +
-              "（目安・制限なし）・敵Lv" + C.enemyLevel + "<br>装甲：兵種・敵Lv・重装で変化。貫通・装甲無視が有効。" + (siegeRoleText(C) ? "<br>" + siegeRoleText(C) : "") + "<br>城の耐久 " +
+              "（目安・制限なし）・敵Lv" + C.enemyLevel + "<br>装甲：兵種・敵Lv・重装で変化。貫通・装甲無視が有効。" + (siegeRoleText(C) ? "<br>" + siegeRoleText(C) : "") + (siegeTerrainText(C) ? "<br>地形：" + siegeTerrainText(C) : "") + "<br>城の耐久 " +
               C.hp +
               "・防衛塔 " +
               C.towers.length +
@@ -15438,6 +15438,46 @@ OFF</button>
         const siegeRoleText = (C) => [...new Set(C.garrison.map((g) => siegeRoleOf(g.kind, g.role)).filter(Boolean))].map((R) =>
           R.name + (R.kind === "dragon" ? "：射程210・高威力だが装填2.2秒。騎兵で接近しよう" : "：高HP・装甲（上限42）。貫通や装甲無視が有効")
         ).join("／");
+        // 地形は設定された攻城戦だけで有効。待機中も部隊は通常の攻撃・回復・被弾を続ける。
+        const SIEGE_TERRAIN = {
+          forest: { name: "密林", from: 260, to: 430, speed: 0.75, text: "密林では味方の進軍速度75%" },
+          river: { name: "渡河", at: 480, wait: 1.5, text: "川では部隊ごとに1回、渡河待ち1.5秒（攻撃・回復・被弾は継続）" },
+        };
+        const siegeTerrainText = (C) => (C.terrain || []).map((id) => SIEGE_TERRAIN[id].text).join("／");
+        const siegeMarchFactor = (B, d) => (B.terrain || []).reduce((n, id) => {
+          const t = SIEGE_TERRAIN[id];
+          return t.speed && d >= t.from && d < t.to ? Math.min(n, t.speed) : n;
+        }, 1);
+        function advanceSiegeMarch(B, g, speed, dt) {
+          if (!Number.isFinite(speed) || !Number.isFinite(dt) || dt <= 0) return;
+          const land = (B.terrain || []).map((id) => ({ id, ...SIEGE_TERRAIN[id] }));
+          const crossed = g.crossedTerrain || (g.crossedTerrain = {}), eps = 1e-8;
+          let left = dt;
+          const startCrossing = () => {
+            for (const t of land)
+              if (t.wait && !crossed[t.id] && Math.abs(g.d - t.at) < eps) {
+                crossed[t.id] = true;
+                g.terrainWait = t.wait;
+              }
+          };
+          while (left > eps) {
+            startCrossing();
+            if (g.terrainWait > eps) {
+              const used = Math.min(left, g.terrainWait);
+              g.terrainWait = Math.max(0, g.terrainWait - used);
+              left -= used;
+              continue;
+            }
+            if (speed <= 0) break;
+            const rate = speed * siegeMarchFactor(B, g.d);
+            const boundaries = land.flatMap((t) => t.speed ? [t.from, t.to] : !crossed[t.id] ? [t.at] : []);
+            const next = Math.min(...boundaries.filter((d) => d > g.d + eps), Infinity);
+            const distance = Math.min(left * rate, next - g.d);
+            g.d += distance;
+            left = Math.max(0, left - distance / rate);
+          }
+          startCrossing(); // ちょうど川に着いて終了したフレームでも、その場で待機を開始する。
+        }
         function siegeArmorDamage(e, raw, s) {
           const pierce = s ? Math.min(1, Math.max(0, skillSum(s, "armorPierce"))) : 0;
           return raw * 30 / (30 + Math.max(0, e.armor || 0) * (1 - pierce));
@@ -15823,6 +15863,37 @@ OFF</button>
           ["cn_lingnan", "嶺南", "cn_south", "cn_fort_lingnan", "陽炎の砦", "守護連盟・嶺南", ["heavyCavalry", "gun"]],
           ["cn_nanhai", "南海", "cn_south", "cn_fort_nanhai", "天海の都城", "守護連盟・南海", ["fortress", "heavyCavalry", "warlord"]]
         ];
+        // 東南アジア編：地名を参考にした架空の城・勢力。旧章のID・強さを変更せず追加する。
+        const SOUTHEAST_LEVELS = {
+          se_redriver: 1150,
+          se_mekong: 1200,
+          se_irrawaddy: 1250,
+          se_salween: 1300,
+          se_chaophraya: 1350,
+          se_angkor: 1400,
+          se_malay: 1450,
+          se_sumatra: 1500,
+          se_straits: 1550,
+          se_java: 1600,
+          se_borneo: 1650,
+          se_molucca: 1700
+        };
+        // 重装騎兵と遠距離兵の重なる2拠点は、その分だけ基礎倍率を補正する。
+        const SOUTHEAST_POWER_MUL = { se_sumatra: 0.97, se_borneo: 0.95 };
+        const SOUTHEAST_KUNI = [
+          ["se_redriver", "紅河", "se_north", "se_fort_redriver", "紅蓮の水門", "群島守護隊・紅河", ["crossbow", "sea"]],
+          ["se_mekong", "メコン上流", "se_north", "se_fort_mekong", "翠流の砦", "群島守護隊・メコン上流", ["archer", "spear"]],
+          ["se_irrawaddy", "イラワジ", "se_north", "se_fort_irrawaddy", "金樹城", "群島守護隊・イラワジ", ["heavyCavalry"]],
+          ["se_salween", "サルウィン", "se_river", "se_fort_salween", "霧峡の関", "群島守護隊・サルウィン", ["spear", "crossbow"]],
+          ["se_chaophraya", "チャオプラヤ", "se_river", "se_fort_chaophraya", "暁蓮の都城", "群島守護隊・チャオプラヤ", ["fortress", "sea"]],
+          ["se_angkor", "大湖", "se_river", "se_fort_angkor", "巨樹の砦", "群島守護隊・大湖", ["crossbow", "heavyCavalry"]],
+          ["se_malay", "マレー", "se_peninsula", "se_fort_malay", "南風の海門", "群島守護隊・マレー", ["sea", "spear"]],
+          ["se_sumatra", "スマトラ", "se_peninsula", "se_fort_sumatra", "黒潮城", "群島守護隊・スマトラ", ["heavyCavalry", "archer"]],
+          ["se_straits", "海峡諸港", "se_peninsula", "se_fort_straits", "双帆の水城", "群島守護隊・海峡諸港", ["fortress", "sea"]],
+          ["se_java", "ジャワ", "se_islands", "se_fort_java", "火峰の関", "群島守護隊・ジャワ", ["crossbow", "spear"]],
+          ["se_borneo", "ボルネオ", "se_islands", "se_fort_borneo", "翡翠の砦", "群島守護隊・ボルネオ", ["heavyCavalry", "gun"]],
+          ["se_molucca", "香料諸島", "se_islands", "se_fort_molucca", "天香の都城", "群島守護隊・香料諸島", ["fortress", "heavyCavalry", "warlord"]]
+        ];
         const CHAPTERS = {
           japan: {
             name: "日本",
@@ -15889,8 +15960,54 @@ OFF</button>
             hp: (lv, styles) => Math.round((17000 + (lv - 335) * 35) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
           },
         });
-        const CHAPTER_ORDER = ["japan", "korea", "china"];
-        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"]];
+        Object.assign(CHAPTERS, {
+          southeast: {
+            name: "東南アジア", icon: "🌴", entry: "se_redriver", clearTickets: 10, requiredChapter: "china", bonusProvince: "se_molucca",
+            intro: "中国の南海から紅河航路へ。密林は味方の進軍速度75%、川は部隊ごとに1回、渡河待ち1.5秒。待っている間も攻撃・回復・被弾が続きます。地名を参考にした架空の城・勢力です。",
+            kuni: SOUTHEAST_KUNI,
+            land: `
+              se_redriver: se_mekong
+              se_mekong: se_redriver se_irrawaddy se_salween se_angkor
+              se_irrawaddy: se_mekong se_salween
+              se_salween: se_mekong se_irrawaddy se_chaophraya
+              se_chaophraya: se_salween se_angkor se_malay
+              se_angkor: se_mekong se_chaophraya
+              se_malay: se_chaophraya
+              se_sumatra:
+              se_straits:
+              se_java:
+              se_borneo:
+              se_molucca:
+            `,
+            sea: [
+              ["se_malay", "se_sumatra", "マラッカ海峡"], ["se_malay", "se_straits", "海峡航路"],
+              ["se_sumatra", "se_straits", "西海の航路"], ["se_straits", "se_java", "ジャワ航路"],
+              ["se_straits", "se_borneo", "群島航路"], ["se_java", "se_molucca", "東方島嶼航路"],
+              ["se_borneo", "se_molucca", "香料航路"],
+            ],
+            roads: { se_north: "北部大陸", se_river: "河川と湖", se_peninsula: "半島・海峡", se_islands: "南の群島" },
+            levels: SOUTHEAST_LEVELS,
+            power: (dist, styles, id) => castlePowerAtLevel(625) * Math.sqrt(SOUTHEAST_LEVELS[id] / 625) * (SOUTHEAST_POWER_MUL[id] || 1),
+            scaleGuards: true,
+            hp: (lv, styles) => Math.round(43775 * Math.sqrt(lv / 1100) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
+            terrain: {
+              se_redriver: ["river"],
+              se_mekong: ["forest", "river"],
+              se_irrawaddy: ["forest"],
+              se_salween: ["forest", "river"],
+              se_chaophraya: ["river"],
+              se_angkor: ["forest"],
+              se_malay: ["forest", "river"],
+              se_sumatra: ["forest"],
+              se_straits: ["river"],
+              se_java: ["forest", "river"],
+              se_borneo: ["forest"],
+              se_molucca: ["forest", "river"]
+            },
+          },
+        });
+        const CHAPTER_ORDER = ["japan", "korea", "china", "southeast"];
+        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"], ["cn_nanhai", "se_redriver", "紅河航路"]];
         (() => {
           for (const cid of CHAPTER_ORDER) {
             const CH = CHAPTERS[cid],
@@ -15938,7 +16055,8 @@ OFF</button>
                 tickets = cid === "japan" ? 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0) : id === CH.bonusProvince ? 2 : 1;
               const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
               if (CH.levels) C.level = C.enemyLevel = CH.levels[id];
-              if (CH.scaleGuards) C.guardPower = power; // 中国だけ守備兵と塔に同じ成長曲線を使う（装甲は敵Lvで計算）
+              if (CH.scaleGuards) C.guardPower = power; // 設定した章だけ、守備兵と塔に同じ成長曲線を使う（装甲は敵Lvで計算）
+              if (CH.terrain?.[id]) C.terrain = CH.terrain[id].slice();
               C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
               C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
               NPC_CASTLES[castle] = C;
@@ -16982,7 +17100,10 @@ OFF</button>
               skillCd: 0, // 必殺技は出撃したらすぐ使える
               rally: 0,
               guard: 0,
+              terrainWait: 0,
+              crossedTerrain: {},
             })),
+            terrain: boss ? [] : (C.terrain || []).slice(),
             towers: towersNpc,
             garrison,
             castleId,
@@ -17298,8 +17419,10 @@ OFF</button>
           for (const g of B.groups) {
             if (!groupActive(g)) continue;
             const atCastle = castleDist(g) <= SIEGE_BATTLE.castle.reach;
-            if (blockerAhead(g) || atCastle) g.state = "fight";
-            else {
+            if (blockerAhead(g) || atCastle) {
+              g.state = "fight";
+              advanceSiegeMarch(B, g, 0, dt); // 交戦で止まっていても渡河待ちの時間は進む。
+            } else {
               g.state = "march";
               const speed =
                 SIEGE_BATTLE.march *
@@ -17308,7 +17431,8 @@ OFF</button>
                     (s) => (unitOf(s).march || 1) * (1 + pointBonus(s, "spd")) * Math.max(0.3, 1 + skillSum(s, "march")),
                   ),
                 );
-              g.d += speed * dt;
+              advanceSiegeMarch(B, g, speed, dt);
+              if (g.terrainWait > 0) g.state = "fight"; // 渡河中は静止。騎馬鉄砲の構えも進め、攻撃・回復・被弾を続ける。
               Object.assign(g, pathAt(g.path, g.d));
             }
           }
@@ -17903,6 +18027,7 @@ OFF</button>
               Math.ceil(Math.max(0, B.castleHp)) +
               "/" +
               B.castleMax +
+              (B.terrain.length ? "<br>地形：" + B.terrain.map((id) => SIEGE_TERRAIN[id].name).join("・") : "") +
               "<br>" +
               B.groups
                 .filter((g) => g.list.length)
@@ -17914,7 +18039,7 @@ OFF</button>
                       ? "待機（" + Math.max(0, Math.ceil(g.idx * SIEGE_BATTLE.interval - B.t)) + "秒）"
                       : g.state === "lost"
                         ? "壊滅"
-                        : groupAlive(g).length + "人"),
+                        : groupAlive(g).length + "人" + (g.terrainWait > 0 ? "（渡河 " + g.terrainWait.toFixed(1) + "秒）" : "")),
                 )
                 .join("・"),
           );
@@ -18445,10 +18570,36 @@ OFF</button>
           if (e.heads) for (const h of e.heads) if (h.anim > 0) h.anim = Math.max(0, h.anim - dt);
         }
         // 描画：NPCの塔・守備隊・味方の部隊・城の耐久
+        function drawSiegeTerrain(B) {
+          if (!B.terrain?.length) return;
+          ctx.save();
+          for (const id of B.terrain) {
+            const t = SIEGE_TERRAIN[id];
+            for (const path of [upper, lower]) {
+              const from = t.speed ? t.from : t.at - 18, to = t.speed ? t.to : t.at + 18;
+              ctx.beginPath();
+              for (let d = from; d <= to; d += 4) {
+                const p = pathAt(path, d);
+                if (d === from) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+              }
+              ctx.strokeStyle = t.speed ? "#276b3870" : "#69c9eeaa";
+              ctx.lineWidth = t.speed ? 36 : 40;
+              ctx.stroke();
+              const p = pathAt(path, (from + to) / 2);
+              ctx.fillStyle = "#153e36ee";
+              ctx.fillRect(p.x - 50, p.y - 54, 100, 21);
+              ctx.fillStyle = t.speed ? "#b8f2b0" : "#a9e6ff";
+              ctx.font = "bold 14px system-ui"; ctx.textAlign = "center";
+              ctx.fillText(t.speed ? "密林 速度75%" : "渡河 1.5秒", p.x, p.y - 39);
+            }
+          }
+          ctx.restore();
+        }
         function drawBattle() {
           const B = battle,
             actors = [];
           renderBattleBar(); // 時間・城・各部隊の状況（変わったときだけ書き換わる）
+          drawSiegeTerrain(B);
           for (const t of B.towers)
             actors.push({
               y: t.y,
@@ -19438,6 +19589,9 @@ OFF</button>
               siegeEnemyStats,
               SIEGE_ENEMY_ROLES,
               siegeGuardAttack,
+              SIEGE_TERRAIN,
+              advanceSiegeMarch,
+              siegeMarchFactor,
               siegeArmorDamage,
               battleHitGarrison,
               NPC_CASTLES,
