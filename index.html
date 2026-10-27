@@ -14814,7 +14814,7 @@ OFF</button>
               '<div class="card-actions"><button data-provinces>🗾 領土 ' +
               ownedCount() +
               "/" +
-              PROVINCE_ORDER.length +
+              JAPAN.length +
               "・目標を選ぶ</button></div>",
           );
           $("siegeGo").textContent = done
@@ -14828,12 +14828,12 @@ OFF</button>
             '<h3 style="margin:12px 0 0;font-size:16px">🗾 領土 ' +
             ownedCount() +
             "/" +
-            PROVINCE_ORDER.length +
+            JAPAN.length +
             "か国</h3>" +
             '<p class="muted">領土の隣の国だけ攻められます。まず最初の7か国（三河〜甲斐）の統一（🎴 ガチャ券 +' +
             UNIFY_TICKETS +
             "）、その先は全国" +
-            PROVINCE_ORDER.length +
+            JAPAN.length +
             "か国の制覇（天下統一 🎴 ガチャ券 +" +
             TENKA_TICKETS +
             "）を目指そう。ここには最初の7か国と、領土・攻略できる国を出します。</p>" +
@@ -15089,7 +15089,7 @@ OFF</button>
         }
         function renderMap() {
           const n = ownedCount(),
-            all = PROVINCE_ORDER.length,
+            all = JAPAN.length,
             tenka = isTenka();
           let html =
             (mapNote ? '<p class="saved">' + esc(mapNote) + "</p>" : "") +
@@ -15652,22 +15652,49 @@ OFF</button>
         };
         const BONUS_CAPS = { waveGold: 1.5, repair: 0.6, hire: 0.5 };
         const STAGE1 = ["mikawa", "owari", "totomi", "mino", "suruga", "shinano", "kai"]; // 最初の舞台（7か国の統一）
+        // ===== 世界の章（地域） =====
+        // 章ごとに、国の表（KUNI と同じ形）・陸のつながり（KUNI_LAND と同じ形）・航路・地方（道）・城の強さの式を持つ。今は「日本」だけ。
+        // 海外の章は、同じ形の表を CHAPTERS に足すだけで増やせる（章どうしは CHAPTER_LINKS の航路でつなぐ）。
+        // 国ID・城ID・地方IDは、すべての章で重ならないようにする（保存データの占領は城IDで記録する）
+        const CHAPTERS = {
+          japan: {
+            name: "日本",
+            icon: "🗾",
+            kuni: KUNI,
+            land: KUNI_LAND,
+            sea: SEA_ROUTES,
+            roads: ROADS,
+            // 城の強さ：三河からの距離（航路も1つ）で強くなる（1つ遠いごとに ×1.24）・特色の倍率を掛ける
+            power: (dist, styles) => 1.1 * 1.24 ** dist * styles.reduce((n, s) => n * (s.power || 1), 1),
+          },
+        };
+        const CHAPTER_ORDER = ["japan"];
+        const CHAPTER_LINKS = []; // [国ID, 国ID, 航路の名前]：章と章をつなぐ（例：対馬 → 朝鮮半島の国）
         (() => {
-          const land = {};
-          for (const line of KUNI_LAND.trim().split("\n")) {
-            const [k, v] = line.split(":");
-            land[k.trim()] = v.trim() ? v.trim().split(/\s+/) : [];
+          for (const cid of CHAPTER_ORDER) {
+            const CH = CHAPTERS[cid],
+              land = {};
+            for (const line of CH.land.trim().split("\n")) {
+              const [k, v] = line.split(":");
+              land[k.trim()] = v.trim() ? v.trim().split(/\s+/) : [];
+            }
+            for (const [id, name, road, castle, castleName, lord, styles] of CH.kuni) {
+              const P = PROVINCES[id] || (PROVINCES[id] = { name, castle });
+              Object.assign(P, { chapter: cid, road, lord, styles, castleName, adj: land[id].slice(), routes: {} });
+            }
           }
-          for (const [id, name, road, castle, castleName, lord, styles] of KUNI) {
-            const P = PROVINCES[id] || (PROVINCES[id] = { name, castle });
-            Object.assign(P, { road, lord, styles, castleName, adj: land[id].slice(), routes: {} });
-          }
-          for (const [a, b, name] of SEA_ROUTES) {
+          for (const cid of CHAPTER_ORDER)
+            for (const [a, b, name] of CHAPTERS[cid].sea) {
+              PROVINCES[a].adj.push(b);
+              PROVINCES[b].adj.push(a);
+              PROVINCES[a].routes[b] = PROVINCES[b].routes[a] = name;
+            }
+          for (const [a, b, name] of CHAPTER_LINKS) {
             PROVINCES[a].adj.push(b);
             PROVINCES[b].adj.push(a);
             PROVINCES[a].routes[b] = PROVINCES[b].routes[a] = name;
           }
-          // 三河からの距離（国の数）
+          // 三河からの距離（国の数。章をまたいでも数える）
           const dist = { mikawa: 0 },
             queue = ["mikawa"];
           while (queue.length) {
@@ -15678,32 +15705,38 @@ OFF</button>
                 queue.push(q);
               }
           }
-          for (const [id, name, , castle, castleName, , styles] of KUNI) {
-            const P = PROVINCES[id];
-            P.dist = dist[id];
-            if (!castle || NPC_CASTLES[castle]) continue; // 自国と、最初の7か国の城はこれまでのまま
-            const st = styles.map((k) => KUNI_STYLE[k]),
-              power = Math.round(1.1 * 1.24 ** P.dist * st.reduce((n, s) => n * (s.power || 1), 1) * 100) / 100,
-              hp = Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
-              tickets = 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0);
-            const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
-            C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
-            C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
-            NPC_CASTLES[castle] = C;
-            const b = KUNI_BONUS[styles.find((k) => KUNI_BONUS[k]) || "other"];
-            PROVINCE_BONUS[id] = Object.assign({}, b, { name: name + "の" + b.name });
-          }
+          for (const cid of CHAPTER_ORDER)
+            for (const [id, name, , castle, castleName, , styles] of CHAPTERS[cid].kuni) {
+              const P = PROVINCES[id];
+              P.dist = dist[id];
+              if (!castle || NPC_CASTLES[castle]) continue; // 自国と、最初の7か国の城はこれまでのまま
+              const st = styles.map((k) => KUNI_STYLE[k]),
+                power = Math.round(CHAPTERS[cid].power(P.dist, st) * 100) / 100,
+                hp = Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
+                tickets = 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0);
+              const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
+              C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
+              C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
+              NPC_CASTLES[castle] = C;
+              const b = KUNI_BONUS[styles.find((k) => KUNI_BONUS[k]) || "other"];
+              PROVINCE_BONUS[id] = Object.assign({}, b, { name: name + "の" + b.name });
+            }
         })();
-        // 一覧の並び：最初の7か国 → 三河から近い順（同じ距離は道の順）
+        // 一覧の並び：最初の7か国 → 章の順 → 三河から近い順（同じ距離は地方の順）
+        const roadIndex = (p) => Object.keys(CHAPTERS[PROVINCES[p].chapter].roads).indexOf(PROVINCES[p].road);
         const PROVINCE_ORDER = STAGE1.concat(
-          KUNI.map((k) => k[0])
+          CHAPTER_ORDER.flatMap((cid) => CHAPTERS[cid].kuni.map((k) => k[0]))
             .filter((p) => !STAGE1.includes(p))
             .sort(
               (a, b) =>
+                CHAPTER_ORDER.indexOf(PROVINCES[a].chapter) - CHAPTER_ORDER.indexOf(PROVINCES[b].chapter) ||
                 PROVINCES[a].dist - PROVINCES[b].dist ||
-                Object.keys(ROADS).indexOf(PROVINCES[a].road) - Object.keys(ROADS).indexOf(PROVINCES[b].road),
+                roadIndex(a) - roadIndex(b),
             ),
         );
+        const chapterProvinces = (cid) => PROVINCE_ORDER.filter((p) => PROVINCES[p].chapter === cid);
+        // 日本の国（天下統一は日本の68か国の制覇。海外の章を足しても変わらない）
+        const JAPAN = chapterProvinces("japan");
         // 推奨レベル（目安。入場の制限ではない）：城の強さから
         // 模擬（4部隊×10人）で勝てたレベル：強さ 1.6 → Lv10、4 → Lv35、6 → Lv65、8 → Lv100（その間は直線でつなぐ）
         const RECLV_POINTS = [
@@ -15834,7 +15867,7 @@ OFF</button>
         }
         const provinceOf = (castleId) => PROVINCE_ORDER.find((p) => PROVINCES[p].castle === castleId);
         const ownsProvince = (p) => !!(PROVINCES[p].home || conquest[PROVINCES[p].castle].captured);
-        const ownedCount = () => PROVINCE_ORDER.filter(ownsProvince).length;
+        const ownedCount = (list = JAPAN) => list.filter(ownsProvince).length; // 既定は日本の国の数
         function territoryBonus(key) {
           if (!territoryReady) return 0; // 起動の途中（領土のデータの準備前）は効果なしで計算する
           let n = 0;
@@ -15844,7 +15877,7 @@ OFF</button>
         }
         territoryReady = true;
         // 全国制覇（天下統一）：今、全部の国を領土にしているか（反撃で失えば外れる。お祝いと報酬は1回だけ）
-        const isTenka = () => PROVINCE_ORDER.every(ownsProvince);
+        const isTenka = () => JAPAN.every(ownsProvince);
         // 秘境の発見：条件の国をすべて領土にしたら発見（1回発見したら残る）。新しく見つけた秘境を返す
         function checkSecrets() {
           const found = [];
@@ -15875,16 +15908,15 @@ OFF</button>
           return c;
         }
         // 境目の領土：自国以外の領土で、まだ取っていない国と隣り合っている国
-        const borderProvinces = () =>
-          PROVINCE_ORDER.filter(
-            (p) => !PROVINCES[p].home && ownsProvince(p) && PROVINCES[p].adj.some((a) => !ownsProvince(a)),
-          );
+        // 反撃してくるのは同じ章（地域）の敵国だけ（海を越えた別の章からは来ない）
+        const counterFoes = (p) => PROVINCES[p].adj.filter((a) => !ownsProvince(a) && PROVINCES[a].chapter === PROVINCES[p].chapter);
+        const borderProvinces = () => PROVINCE_ORDER.filter((p) => !PROVINCES[p].home && ownsProvince(p) && counterFoes(p).length);
         function maybeCounter() {
           if (activeCounter() || counterRng() >= COUNTER.chance) return null;
           const list = borderProvinces();
           if (!list.length) return null;
           const province = list[Math.min(list.length - 1, Math.floor(counterRng() * list.length))],
-            enemies = PROVINCES[province].adj.filter((a) => !ownsProvince(a)),
+            enemies = counterFoes(province),
             from = enemies[Math.min(enemies.length - 1, Math.floor(counterRng() * enemies.length))];
           conquestMeta.counter = { province, from };
           persistConquest();
@@ -17322,7 +17354,7 @@ OFF</button>
                 "</p><p>領土 " +
                 ownedCount() +
                 "/" +
-                PROVINCE_ORDER.length +
+                JAPAN.length +
                 "か国</p>"
               : "") +
             (B.unified
@@ -17330,7 +17362,7 @@ OFF</button>
               : "") +
             (B.tenka
               ? '<div class="tenka"><p class="tenka-title">🎌 天下統一！</p><p>全国' +
-                PROVINCE_ORDER.length +
+                JAPAN.length +
                 "か国を制覇した！ 🎴 ガチャ券 +" +
                 TENKA_TICKETS +
                 "</p><p>🔥 報酬：<b>爆炎の鉄砲</b>（🎒 装備倉庫）</p></div>"
@@ -19078,6 +19110,10 @@ OFF</button>
               STAGE1,
               SECRETS,
               PROVINCE_ORDER,
+              CHAPTERS,
+              CHAPTER_ORDER,
+              chapterProvinces,
+              JAPAN,
               LEGACY_PROVINCE_IDS,
               recLevel,
               isTenka,
