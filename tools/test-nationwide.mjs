@@ -668,7 +668,7 @@ check(
     /零式・天魔機神/.test(text) &&
     (await page.$$eval(
       ".secret-card button",
-      (bs) => bs.length === 3 && bs.every((b) => !b.disabled && /討伐に出陣/.test(b.textContent)),
+      (bs) => bs.length === 4 && bs.every((b) => !b.disabled && /討伐に出陣/.test(b.textContent)), // 秘境3つ＋真・八岐大蛇
     )),
   text.slice(0, 200),
 );
