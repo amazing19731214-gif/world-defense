@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 防衛戦と攻城戦で同じ第一〜第四部隊（10人まで）を使う動作確認。古い保存データ（5人×8部隊）の引き継ぎ・攻城編成（武将）・保存
+// 防衛戦と攻城戦で同じ第一〜第八部隊（10人まで）を使う動作確認。古い保存データ（5人×8部隊）の引き継ぎ・攻城編成（武将）・保存
 //   node tools/test-formation.mjs
 //   SCREENSHOTS=dir node tools/test-formation.mjs … 画面写真も保存
 import { createRequire } from "node:module";
@@ -126,18 +126,18 @@ check(
     )),
 );
 check(
-  "第一〜第四部隊の枠を前から割り当てる",
-  q.map((x) => x.slot).join() === "0,1,2,3,-1" &&
-    q[0].name === "第一部隊（槍兵）" &&
-    q[3].name === "第四部隊（槍兵）",
+  "第一〜第八部隊の枠を前から割り当てる",
+  q.map((x) => x.slot).join() === "0,1,2,3,4" &&
+    q[0].name === "第一部隊" &&
+    q[3].name === "第四部隊",
   JSON.stringify(q.map((x) => x.name)),
 );
-check("4部隊に収まらない兵士は「予備隊」に残る", q[4].name === "予備隊 #5（弓兵）", q[4].name);
+check("第五部隊の兵士も通常の枠に残る", q[4].name === "第五部隊", q[4].name);
 let r = await ev(page, () => {
   WD_DEBUG.setGold(9999);
   return WD_DEBUG.squadApi.hireSquad("ashigaru", 650, 300);
 });
-check("部隊が4つ以上あると新しく雇えない", r === null && /4 部隊まで/.test(await page.textContent("#msg")));
+check("8枠までは部隊を追加できる（戦闘用fixture）", r !== null);
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 check("再読み込みしても同じまとめ方になる", JSON.stringify(await squadsNow(page)) === JSON.stringify(q));
@@ -149,13 +149,13 @@ r = await ev(page, () => {
   return { err, list: now.map((x) => x.id + ":" + x.slot), name: a.squadName(now[3]) };
 });
 check(
-  "部隊を解散すると、空いた枠に予備隊が入る",
-  !r.err && r.list.join() === "1:0,2:1,3:2,5:3" && r.name === "第四部隊（弓兵）",
+  "部隊を解散すると、第五部隊の保存済み枠を維持する",
+  !r.err && r.list.join() === "1:0,2:1,3:2,5:4" && r.name === "第五部隊",
   JSON.stringify(r),
 );
 check(
   "枠を保存",
-  (await stored(page, SKEY)).squads.map((x) => x.id + ":" + x.slot).join() === "1:0,2:1,3:2,5:3",
+  (await stored(page, SKEY)).squads.map((x) => x.id + ":" + x.slot).join() === "1:0,2:1,3:2,5:4",
   JSON.stringify((await stored(page, SKEY)).squads),
 );
 
@@ -165,28 +165,23 @@ await page.tap("#siege");
 check("攻城編成の画面を開く", await page.isVisible("#siegeSheet"));
 let tabs = await page.$$eval("#siegeTabs button", (bs) => bs.map((b) => b.textContent));
 check(
-  "第一〜第四部隊のタブ（人数）",
-  tabs.length === 4 && /^第一10\/10/.test(tabs[0]) && /^第四5\/10/.test(tabs[3]),
+  "第一〜第八部隊のタブ（人数）",
+  tabs.length === 8 && /^第一10\/10/.test(tabs[0]) && /^第五5\/10/.test(tabs[4]),
   tabs.join(),
 );
 let u = await units(page);
 r = await ev(page, () =>
-  WD_DEBUG.state().squads.map((q) =>
-    WD_DEBUG.squadApi
-      .roster(q)
-      .map((s) => s.id)
-      .join(),
-  ),
+  Array.from({length:8}, (_,i) => { const q=WD_DEBUG.state().squads.find(q=>q.slot===i);return q?WD_DEBUG.squadApi.roster(q).map(s=>s.id).join():""; }),
 );
 check(
-  "攻城の第一〜第四部隊の兵士は、防衛の第一〜第四部隊の兵士と同じ",
-  u.every((x, i) => x.soldiers.join() === r[i]),
+  "攻城の第一〜第八部隊の兵士は、防衛の第一〜第八部隊の兵士と同じ",
+  u.every((x, i) => x.soldiers.join() === (r[i] || "")),
   JSON.stringify(u.map((x) => x.soldiers.length)),
 );
 let text = await page.textContent("#siegeUnit");
 check(
   "部隊の兵種・兵士数・平均Lv・兵士の一覧を表示",
-  /第一部隊（槍兵）/.test(text) && /兵士 10\/10/.test(text) && /平均 Lv\d/.test(text) && /Lv\d+/.test(text),
+  /第一部隊/.test(text) && /兵士 10\/10/.test(text) && /平均 Lv\d/.test(text) && /Lv\d+/.test(text),
   text.slice(0, 120),
 );
 check("攻城編成では兵士を外せない（ボタンなし）", (await page.$$("#siegeUnit [data-remove]")).length === 0);
@@ -280,14 +275,14 @@ r = await ev(page, () => {
   const q = s.squads[3]; // 第四部隊（5人）
   a.recruitInto(q);
   const fresh = s.soldiers[s.soldiers.length - 1];
-  return { id: fresh.id, before: a.siege()[3].soldiers.includes(fresh.id) };
+  return { id: fresh.id, before: a.siege()[4].soldiers.includes(fresh.id) };
 });
 check("保存される前の新兵は、まだ攻城に出ない", !r.before, JSON.stringify(r));
 await page.tap("#siege");
 check(
   "攻城編成の画面で、ウェーブをクリアすると出撃できると案内",
   await ev(page, () => {
-    document.querySelector('#siegeTabs [data-unit="3"]').click();
+    document.querySelector('#siegeTabs [data-unit="4"]').click();
     return /雇ったばかりの兵士 1 人/.test(document.getElementById("siegePick").textContent);
   }),
 );
@@ -300,7 +295,7 @@ r = await ev(
     WD_DEBUG.state().enemies.length = 0;
     WD_DEBUG.step(0.1); // ウェーブをクリアして保存
     WD_DEBUG.squadApi.refreshSiege();
-    return WD_DEBUG.squadApi.siege()[3].soldiers.includes(id);
+    return WD_DEBUG.squadApi.siege()[4].soldiers.includes(id);
   },
   r.id,
 );
@@ -336,8 +331,8 @@ console.log("■ 保存が無いとき・不正な保存データ");
 }));
 r = await units(page);
 check(
-  "部隊が無ければ4部隊とも空",
-  r.length === 4 && r.every((x) => !x.soldiers.length && !x.hero) && errors.length === 0,
+  "部隊が無ければ8部隊とも空",
+  r.length === 8 && r.every((x) => !x.soldiers.length && !x.hero) && errors.length === 0,
 );
 await page.tap("#siege");
 check(
@@ -363,12 +358,12 @@ await context.close();
 r = await units(page);
 check(
   "古い攻城編成の兵士の選び方は使わず、武将だけ読み込む（重複・未所持は除く）",
-  r.length === 4 &&
-    r.map((x) => x.soldiers.length).join() === "10,10,10,5" &&
+  r.length === 8 &&
+    r.map((x) => x.soldiers.length).join() === "10,10,10,5,5,0,0,0" &&
     r[0].hero === "yukimura" &&
     r[1].hero === null &&
     r[2].hero === null &&
-    r[3].hero === null,
+    r[3].hero === null && r[4].hero === "kanbei",
   JSON.stringify(r),
 );
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
@@ -377,7 +372,7 @@ await context.close();
 r = await units(page);
 check(
   "壊れた保存データでも起動（武将なし）",
-  r.length === 4 && r.every((x) => !x.hero) && errors.length === 0,
+  r.length === 8 && r.every((x) => !x.hero) && errors.length === 0,
   errors.join(),
 );
 await context.close();

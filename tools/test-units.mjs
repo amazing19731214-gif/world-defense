@@ -23,9 +23,9 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -96,22 +96,10 @@ await ev(page, () => WD_DEBUG.setGold(9999));
 
 console.log("■ 雇用メニューと能力値");
 let text = await page.textContent("#unitTools");
-check(
-  "雇用メニューに鉄砲兵（10人 300G）・衛生兵（10人 240G）",
-  /鉄砲兵 300G/.test(text) && /衛生兵 240G/.test(text),
-  text,
-);
-check(
-  "ボタンに兵士の絵",
-  (
-    await page.$$eval('[data-u="gunner"] img, [data-u="medic"] img', (ims) =>
-      ims.map((i) => i.naturalWidth > 0),
-    )
-  ).join() === "true,true",
-);
+check("雇用はランダム1人24Gで兵種選択なし",/24G/.test(text)&&await page.locator('[data-u]').count()===0);
 let r = await ev(page, () => {
   const F = WD_DEBUG.unitConfig.UNIT_FRAMES,
-    btn = document.querySelector('[data-u="medic"] img').src;
+    btn = F.medic.idle;
   return {
     frames: Object.fromEntries(Object.entries(F).map(([k, v]) => [k, Object.keys(v).join()])),
     btn: btn.slice(0, 15),
@@ -122,7 +110,7 @@ check(
   r.frames.gunner === "idle,attack,death" && r.frames.medic === "idle,death",
   JSON.stringify(r.frames),
 );
-check("衛生兵のボタンは素材の絵（仮画像ではない）", r.btn === "data:image/webp", r.btn);
+check("衛生兵は素材の絵（仮画像ではない）", r.btn === "data:image/webp", r.btn);
 r = await ev(page, () => {
   const T = WD_DEBUG.unitConfig.SOLDIER_TYPES;
   return { g: T.gunner, a: T.archer, s: T.ashigaru, m: T.medic };
@@ -141,7 +129,7 @@ check(
   (await page.textContent('[data-t="magic"]')).includes("鉄砲") && r.g.name === "鉄砲兵",
 );
 await tapHire(page, "gunner");
-check("鉄砲兵を選ぶと説明を表示", /鉄砲隊（10人・300G）/.test(await page.textContent("#msg")));
+check("鉄砲兵の戦闘用fixtureを選択",await ev(page,()=>WD_DEBUG.state().selectedUnitType==="gunner"));
 await tapMap(page, 760, 300);
 await tapHire(page, "medic");
 await tapMap(page, 690, 300);
@@ -454,23 +442,23 @@ await page.tap(`#siegeTabs [data-unit="${tab}"]`);
 text = await page.textContent("#siegeUnit");
 check(
   "攻城編成の画面に部隊の兵種（鉄砲兵）",
-  /（鉄砲兵）/.test(text) && /兵種 鉄砲兵\d/.test(text),
+  /兵種 鉄砲兵\d/.test(text) && !/混成/.test(text),
   text.slice(0, 100),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "u2-siege.png") });
 await page.tap("#siegeClose");
 
 console.log("■ 画面（390px）");
-if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle"); // 雇用ボタンを開いて測る
+// 常設の雇用ボタンを測る
 const lay = await ev(page, () => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
   minBtn: Math.min(
-    ...[...document.querySelectorAll("[data-u]")].map((b) => b.getBoundingClientRect().height),
+    ...[...document.querySelectorAll("#hireToggle")].map((b) => b.getBoundingClientRect().height),
   ),
-  minW: Math.min(...[...document.querySelectorAll("[data-u]")].map((b) => b.getBoundingClientRect().width)),
+  minW: Math.min(...[...document.querySelectorAll("#hireToggle")].map((b) => b.getBoundingClientRect().width)),
 }));
 check(
-  "雇用ボタン5つでも横スクロールなし・押しやすい大きさ",
+  "雇用ボタンが横スクロールなし・押しやすい大きさ",
   !lay.hScroll && lay.minBtn >= 44 && lay.minW >= 80,
   JSON.stringify(lay),
 );

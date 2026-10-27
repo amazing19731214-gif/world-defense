@@ -22,9 +22,9 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -34,9 +34,9 @@ function check(name, cond, detail = "") {
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
 );
-// 何度も遊んで、待機中の部隊が上限（4部隊）まで貯まった保存データ（第一〜第三 足軽・第四 槍兵、各5人）
-const save = { version: 1, seq: 20, squadSeq: 4, squads: [], soldiers: [], fallen: [] };
-for (let q = 1; q <= 4; q++) {
+// 何度も遊んで、待機中の部隊が上限（8部隊）まで貯まった保存データ（第一〜第三 足軽・第四 槍兵、各5人）
+const save = { version: 1, seq: 40, squadSeq: 8, squads: [], soldiers: [], fallen: [] };
+for (let q = 1; q <= 8; q++) {
   const type = q <= 3 ? "ashigaru" : "spearman";
   save.squads.push({ id: q, type, slot: q - 1 });
   for (let k = 0; k < 5; k++) {
@@ -90,7 +90,7 @@ const counts = () =>
 
 console.log("■ 保有数の表示");
 let text = await page.textContent("#unitCount");
-check("配置中の部隊数と保有数（待機中を含む）を表示", /配置 0\/4/.test(text) && /保有 4\/4/.test(text), text);
+check("配置中の部隊数と保有数（待機中を含む）を表示", /配置 0\/8/.test(text) && /保有 8\/8/.test(text), text);
 
 console.log("■ 上限のときに道をタップ");
 await tapHire(page, "medic");
@@ -101,11 +101,11 @@ const toast = await ev(() => {
     b = el.getBoundingClientRect();
   return { shown: !el.hidden, text: el.textContent, top: b.top, bottom: b.bottom };
 });
-check("待機中に同じ兵種が無ければ雇えない（部隊は増えない）", r.all === 4 && r.out === 0);
+check("待機中に同じ兵種が無ければ雇えない（部隊は増えない）", r.all === 8 && r.out === 0);
 check(
   "置けない理由を画面の上に表示（スクロールしなくても見える）",
   toast.shown &&
-    /4 部隊まで/.test(toast.text) &&
+    /8 部隊まで/.test(toast.text) &&
     /解散/.test(toast.text) &&
     toast.top >= 0 &&
     toast.bottom < 200,
@@ -117,26 +117,26 @@ await tapMap(650, 300);
 r = await counts();
 check(
   "同じ兵種の待機中の部隊があれば、その部隊をタップした場所に配置",
-  r.all === 4 && r.out === 1,
+  r.all === 8 && r.out === 1,
   JSON.stringify(r),
 );
 check("配置したことも上に表示", /を配置した/.test(await page.textContent("#toast")));
 check("ゴールドは減らない（雇用ではなく配置）", (await ev(() => WD_DEBUG.state().gold)) === 500);
 text = await page.textContent("#unitCount");
-check("表示が「配置 1/4・保有 4/4」になる", /配置 1\/4/.test(text) && /保有 4\/4/.test(text), text);
+check("表示が「配置 1/8・保有 8/8」になる", /配置 1\/8/.test(text) && /保有 8\/8/.test(text), text);
 
 console.log("■ 解散");
 await page.tap("#organize");
 const disbandBtns = await page.$$eval("[data-disband]", (bs) => bs.map((b) => +b.dataset.disband));
 check(
   "待機中の部隊にだけ「解散」ボタン（配置中の部隊には出ない）",
-  disbandBtns.length === 3,
+  disbandBtns.length === 7,
   disbandBtns.join(),
 );
 await page.tap('[data-disband="4"]');
 check(
   "解散の前に確認（名前付きの兵士の名前も表示）",
-  /第四部隊（槍兵）/.test(confirmText) && /権六/.test(confirmText),
+  /第四部隊/.test(confirmText) && /権六/.test(confirmText),
   confirmText,
 );
 r = await ev(() => {
@@ -154,7 +154,7 @@ r = await ev(() => {
 });
 check(
   "解散すると部隊と兵士が消え、保存データからも外れる",
-  r.squads === 3 && r.soldiers === 0 && r.saved === 0 && !r.savedSquad,
+  r.squads === 7 && r.soldiers === 0 && r.saved === 0 && !r.savedSquad,
   JSON.stringify(r),
 );
 check("解散は戦死ではない（英霊名鑑に載らない）", r.fallen === 0);
@@ -163,7 +163,7 @@ await page.tap("#squadClose");
 await tapHire(page, "medic");
 await tapMap(740, 300);
 r = await counts();
-check("枠が空けば新しい部隊を雇える（空いた第四部隊に入る）", r.all === 4 && r.out === 2, JSON.stringify(r));
+check("枠が空けば新しい部隊を雇える（空いた第四部隊に入る）", r.all === 8 && r.out === 2, JSON.stringify(r));
 r = await ev(() => {
   const a = WD_DEBUG.squadApi,
     s = WD_DEBUG.state();

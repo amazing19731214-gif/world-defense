@@ -23,9 +23,9 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 let failures = 0,
   passes = 0;
 // 雇用ボタンは「＋ 雇う」の中（畳まれていれば開いてから押す）
+// Combat fixture: choose a known unit type through debug setup, not the removed recruitment UI.
 async function tapHire(page, type) {
-  if (!(await page.isVisible(`[data-u="${type}"]`))) await page.tap("#hireToggle");
-  await page.tap(`[data-u="${type}"]`);
+  await page.evaluate(type => WD_DEBUG.squadApi.selectUnitForFixture(type), type);
 }
 function check(name, cond, detail = "") {
   if (cond) passes++;
@@ -177,14 +177,9 @@ const U1 = [300, 165],
 let { page, errors, context } = await newPage();
 await page.evaluate(() => WD_DEBUG.setGold(5000));
 
-console.log("■ 兵種と雇用ボタン");
-const btns = await page.$$eval("[data-u]", (bs) => bs.map((b) => b.dataset.u));
-check(
-  "雇用できるのは足軽・槍兵・弓兵・鉄砲兵・衛生兵・騎兵の6種類",
-  btns.join() === "ashigaru,spearman,archer,gunner,medic,cavalry",
-  btns.join(),
-);
-check("ボタンに部隊の費用（10人分）を表示", /足軽 150G/.test(await page.textContent('[data-u="ashigaru"]')));
+console.log("■ ランダム雇用ボタン");
+check("兵種選択ボタンを表示しない",await page.locator('[data-u]').count()===0);
+check("雇用費を表示",/24G/.test(await page.textContent('#hireToggle')));
 
 console.log("■ 雇用・配置");
 await tapHire(page, "ashigaru");
@@ -215,9 +210,8 @@ await tapMap(page, ...M2);
 await tapHire(page, "archer");
 await tapMap(page, ...U1);
 await tapMap(page, ...L1);
-await tapMap(page, ...U2);
 st = await S(page);
-check("道に出せるのは4部隊まで", st.squads.length === 4 && /4 部隊まで/.test(await msgText(page)));
+check("4部隊の戦闘テスト用配置と上限8部隊", st.squads.length === 4 && await page.evaluate(()=>WD_DEBUG.unitConfig.SQUAD_RULES.maxDeployed===8));
 await page.tap('[data-t="arrow"]');
 await tapMap(page, 650, 225); // 足軽隊#1の上側の草地
 st = await S(page);
@@ -517,8 +511,8 @@ const mixed = await page.evaluate(
   [arc.alive[0], ash.id, arc.id],
 );
 check(
-  "別の兵種の部隊にも編入できる（混成部隊になり、戻すと元の名前）",
-  mixed.err === null && /（混成）/.test(mixed.name) && mixed.back === null && /（足軽）/.test(mixed.after),
+  "別の兵種の部隊にも編入できる（名前に兵種の接尾辞を付けない）",
+  mixed.err === null && !/混成/.test(mixed.name) && mixed.back === null && mixed.name === mixed.after,
   JSON.stringify(mixed),
 );
 const full = await page.evaluate((id) => {

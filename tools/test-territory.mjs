@@ -260,11 +260,11 @@ console.log("■ 領土の効果");
 ({ page, errors, context } = await newContext());
 r = await page.evaluate(() => ({
   gold: WD_DEBUG.state().gold,
-  label: document.querySelector('[data-u="ashigaru"]').textContent,
+  label: document.querySelector("#hireToggle").textContent,
 }));
 check(
-  "領土が三河だけなら効果なし（開始ゴールド 500・足軽 150G）",
-  r.gold === 500 && /150G/.test(r.label),
+  "領土が三河だけなら効果なし（開始ゴールド500・ランダム雇用24G）",
+  r.gold === 500 && /24G/.test(r.label),
   JSON.stringify(r),
 );
 // 尾張（ウェーブの報酬）・遠江と駿河（開始ゴールド）・美濃（修理費）・信濃（雇用費）を領土にした保存データ
@@ -300,12 +300,12 @@ r = await page.evaluate(() => {
 check("美濃で塔の修理費 -30%", r.cost === Math.ceil(100 * 0.5 * 0.7 * 0.5), JSON.stringify(r));
 r = await capture(page, "fukashi");
 r = await page.evaluate(() => ({
-  label: document.querySelector('[data-u="ashigaru"] .u-cost').textContent,
+  label: document.querySelector("#hireToggle").textContent,
   cost: WD_DEBUG.squadApi.unitCost("ashigaru"),
 }));
 check(
-  "信濃を取ると、すぐ雇用費 -15%（足軽 1人13G・部隊130G）",
-  r.cost === 13 && r.label === "130G",
+  "信濃を取ると、すぐ雇用費 -15%（ランダム雇用20G）",
+  r.cost === 13 && /20G/.test(r.label),
   JSON.stringify(r),
 );
 r = await page.evaluate(() => {
