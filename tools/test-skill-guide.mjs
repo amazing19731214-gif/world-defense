@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { openInfoEntry } from './ui-test-utils.mjs';
+import { openInfoEntry, togglePause, toggleSpeed } from './ui-test-utils.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -66,8 +66,8 @@ try {
  check('閲覧中は敵・ゴールド・HP・ウェーブが進まない',JSON.stringify(before)===JSON.stringify(after));
  await page.keyboard.press('Escape');
  check('Escapeで閉じて再開',await page.locator('#skillGuideSheet').isHidden()&&!await page.evaluate(()=>WD_DEBUG.state().paused));
- await page.tap('#pause');
- await page.tap('#speed');
+ await toggleSpeed(page);
+ await togglePause(page);
  await openInfoEntry(page, '#skillGuideOpen');
  await page.tap('#skillGuideClose');
  check('もともと停止中なら停止を保つ',await page.evaluate(()=>WD_DEBUG.state().paused));

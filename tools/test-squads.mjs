@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { togglePause, toggleSpeed } from './ui-test-utils.mjs';
 // 兵士部隊・永久死亡・成長・称号・再編成の動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test-squads.mjs
 //   SCREENSHOTS=dir node tools/test-squads.mjs … 画面写真も保存
@@ -55,6 +56,10 @@ async function newPage(seed) {
   return { page, errors, context };
 }
 async function tapMap(page, x, y) {
+  await page.evaluate(() => {
+    const top = document.getElementById("game").getBoundingClientRect().top;
+    window.scrollBy(0, top - document.querySelector("header").getBoundingClientRect().height - 8);
+  });
   const p = await page.evaluate(
     ([x, y]) => {
       const c = document.getElementById("game"),
@@ -661,7 +666,7 @@ check(
   String(st.gold - g1),
 );
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "knight", d: 694 + 150, hp: 1e6, speed: 0 }));
-await page.tap("#pause");
+await togglePause(page);
 const p0 = await S(page);
 await page.waitForTimeout(1200);
 const p1 = await S(page);
@@ -670,7 +675,7 @@ check(
   JSON.stringify(p0.soldiers) === JSON.stringify(p1.soldiers) &&
     JSON.stringify(p0.enemies) === JSON.stringify(p1.enemies),
 );
-await page.tap("#pause");
+await togglePause(page);
 await clearEnemies(page);
 // 撤退時間で x1 / x2 を確認
 const sp = st.squads.find((q) => q.state === "deployed" && q.type === "archer");
@@ -688,7 +693,7 @@ check(
   near(r0 - r1, real, 0.3),
   `${(r0 - r1).toFixed(2)} vs ${real.toFixed(2)}`,
 );
-await page.tap("#speed");
+await toggleSpeed(page);
 t0 = Date.now();
 r0 = sq(await S(page), sp.id).retreatLeft;
 await page.waitForTimeout(500);
@@ -699,7 +704,7 @@ check(
   near(r0 - r1, real * 2, 0.4),
   `${(r0 - r1).toFixed(2)} vs ${(real * 2).toFixed(2)}`,
 );
-await page.tap("#speed");
+await toggleSpeed(page);
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 if (shots) await page.screenshot({ path: path.join(shots, "s3-battle.png"), fullPage: true });
 

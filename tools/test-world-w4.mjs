@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { togglePause, toggleSpeed } from './ui-test-utils.mjs';
 // W4: 東南アジア12拠点・旧版互換・霧・報酬・保存障害・森と川の実戦。
 // 進行は勝敗指定。地形は実際のtickで移動・攻撃・回復・被弾を検証する。
 import fs from 'node:fs';
@@ -86,9 +87,9 @@ try{
  r=await p.evaluate(()=>{const B=WD_DEBUG.squadApi.battle(),g=B.groups[1];g.state='march';g.d=480;Object.assign(g,WD_DEBUG.pathAt(g.path,g.d));WD_DEBUG.step(0.5);return {first:B.groups[0].terrainWait,second:g.terrainWait,d:g.d};});
  check('別の部隊は独立して渡河する',r.first===0&&Math.abs(r.second-1)<1e-8&&r.d===480,r);
  await terrainBattle(p,['river'],480);
- await p.locator('#pause').click();r=await p.evaluate(()=>{WD_DEBUG.step(0.5);return WD_DEBUG.squadApi.battle().groups[0].d;});
+ await togglePause(p);r=await p.evaluate(()=>{WD_DEBUG.step(0.5);return WD_DEBUG.squadApi.battle().groups[0].d;});
  check('停止中は地形の進行も止まる',r===480,r);
- await p.locator('#pause').click();await p.evaluate(()=>WD_DEBUG.step(0.5));await p.locator('#speed').click();
+ await togglePause(p);await p.evaluate(()=>WD_DEBUG.step(0.5));await toggleSpeed(p);
  r=await p.evaluate(()=>{WD_DEBUG.step(0.25);return WD_DEBUG.squadApi.battle().groups[0].terrainWait;});
  check('x2では渡河待ちも2倍の速さで進む',Math.abs(r-0.5)<1e-8,r);
  await terrainBattle(p,['river'],480);

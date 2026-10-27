@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { openInfoEntry } from './ui-test-utils.mjs';
+import { openInfoEntry, togglePause, toggleSpeed } from './ui-test-utils.mjs';
 // 動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test.mjs              … index.html を検査
 //   SCREENSHOTS=dir node tools/test.mjs … 画面写真も保存
@@ -216,12 +216,12 @@ check("集中砲火：指定敵に発動",used);
 st=await S(page);
 check("集中砲火：効果7秒・再使用40秒",near(st.heroes.kanbei.active,7,.3)&&near(st.heroes.kanbei.cd,40,.3));
 check("必殺技の表示（残り秒数）",(await page.textContent("#skillLabel")).includes("発動中"));
-await page.tap("#pause");const p0=(await S(page)).heroes.kanbei;await page.waitForTimeout(400);const p1=(await S(page)).heroes.kanbei;
+await togglePause(page);const p0=(await S(page)).heroes.kanbei;await page.waitForTimeout(400);const p1=(await S(page)).heroes.kanbei;
 check("停止中は効果時間・再使用待ちが止まる",p0.active===p1.active&&p0.cd===p1.cd);
-await page.tap("#pause");let t0=Date.now(),a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);let a1=(await S(page)).heroes.kanbei.active,real=(Date.now()-t0)/1000;
+await togglePause(page);let t0=Date.now(),a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);let a1=(await S(page)).heroes.kanbei.active,real=(Date.now()-t0)/1000;
 check("x1：実時間とほぼ同じ速さ",near(a0-a1,real,.35));
-await page.tap("#speed");t0=Date.now();a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);a1=(await S(page)).heroes.kanbei.active;real=(Date.now()-t0)/1000;
-check("x2：2倍の速さ",near(a0-a1,real*2,.6));await page.tap("#speed");
+await toggleSpeed(page);t0=Date.now();a0=(await S(page)).heroes.kanbei.active;await page.waitForTimeout(600);a1=(await S(page)).heroes.kanbei.active;real=(Date.now()-t0)/1000;
+check("x2：2倍の速さ",near(a0-a1,real*2,.6));await toggleSpeed(page);
 await page.evaluate(()=>WD_DEBUG.step(8));st=await S(page);
 check("効果終了後も再使用待ちは継続",st.heroes.kanbei.active===0&&st.heroes.kanbei.cd>0);
 const cdBefore=st.heroes.kanbei.cd;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { togglePause } from './ui-test-utils.mjs';
 // 操作性の改善の確認：ウェーブの自動開始（AUTO）・装備倉庫の並び替えと絞り込み・装備のロック・売却（個別・まとめて）
 //   node tools/test-qol.mjs
 //   SCREENSHOTS=dir node tools/test-qol.mjs … 画面写真も保存
@@ -173,7 +174,7 @@ await page.evaluate(() => {
   WD_DEBUG.state().enemies.length = 0;
   WD_DEBUG.step(0.1);
 });
-await page.tap("#pause");
+await togglePause(page);
 await step(page, 10);
 r = await st(page);
 check(
@@ -181,7 +182,7 @@ check(
   r.wave === 4 && !r.playing && /5秒/.test(await startText(page)),
   JSON.stringify(r) + (await startText(page)),
 );
-await page.tap("#pause");
+await togglePause(page);
 await page.tap("#gearOpen");
 await step(page, 10);
 r = await st(page);

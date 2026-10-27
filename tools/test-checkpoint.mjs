@@ -53,7 +53,7 @@ try {
       D.state().towers.push(t); D.heroApi.assignHero('shingen', q); D.heroApi.assignHero('kanetsugu', t);
       D.heroApi.heroState().shingen.cd = 17;
       D.state().soldiers[0].hp = 50;
-      document.getElementById('speed').click();
+      WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().speed === 1 ? 'x2' : 'x1');
       return { ok: D.defenseApi.save(), wave: D.state().wave, hp: D.state().hp, gold: D.state().gold, tickets: D.heroApi.save().tickets, soldier: D.state().soldiers[0].id };
     });
     check('準備中の保存が成功', r.ok === true, r);

@@ -2326,9 +2326,11 @@
         background: #3d5a4a;
       }
       .unit-head .row-label span { display: block; }
-      .unit-head #unitCount { font-size: 12px; }
-      .unit-head #towerCount { margin-top: 2px; font-size: 12px; }
+      .unit-head #unitCount { font-size: 14px; }
+      .unit-head #towerCount { margin-top: 2px; font-size: 14px; }
       #infoOpen { font-size: 12px; }
+      #pace, #recoverAll { white-space: pre-line; font-size: 14px; line-height: 1.3; padding: 6px 1px; }
+      #pace[data-mode="paused"] { background: #495f62; }
       #infoSheet { z-index: 9; }
       .info-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
       .info-entry { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; min-width: 0; min-height: 72px; padding: 12px; text-align: left; }
@@ -2401,8 +2403,8 @@
         <button id="battleRetreat" class="retreat">↩ 全軍撤退</button>
       </section>
       <div class="tools play-tools" aria-label="ウェーブ">
-        <button id="start">▶ ウェーブ開始</button><button id="speed">⏩ x1</button
-        ><button id="pause">⏸ 停止</button
+        <button id="start">▶ ウェーブ開始</button><button id="pace" data-mode="x1" aria-label="進行：通常速度。押すと倍速">▶ ×1</button
+        ><button id="recoverAll" aria-label="兵士と塔をまとめて回復" disabled>🩹 全回復</button
         ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める（防衛戦・修練場）">AUTO
 OFF</button>
       </div>
@@ -2487,7 +2489,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v73（情報メニュー・配置表示の整理）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v74（進行ボタン統合・兵士と塔の一括回復）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -5014,6 +5016,8 @@ OFF</button>
             : "WAVE " + wave + "/" + waveGoal;
           $("start").disabled = playing || over || !!battle;
           renderAuto();
+          renderPace();
+          renderRecovery();
           $("upgrade").disabled =
             !selectedTower || gold < upgradePrice(selectedTower) || selectedTower.level >= 5;
           $("sell").disabled = !selectedTower || !!training;
@@ -8788,9 +8792,9 @@ OFF</button>
           return null;
         }
         // 治療：ウェーブの合間にゴールドで部隊の生存兵を全回復する（戦死者は対象外＝復活しない）
-        const healCost = (q) =>
+        const healCost = (q, factor = serviceFactor("heal", q)) =>
           Math.ceil(
-            serviceFactor("heal", q) * roster(q).reduce(
+            factor * roster(q).reduce(
               (n, s) =>
                 n +
                 SOLDIER_TYPES[s.type].cost *
@@ -9167,10 +9171,10 @@ OFF</button>
           if (t.hp == null) t.hp = towerMaxHp(t);
           return t.hp;
         }
-        const repairCost = (t) =>
+        const repairCost = (t, factor = serviceFactor("repair", t)) =>
           t.destroyed
             ? 0
-            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - territoryBonus("repair")) * (1 - towerHp(t) / towerMaxHp(t)) * serviceFactor("repair", t));
+            : Math.ceil(types[t.type].cost * TOWER_HP.repairRate * (1 - territoryBonus("repair")) * (1 - towerHp(t) / towerMaxHp(t)) * factor);
         function damageTower(t, dmg, ranged = false, enemy = null) {
           if (t.destroyed) return;
           const h = heroOn(t), evade = h ? warlordGrowth(h.id).evade || 0 : 0;
@@ -11439,7 +11443,7 @@ OFF</button>
           spawnClock = 0.5;
           playing = true;
           paused = false;
-          $("pause").textContent = "⏸ 停止";
+          renderPace();
           if (training) trainingWaveStart();
           planRare(); // 特別な敵（ラッキー・黄金）を出すか
           planIntruder(); // 裏ボスを乱入させるか（読み込み直す前に乱入していたら必ず）
@@ -11448,15 +11452,82 @@ OFF</button>
           renderAuto();
           updateUI();
         };
-        $("pause").onclick = () => {
-          paused = !paused;
-          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+        // 進行の3状態を1つのボタンにまとめる。ゲーム内の時間倍率は既存のspeedだけを使う。
+        function paceMode() { return paused ? "paused" : speed === 2 ? "x2" : "x1"; }
+        function renderPace() {
+          const mode = paceMode(), btn = $("pace");
+          btn.dataset.mode = mode;
+          btn.textContent = mode === "paused" ? "▶ 再開" : mode === "x2" ? "⏩ ×2" : "▶ ×1";
+          btn.setAttribute("aria-label", mode === "paused" ? "進行：停止中。押すと通常速度で再開" : mode === "x2" ? "進行：倍速。押すと停止" : "進行：通常速度。押すと倍速");
+          btn.title = "通常×1 → 倍速×2 → 停止 → 通常×1";
+        }
+        function setPaceMode(mode) {
+          if (!["x1", "x2", "paused"].includes(mode)) return;
+          paused = mode === "paused";
+          if (!paused) speed = mode === "x2" ? 2 : 1;
+          last = 0;
           updateUI();
-        };
-        $("speed").onclick = () => {
-          speed = speed === 1 ? 2 : 1;
-          $("speed").textContent = "⏩ x" + speed;
-        };
+        }
+        $("pace").onclick = () => setPaceMode(paused ? "x1" : speed === 1 ? "x2" : "paused");
+        // 一括回復は通常防衛の準備中のみ。修練場の仮の軍資金や攻城戦へ持ち込まない。
+        function recoveryPlan() {
+          const services = [];
+          for (const q of squads) {
+            const targets = roster(q).filter(m => m.hp > 0 && m.hp < soldierStats(m).maxHp).map(m => ({ obj: m, max: soldierStats(m).maxHp }));
+            if (targets.length) services.push({ kind: "heal", q, targets, cost: healCost(q, 1) });
+          }
+          for (const t of towers) if (!t.destroyed && towerHp(t) > 0 && towerHp(t) < towerMaxHp(t))
+            services.push({ kind: "repair", t, targets: [{ obj: t, max: towerMaxHp(t) }], cost: repairCost(t, 1) });
+          // 割引券は最大の治療・修理1件にだけ使う（全件へ重複適用しない）。
+          const coupon = couponOwner(), discounted = coupon && services.reduce((a, b) => !a || b.cost > a.cost ? b : a, null);
+          if (discounted) discounted.cost = discounted.kind === "heal" ? healCost(discounted.q, 1 - WARLORD_RULES.supplyDiscount) : repairCost(discounted.t, 1 - WARLORD_RULES.supplyDiscount);
+          return { services, coupon: discounted ? coupon : null, total: services.reduce((n, v) => n + v.cost, 0) };
+        }
+        function recoveryError(plan = null) {
+          if (battle || training) return "一括回復は通常防衛戦の準備中に使えます。";
+          if (playing) return "ウェーブの合間に使えます。停止中も戦闘中の回復はできません。";
+          if (hp <= 0) return "ゲームオーバー後は使えません。";
+          if (plan && !plan.services.length) return "兵士と塔は満タンです。";
+          if (plan && gold < plan.total) return "軍資金が足りません（全回復 " + plan.total + "G）。";
+          return null;
+        }
+        function renderRecovery() {
+          const btn = $("recoverAll"), unavailable = recoveryError();
+          const plan = unavailable ? null : recoveryPlan(), error = unavailable || recoveryError(plan);
+          btn.disabled = !!error;
+          btn.textContent = "🩹全回復\n" + (unavailable ? (training || battle ? "通常防衛" : hp <= 0 ? "終了" : "戦闘後") : !plan.services.length ? "満タン" : plan.total.toLocaleString("ja-JP") + "G");
+          btn.title = error || "生存兵士の治療と、全壊していない塔の修理（合計" + plan.total + "G）。城のハートは対象外。";
+          btn.setAttribute("aria-label", error || "兵士と塔をまとめて全回復：" + plan.total + "G");
+        }
+        function recoverAll() {
+          const unavailable = recoveryError();
+          if (unavailable) return unavailable;
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return "未保存の進行があります。先に途中保存をやり直してください。";
+          const plan = recoveryPlan(), error = recoveryError(plan);
+          if (error) return error;
+          const targets = plan.services.flatMap(v => v.targets);
+          const before = { gold, defense: heroSave.defense, roster: JSON.parse(JSON.stringify(soldierSave)),
+            hp: targets.map(t => [t.obj, t.obj.hp]), couponWave: plan.coupon?.couponWave,
+            types: squads.map(q => [q, q.type]), batch: gameSaveBatch, active: gameSaveBatchActive };
+          gold -= plan.total;
+          for (const t of targets) t.obj.hp = t.max;
+          if (plan.coupon) plan.coupon.couponWave = -1;
+          if (!saveDefenseCheckpoint()) {
+            gold = before.gold; heroSave.defense = before.defense;
+            for (const [obj, value] of before.hp) obj.hp = value;
+            for (const [q, type] of before.types) q.type = type;
+            for (const k of Object.keys(soldierSave)) delete soldierSave[k];
+            Object.assign(soldierSave, before.roster);
+            if (plan.coupon) plan.coupon.couponWave = before.couponWave;
+            gameSaveBatch = before.batch; gameSaveBatchActive = before.active;
+            updateUI();
+            return "保存できなかったため、支払いと回復を取り消しました。空き容量を確認してください。";
+          }
+          msg("🩹 兵士・塔をまとめて全回復した（" + plan.total + "G）。");
+          updateUI();
+          return null;
+        }
+        $("recoverAll").onclick = () => { const error = recoverAll(); if (error) { msg(error); toast(error); updateUI(); } };
         $("upgrade").onclick = () => {
           if (!selectedTower || selectedTower.level >= 5 || selectedTower.destroyed) return;
           const price = Math.round(types[selectedTower.type].cost * (0.7 + selectedTower.level * 0.55));
@@ -11538,7 +11609,7 @@ OFF</button>
           playing = false;
           paused = false;
           over = false;
-          $("pause").textContent = "⏸ 停止";
+          renderPace();
           msg(
             "新しいゲームを開始。塔を建てよう！" +
               (startGold() > 500 ? " 領土の効果で開始ゴールド " + startGold() + "G。" : "") +
@@ -11560,7 +11631,7 @@ OFF</button>
           const main = document.querySelector("main");
           infoReturn = { paused, y: window.scrollY, style: document.body.style.cssText, inert: main.inert, focus: document.activeElement };
           paused = true;
-          $("pause").textContent = "▶ 再開";
+          renderPace();
           renderInfo();
           $("infoSheet").hidden = false;
           $("infoSheet").inert = false;
@@ -11585,7 +11656,7 @@ OFF</button>
           document.querySelector("main").inert = prev.inert;
           document.body.style.cssText = prev.style;
           paused = prev.paused;
-          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+          renderPace();
           last = 0;
           window.scrollTo(0, prev.y);
           if (prev.focus && prev.focus.isConnected) prev.focus.focus({ preventScroll: true });
@@ -19785,7 +19856,7 @@ OFF</button>
             ? paused ? "ゲームは停止中です。閉じても停止を維持します。" : "読んでいる間は一時停止します。閉じると再開します。"
             : "一覧を閉じると、そのままゲームに戻れます。";
           paused = true;
-          $("pause").textContent = "▶ 再開";
+          renderPace();
           $("skillGuideSearch").value = "";
           renderSkillGuide();
           $("skillGuideSheet").hidden = false;
@@ -19807,7 +19878,7 @@ OFF</button>
           document.querySelector("main").inert = prev.inert;
           document.body.style.cssText = prev.style;
           paused = prev.paused;
-          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+          renderPace();
           last = 0; // 閲覧時間ぶんを戦闘に加算しない
           window.scrollTo(0, prev.y);
           if (prev.focus && prev.focus.isConnected) prev.focus.focus({ preventScroll: true });
@@ -20238,6 +20309,8 @@ OFF</button>
             },
             defenseApi: { save: saveDefenseCheckpoint, restore: restoreDefenseCheckpoint },
             heartApi: { buy: buyHeart, price: heartPrice, state: () => ({ purchases: heartPurchases, price: heartPrice(), maxHp: HEART_RULES.maxHp }) },
+            playbackApi: { mode: paceMode, setMode: setPaceMode },
+            recoveryApi: { plan: recoveryPlan, error: recoveryError, recover: recoverAll },
             config: { WARLORDS, HERO_RULES, GACHA },
             heroApi: {
               save: () => heroSave,
@@ -20413,7 +20486,7 @@ OFF</button>
           // 乱入した裏ボスとの戦いの途中で閉じた：次のウェーブ（同じウェーブ）で必ず乱入させる
           pendingIntruder = d.intruder && Number.isInteger(d.intruder.wave) && d.intruder.wave === d.wave + 1 ? d.intruder.wave : null;
           if (pendingIntruder) defenseSaveMessage = "⚠ 前回、裏ボス「" + INTRUDER.name + "」が乱入したウェーブです。次のウェーブで必ず乱入します。";
-          $("pause").textContent = "▶ 再開"; $("speed").textContent = "⏩ x" + speed;
+          renderPace(); renderPace();
           msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < MAX_WAVE ? "目標達成済みです。WAVEから目標を延ばせます。" : "全" + MAX_WAVE + "ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
           return true;
         }
