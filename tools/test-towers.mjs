@@ -92,10 +92,10 @@ check(
   "塔は4種類：弓100G・大砲180G・鉄砲220G・水攻め150G",
   JSON.stringify(btns) ===
     JSON.stringify([
-      ["arrow", "弓 100G"],
-      ["cannon", "大砲 180G"],
-      ["magic", "鉄砲 220G"],
-      ["ice", "水攻め 150G"],
+      ["arrow", "弓 100G 育成Lv1"],
+      ["cannon", "大砲 180G 育成Lv1"],
+      ["magic", "鉄砲 220G 育成Lv1"],
+      ["ice", "水攻め 150G 育成Lv1"],
     ]),
   JSON.stringify(btns),
 );
@@ -147,8 +147,8 @@ check(
   JSON.stringify(lay.map((l) => l.contentMid)),
 );
 check(
-  "名前と価格は2行（折り返しでずれない）",
-  lay.every((l) => l.lines === 2),
+  "名前・価格・種類育成Lvは3行（折り返しでずれない）",
+  lay.every((l) => l.lines === 3),
   JSON.stringify(lay.map((l) => l.lines)),
 );
 check(

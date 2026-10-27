@@ -110,7 +110,7 @@ const loseDefense = (page) =>
 let { page, errors, context } = await newContext();
 
 console.log("■ 反撃が起きる");
-check("反撃がなければお知らせは出ない", !(await page.isVisible("#counterBanner")));
+check("反撃がなければお知らせは出ない", !(await page.isVisible("#mapNotice")));
 let r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi;
   a.setCounterRng(() => 0); // 必ず反撃が起きる
@@ -140,8 +140,8 @@ check(
 );
 await page.tap("#battleClose");
 check(
-  "画面上部に反撃中のお知らせ（あと何ウェーブ）",
-  (await page.isVisible("#counterBanner")) && /あと10ウェーブ/.test(await page.textContent("#counterBanner")),
+  "マップ内に反撃通知（あと何ウェーブ）",
+  (await page.isVisible("#mapNotice")) && /あと10ウェーブ/.test(await page.textContent("#mapNotice")),
 );
 check("反撃を保存", (await stored(page, CKEY)).counter.province === "owari");
 if (shots) await page.screenshot({ path: path.join(shots, "k1-banner.png") });
@@ -173,19 +173,19 @@ await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 check(
   "再読み込みしても反撃は続く",
-  (await page.isVisible("#counterBanner")) &&
+  (await page.isVisible("#mapNotice")) &&
     !!(await page.evaluate(() => WD_DEBUG.squadApi.activeCounter())),
 );
 await clearWaves(page, 3);
 check(
   "ウェーブが進むと残りが減る（あと7ウェーブ）",
-  /あと7ウェーブ/.test(await page.textContent("#counterBanner")),
+  /あと7ウェーブ/.test(await page.textContent("#mapNotice")),
 );
 await page.tap("#reset");
 check(
   "「最初から」でやり直しても反撃は続く（奪われない・撃退にもならない）",
   !!(await page.evaluate(() => WD_DEBUG.squadApi.activeCounter())) &&
-    /あと10ウェーブ/.test(await page.textContent("#counterBanner")),
+    /あと10ウェーブ/.test(await page.textContent("#mapNotice")),
 );
 
 console.log("■ 守り抜く");
@@ -207,7 +207,7 @@ const t1 = (await stored(page, WKEY)).tickets;
 // ウェーブ10のクリアでは、2ウェーブごとのガチャ券も入る
 check("撃退の報酬：ガチャ券 +1", t1 - t0 === 1 + 5, String(t1 - t0));
 check("撃退を保存（反撃は消える）", (await stored(page, CKEY)).counter === null);
-check("お知らせが消える", !(await page.isVisible("#counterBanner")));
+check("お知らせが消える", !(await page.isVisible("#mapNotice")));
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
@@ -259,7 +259,7 @@ await context.close();
 r = await page.evaluate(() => WD_DEBUG.squadApi.activeCounter());
 check(
   "領土でない国への反撃（不正な保存データ）は無視する",
-  r === null && !(await page.isVisible("#counterBanner")) && errors.length === 0,
+  r === null && !(await page.isVisible("#mapNotice")) && errors.length === 0,
 );
 await context.close();
 ({ page, errors, context } = await newContext({
