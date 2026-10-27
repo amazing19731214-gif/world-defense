@@ -138,8 +138,8 @@ r = await page.evaluate(() => ({
   q: (document.getElementById("mapBody").textContent.match(/？？？/g) || []).length,
 }));
 check(
-  "見つけた秘境（比叡山）だけ「討伐に出陣」ボタン、未発見は ？？？",
-  r.btns.join() === "hiei:false" && r.q === 2,
+  "見つけた秘境（比叡山）と、最初から場所のわかる真・八岐大蛇だけ「討伐に出陣」ボタン、未発見は ？？？",
+  r.btns.join() === "orochi:false,hiei:false" && r.q === 2,
   JSON.stringify(r),
 );
 await page.tap('[data-boss-go="hiei"]');

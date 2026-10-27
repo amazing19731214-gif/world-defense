@@ -2070,6 +2070,9 @@
         font-size: 13px;
       }
       /* 五畿七道をおおよその位置に並べた簡易地図 */
+      .secret-card.orochi {
+        border-color: #ff5f8a;
+      }
       .road-map {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -2447,7 +2450,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v63（八玉の交換：復活の書・召喚の書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v65（三種の神器・真・八岐大蛇）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4590,7 +4593,7 @@ OFF</button>
           try {
             return !!(
               conquestMeta.tenka &&
-              Object.keys(BOSSES).every((id) => conquestMeta.bosses[id] && conquestMeta.bosses[id].wins > 0)
+              BIG_BOSSES.every((id) => conquestMeta.bosses[id] && conquestMeta.bosses[id].wins > 0)
             );
           } catch (err) {
             return false; // 起動の途中（全国の記録を読む前）は未解放として扱う
@@ -4964,7 +4967,7 @@ OFF</button>
             for (const [id, n] of Object.entries(o.used)) if (WARLORDS[id] && int(n, 1e6) > 0) used[id] = int(n, 1e6);
           const bossRewards = {};
           if (o.bossRewards && typeof o.bossRewards === "object")
-            for (const id of ["hiei", "yomi", "fuji", "tenka"]) if (o.bossRewards[id] === true) bossRewards[id] = true; // tenka：天下統一の爆炎の鉄砲
+            for (const id of ["hiei", "yomi", "fuji", "tenka", "orochi"]) if (o.bossRewards[id] === true) bossRewards[id] = true; // tenka：天下統一の爆炎の鉄砲
           // 旧版で「受領済み」だけ残り、上限処理で消えた限定報酬も復元する。
           for (const boss of Object.keys(bossRewards)) {
             const reward = Object.keys(GEAR).find((id) => GEAR[id].boss === boss);
@@ -4988,6 +4991,7 @@ OFF</button>
             scrolls: Object.fromEntries(
               ["revive", "summon"].map((k) => [k, int(o.scrolls && o.scrolls[k], 99)]).filter(([, n]) => n > 0),
             ), // 八玉で作った書（復活の書・召喚の書）
+            treasures: Object.fromEntries(["kusanagi", "yata", "magatama"].filter((k) => o.treasures && o.treasures[k] === true).map((k) => [k, true])), // 三種の神器（ずっと持つ）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -6118,6 +6122,28 @@ OFF</button>
           summon: { name: "召喚の書", icon: "📗", text: "好きなネームド兵士を1人、Lv1・固有スキルつきで召喚する（同じ人物は1人まで）" },
         };
         const SCROLL_MAX = 99;
+        // 三種の神器：八玉を8種類1つずつ使って1つ作る。装備とは別の宝物で、ずっと持つ（売れない・なくならない・1つずつ）。
+        // 真・八岐大蛇の特殊な攻撃を1つずつ封じる
+        const TREASURES = {
+          kusanagi: { name: "草薙の剣", icon: "🗡️", text: "真・八岐大蛇の再生を封じる" },
+          yata: { name: "八咫鏡", icon: "🪞", text: "真・八岐大蛇の幻惑を防ぐ" },
+          magatama: { name: "八尺瓊勾玉", icon: "🟢", text: "真・八岐大蛇の魂喰い（回復の封印）を防ぐ" },
+        };
+        const hasTreasure = (k) => !!(forgeSave().treasures || {})[k];
+        const treasureCount = () => Object.keys(TREASURES).filter(hasTreasure).length;
+        function craftTreasure(k) {
+          if (!TREASURES[k]) return "その宝物は作れません。";
+          if (hasTreasure(k)) return TREASURES[k].name + "はもう持っています（ずっと持つ宝物です）。";
+          if (!gemsComplete()) return "八玉が8種類そろっていません（" + gemKinds() + "/8）。";
+          const F = forgeSave(),
+            before = { gems: Object.assign({}, F.gems), treasures: Object.assign({}, F.treasures) };
+          for (const g of GEMS) if (--F.gems[g.k] <= 0) delete F.gems[g.k];
+          F.treasures = Object.assign({}, F.treasures, { [k]: true });
+          if (persistHeroes()) return null;
+          F.gems = before.gems;
+          F.treasures = before.treasures;
+          return "保存できなかったので作りませんでした（八玉は元のまま）。";
+        }
         const scrollCount = (k) => ((forgeSave().scrolls || {})[k] || 0);
         const gemsComplete = () => GEMS.every((g) => gemCount(g.k) > 0);
         function craftScroll(k) {
@@ -12556,7 +12582,30 @@ OFF</button>
                   ">作る</button></div>",
               )
               .join("") +
-            '<p class="muted"><small>三種の神器は、のちの段階で追加します。</small></p>';
+            '<h3 class="hg-h">⛩️ 三種の神器 <small>' +
+            treasureCount() +
+            "/3（八玉8種類を1つずつ使う・ずっと持つ宝物）</small></h3>" +
+            Object.entries(TREASURES)
+              .map(
+                ([k, t]) =>
+                  '<div class="pick-row' +
+                  (hasTreasure(k) ? " got" : "") +
+                  '"><span>' +
+                  t.icon +
+                  " <b>" +
+                  t.name +
+                  "</b>" +
+                  (hasTreasure(k) ? ' <small class="saved">所持</small>' : "") +
+                  "<br><small>" +
+                  esc(t.text) +
+                  "</small></span>" +
+                  (hasTreasure(k)
+                    ? "<button disabled>所持</button>"
+                    : '<button data-treasure-craft="' + k + '"' + (ok ? "" : " disabled") + ">作る</button>") +
+                  "</div>",
+              )
+              .join("") +
+            (treasureCount() === 3 ? '<p class="saved"><small>三種の神器がそろった！ 真・八岐大蛇に挑む準備ができた。</small></p>' : "");
           const own = Object.keys(GEM_CRAFT).filter((k) => scrollCount(k) > 0);
           if (!own.length) return html;
           html += '<h3 class="hg-h">📜 書を使う <small>（ウェーブの合間に）</small></h3>' + (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
@@ -13051,7 +13100,13 @@ OFF</button>
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = gearPickFruit = null;
           else if (d.lbookPick) gearPickLBook = +d.lbookPick;
-          else if (d.scrollCraft) {
+          else if (d.treasureCraft) {
+            err = craftTreasure(d.treasureCraft);
+            if (!err) {
+              gearNote = "⛩️ " + TREASURES[d.treasureCraft].name + "を作りました（ずっと持つ宝物）。";
+              toast(gearNote);
+            }
+          } else if (d.scrollCraft) {
             err = craftScroll(d.scrollCraft);
             if (!err) gearNote = GEM_CRAFT[d.scrollCraft].icon + " " + GEM_CRAFT[d.scrollCraft].name + "を作りました（八玉を8種類1つずつ使いました）。";
           } else if (d.scrollUse) gemUse = { k: d.scrollUse, pick: null };
@@ -15100,6 +15155,33 @@ OFF</button>
               ? provinceRows(list)
               : '<p class="muted">' + (tenka ? "全国を制覇しました。演習は各国から選べます。" : "攻略できる国がありません。") + "</p>";
           } else {
+            // 最終ボス：最初から場所がわかっていて、いつでも挑める
+            const O = BOSSES.orochi,
+              orec = bossRecord("orochi");
+            html +=
+              '<div class="secret-card orochi"><p><b>⛩️ ' +
+              O.place +
+              "：" +
+              O.name +
+              "</b>" +
+              (orec.wins ? ' <small class="saved">完全クリア（称号「大蛇討伐者」）</small>' : "") +
+              "<br><small>最後の敵。いつでも挑める。推奨 Lv" +
+              O.lv +
+              "（目安）<br>三種の神器：" +
+              Object.entries(TREASURES)
+                .map(([k, t]) => (hasTreasure(k) ? "✅" : "❌") + t.name)
+                .join("・") +
+              "（神器がないと、ほぼ勝てない）<br>討伐 " +
+              orec.wins +
+              "回・挑戦 " +
+              orec.attempts +
+              "回" +
+              (orec.best ? "・最速 " + orec.best + "秒" : "") +
+              "<br>" +
+              O.text +
+              '</small></p><button data-boss-go="orochi"' +
+              (battle ? " disabled" : "") +
+              ">⚔️ 討伐に出陣（攻城編成へ）</button></div>";
             for (const [id, S] of Object.entries(SECRETS)) {
               const found = conquestMeta.secrets[id];
               html += found
@@ -15948,6 +16030,28 @@ OFF</button>
             shards: 15,
             text: "装甲が厚く（装甲無視が効く）、範囲砲撃を使う。HP70%・30%で形態が変わり、最後は必殺の「天魔砲」（予兆あり）と防御形態を切り替える。",
           },
+          // 最終ボス：最初から場所がわかっていて、いつでも挑める。三種の神器で特殊な攻撃を1つずつ封じる。倒すと完全クリア
+          orochi: {
+            name: "真・八岐大蛇",
+            place: "黄泉の最深部",
+            lv: 3000,
+            hp: 3000000,
+            atk: 3000,
+            time: 600,
+            color: "#ff5f8a",
+            reward: null, // 専用装備はない（初めて倒すと「完全クリア」）
+            shards: 30,
+            text: "八つの頭で攻め、攻撃中の頭を叩くと封じられる（冥龍・八岐と同じ）。さらに、強い再生（草薙の剣で封じる）・幻惑（部隊の攻撃が当たらなくなる。八咫鏡で防ぐ）・魂喰い（回復が効かず、魂を吸われる。八尺瓊勾玉で防ぐ）を使う。",
+          },
+        };
+        const BIG_BOSSES = ["hiei", "yomi", "fuji"]; // 三大裏ボス（終盤の解放の条件）
+        const OROCHI = {
+          regen: 0.01, // 草薙の剣がないとき：毎秒、最大HPのこの割合を再生（開いている頭の数に比例・上限なし）
+          illusionEvery: 14, // 幻惑の間隔（秒・2秒前に予兆）
+          illusionTime: 6, // 幻惑の長さ（その部隊の攻撃が当たらない）
+          soulEvery: 10, // 魂喰いの間隔（秒）：全部隊に攻撃の soulPower 倍
+          soulPower: 0.5,
+          clearTickets: 10, // 初めて倒したとき（完全クリア）のガチャ券
         };
         const BOSS_RULES = {
           d: 720, // ボスの立つ位置（道に沿った距離。上下の道が合流した後）
@@ -15970,6 +16074,7 @@ OFF</button>
           conquestMeta.bosses[id] || (conquestMeta.bosses[id] = { attempts: 0, wins: 0, first: 0, best: 0 });
         function bossError(id) {
           if (!BOSSES[id]) return "その秘境はありません。";
+          if (id === "orochi") return null; // 最初から場所がわかっていて、いつでも挑める
           if (!conquestMeta.secrets[id]) return "まだ見つけていない秘境です。";
           return null;
         }
@@ -16002,7 +16107,11 @@ OFF</button>
             sp: 6, // 大技までの秒数
             sp2: 4,
           };
-          if (id === "yomi") {
+          if (id === "orochi") {
+            e.illusionLeft = OROCHI.illusionEvery;
+            e.soulLeft = OROCHI.soulEvery;
+          }
+          if (id === "yomi" || id === "orochi") {
             e.heads = YAMATA_HEADS.map((h) => Object.assign({ hp: D.hp * 0.05, max: D.hp * 0.05, sealed: 0 }, h));
             e.head = 0;
             e.headLeft = 8;
@@ -16058,7 +16167,7 @@ OFF</button>
               pierce = s ? Math.min(0.8, skillSum(s, "armorPierce")) : 0;
             dmg *= 1 - armor * (1 - pierce);
           }
-          if (e.boss === "yomi") {
+          if (yamataLike(e)) {
             const h = e.heads[e.head];
             if (h && !h.sealed) {
               h.hp -= dmg;
@@ -16075,6 +16184,7 @@ OFF</button>
           }
           return dmg;
         }
+        const yamataLike = (e) => e.boss === "yomi" || e.boss === "orochi"; // 八つの頭のボス
         function nextHead(e) {
           for (let i = 1; i <= 8; i++) {
             const k = (e.head + i) % 8;
@@ -16085,6 +16195,40 @@ OFF</button>
             }
           }
           e.headLeft = 3; // 全部封じた：しばらく攻撃が止まる
+        }
+        // 真・八岐大蛇の特殊な攻撃：幻惑（八咫鏡で防ぐ）・魂喰い（八尺瓊勾玉で防ぐ）
+        function orochiTick(B, e, D, dt) {
+          B.soulEat = !hasTreasure("magatama"); // 魂喰い：回復が効かない
+          if ((e.soulLeft -= dt) <= 0) {
+            e.soulLeft = OROCHI.soulEvery;
+            if (B.soulEat) {
+              bossFx("bshock", { x: e.x + BOSS_DX.yomi, y: e.y - 30, r0: 20, r1: 260, col: "#ff5f8a", duration: 0.7 });
+              for (const g of activeGroups(B)) bossBlast(g, D.atk * OROCHI.soulPower, "soul");
+              msg("👻 魂喰い：全部隊の魂が吸われた（回復も効かない）");
+            }
+          }
+          if ((e.illusionLeft -= dt) <= 0 && !B.warn) {
+            e.illusionLeft = OROCHI.illusionEvery;
+            const g = biggestGroup(B);
+            if (!g) return;
+            bossWarn(
+              B,
+              "幻惑の予兆：2秒後に " + g.name + " を惑わす" + (hasTreasure("yata") ? "（八咫鏡が映し返す）" : "（攻撃が当たらなくなる）"),
+              2,
+              g,
+              () => {
+                if (hasTreasure("yata")) {
+                  msg("🪞 八咫鏡が幻惑を映し返した！");
+                  bossFx("bspark", { x: g.x, y: g.y, col: "#fff2a8", seed: B.t });
+                  return;
+                }
+                g.confused = OROCHI.illusionTime;
+                bossFx("bmist", { x: g.x, y: g.y, duration: 1.4 });
+                msg("🌀 " + g.name + " が幻惑された！（" + OROCHI.illusionTime + "秒、攻撃が当たらない）");
+              },
+              "breath",
+            );
+          }
         }
         // ボスの行動（1体だけ）。守備隊の攻撃の代わりに呼ぶ
         function bossTick(B, e, dt) {
@@ -16159,19 +16303,25 @@ OFF</button>
                   "bolt",
                 );
             }
-          } else if (e.boss === "yomi") {
+          } else if (yamataLike(e)) {
             // 封じた頭が戻る
             for (const h of e.heads) if (h.sealed > 0 && (h.sealed -= dt) <= 0) h.sealed = 0;
+            if (e.boss === "orochi") orochiTick(B, e, D, dt);
             if (ratio <= 0.3 && e.phase === 1) {
               e.phase = 2;
               msg("🐉 八岐の再生が強まった！");
               bossFx("bphase", { x: W / 2, y: 200, text: "🐉 八岐の再生が強まった！", col: "#c79bff", duration: 1.1 });
             }
-            // 再生：生きている頭の数に比例。1回の戦いの上限あり
+            // 再生：生きている頭の数に比例。1回の戦いの上限あり（真・八岐大蛇は上限なし・草薙の剣で封じる）
             const open = e.heads.filter((h) => !h.sealed).length,
-              regen = Math.min(e.regenLeft, e.max * (e.phase === 2 ? 0.006 : 0.003) * (open / 8) * dt);
+              regen =
+                e.boss === "orochi"
+                  ? hasTreasure("kusanagi")
+                    ? 0
+                    : e.max * OROCHI.regen * (open / 8) * dt
+                  : Math.min(e.regenLeft, e.max * (e.phase === 2 ? 0.006 : 0.003) * (open / 8) * dt);
             e.hp = Math.min(e.max, e.hp + regen);
-            e.regenLeft -= regen;
+            if (e.boss !== "orochi") e.regenLeft -= regen;
             if (regen > 0) e.regenFx = 0.3; // 紫の光が集まる
             // 頭の交代
             if ((e.headLeft -= dt) <= 0) nextHead(e);
@@ -16314,6 +16464,7 @@ OFF</button>
         function tickGroupAilments(B, dt) {
           for (const g of B.groups) {
             if (g.frozen > 0) g.frozen = Math.max(0, g.frozen - dt);
+            if (g.confused > 0) g.confused = Math.max(0, g.confused - dt);
             if (!(g.poison > 0)) continue;
             g.poison -= dt;
             g.poisonAcc = (g.poisonAcc || 0) + dt;
@@ -16327,9 +16478,19 @@ OFF</button>
         function bossStatusText(e) {
           if (!e) return "";
           if (e.boss === "hiei") return e.phase === 2 ? "怒り（雷撃が激しい）" : "通常";
-          if (e.boss === "yomi") {
+          if (yamataLike(e)) {
             const h = e.heads[e.head],
               sealed = e.heads.filter((x) => x.sealed).length;
+            if (e.boss === "orochi")
+              return (
+                (h && !h.sealed ? "攻撃中：" + h.name : "全部の頭を封じた") +
+                "・封じた頭 " +
+                sealed +
+                "/8・" +
+                Object.values(TREASURES)
+                  .map((t, i) => (hasTreasure(Object.keys(TREASURES)[i]) ? "✅" : "❌") + t.name)
+                  .join(" ")
+              );
             return (
               (h && !h.sealed ? "攻撃中：" + h.name : "全部の頭を封じた") +
               "・封じた頭 " +
@@ -16382,7 +16543,10 @@ OFF</button>
           if (result !== "win") return;
           const F = forgeSave();
           F.bossRewards = F.bossRewards || {};
-          if (!F.bossRewards[id]) {
+          if (!F.bossRewards[id] && !D.reward) {
+            F.bossRewards[id] = true; // 真・八岐大蛇：初めて倒すと完全クリア（装備はない）
+            B.firstClear = true;
+          } else if (!F.bossRewards[id]) {
             F.bossRewards[id] = true;
             const uid = ++F.seq;
             F.items.push({ uid, id: D.reward, owner: null, lock: true }); // 裏ボスの専用装備は最初からロック
@@ -16392,7 +16556,7 @@ OFF</button>
           F.shards = Math.min(99999, F.shards + D.shards);
           B.shards = D.shards;
           persistHeroes();
-          B.tickets = B.firstReward ? BOSS_RULES.firstTickets : BOSS_RULES.repeatTickets;
+          B.tickets = B.firstClear ? OROCHI.clearTickets : B.firstReward ? BOSS_RULES.firstTickets : BOSS_RULES.repeatTickets;
         }
         function canStartBattle() {
           if (training) return "修練場の挑戦中は出陣できません。";
@@ -16829,6 +16993,10 @@ OFF</button>
               s.cd -= dt * (g.frozen > 0 ? 0.5 : 1); // 八岐の氷：攻撃が遅くなる
               if (s.cd > 0) continue;
               const st = battleStats(g, s);
+              if (g.confused > 0 && !c.heal) {
+                s.cd += st.rate; // 幻惑：攻撃が当たらない（空を斬る）
+                continue;
+              }
               if (c.heal) {
                 // 衛生兵：攻城の部隊の中でHPの割合が最も低い味方1人（自分は除く）
                 let best = null,
@@ -16850,7 +17018,7 @@ OFF</button>
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
-                best.m.hp += Math.min(st.heal * healTakenMul(best.m), soldierStats(best.m).maxHp - best.m.hp);
+                if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), soldierStats(best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
                 if (effects.length >= 80) effects.shift();
@@ -17077,7 +17245,7 @@ OFF</button>
             }
           refreshSiege();
           B.report = report;
-          for (const g of B.groups) g.poison = g.frozen = 0;
+          for (const g of B.groups) g.poison = g.frozen = g.confused = 0;
           B.warn = null;
           for (let i = effects.length - 1; i >= 0; i--) if (effects[i].boss) effects.splice(i, 1); // ボスの演出は残さない
           if (B.boss) {
@@ -17148,7 +17316,12 @@ OFF</button>
             rec = B.boss && bossRecord(B.boss);
           let html =
             (BD
-              ? (B.firstReward
+              ? (B.firstClear
+                  ? '<div class="tenka"><p class="tenka-title">⛩️ 完全クリア！</p><p>' +
+                    esc(BD.name) +
+                    "を討ち果たし、八岐の怨念を鎮めた。<br>称号「大蛇討伐者」を得た（🗾 全国 → 🗻 秘境に記録）</p></div>"
+                  : "") +
+                (B.firstReward
                   ? '<div class="tenka"><p class="tenka-title">🗻 初討伐！</p><p>専用の伝説装備「' +
                     GEAR[B.firstReward].name +
                     "」を手に入れた（🎒 装備倉庫）<br><small>" +
@@ -17160,7 +17333,7 @@ OFF</button>
                     B.shards +
                     "・🎴 ガチャ券 +" +
                     B.tickets +
-                    (B.firstReward ? "" : "（専用装備は初回だけ）") +
+                    (B.firstReward || !BD.reward ? "" : "（専用装備は初回だけ）") +
                     "</p>"
                   : "") +
                 "<p>討伐 " +
@@ -17362,7 +17535,8 @@ OFF</button>
                             "人" +
                             (g.guard > 0 ? "🛡" : "") +
                             (g.poison > 0 ? "☠毒" : "") +
-                            (g.frozen > 0 ? "❄凍" : "")),
+                            (g.frozen > 0 ? "❄凍" : "") +
+                            (g.confused > 0 ? "🌀幻" : "")),
                   )
                   .join("・") +
                 "</p>",
@@ -17403,7 +17577,7 @@ OFF</button>
         // 視差効果を減らす設定（reduced）では、呼吸・ゆれ・点滅・画面の閃光を止め、形と文字だけで伝える
         const BP = 5;
         // 絵の中心を立ち位置（攻撃の判定の位置）より右（奥）にずらす：前で止まる部隊と重ならないように
-        const BOSS_DX = { hiei: 105, yomi: 90, fuji: 80 };
+        const BOSS_DX = { hiei: 105, yomi: 90, fuji: 80, orochi: 90 };
         const byakkoHead = (e) => ({ x: e.x + BOSS_DX.hiei - 18.5 * BP, y: e.y + 8 - 16.4 * BP });
         const tenmaChest = (e) => ({ x: e.x + BOSS_DX.fuji, y: e.y + 10 - 25.5 * BP });
         const tenmaMuzzle = (e) => ({ x: e.x + BOSS_DX.fuji - 22 * BP, y: e.y + 10 - 15.5 * BP });
@@ -17537,6 +17711,18 @@ OFF</button>
             bx = e.x + BOSS_DX.yomi,
             by = e.y - 66;
           return { bx, by, x: bx + Math.cos(a) * (len + lunge), y: by + Math.sin(a) * (len + lunge) + bob + droop };
+        }
+        // 真・八岐大蛇は、八岐の絵を赤く染めて描く（filter が使えない環境ではそのまま）
+        function drawYamataTinted(e, alpha) {
+          if (e.boss !== "orochi") return drawYamata(e, alpha);
+          ctx.save();
+          try {
+            ctx.filter = "hue-rotate(110deg) saturate(1.5) brightness(1.05)";
+          } catch (err) {
+            /* 使えない環境 */
+          }
+          drawYamata(e, alpha);
+          ctx.restore();
         }
         function drawYamata(e, alpha) {
           const T = visualTime,
@@ -17745,12 +17931,12 @@ OFF</button>
             alpha,
           });
           if (e.boss === "hiei") drawByakko(e, alpha);
-          else if (e.boss === "yomi") drawYamata(e, alpha);
+          else if (yamataLike(e)) drawYamataTinted(e, alpha);
           else drawTenma(e, alpha, B);
           // 頭上のHPバー
           const r = Math.max(0, e.hp / e.max),
             cx = e.x + BOSS_DX[e.boss],
-            top = e.y - (e.boss === "fuji" ? 262 : e.boss === "yomi" ? 232 : 150);
+            top = e.y - (e.boss === "fuji" ? 262 : yamataLike(e) ? 232 : 150);
           ctx.fillStyle = "#1f2a22dd";
           ctx.fillRect(cx - 62, top, 124, 9);
           ctx.fillStyle = "#ed6654";
@@ -17768,7 +17954,7 @@ OFF</button>
           ctx.font = "bold 30px system-ui";
           ctx.textAlign = "center";
           ctx.fillStyle = D.color;
-          ctx.fillText((B.boss === "hiei" ? "⚡ " : B.boss === "yomi" ? "🐉 " : "🤖 ") + D.name + " 出現", W / 2, 148);
+          ctx.fillText((B.boss === "hiei" ? "⚡ " : B.boss === "yomi" ? "🐉 " : B.boss === "orochi" ? "⛩️ " : "🤖 ") + D.name + " 出現", W / 2, 148);
           ctx.restore();
         }
         // 予兆の間の演出（落雷の光・炎の溜め・炉の充填）
@@ -17893,7 +18079,7 @@ OFF</button>
             if (p < 0.6) {
               const B = { t: 9, warn: null };
               if (ghost.boss === "hiei") drawByakko(ghost, 1 - p / 0.6);
-              else if (ghost.boss === "yomi") drawYamata(ghost, 1 - p / 0.6);
+              else if (yamataLike(ghost)) drawYamataTinted(ghost, 1 - p / 0.6);
               else drawTenma(ghost, 1 - p / 0.6, B);
             }
             ctx.globalAlpha = 1 - p;
@@ -18745,6 +18931,9 @@ OFF</button>
             },
             gemApi: {
               GEM_CRAFT,
+              TREASURES,
+              craftTreasure,
+              treasures: () => Object.assign({}, forgeSave().treasures),
               craftScroll,
               summonNamed,
               reviveFallen,
