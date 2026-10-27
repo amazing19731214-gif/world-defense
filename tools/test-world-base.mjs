@@ -51,8 +51,8 @@ let r = await page.evaluate((api) => {
   };
 }, api);
 check(
-  "今は「日本」の章だけ・日本は68か国",
-  r.order.join() === "japan" && r.japan === 68 && r.all === 68 && r.chapters.join() === "japan",
+  "日本68か国と朝鮮半島8拠点・全76拠点",
+  r.order.join() === "japan,korea" && r.japan === 68 && r.all === 76 && r.chapters.join() === "japan,korea",
   JSON.stringify(r),
 );
 

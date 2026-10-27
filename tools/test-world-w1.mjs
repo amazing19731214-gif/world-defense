@@ -44,7 +44,7 @@ try{
  let r=await p.evaluate(()=>{const a=WD_DEBUG.squadApi;return {ready:a.tsushimaReady(),open:a.canAttackProvince('tsushima'),err:a.setTarget('kaneishi'),target:a.targetCastleId()};});
  check('壱岐だけの制圧では対馬を攻略できない',!r.ready&&!r.open&&/67か国/.test(r.err),r);
  check('保存済み目標を使っても対馬の条件を迂回しない',r.target!=='kaneishi',r);
- await p.locator('#mapOpen').tap();await p.locator('[data-map-road="saikaido"]').tap();await p.locator('[data-map-prov="tsushima"]').tap();
+ await p.locator('#mapOpen').tap();await p.locator('[data-map-chapter="japan"]').tap();await p.locator('[data-map-road="saikaido"]').tap();await p.locator('[data-map-prov="tsushima"]').tap();
  check('対馬の出陣ボタンは無効・解放条件を表示',await p.locator('[data-map-go="kaneishi"]').isDisabled()&&/対馬以外の日本67か国/.test(await p.locator('#mapBody').innerText()));
  check('条件を満たさない旧目標に攻略目標の印を表示しない',!((await p.locator('[data-map-prov="tsushima"]').innerText()).includes('🎯')));
  check('390pxで地図の横はみ出しなし',await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
