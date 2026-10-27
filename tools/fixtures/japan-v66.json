@@ -1,0 +1,543 @@
+{
+  "order": [
+    "mikawa",
+    "owari",
+    "totomi",
+    "mino",
+    "suruga",
+    "shinano",
+    "kai",
+    "ise",
+    "musashi",
+    "omi",
+    "hida",
+    "kozuke",
+    "echizen",
+    "etchu",
+    "echigo",
+    "yamashiro",
+    "yamato",
+    "iga",
+    "shima",
+    "izu",
+    "sagami",
+    "shimosa",
+    "shimotsuke",
+    "mutsu",
+    "dewa",
+    "wakasa",
+    "kaga",
+    "noto",
+    "sado",
+    "tanba",
+    "kii",
+    "kawachi",
+    "izumi",
+    "settsu",
+    "awaBoso",
+    "kazusa",
+    "hitachi",
+    "tango",
+    "tajima",
+    "harima",
+    "awaShikoku",
+    "inaba",
+    "mimasaka",
+    "bizen",
+    "awaji",
+    "sanuki",
+    "iyo",
+    "tosa",
+    "hoki",
+    "bitchu",
+    "aki",
+    "bungo",
+    "izumo",
+    "iwami",
+    "oki",
+    "bingo",
+    "suo",
+    "chikuzen",
+    "chikugo",
+    "buzen",
+    "higo",
+    "hyuga",
+    "nagato",
+    "hizen",
+    "osumi",
+    "satsuma",
+    "iki",
+    "tsushima"
+  ],
+  "rows": [
+    {
+      "p": "owari",
+      "castle": "kiyosu",
+      "level": 5,
+      "hp": 1600,
+      "power": 1
+    },
+    {
+      "p": "totomi",
+      "castle": "hikuma",
+      "level": 10,
+      "hp": 2618,
+      "power": 1.6
+    },
+    {
+      "p": "mino",
+      "castle": "inabayama",
+      "level": 15,
+      "hp": 3661,
+      "power": 2.08
+    },
+    {
+      "p": "suruga",
+      "castle": "sunpu",
+      "level": 20,
+      "hp": 4551,
+      "power": 2.56
+    },
+    {
+      "p": "shinano",
+      "castle": "fukashi",
+      "level": 25,
+      "hp": 5451,
+      "power": 3.04
+    },
+    {
+      "p": "kai",
+      "castle": "tsutsujigasaki",
+      "level": 30,
+      "hp": 6600,
+      "power": 3.52
+    },
+    {
+      "p": "ise",
+      "castle": "okochi",
+      "level": 35,
+      "hp": 4734,
+      "power": 4
+    },
+    {
+      "p": "musashi",
+      "castle": "kawagoe",
+      "level": 40,
+      "hp": 5128,
+      "power": 4.333333333333333
+    },
+    {
+      "p": "omi",
+      "castle": "kannonji",
+      "level": 45,
+      "hp": 7179,
+      "power": 4.666666666666667
+    },
+    {
+      "p": "hida",
+      "castle": "matsukura",
+      "level": 50,
+      "hp": 5917,
+      "power": 5
+    },
+    {
+      "p": "kozuke",
+      "castle": "minowa",
+      "level": 55,
+      "hp": 8205,
+      "power": 5.333333333333333
+    },
+    {
+      "p": "echizen",
+      "castle": "ichijodani",
+      "level": 60,
+      "hp": 8718,
+      "power": 5.666666666666667
+    },
+    {
+      "p": "etchu",
+      "castle": "toyama",
+      "level": 65,
+      "hp": 7101,
+      "power": 6
+    },
+    {
+      "p": "echigo",
+      "castle": "kasugayama",
+      "level": 70,
+      "hp": 9274,
+      "power": 6.285714285714286
+    },
+    {
+      "p": "yamashiro",
+      "castle": "nijo",
+      "level": 75,
+      "hp": 9075,
+      "power": 6.571428571428571
+    },
+    {
+      "p": "yamato",
+      "castle": "shigisan",
+      "level": 80,
+      "hp": 9469,
+      "power": 6.857142857142857
+    },
+    {
+      "p": "iga",
+      "castle": "maruyama",
+      "level": 85,
+      "hp": 7823,
+      "power": 7.142857142857142
+    },
+    {
+      "p": "shima",
+      "castle": "nakiri",
+      "level": 90,
+      "hp": 8136,
+      "power": 7.428571428571429
+    },
+    {
+      "p": "izu",
+      "castle": "nirayama",
+      "level": 95,
+      "hp": 8449,
+      "power": 7.714285714285714
+    },
+    {
+      "p": "sagami",
+      "castle": "odawara",
+      "level": 100,
+      "hp": 10573,
+      "power": 8
+    },
+    {
+      "p": "shimosa",
+      "castle": "motosakura",
+      "level": 105,
+      "hp": 9075,
+      "power": 8.285714285714286
+    },
+    {
+      "p": "shimotsuke",
+      "castle": "utsunomiya",
+      "level": 110,
+      "hp": 9388,
+      "power": 8.571428571428571
+    },
+    {
+      "p": "mutsu",
+      "castle": "kurokawa",
+      "level": 115,
+      "hp": 9364,
+      "power": 8.857142857142858
+    },
+    {
+      "p": "dewa",
+      "castle": "yamagata",
+      "level": 120,
+      "hp": 10014,
+      "power": 9.142857142857142
+    },
+    {
+      "p": "wakasa",
+      "castle": "nochiseyama",
+      "level": 125,
+      "hp": 10327,
+      "power": 9.428571428571429
+    },
+    {
+      "p": "kaga",
+      "castle": "oyama",
+      "level": 130,
+      "hp": 13415,
+      "power": 9.714285714285714
+    },
+    {
+      "p": "noto",
+      "castle": "nanao",
+      "level": 135,
+      "hp": 13810,
+      "power": 10
+    },
+    {
+      "p": "sado",
+      "castle": "kawarada",
+      "level": 140,
+      "hp": 11265,
+      "power": 10.285714285714285
+    },
+    {
+      "p": "tanba",
+      "castle": "yakami",
+      "level": 145,
+      "hp": 14599,
+      "power": 10.571428571428571
+    },
+    {
+      "p": "kii",
+      "castle": "saika",
+      "level": 150,
+      "hp": 11891,
+      "power": 10.857142857142858
+    },
+    {
+      "p": "kawachi",
+      "castle": "iimoriyama",
+      "level": 155,
+      "hp": 11143,
+      "power": 11.142857142857142
+    },
+    {
+      "p": "izumi",
+      "castle": "kishiwada",
+      "level": 160,
+      "hp": 11429,
+      "power": 11.428571428571429
+    },
+    {
+      "p": "settsu",
+      "castle": "ishiyama",
+      "level": 165,
+      "hp": 14868,
+      "power": 11.714285714285715
+    },
+    {
+      "p": "awaBoso",
+      "castle": "okamoto",
+      "level": 170,
+      "hp": 12000,
+      "power": 12
+    },
+    {
+      "p": "kazusa",
+      "castle": "kururi",
+      "level": 175,
+      "hp": 12286,
+      "power": 12.285714285714285
+    },
+    {
+      "p": "hitachi",
+      "castle": "ota",
+      "level": 180,
+      "hp": 12527,
+      "power": 12.571428571428571
+    },
+    {
+      "p": "tango",
+      "castle": "tatebeyama",
+      "level": 185,
+      "hp": 12857,
+      "power": 12.857142857142858
+    },
+    {
+      "p": "tajima",
+      "castle": "konosumi",
+      "level": 190,
+      "hp": 13143,
+      "power": 13.142857142857142
+    },
+    {
+      "p": "harima",
+      "castle": "himeji",
+      "level": 195,
+      "hp": 13429,
+      "power": 13.428571428571429
+    },
+    {
+      "p": "awaShikoku",
+      "castle": "shozui",
+      "level": 200,
+      "hp": 13714,
+      "power": 13.714285714285715
+    },
+    {
+      "p": "inaba",
+      "castle": "tottori",
+      "level": 205,
+      "hp": 16522,
+      "power": 14
+    },
+    {
+      "p": "mimasaka",
+      "castle": "takada",
+      "level": 210,
+      "hp": 13310,
+      "power": 14.285714285714285
+    },
+    {
+      "p": "bizen",
+      "castle": "tenjinyama",
+      "level": 215,
+      "hp": 13576,
+      "power": 14.571428571428571
+    },
+    {
+      "p": "awaji",
+      "castle": "sumoto",
+      "level": 220,
+      "hp": 13842,
+      "power": 14.857142857142858
+    },
+    {
+      "p": "sanuki",
+      "castle": "sogo",
+      "level": 225,
+      "hp": 14108,
+      "power": 15.142857142857142
+    },
+    {
+      "p": "iyo",
+      "castle": "yuzuki",
+      "level": 230,
+      "hp": 14374,
+      "power": 15.428571428571429
+    },
+    {
+      "p": "tosa",
+      "castle": "oko",
+      "level": 235,
+      "hp": 14450,
+      "power": 15.714285714285715
+    },
+    {
+      "p": "hoki",
+      "castle": "uejishi",
+      "level": 240,
+      "hp": 14400,
+      "power": 16
+    },
+    {
+      "p": "bitchu",
+      "castle": "bitchumatsuyama",
+      "level": 245,
+      "hp": 17914,
+      "power": 16.285714285714285
+    },
+    {
+      "p": "aki",
+      "castle": "koriyama",
+      "level": 250,
+      "hp": 18029,
+      "power": 16.57142857142857
+    },
+    {
+      "p": "bungo",
+      "castle": "funai",
+      "level": 255,
+      "hp": 14828,
+      "power": 16.857142857142858
+    },
+    {
+      "p": "izumo",
+      "castle": "gassantoda",
+      "level": 260,
+      "hp": 17591,
+      "power": 17.142857142857142
+    },
+    {
+      "p": "iwami",
+      "castle": "sanbonmatsu",
+      "level": 265,
+      "hp": 14758,
+      "power": 17.42857142857143
+    },
+    {
+      "p": "oki",
+      "castle": "kofuo",
+      "level": 270,
+      "hp": 15000,
+      "power": 17.714285714285715
+    },
+    {
+      "p": "bingo",
+      "castle": "kannabe",
+      "level": 275,
+      "hp": 15242,
+      "power": 18
+    },
+    {
+      "p": "suo",
+      "castle": "konomine",
+      "level": 280,
+      "hp": 15484,
+      "power": 18.285714285714285
+    },
+    {
+      "p": "chikuzen",
+      "castle": "tachibana",
+      "level": 285,
+      "hp": 19470,
+      "power": 18.57142857142857
+    },
+    {
+      "p": "chikugo",
+      "castle": "yanagawa",
+      "level": 290,
+      "hp": 19770,
+      "power": 18.857142857142858
+    },
+    {
+      "p": "buzen",
+      "castle": "kawara",
+      "level": 295,
+      "hp": 16210,
+      "power": 19.142857142857142
+    },
+    {
+      "p": "higo",
+      "castle": "hitoyoshi",
+      "level": 300,
+      "hp": 16452,
+      "power": 19.42857142857143
+    },
+    {
+      "p": "hyuga",
+      "castle": "tonokori",
+      "level": 305,
+      "hp": 16694,
+      "power": 19.714285714285715
+    },
+    {
+      "p": "nagato",
+      "castle": "katsuyama",
+      "level": 310,
+      "hp": 15935,
+      "power": 20
+    },
+    {
+      "p": "hizen",
+      "castle": "muranaka",
+      "level": 315,
+      "hp": 16192,
+      "power": 20.285714285714285
+    },
+    {
+      "p": "osumi",
+      "castle": "koyama",
+      "level": 320,
+      "hp": 16390,
+      "power": 20.57142857142857
+    },
+    {
+      "p": "satsuma",
+      "castle": "uchijo",
+      "level": 325,
+      "hp": 20731,
+      "power": 20.857142857142858
+    },
+    {
+      "p": "iki",
+      "castle": "kameoka",
+      "level": 330,
+      "hp": 16846,
+      "power": 21.142857142857142
+    },
+    {
+      "p": "tsushima",
+      "castle": "kaneishi",
+      "level": 335,
+      "hp": 16592,
+      "power": 21.42857142857143
+    }
+  ]
+}
