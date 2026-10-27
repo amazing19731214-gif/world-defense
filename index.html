@@ -2455,7 +2455,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v68（世界地図・朝鮮半島）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v69（世界地図・中国編）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -9691,11 +9691,12 @@ OFF</button>
           ctx.save();
           ctx.textAlign = "center";
           ctx.font = "bold 12px system-ui";
-          const label = (e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : "") + "Lv" + e.lv,
+          const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole),
+            label = (R ? R.mark + " " : e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : "") + "Lv" + e.lv,
             w = ctx.measureText(label).width + 8;
           ctx.fillStyle = e.role ? "#b8322bee" : "#1f2a22cc";
           ctx.fillRect(e.x - w / 2, y - 14, w, 14);
-          ctx.fillStyle = e.role ? "#fff1d0" : "#ffe3a0";
+          ctx.fillStyle = R ? R.color : e.role ? "#fff1d0" : "#ffe3a0";
           ctx.fillText(label, e.x, y - 3);
           ctx.restore();
         }
@@ -9763,7 +9764,11 @@ OFF</button>
           if (reduced && list === set.walk) idx = 0;
           const im = imgReady(list[idx]) ? list[idx] : set.walk[0];
           ellipse(e.x + 2, e.y + 10, e.r + 2, 4, "#2e523855");
+          ctx.save();
+          const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole);
+          if (R) ctx.filter = R.tint;
           const h = drawEnemyFrame(e.kind, im, e.x, e.y, e.face || 1, 1, set);
+          ctx.restore();
           // 体力バー（画像の上）
           const top = e.y + 10 - h - 6,
             bw = Math.max(24, e.r * 2);
@@ -14802,7 +14807,7 @@ OFF</button>
               TC.towers.length +
               "基・守備兵 " +
               TC.garrison.reduce((n, g) => n + g.n, 0) +
-              "人" +
+              "人" + (siegeRoleText(TC) ? "<br>" + siegeRoleText(TC) : "") +
               (done
                 ? "・演習として何度でも攻められます（報酬なし・経験値あり）"
                 : TC.reward && TC.reward.tickets
@@ -15028,7 +15033,7 @@ OFF</button>
               C.power.toFixed(2) +
               "・推奨 Lv" +
               recLevel(C) +
-              "（目安・制限なし）・敵Lv" + C.enemyLevel + "<br>装甲：兵種と敵Lvで変化（槍兵が最も硬い）。貫通・装甲無視が有効。<br>城の耐久 " +
+              "（目安・制限なし）・敵Lv" + C.enemyLevel + "<br>装甲：兵種・敵Lv・重装で変化。貫通・装甲無視が有効。" + (siegeRoleText(C) ? "<br>" + siegeRoleText(C) : "") + "<br>城の耐久 " +
               C.hp +
               "・防衛塔 " +
               C.towers.length +
@@ -15097,14 +15102,23 @@ OFF</button>
             })
             .join("");
         }
+        const chapterUnlockText = (cid) => CHAPTERS[cid].requiredChapter === "japan" ? "日本を天下統一すると解放" : CHAPTERS[CHAPTERS[cid].requiredChapter].name + "を制覇すると解放";
+        const chapterLevelsText = (cid) => {
+          const levels = Object.values(CHAPTERS[cid].levels || {}).filter(Number.isFinite);
+          return cid === "japan" ? "5〜335" : Math.min(...levels) + "〜" + Math.max(...levels);
+        };
+        const chapterClearNextText = (cid) => {
+          const next = CHAPTER_ORDER[CHAPTER_ORDER.indexOf(cid) + 1];
+          return next && chapterUnlocked(next) ? '🌏 世界から次の章「' + CHAPTERS[next].name + '」へ進めます。' : '次の章は今後追加予定です。';
+        };
         function renderWorld() {
           let html = (mapNote ? '<p class="saved">' + esc(mapNote) + '</p>' : '') + '<p>日本から海を越えて、新しい章へ。育てた兵士・武将・装備をそのまま使えます。</p><div class="world-chapters">';
           for (const [i, cid] of CHAPTER_ORDER.entries()) {
             const CH = CHAPTERS[cid], list = chapterProvinces(cid), open = chapterUnlocked(cid), n = ownedCount(list);
             html += '<button class="world-chapter" data-map-chapter="' + cid + '"' + (open ? '' : ' disabled') + '><b>第' + (i + 1) + '章 ' + (open ? CH.icon + ' ' + CH.name : '🔒 ？？？') + '</b><small>';
-            if (!open) html += '日本を天下統一すると解放';
+            if (!open) html += chapterUnlockText(cid);
             else {
-              html += '制圧 ' + n + '/' + list.length + (cid === "japan" ? 'か国・推奨Lv5〜335' : '拠点・推奨Lv350〜600');
+              html += '制圧 ' + n + '/' + list.length + (cid === "japan" ? 'か国' : '拠点') + '・推奨Lv' + chapterLevelsText(cid);
               if (cid === "japan") html += (conquestMeta.tenka || isTenka()) ? '・天下統一達成' : '';
               else html += conquestMeta.world.cleared[cid] ? '・初回制覇済み' : '・初回制覇で🎴ガチャ券' + CH.clearTickets + '枚';
             }
@@ -15136,7 +15150,7 @@ OFF</button>
             all +
             "か国の制覇で天下統一（🎴 ガチャ券 +" +
             TENKA_TICKETS +
-            "）。推奨レベルは目安で、制限はありません。地図は位置をおおまかに表した簡略図です。</small></p>" : '<p class="muted"><small>対馬から釜山航路へ。領土の隣の拠点を攻略しよう。装甲の高い槍兵には貫通が有効。8拠点の初回制覇で🎴ガチャ券5枚。</small></p>') +
+            "）。推奨レベルは目安で、制限はありません。地図は位置をおおまかに表した簡略図です。</small></p>" : '<p class="muted"><small>' + esc(CH.intro) + list.length + '拠点の初回制覇で🎴ガチャ券' + CH.clearTickets + '枚。</small></p>') +
             '<div class="forge-kinds map-tabs" role="group" aria-label="表示">' +
             [
               ["map", "🗾 地方"],
@@ -15398,15 +15412,28 @@ OFF</button>
           armorRole: { goblin: 0.25, wolf: 0.5, knight: 1, dragon: 0.2, boss: 0.8 },
           armor: (lv) => Math.max(0, 0.1 * (Math.min(lv, 100) - 5) + 0.02 * Math.max(0, lv - 100)),
         };
-        function siegeEnemyStats(kind, lv) {
-          const power = castlePowerAtLevel(lv);
+        // 攻城戦だけの敵役割。元の兵種を保ち、通常防衛戦・修練場へは持ち込まない。
+        const SIEGE_ENEMY_ROLES = {
+          crossbow: { kind: "dragon", name: "弩兵", mark: "弩", hp: 1, damage: 1.45, range: 210, rate: 2.2, armor: 0, armorCap: 30, color: "#92e0e8", tint: "hue-rotate(135deg)" },
+          heavyCavalry: { kind: "wolf", name: "重装騎兵", mark: "重", hp: 1.55, damage: 1.1, range: 46, rate: 1.1, armor: 12, armorCap: 42, color: "#d5bbff", tint: "hue-rotate(250deg) saturate(0.65)" },
+        };
+        const siegeRoleOf = (kind, role) => SIEGE_ENEMY_ROLES[role]?.kind === kind ? SIEGE_ENEMY_ROLES[role] : null;
+        function siegeEnemyStats(kind, lv, role, guardPower) {
+          const power = Number.isFinite(guardPower) && guardPower > 0 ? guardPower : castlePowerAtLevel(lv), R = siegeRoleOf(kind, role);
           return {
             lv,
-            max: Math.round(SIEGE_BATTLE.garrisonHp[kind] * power),
-            attack: ENEMY_VS_UNIT[kind].damage * power,
-            armor: Math.min(SIEGE_LEVEL.armorCap, SIEGE_LEVEL.armor(lv) * SIEGE_LEVEL.armorRole[kind]),
+            max: Math.round(SIEGE_BATTLE.garrisonHp[kind] * power * (R?.hp || 1)),
+            attack: ENEMY_VS_UNIT[kind].damage * power * (R?.damage || 1),
+            armor: Math.min(R?.armorCap || SIEGE_LEVEL.armorCap, SIEGE_LEVEL.armor(lv) * SIEGE_LEVEL.armorRole[kind] + (R?.armor || 0)),
           };
         }
+        const siegeGuardAttack = (e) => {
+          const base = ENEMY_VS_UNIT[e.kind], R = siegeRoleOf(e.kind, e.siegeRole);
+          return { range: R?.range || base.ranged || SIEGE_BATTLE.enemyReach, rate: R?.rate || base.rate, ranged: !!base.ranged };
+        };
+        const siegeRoleText = (C) => [...new Set(C.garrison.map((g) => siegeRoleOf(g.kind, g.role)).filter(Boolean))].map((R) =>
+          R.name + (R.kind === "dragon" ? "：射程210・高威力だが装填2.2秒。騎兵で接近しよう" : "：高HP・装甲（上限42）。貫通や装甲無視が有効")
+        ).join("／");
         function siegeArmorDamage(e, raw, s) {
           const pierce = s ? Math.min(1, Math.max(0, skillSum(s, "armorPierce"))) : 0;
           return raw * 30 / (30 + Math.max(0, e.armor || 0) * (1 - pierce));
@@ -15699,6 +15726,8 @@ OFF</button>
             towers: [{ type: "ice", x: 340, y: 300, damage: 10 }],
           },
           fortress: { name: "堅城", hp: 1.25, towerLevel: 1, towers: [{ type: "cannon", x: 880, y: 190, damage: 24 }] },
+          crossbow: { name: "弩兵陣", garrison: [{ path: "upper", d: 620, kind: "dragon", role: "crossbow", n: 2 }, { path: "lower", d: 600, kind: "dragon", role: "crossbow", n: 2 }] },
+          heavyCavalry: { name: "重装騎兵", garrison: [{ path: "upper", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }, { path: "lower", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }] },
           warlord: { name: "名将", power: 1.08, garrison: [{ path: "upper", d: 900, kind: "boss", n: 1 }] },
         };
         // 新しい国の領土の効果（小さめ。合計には上限 BONUS_CAPS）
@@ -15745,6 +15774,51 @@ OFF</button>
           ["kr_pyeongan", "平安", "kr_north", "kr_white", "白雲城", "白雲の衛士", ["fortress", "cavalry"]],
           ["kr_hamgyeong", "咸鏡", "kr_north", "kr_dawn", "暁の北城", "暁の守護者", ["fortress", "warlord", "spear"]],
         ];
+        // 中国編：地名を参考にした20地域。城名・勢力はゲーム独自の設定。
+        const CHINA_LEVELS = {
+          cn_liaodong: 625,
+          cn_liaoxi: 650,
+          cn_yan: 675,
+          cn_jizhou: 700,
+          cn_qilu: 725,
+          cn_zhongyuan: 750,
+          cn_guanzhong: 775,
+          cn_longxi: 800,
+          cn_jianghuai: 825,
+          cn_jiangnan: 850,
+          cn_wuyue: 875,
+          cn_min: 900,
+          cn_hanzhong: 925,
+          cn_bashu: 950,
+          cn_qian: 975,
+          cn_yunnan: 1000,
+          cn_jingchu: 1025,
+          cn_gan: 1050,
+          cn_lingnan: 1075,
+          cn_nanhai: 1100
+        };
+        const CHINA_KUNI = [
+          ["cn_liaodong", "遼東", "cn_north", "cn_fort_liaodong", "青湾の門", "守護連盟・遼東", ["crossbow", "spear"]],
+          ["cn_liaoxi", "遼西", "cn_north", "cn_fort_liaoxi", "玄武の関", "守護連盟・遼西", ["heavyCavalry"]],
+          ["cn_yan", "燕", "cn_north", "cn_fort_yan", "天嶺城", "守護連盟・燕", ["fortress", "crossbow"]],
+          ["cn_jizhou", "冀州", "cn_north", "cn_fort_jizhou", "白槍の砦", "守護連盟・冀州", ["spear", "heavyCavalry"]],
+          ["cn_qilu", "斉魯", "cn_central", "cn_fort_qilu", "碧海城", "守護連盟・斉魯", ["crossbow", "archer"]],
+          ["cn_zhongyuan", "中原", "cn_central", "cn_fort_zhongyuan", "龍河の都", "守護連盟・中原", ["fortress", "heavyCavalry"]],
+          ["cn_guanzhong", "関中", "cn_central", "cn_fort_guanzhong", "赤壁の関", "守護連盟・関中", ["crossbow", "spear"]],
+          ["cn_longxi", "隴西", "cn_central", "cn_fort_longxi", "西風の砦", "守護連盟・隴西", ["heavyCavalry", "warlord"]],
+          ["cn_jianghuai", "江淮", "cn_east", "cn_fort_jianghuai", "水鏡城", "守護連盟・江淮", ["sea", "crossbow"]],
+          ["cn_jiangnan", "江南", "cn_east", "cn_fort_jiangnan", "翠江の砦", "守護連盟・江南", ["crossbow", "spear"]],
+          ["cn_wuyue", "呉越", "cn_east", "cn_fort_wuyue", "蒼玉城", "守護連盟・呉越", ["sea", "heavyCavalry"]],
+          ["cn_min", "閩", "cn_east", "cn_fort_min", "雲海の門", "守護連盟・閩", ["fortress", "crossbow"]],
+          ["cn_hanzhong", "漢中", "cn_west", "cn_fort_hanzhong", "山影の関", "守護連盟・漢中", ["spear", "crossbow"]],
+          ["cn_bashu", "巴蜀", "cn_west", "cn_fort_bashu", "金竹城", "守護連盟・巴蜀", ["fortress", "heavyCavalry"]],
+          ["cn_qian", "黔", "cn_west", "cn_fort_qian", "霧峰の砦", "守護連盟・黔", ["crossbow", "spear"]],
+          ["cn_yunnan", "雲南", "cn_west", "cn_fort_yunnan", "南雲城", "守護連盟・雲南", ["heavyCavalry", "archer"]],
+          ["cn_jingchu", "荊楚", "cn_south", "cn_fort_jingchu", "紅蓮の関", "守護連盟・荊楚", ["crossbow", "heavyCavalry"]],
+          ["cn_gan", "贛", "cn_south", "cn_fort_gan", "飛瀑城", "守護連盟・贛", ["fortress", "crossbow"]],
+          ["cn_lingnan", "嶺南", "cn_south", "cn_fort_lingnan", "陽炎の砦", "守護連盟・嶺南", ["heavyCavalry", "gun"]],
+          ["cn_nanhai", "南海", "cn_south", "cn_fort_nanhai", "天海の都城", "守護連盟・南海", ["fortress", "heavyCavalry", "warlord"]]
+        ];
         const CHAPTERS = {
           japan: {
             name: "日本",
@@ -15757,7 +15831,8 @@ OFF</button>
             power: (dist, styles) => 1.1 * 1.24 ** dist * styles.reduce((n, s) => n * (s.power || 1), 1),
           },
           korea: {
-            name: "朝鮮半島", icon: "🌊", entry: "kr_gyeongsang", clearTickets: 5,
+            name: "朝鮮半島", icon: "🌊", entry: "kr_gyeongsang", clearTickets: 5, requiredChapter: "japan", bonusProvince: "kr_hamgyeong",
+            intro: "対馬から釜山航路へ。領土の隣の拠点を攻略しよう。装甲の高い槍兵には貫通が有効。",
             kuni: KOREA_KUNI,
             land: `
               kr_gyeongsang: kr_jeolla kr_chungcheong kr_gangwon
@@ -15775,8 +15850,43 @@ OFF</button>
             hp: (lv, styles) => Math.round((17000 + (lv - 335) * 35) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
           },
         };
-        const CHAPTER_ORDER = ["japan", "korea"];
-        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"]];
+        Object.assign(CHAPTERS, {
+          china: {
+            name: "中国", icon: "🐉", entry: "cn_liaodong", clearTickets: 10, requiredChapter: "korea", bonusProvince: "cn_nanhai",
+            intro: "平安から遼東航路へ。弩兵は射程210・装填2.2秒、重装騎兵は高HP・装甲（上限42）。騎兵の接近や貫通・装甲無視を組み合わせよう。地名を参考にした架空の城・勢力です。",
+            kuni: CHINA_KUNI,
+            land: `
+              cn_liaodong: cn_liaoxi
+              cn_liaoxi: cn_liaodong cn_yan
+              cn_yan: cn_liaoxi cn_jizhou
+              cn_jizhou: cn_yan cn_qilu cn_zhongyuan
+              cn_qilu: cn_jizhou cn_zhongyuan cn_jianghuai
+              cn_zhongyuan: cn_jizhou cn_qilu cn_guanzhong cn_jianghuai cn_jingchu
+              cn_guanzhong: cn_zhongyuan cn_longxi cn_hanzhong
+              cn_longxi: cn_guanzhong cn_hanzhong
+              cn_jianghuai: cn_qilu cn_zhongyuan cn_jiangnan
+              cn_jiangnan: cn_jianghuai cn_wuyue cn_gan
+              cn_wuyue: cn_jiangnan cn_min
+              cn_min: cn_wuyue cn_gan cn_nanhai
+              cn_hanzhong: cn_guanzhong cn_longxi cn_bashu cn_jingchu
+              cn_bashu: cn_hanzhong cn_qian cn_yunnan
+              cn_qian: cn_bashu cn_yunnan cn_jingchu cn_lingnan
+              cn_yunnan: cn_bashu cn_qian cn_lingnan
+              cn_jingchu: cn_zhongyuan cn_hanzhong cn_qian cn_gan
+              cn_gan: cn_jiangnan cn_min cn_jingchu cn_lingnan
+              cn_lingnan: cn_qian cn_yunnan cn_gan cn_nanhai
+              cn_nanhai: cn_min cn_lingnan
+            `,
+            sea: [], roads: { cn_north: "北方", cn_central: "中原・西北", cn_east: "東方", cn_west: "西南", cn_south: "南方" },
+            levels: CHINA_LEVELS,
+            // 兵士の高Lv成長に合わせた平方根の伸び。Lv625の入口は従来式と同じ。
+            power: (dist, styles, id) => castlePowerAtLevel(625) * Math.sqrt(CHINA_LEVELS[id] / 625),
+            scaleGuards: true,
+            hp: (lv, styles) => Math.round((17000 + (lv - 335) * 35) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
+          },
+        });
+        const CHAPTER_ORDER = ["japan", "korea", "china"];
+        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"]];
         (() => {
           for (const cid of CHAPTER_ORDER) {
             const CH = CHAPTERS[cid],
@@ -15821,9 +15931,10 @@ OFF</button>
                 CH = CHAPTERS[cid],
                 power = CH.levels ? CH.power(P.dist, st, id) : Math.round(CH.power(P.dist, st, id) * 100) / 100,
                 hp = CH.hp ? CH.hp(CH.levels[id], st) : Math.round(((1600 + 650 * (power - 1)) * st.reduce((n, s) => n * (s.hp || 1), 1)) / 100) * 100,
-                tickets = cid === "japan" ? 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0) : id === "kr_hamgyeong" ? 2 : 1;
+                tickets = cid === "japan" ? 2 + Math.floor(P.dist / 3) + (styles.includes("warlord") ? 1 : 0) : id === CH.bonusProvince ? 2 : 1;
               const C = npcCastle(castleName, name, hp, power, tickets, st.flatMap((s) => s.garrison || []));
               if (CH.levels) C.level = C.enemyLevel = CH.levels[id];
+              if (CH.scaleGuards) C.guardPower = power; // 中国だけ守備兵と塔に同じ成長曲線を使う（装甲は敵Lvで計算）
               C.towers = BASE_TOWERS.concat(st.flatMap((s) => s.towers || []));
               C.towerLevel = 2 + st.reduce((n, s) => n + (s.towerLevel || 0), 0);
               NPC_CASTLES[castle] = C;
@@ -16076,11 +16187,11 @@ OFF</button>
         const provinceDiscovered = (p) => !!(PROVINCES[p] && chapterUnlocked(PROVINCES[p].chapter) && (PROVINCES[p].chapter === "japan" || conquestMeta.world.discovered[p]));
         function syncWorldProgress() {
           const w = conquestMeta.world, before = JSON.stringify(w);
-          const korea = chapterProvinces("korea");
-          if (conquestMeta.tenka || isTenka() || korea.some((p) => ownsProvince(p) || conquest[PROVINCES[p].castle].wins > 0)) w.unlocked.korea = true;
           for (const cid of CHAPTER_ORDER) {
+            const CH = CHAPTERS[cid], list = chapterProvinces(cid), entry = CH.entry, prev = CH.requiredChapter;
+            const priorClear = prev === "japan" ? conquestMeta.tenka || isTenka() : prev && w.cleared[prev];
+            if (priorClear || (cid !== "japan" && list.some((p) => ownsProvince(p) || conquest[PROVINCES[p].castle].wins > 0))) w.unlocked[cid] = true;
             if (!chapterUnlocked(cid)) continue;
-            const list = chapterProvinces(cid), entry = CHAPTERS[cid].entry;
             if (entry) w.discovered[entry] = true;
             for (const p of list)
               if (cid === "japan" || ownsProvince(p) || PROVINCES[p].adj.some(ownsProvince)) w.discovered[p] = true;
@@ -16173,7 +16284,7 @@ OFF</button>
         function targetError(castleId) {
           const p = provinceOf(castleId);
           if (!p) return "その城はありません。";
-          if (!chapterUnlocked(PROVINCES[p].chapter)) return "まだ解放されていない章です。日本を天下統一すると次の章が開きます。";
+          if (!chapterUnlocked(PROVINCES[p].chapter)) return "まだ解放されていない章です。" + chapterUnlockText(PROVINCES[p].chapter) + "。";
           if (!provinceDiscovered(p)) return "まだ発見していない拠点です。周辺の拠点を制圧すると発見できます。";
           if (ownsProvince(p) || canAttackProvince(p)) return null;
           if (p === "tsushima" && !tsushimaReady()) return "対馬は日本最後の城です。対馬以外の日本67か国を制圧すると解放されます。";
@@ -16829,11 +16940,12 @@ OFF</button>
             for (let i = 0; i < g.n; i++) {
               const d = g.d + i * 12,
                 p = pathAt(path, d),
-                stats = siegeEnemyStats(g.kind, enemyLevel),
+                stats = siegeEnemyStats(g.kind, enemyLevel, g.role, C.guardPower),
                 hp = stats.max;
               garrison.push({
                 ...stats,
                 kind: g.kind,
+                siegeRole: siegeRoleOf(g.kind, g.role) ? g.role : null,
                 path,
                 d,
                 x: p.x,
@@ -17340,8 +17452,8 @@ OFF</button>
             }
             e.cd -= dt;
             if (e.cd > 0) continue;
-            const a = ENEMY_VS_UNIT[e.kind],
-              reach = a.ranged || SIEGE_BATTLE.enemyReach;
+            const a = siegeGuardAttack(e),
+              reach = a.range;
             let tg = null,
               best = reach;
             for (const g of B.groups) {
@@ -17586,7 +17698,7 @@ OFF</button>
                 chapterProvinces(B.chapter || "japan").length +
                 (B.chapter === "japan" ? "か国</p>" : "拠点</p>")
               : "") +
-            (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。次の章は今後追加予定です。</p></div>' : '') +
+            (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。' + esc(chapterClearNextText(B.chapter)) + '</p></div>' : '') +
             (B.savePending ? '<p class="injured">⚠ 進行・報酬が未保存です。ページを閉じずに「途中保存」で保存を再試行してください。</p>' : '') +
             (B.unified
               ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
@@ -19320,6 +19432,8 @@ OFF</button>
               SIEGE_BATTLE,
               SIEGE_LEVEL,
               siegeEnemyStats,
+              SIEGE_ENEMY_ROLES,
+              siegeGuardAttack,
               siegeArmorDamage,
               battleHitGarrison,
               NPC_CASTLES,
