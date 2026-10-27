@@ -157,7 +157,7 @@ let r = await page.evaluate(() => {
     legacy: JSON.stringify(a.LEGACY_PROVINCE_IDS),
     first: a.PROVINCE_ORDER.slice(0, 7).join(),
     old: ["kiyosu", "hikuma", "inabayama", "sunpu", "fukashi", "tsutsujigasaki"]
-      .map((c) => [a.NPC_CASTLES[c].hp, a.NPC_CASTLES[c].power].join("/"))
+      .map((c) => a.recLevel(a.NPC_CASTLES[c]))
       .join(),
     mikawaAdj: P.mikawa.adj.slice().sort().join(),
     lords: ids.every((id) => P[id].lord),
@@ -207,8 +207,8 @@ check(
   r.legacy,
 );
 check(
-  "以前の6つの城の耐久・強さはそのまま",
-  r.old === "1600/1,1800/1.1,2200/1.25,2400/1.35,2600/1.45,3000/1.6",
+  "以前の6つの城も推奨Lv5刻みで段階的に強くなる",
+  r.old === "5,10,15,20,25,30",
   r.old,
 );
 check(
@@ -265,8 +265,8 @@ r = await page.evaluate(() => {
 });
 check("三河から遠い国ほど城が強い（名将の国は少し強い）", r.byDist);
 check(
-  "最後の国の推奨は Lv100 くらい（対馬・薩摩）",
-  r.rec.tsushima >= 85 && r.rec.tsushima <= 105 && r.rec.satsuma >= 70 && r.rec.kai <= 12,
+  "最後は推奨Lv335・最初の6城はLv30まで",
+  r.rec.tsushima === 335 && r.rec.satsuma >= 300 && r.rec.kai === 30,
   JSON.stringify(r.rec),
 );
 check("推奨レベルは城の強さの順", r.recUp);

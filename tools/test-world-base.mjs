@@ -105,12 +105,13 @@ r = await page.evaluate((api) => {
     tenka: c.isTenka(),
     first: c.PROVINCE_ORDER.slice(0, 7).join(),
     kiyosu: c.NPC_CASTLES.kiyosu.power,
+    kiyosuLevel: c.recLevel(c.NPC_CASTLES.kiyosu),
     tsushima: c.NPC_CASTLES[c.PROVINCES.tsushima.castle].power,
   };
 }, api);
 check(
-  "最初の7か国の並び・清洲城の強さ（1）は今までどおり",
-  r.first === "mikawa,owari,totomi,mino,suruga,shinano,kai" && r.kiyosu === 1,
+  "最初の7か国の並びは今までどおり・清洲城は推奨Lv5",
+  r.first === "mikawa,owari,totomi,mino,suruga,shinano,kai" && r.kiyosuLevel === 5 && r.kiyosu === 1,
   JSON.stringify(r),
 );
 check("天下統一の判定は日本の国で（まだ取っていない）", r.tenka === false, JSON.stringify(r));
