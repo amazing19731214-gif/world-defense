@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -18,10 +19,10 @@ try {
  await page.goto(pathToFileURL(path.join(root,'index.html')).href+'?debug');
  await page.waitForFunction(()=>window.WD_DEBUG);
  check('起動時は一覧を隠す',await page.locator('#skillGuideSheet').isHidden());
- const layout = await page.evaluate(()=>{const w=document.getElementById('wave').getBoundingClientRect(),b=document.getElementById('skillGuideOpen').getBoundingClientRect();return {right:b.left>=w.right,same:Math.abs((w.top+w.bottom-b.top-b.bottom)/2)<2,h:b.height,overflow:document.documentElement.scrollWidth>innerWidth};});
- check('390pxでWAVEの右隣・高さ44px以上・横はみ出しなし',layout.right&&layout.same&&layout.h>=44&&!layout.overflow);
+ const layout = await page.evaluate(()=>{const w=document.getElementById('wave').getBoundingClientRect(),b=document.getElementById('infoOpen').getBoundingClientRect();return {right:b.left>=w.right,same:Math.abs((w.top+w.bottom-b.top-b.bottom)/2)<2,h:b.height,overflow:document.documentElement.scrollWidth>innerWidth};});
+ check('390pxで情報がWAVEの右側・高さ44px以上・横はみ出しなし',layout.right&&layout.same&&layout.h>=44&&!layout.overflow);
  const saved=await page.evaluate(()=>JSON.stringify(localStorage));
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  check('タッチで説明画面を開く',await page.locator('#skillGuideSheet').isVisible());
  check('未所持でも全30人を表示',await page.locator('[data-guide-hero]').count()===30);
  check('常時効果と技名と再使用時間', (await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('三段撃ち')&&(await page.locator('[data-guide-hero="nobunaga"]').innerText()).includes('40秒'));
@@ -52,11 +53,11 @@ try {
  if(folder)await page.screenshot({path:path.join(folder,'skills-heroes.png')});
  await page.tap('#skillGuideClose');
  check('戦闘前は元の停止状態に戻る',!await page.evaluate(()=>WD_DEBUG.state().paused));
- check('ゲームへのフォーカスを復元',await page.evaluate(()=>document.activeElement.id==='skillGuideOpen'));
+ check('情報ボタンへフォーカスを復元',await page.evaluate(()=>document.activeElement.id==='infoOpen'));
  check('所持武将・ガチャ券・保存内容は不変',await page.evaluate(()=>JSON.stringify(localStorage))===saved);
  await page.tap('#start');
  await page.waitForTimeout(700);
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  const before=await page.evaluate(()=>{const s=WD_DEBUG.state();return {gold:s.gold,hp:s.hp,wave:s.wave,enemyD:s.enemies.map(e=>e.d),speed:s.speed}});
  check('閲覧中は停止',await page.evaluate(()=>WD_DEBUG.state().paused));
  await page.waitForTimeout(250);
@@ -67,11 +68,11 @@ try {
  check('Escapeで閉じて再開',await page.locator('#skillGuideSheet').isHidden()&&!await page.evaluate(()=>WD_DEBUG.state().paused));
  await page.tap('#pause');
  await page.tap('#speed');
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  await page.tap('#skillGuideClose');
  check('もともと停止中なら停止を保つ',await page.evaluate(()=>WD_DEBUG.state().paused));
  check('2倍速を保つ',await page.evaluate(()=>WD_DEBUG.state().speed===2));
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  const rect=await page.locator('#skillGuideSheet .sheet').boundingBox();
  check('一覧は画面の88%以内',rect.height<=844*.89);
  await page.touchscreen.tap(10,5);
@@ -89,7 +90,7 @@ try {
   check(width+'pxで横はみ出しなし',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  }
  await page.setViewportSize({width:390,height:844});
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  await page.locator('#skillGuideHeroes').focus();
  await page.keyboard.press('ArrowRight');
  check('矢印キーでタブ切替',await page.locator('#skillGuideSoldiers').getAttribute('aria-selected')==='true');
@@ -100,7 +101,7 @@ try {
  check('操作後もJSエラーなし',errors.length===0);
  // The production URL also works without the debug API.
  await page.goto(pathToFileURL(path.join(root,'index.html')).href);
- await page.tap('#skillGuideOpen');
+ await openInfoEntry(page, '#skillGuideOpen');
  check('通常プレイURLでも全武将を表示',await page.locator('[data-guide-hero]').count()===30&&!await page.evaluate(()=>!!window.WD_DEBUG));
  console.log('結果: '+pass+'件成功');
 } finally { await browser.close(); }

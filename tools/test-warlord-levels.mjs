@@ -1,3 +1,4 @@
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 武将の永続育成・30人の成長・自然回復・保存の統合試験。戦闘条件は独立したテスト用セーブ。
 import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -57,12 +58,12 @@ try {
  await siege.page.reload();
  check(await siege.page.evaluate(()=>WD_DEBUG.heroApi.warlordLevel('kanetsugu').level>=100),'攻城戦で得た武将経験値を保存');
  // UI: actual touch interaction with seeded hero roster (no hidden UI bypass).
- await siege.page.locator('#roster').click();
+ await openInfoEntry(siege.page, '#roster');
  check(await siege.page.locator('[data-warlord-level]').count()===30,'武将一覧に全30人のLv・経験値・成長内容を表示');
  check(await siege.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'iPhone相当390pxで横はみ出しなし');
  if(process.env.SCREENSHOTS){mkdirSync(process.env.SCREENSHOTS,{recursive:true});await siege.page.screenshot({path:process.env.SCREENSHOTS+'/warlord-levels-390.png'});}
  await siege.ctx.close();
- for(const width of [375,1280]){const v=await setup(width);await v.page.locator('#roster').click();check(await v.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'幅'+width+'pxで一覧が画面内に収まる');await v.ctx.close();}
+ for(const width of [375,1280]){const v=await setup(width);await openInfoEntry(v.page, '#roster');check(await v.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'幅'+width+'pxで一覧が画面内に収まる');await v.ctx.close();}
  // War loans are never granted for an unfinished checkpoint or a failed precommit write.
  for(const failure of ['worldDefense.bookTransaction.v1',W,S]){
   const v=await setup();

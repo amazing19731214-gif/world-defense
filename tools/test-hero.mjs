@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 主人公・無限育成の動作確認：主人公の選択・変更、Lv30を超える成長、ステータスポイント、スキル20枠、
 // 主人公の戦死とLv1からの再出発（防衛戦・攻城戦）、育成画面、以前の保存データ
 //   node tools/test-hero.mjs
@@ -118,7 +119,7 @@ check(
 check("主人公はまだいない", (await ev(page, () => WD_DEBUG.squadApi.heroSoldier())) === null);
 
 console.log("■ 主人公を選ぶ・変える");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap('[data-make-hero="1"]');
 check("兵士名簿から主人公にする", (await saved(page)).heroId === 1);
 check("名簿で主人公に 👑", /👑🎖鬼若/.test(await page.textContent("#soldierList")));
@@ -501,7 +502,7 @@ check(
   r.hero && r.name === "鬼若" && r.deaths === 1 && r.best >= 12,
   JSON.stringify(r),
 );
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 check(
   "兵士名簿に残る（戦死回数・過去最高Lvを表示）",
   /👑🎖鬼若/.test(await page.textContent("#soldierList")) &&

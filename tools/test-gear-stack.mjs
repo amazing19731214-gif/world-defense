@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 装備倉庫の一覧：同じ装備を1行に「×個数」でまとめる・行を開いて操作（装備・ロック・1個売却・まとめて売却）・
 // 売却モードは行ごと・スキルの書の一覧・兵士の装備画面もまとめる・画面
 //   node tools/test-gear-stack.mjs
@@ -230,7 +231,7 @@ await page.evaluate(() => {
   for (let k = 0; k < 3; k++) F.save().items.push({ uid: 100 + k, id: "nanbando", owner: null, lock: false });
   F.persist();
 });
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.evaluate(() => document.querySelector('[data-gear-open="2"]').click());
 r = await page.evaluate(() => {
   const body = document.getElementById("gearBody");

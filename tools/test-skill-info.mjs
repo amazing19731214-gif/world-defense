@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 兵士名簿のスキルの札を押すと、そのスキルの説明（分類・効果・習得のしかた）を開く
 //   node tools/test-skill-info.mjs
 //   SCREENSHOTS=dir node tools/test-skill-info.mjs … 画面写真も保存
@@ -67,7 +68,7 @@ const infos = () =>
   page.evaluate(() => [...document.querySelectorAll("#soldierList .skill-info")].map((e) => e.textContent));
 
 console.log("■ スキルの札を押して説明を出す");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 let r = await page.evaluate(() => ({
   tags: [...document.querySelectorAll("#soldierList [data-skill-info]")].map((b) => b.dataset.skillInfo),
   info: document.querySelectorAll("#soldierList .skill-info").length,

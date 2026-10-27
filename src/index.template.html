@@ -942,7 +942,7 @@
         padding: 8px 12px;
         flex: 1;
       }
-      /* スキル図鑑：WAVEの隣から開く、戦闘を離れない説明画面 */
+      /* 情報：WAVEの隣から名簿・育成・スキルの説明を開く */
       .stats {
         align-items: center;
       }
@@ -951,7 +951,7 @@
         align-items: center;
         gap: 7px;
       }
-      #skillGuideOpen {
+      #infoOpen {
         min-height: 44px;
         padding: 7px 9px;
         font-size: 12px;
@@ -1095,7 +1095,7 @@
       .wave-guide-controls {
         gap: 5px;
       }
-      #skillGuideOpen {
+      #infoOpen {
         min-height: 44px;
         min-width: 44px;
         padding: 4px 8px;
@@ -1121,9 +1121,6 @@
         header .stats span {
           font-size: 13px;
           padding: 5px 5px;
-        }
-        #skillGuideOpen .lbl {
-          display: none; /* スマホでは📖だけ（読み上げは aria-label） */
         }
         canvas {
           border-width: 2px;
@@ -2328,8 +2325,17 @@
         outline: 2px solid #ffd34d;
         background: #3d5a4a;
       }
-      .tower-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
-      .tower-status button { min-height: 44px; }
+      .unit-head .row-label span { display: block; }
+      .unit-head #unitCount { font-size: 12px; }
+      .unit-head #towerCount { margin-top: 2px; font-size: 12px; }
+      #infoOpen { font-size: 12px; }
+      #infoSheet { z-index: 9; }
+      .info-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+      .info-entry { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; min-width: 0; min-height: 72px; padding: 12px; text-align: left; }
+      .info-entry b { font-size: 17px; }
+      .info-entry span, .info-entry small { font-size: 13px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+      .info-entry small { color: #d8eadf; }
+      @media (min-width: 700px) { .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
       .tower-growth-grid { display: grid; gap: 12px; }
       .tower-growth-card { padding: 12px; border: 1px solid #82aa8d; border-radius: 12px; }
       .tower-growth-card h3 { margin: 0 0 8px; font-size: 17px; }
@@ -2374,15 +2380,7 @@
           <span id="hp" role="button" tabindex="0" aria-haspopup="dialog" aria-label="城のハートをゴールドで回復">❤️ 20</span><span id="gold">🪙 500G</span>
           <div class="wave-guide-controls">
             <span id="wave" role="button" tabindex="0" aria-haspopup="dialog" aria-label="目標ウェーブを選ぶ">WAVE 0/20</span><span id="deployStat">配置 0/4</span
-            ><button
-              id="skillGuideOpen"
-              aria-label="スキル一覧"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-              aria-controls="skillGuideSheet"
-            >
-              📖<b class="lbl"> スキル</b>
-            </button>
+            ><button id="infoOpen" aria-label="情報：武将・兵士・塔の育成とスキル" aria-haspopup="dialog" aria-expanded="false" aria-controls="infoSheet">情報</button>
           </div>
         </div>
       </header>
@@ -2427,8 +2425,7 @@ OFF</button>
       </section>
       <div class="tools unit-tools" id="unitTools" aria-label="兵士部隊（道に配置）">
         <div class="unit-head">
-          <span class="row-label" id="unitCount">部隊 0/4</span
-          ><button id="hireToggle" aria-expanded="false">＋ 雇う</button
+          <div class="row-label"><span id="unitCount">配置 0/4｜保有 0/4</span><span id="towerCount" role="status">塔 0/6</span></div><button id="hireToggle" aria-expanded="false">＋ 雇う</button
           ><button id="organize">📋 編成</button>
         </div>
         <div id="squadChips" class="squad-chips" aria-label="保有している部隊（タップして配置）"></div>
@@ -2478,16 +2475,11 @@ OFF</button>
           <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
         </button>
       </div>
-      <div class="tower-status">
-        <span id="towerCount" role="status">🏯 塔 0/6</span>
-        <button id="towerGrowthOpen" aria-haspopup="dialog" aria-controls="towerGrowthSheet">🏯 塔育成</button>
-      </div>
       <div class="tools menu-tools">
         <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
         ><button id="gacha">🎴 ガチャ</button
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
-        ><button id="roster">👥 武将一覧</button
-        ><button id="soldiers">🪖 兵士</button><button id="siege">⚔️ 攻城編成</button
+        ><button id="siege">⚔️ 攻城編成</button
         ><button id="mapOpen">🌏 世界</button><button id="zukanOpen">📖 図鑑</button
         ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button>
@@ -2495,8 +2487,20 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v72（武将の永続育成・自然回復）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v73（情報メニュー・配置表示の整理）</small>
     </main>
+    <div id="infoSheet" class="sheet-back" hidden>
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
+        <div class="panel-head"><strong id="infoTitle">ℹ️ 情報</strong><button id="infoClose" class="icon-btn" aria-label="情報を閉じてゲームに戻る">✕ 閉じる</button></div>
+        <p id="infoHint" class="muted">武将・兵士・塔のレベルや能力を確認できます。閲覧中は一時停止します。</p>
+        <div class="info-grid">
+          <button id="roster" class="info-entry" aria-haspopup="dialog" aria-controls="heroSheet"><b>👥 武将</b><span id="infoHeroSummary"></span><small>レベル・経験値・パッシブ・必殺技</small></button>
+          <button id="soldiers" class="info-entry" aria-haspopup="dialog" aria-controls="soldierSheet"><b>🪖 兵士</b><span id="infoSoldierSummary"></span><small>レベル・能力・職業・スキル</small></button>
+          <button id="towerGrowthOpen" class="info-entry" aria-haspopup="dialog" aria-controls="towerGrowthSheet"><b>🏯 塔の育成</b><span id="infoTowerSummary"></span><small>種類別レベル・経験値・育成効果</small></button>
+          <button id="skillGuideOpen" class="info-entry" aria-haspopup="dialog" aria-expanded="false" aria-controls="skillGuideSheet"><b>📖 スキル一覧</b><small>全武将・兵士・職業のスキルを調べる</small></button>
+        </div>
+      </section>
+    </div>
     <div id="towerGrowthSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="towerGrowthTitle">
         <div class="panel-head"><strong id="towerGrowthTitle">🏯 塔の種類別育成</strong><button id="towerGrowthClose" class="icon-btn" aria-label="塔育成を閉じる">✕ 閉じる</button></div>
@@ -2799,7 +2803,7 @@ OFF</button>
         }
         function renderTowerGrowth() {
           const count = builtTowerCount();
-          $("towerCount").textContent = "🏯 塔 " + count + "/" + TOWER_RULES.maxBuilt + (count > TOWER_RULES.maxBuilt ? "（旧セーブ）" : "");
+          $("towerCount").textContent = "塔 " + count + "/" + TOWER_RULES.maxBuilt + (count > TOWER_RULES.maxBuilt ? "（旧セーブ）" : "");
           document.querySelectorAll("[data-t]").forEach(b => {
             let el = b.querySelector(".t-level");
             if (!el) { el = document.createElement("span"); el.className = "t-level"; b.querySelector(".t-text").append(el); }
@@ -11542,6 +11546,103 @@ OFF</button>
           );
           updateUI();
         };
+        // 情報画面：育成・名簿への入口を集約。閲覧中だけ停止し、保存データや戦闘の状態を変えない。
+        let infoReturn = null, infoLastChild = null, infoGoBack = false;
+        const INFO_DETAILS = { heroSheet: "roster", soldierSheet: "soldiers", towerGrowthSheet: "towerGrowthOpen", skillGuideSheet: "skillGuideOpen" };
+        function renderInfo() {
+          const ids = ownedIds(), live = soldiers.filter(s => s.alive && squadById(s.squadId));
+          $("infoHeroSummary").textContent = ids.length ? "所持 " + ids.length + "人・最高Lv" + Math.max(...ids.map(id => warlordLevel(id).level)) : "所持 0人";
+          $("infoSoldierSummary").textContent = live.length ? "在籍 " + live.length + "人・最高Lv" + Math.max(...live.map(s => s.level)) : "在籍 0人";
+          $("infoTowerSummary").textContent = "建設 " + builtTowerCount() + "/" + TOWER_RULES.maxBuilt + "・" + Object.keys(types).map(type => TOWER_NAMES[type].replace("の塔", "") + " Lv" + towerResearch(type).level).join("／");
+        }
+        function openInfo() {
+          if (infoReturn) return;
+          const main = document.querySelector("main");
+          infoReturn = { paused, y: window.scrollY, style: document.body.style.cssText, inert: main.inert, focus: document.activeElement };
+          paused = true;
+          $("pause").textContent = "▶ 再開";
+          renderInfo();
+          $("infoSheet").hidden = false;
+          $("infoSheet").inert = false;
+          $("infoSheet").removeAttribute("aria-hidden");
+          $("infoOpen").setAttribute("aria-expanded", "true");
+          main.inert = true;
+          document.body.style.position = "fixed";
+          document.body.style.top = -infoReturn.y + "px";
+          document.body.style.width = "100%";
+          document.body.style.overflow = "hidden";
+          $("infoClose").focus({ preventScroll: true });
+          updateUI();
+        }
+        function closeInfo() {
+          if (!infoReturn) return;
+          const prev = infoReturn;
+          $("infoSheet").hidden = true;
+          $("infoSheet").inert = false;
+          $("infoSheet").removeAttribute("aria-hidden");
+          $("infoOpen").setAttribute("aria-expanded", "false");
+          infoReturn = null; infoLastChild = null; infoGoBack = false;
+          document.querySelector("main").inert = prev.inert;
+          document.body.style.cssText = prev.style;
+          paused = prev.paused;
+          $("pause").textContent = paused ? "▶ 再開" : "⏸ 停止";
+          last = 0;
+          window.scrollTo(0, prev.y);
+          if (prev.focus && prev.focus.isConnected) prev.focus.focus({ preventScroll: true });
+          updateUI();
+        }
+        function closeInfoDetail(id) {
+          if (id === "heroSheet") closeSheet();
+          else if (id === "soldierSheet") closeSoldierSheet();
+          else if (id === "towerGrowthSheet") closeTowerGrowth();
+          else if (id === "skillGuideSheet") closeSkillGuide();
+        }
+        function syncInfoChild() {
+          const child = Object.keys(INFO_DETAILS).find(id => !$(id).hidden);
+          for (const el of document.querySelectorAll("[data-info-back]")) el.hidden = !infoReturn || el.dataset.infoBack !== child;
+          if (!infoReturn) return;
+          if (child) {
+            infoLastChild = child;
+            $("infoSheet").hidden = true;
+          } else if (infoLastChild) {
+            const previous = infoLastChild;
+            infoLastChild = null;
+            if (infoGoBack) {
+              infoGoBack = false;
+              renderInfo();
+              $("infoSheet").hidden = false;
+              $(INFO_DETAILS[previous]).focus({ preventScroll: true });
+            } else closeInfo();
+          }
+        }
+        for (const id of Object.keys(INFO_DETAILS)) {
+          const head = $(id).querySelector(".panel-head"), back = document.createElement("button");
+          back.className = "icon-btn"; back.type = "button"; back.dataset.infoBack = id;
+          back.textContent = "← 情報"; back.hidden = true;
+          back.onclick = () => { infoGoBack = true; closeInfoDetail(id); };
+          head.insertBefore(back, head.lastElementChild);
+        }
+        $("infoOpen").onclick = openInfo;
+        $("infoClose").onclick = closeInfo;
+        $("infoSheet").addEventListener("click", ev => { if (ev.target === $("infoSheet")) closeInfo(); });
+        const infoObserver = new MutationObserver(syncInfoChild);
+        for (const id of Object.keys(INFO_DETAILS)) infoObserver.observe($(id), { attributes: true, attributeFilter: ["hidden"] });
+        document.addEventListener("keydown", ev => {
+          if (!infoReturn) return;
+          // 装備・転職など、さらに上の画面を開いている間はそちらの操作を優先する。
+          if ([...document.querySelectorAll(".sheet-back:not([hidden])")].some(el => el.id !== "infoSheet" && !INFO_DETAILS[el.id])) return;
+          const child = Object.keys(INFO_DETAILS).find(id => !$(id).hidden), sheet = $(child || "infoSheet");
+          if (ev.key === "Escape") {
+            ev.preventDefault(); ev.stopImmediatePropagation();
+            if (child) closeInfoDetail(child);
+            else closeInfo();
+          } else if (ev.key === "Tab") {
+            const nodes = [...sheet.querySelectorAll('button, input, select, summary, [tabindex="0"]')].filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
+            const first = nodes[0], end = nodes[nodes.length - 1];
+            if (ev.shiftKey && (document.activeElement === first || !sheet.contains(document.activeElement))) { ev.preventDefault(); end?.focus(); }
+            else if (!ev.shiftKey && (document.activeElement === end || !sheet.contains(document.activeElement))) { ev.preventDefault(); first?.focus(); }
+          }
+        });
         $("towerGrowthOpen").onclick = () => {
           $("towerGrowthSheet").hidden = false;
           renderTowerGrowth();

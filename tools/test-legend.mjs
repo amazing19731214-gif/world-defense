@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 終盤（試作）：伝説の兵士の確認
 // 解放の条件（天下統一＋三大裏ボス）・解放前の扱い・レベルアップで伝説の能力（数値は抽選して固定・能力値は1つだけ有効）・
 // 特殊能力（貫通ビームサーベル・連鎖雷撃・爆炎斬・影分身）の効果と演出・重ね掛け・無限に連鎖しない・防衛戦/攻城戦/修練場・
@@ -98,7 +99,7 @@ check("解放前は endgameOn = false", r.on === false);
 check("解放前はレベルアップしても伝説の能力を習得しない", r.legend === null, JSON.stringify(r.legend));
 check("解放前は終盤の装備を作れない", /終盤/.test(r.craft) && r.level >= 100, JSON.stringify(r));
 check("公開版（試作版でない）には試作のボタンを出さない（?debug でも）", r.preview === true);
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 r = await ev(page, () => ({
   retire: document.querySelectorAll("[data-retire]").length,
   legend: document.querySelectorAll(".legend-box").length,
@@ -257,7 +258,7 @@ check(
   JSON.stringify(r),
 );
 check("解放すると伝説の能力が働く（攻撃 +40）", Math.abs(r.unlocked - 40) < 1e-6, JSON.stringify(r));
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 r = await ev(page, () => {
   const card = [...document.querySelectorAll(".s-card")].find((c) => /九十九/.test(c.textContent)),
     lock = card.querySelector(".retire-locked"),
@@ -701,7 +702,7 @@ check(
   r.a.join(),
 );
 check("ネームド兵士の固有能力は残せない（吉川元春は能力値の書4種だけ）", r.named === 4, String(r.named));
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 r = await ev(page, () => ({
   box: document.querySelector(".s-card .legend-box")
     ? document.querySelector(".s-card .legend-box").textContent
@@ -966,7 +967,7 @@ await page.tap("#previewOpen");
 await page.tap('[data-pv="toggle"]');
 await page.tap('[data-pv="all4"]');
 await page.tap("#previewClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 r = await ev(
   page,
   () => document.querySelector(".legend-box") && document.querySelector(".legend-box").textContent,

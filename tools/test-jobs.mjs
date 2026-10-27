@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 自由転職・職業スキルの動作確認：Lv30での解放、何度でも無料の転職、引き継ぐもの、熟練度と職業スキル、
 // 主人公の戦死（初期職に戻る・一度なった職業へは Lv1 でも戻れる）、戦闘での効果（防衛戦・攻城戦・修練場）、
 // 戦闘中の転職禁止、転職画面（主人公育成画面・兵士名簿から）、以前の保存データ
@@ -904,7 +905,7 @@ check(
     /侍/.test(await page.textContent("#hgBody")),
 );
 await page.tap("#hgClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 check("兵士名簿に職業を表示", /侍・Lv/.test(await page.textContent("#soldierList")));
 await page.tap('[data-job-open="11"]');
 text = await page.textContent("#jobBody");

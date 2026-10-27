@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 鉄砲兵・衛生兵（陣中医）の動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test-units.mjs
 //   SCREENSHOTS=dir node tools/test-units.mjs … 画面写真も保存
@@ -427,7 +428,7 @@ check(
   r === before && /gunner/.test(r) && /medic/.test(r),
   r + " vs " + before,
 );
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 text = await page.textContent("#soldierList");
 check(
   "兵士名簿に鉄砲兵・衛生兵（衛生兵は回復量と治療回数）",

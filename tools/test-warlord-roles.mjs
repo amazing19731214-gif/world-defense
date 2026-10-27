@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // v17: role-based passives, actual combat effects, targeting, economy and lifecycle.
 import {createRequire} from 'node:module';
 import path from 'node:path';
@@ -163,7 +164,7 @@ try{
  check('救護陣は傷ついた味方の近くへ自動発動',await run('kanetsugu',()=>{const {A,S,h,other}=F;const m=S.members(other)[0];m.hp=1;const used=A.useSkillFrom(h);return used&&m.hp>1&&!F.D.state().paused;}));
  check('手動停止中は必殺技で勝手に再開しない',await run('mitsuhide',()=>{const {A,h,D}=F;document.getElementById('pause').click();return !A.useSkillFrom(h)&&D.state().paused&&h.cd===0;}));
  await setup('mitsuhide');await page.evaluate(()=>F.A.useSkillFrom(F.h));
- await page.tap('#skillGuideOpen');check('一覧が部隊用・塔用を分けて説明',(await page.locator('#skillGuidePanel').innerText()).includes('部隊：')&&(await page.locator('#skillGuidePanel').innerText()).includes('塔：'));
+ await openInfoEntry(page, '#skillGuideOpen');check('一覧が部隊用・塔用を分けて説明',(await page.locator('#skillGuidePanel').innerText()).includes('部隊：')&&(await page.locator('#skillGuidePanel').innerText()).includes('塔：'));
  if(process.env.SCREENSHOTS){fs.mkdirSync(process.env.SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.SCREENSHOTS,'warlords-v17-guide.png')});}
  await page.tap('#skillGuideClose');
  await page.tap('#pause');const before=await page.evaluate(()=>F.h.cd);await page.evaluate(()=>WD_DEBUG.step(2));check('停止中は新しいスキルの待ちも進まない',await page.evaluate(()=>F.h.cd)===before);

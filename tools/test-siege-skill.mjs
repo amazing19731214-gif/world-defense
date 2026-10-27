@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 攻城戦の武将の必殺技（一撃・範囲攻撃・鼓舞・守りの陣・手当て）の動作確認
 //   node tools/test-siege-skill.mjs
 //   SCREENSHOTS=dir node tools/test-siege-skill.mjs … 画面写真も保存
@@ -313,7 +314,7 @@ await context.close();
 
 console.log("■ スキル一覧・攻城編成に攻城の効果");
 ({ page, errors, context } = await newContext(["nobunaga"]));
-await page.tap("#skillGuideOpen");
+await openInfoEntry(page, '#skillGuideOpen');
 r = await page.textContent('[data-guide-hero="kanetsugu"]');
 check(
   "スキル一覧に攻城戦の効果（直江兼続：手当て）",

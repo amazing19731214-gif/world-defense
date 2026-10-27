@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 超秘伝書：Lv100以上の指導員の引退で0.1%「貫通ビームサーベル」、SSR武将の秘伝錬成で1%「連鎖雷撃」。
 // 手に入るのも使えるのもいつでも（終盤の解放前でも働く）・強さは抽選・保存（失敗したら出ない）・画面の表示
 // 指導員の能力値の書（攻撃・防御・体力・射程の書。数値は引退のときに抽選）
@@ -204,7 +205,7 @@ await page.tap('[data-gear-tab="books"]');
 text = await page.textContent("#gearBody");
 check("スキルの書の一覧に🌟超秘伝の書", /🌟超秘伝 ⚡連鎖雷撃/.test(text), text.slice(0, 300));
 await page.tap("#gearClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap('[data-retire="3"]');
 text = await page.textContent("#retireBody");
 check(
@@ -288,7 +289,7 @@ check(
   JSON.stringify(r),
 );
 if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap("#tabLive");
 await page.tap('[data-retire="8"]');
 text = await page.textContent("#retireBody");
@@ -387,7 +388,7 @@ check(
   JSON.stringify(r),
 );
 if (await page.isVisible("#soldierClose")) await page.tap("#soldierClose");
-await page.tap("#soldiers");
+await openInfoEntry(page, '#soldiers');
 await page.tap("#tabLive");
 text = await ev(
   () =>

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // スマートフォンの画面の確認：横にはみ出さない・下のパネルで操作が隠れない・部隊から武将を直接配属
 //   node tools/test-mobile.mjs
 //   SCREENSHOTS=dir node tools/test-mobile.mjs … 画面写真も保存
@@ -110,7 +111,7 @@ const reachAll = (page, selector) =>
     },
     selector,
   );
-const MAIN_BUTTONS = "main > .tools button, #unitTools button, #skillGuideOpen";
+const MAIN_BUTTONS = "main > .tools button, #unitTools button, #infoOpen";
 
 for (const [w, h] of [
   [375, 667],

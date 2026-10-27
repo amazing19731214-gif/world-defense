@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openInfoEntry } from './ui-test-utils.mjs';
 // 動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test.mjs              … index.html を検査
 //   SCREENSHOTS=dir node tools/test.mjs … 画面写真も保存
@@ -237,7 +238,7 @@ st = await S(page);
 check("武将付きの塔を売却 → 武将は未配属", st.heroes.kanbei.tower === null && st.towers.length === 4);
 check("売却額は従来どおり（投資の70%）", st.gold - goldBefore === Math.floor(100 * 0.7));
 check("売却した塔の支援は消える／再使用待ちは保持", st.heroes.kanbei.cd > 0);
-await page.tap("#roster");
+await openInfoEntry(page, '#roster');
 check("武将一覧で配属先を確認", (await page.textContent("#heroList")).includes("配属先："));
 if (shots) await page.screenshot({ path: path.join(shots, "3-roster.png"), fullPage: true });
 await page.tap("#sheetClose");
@@ -297,7 +298,7 @@ for (const [label, raw] of [
       lastHero: "shingen",
     }),
   );
-  await r.page.tap("#roster");
+  await openInfoEntry(r.page, '#roster');
   const first = await r.page.textContent(".hero-card h3");
   check("保存した選択設定を復元（一覧の先頭）", first.includes("武田信玄"), first);
   await r.context.close();
@@ -391,7 +392,7 @@ check("ボタンの高さ 44px 以上", layout.minBtnH >= 44, String(layout.minB
 check("塔パネルの文字 14px 以上", layout.minPanelFont >= 14, String(layout.minPanelFont));
 check("塔パネルがマップに重ならない", !layout.overlap);
 await page.tap("#tpClose");
-await page.tap("#roster");
+await openInfoEntry(page, '#roster');
 const sheet = await page.evaluate(() => {
   const r = document.querySelector("#heroSheet .sheet").getBoundingClientRect();
   return {
