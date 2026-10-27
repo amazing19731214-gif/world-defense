@@ -100,7 +100,7 @@ let text = await page.textContent("#siegeTarget");
 check(
   "攻城編成の画面に攻略目標（清洲城・尾張・耐久・塔・守備兵・報酬）",
   /攻略目標：清洲城（尾張）/.test(text) &&
-    /城の耐久 1600/.test(text) &&
+    /推奨Lv5/.test(text) && /城の耐久 1600/.test(text) &&
     /防衛塔 4基/.test(text) &&
     /守備兵 17人/.test(text) &&
     /ガチャ券 \+3/.test(text),

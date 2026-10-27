@@ -2450,7 +2450,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v65（三種の神器・真・八岐大蛇）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v66（全国の城・推奨Lv5刻み）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -14791,7 +14791,7 @@ OFF</button>
               TC.name +
               "</b>（" +
               TC.province +
-              "）<br><small>城の耐久 " +
+              "）<br><small>推奨Lv" + recLevel(TC) + "（目安・制限なし）・城の耐久 " +
               TC.hp +
               "・防衛塔 " +
               TC.towers.length +
@@ -15613,9 +15613,8 @@ OFF</button>
           shinano: "shinano",
           kai: "kai",
         };
-        // 全国の国・城を作る。最初の7か国の城・領土の効果はそのまま（隣の国だけ全国のデータで作り直す）
-        // 城の強さ：三河からの距離（航路も1つ）で強くなり（1つ遠いごとに ×1.24）、特色で守備兵・塔・耐久が変わる（体力だけを増やさない）。
-        // 一番遠い国（対馬）は 強さ 7.6 ほど＝育成 Lv100 くらいで勝てる（模擬：4部隊×10人・兵種いろいろ）
+        // 全国の国・城を作る。特色で守備兵・塔・耐久が変わる。
+        // 日本の最終的な強さは、一覧の順に推奨Lvを5刻みで割り当てて下で調整する。
         const KUNI_STYLE = {
           spear: { name: "槍衾", garrison: [{ path: "lower", d: 560, kind: "knight", n: 3 }] },
           archer: {
@@ -15737,16 +15736,35 @@ OFF</button>
         const chapterProvinces = (cid) => PROVINCE_ORDER.filter((p) => PROVINCES[p].chapter === cid);
         // 日本の国（天下統一は日本の68か国の制覇。海外の章を足しても変わらない）
         const JAPAN = chapterProvinces("japan");
-        // 推奨レベル（目安。入場の制限ではない）：城の強さから
-        // 模擬（4部隊×10人）で勝てたレベル：強さ 1.6 → Lv10、4 → Lv35、6 → Lv65、8 → Lv100（その間は直線でつなぐ）
+        // 推奨レベル（目安。入場の制限ではない）と城の強さの対応。
+        // 既存の模擬結果を基準に補間する。Lv100を超えた部分は同じ傾きで延長。
         const RECLV_POINTS = [
-          [1, 1],
+          [1, 5],
           [1.6, 10],
           [4, 35],
           [6, 65],
           [8, 100],
         ];
+        function castlePowerAtLevel(lv) {
+          const pts = RECLV_POINTS;
+          for (let i = 1; i < pts.length; i++)
+            if (lv <= pts[i][1])
+              return pts[i - 1][0] + ((lv - pts[i - 1][1]) / (pts[i][1] - pts[i - 1][1])) * (pts[i][0] - pts[i - 1][0]);
+          return 8 + (lv - 100) / 17.5;
+        }
+        // 三河は自国。残る67城にLv5・10…335を固定で割り当てる。
+        // 制圧・敗北・再読込では変わらず、城IDや保存形式も変えない。
+        const JAPAN_CASTLES = JAPAN.filter((p) => PROVINCES[p].castle);
+        for (const [i, p] of JAPAN_CASTLES.entries()) {
+          const C = NPC_CASTLES[PROVINCES[p].castle],
+            level = (i + 1) * 5,
+            power = castlePowerAtLevel(level);
+          C.hp = Math.round(C.hp * power / C.power);
+          C.power = power;
+          C.level = level;
+        }
         function recLevel(C) {
+          if (C.level != null) return C.level;
           const pts = RECLV_POINTS,
             p = C.power;
           for (let i = 1; i < pts.length; i++)
@@ -17111,7 +17129,6 @@ OFF</button>
           }
           B.garrison = B.garrison.filter((e) => e.hp > 0);
           // 守備隊の攻撃（届く部隊の先頭の兵士へ）
-          const scale = 1 + Math.max(0, wave - 1) * 0.05;
           if (B.boss) tickGroupAilments(B, dt);
           for (const e of B.garrison) {
             if (e.boss) {
@@ -17151,7 +17168,7 @@ OFF</button>
                 col: "#a56b35",
               });
             }
-            battleHurt(tg, a.damage * scale * B.power, !!a.ranged, e.kind);
+            battleHurt(tg, a.damage * B.power, !!a.ranged, e.kind);
           }
           // NPCの塔の攻撃
           for (const t of B.towers) {
@@ -17186,7 +17203,7 @@ OFF</button>
               col: p.col,
             });
             if (t.type === "magic") burst(t.x + 4, t.y - 42, "#ffe6a0", "gunsmoke");
-            battleHurt(tg, t.damage * scale, true, "tower");
+            battleHurt(tg, t.damage, true, "tower");
           }
           // 勝敗（裏ボスは倒れてから1.2秒、消える演出を見せてから結果）
           if (B.boss ? bossDown(B) : B.castleHp <= 0) {
