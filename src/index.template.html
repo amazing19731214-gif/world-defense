@@ -2447,7 +2447,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v63（八玉の交換：復活の書・召喚の書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v64（三種の神器）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -4988,6 +4988,7 @@ OFF</button>
             scrolls: Object.fromEntries(
               ["revive", "summon"].map((k) => [k, int(o.scrolls && o.scrolls[k], 99)]).filter(([, n]) => n > 0),
             ), // 八玉で作った書（復活の書・召喚の書）
+            treasures: Object.fromEntries(["kusanagi", "yata", "magatama"].filter((k) => o.treasures && o.treasures[k] === true).map((k) => [k, true])), // 三種の神器（ずっと持つ）
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
@@ -6118,6 +6119,28 @@ OFF</button>
           summon: { name: "召喚の書", icon: "📗", text: "好きなネームド兵士を1人、Lv1・固有スキルつきで召喚する（同じ人物は1人まで）" },
         };
         const SCROLL_MAX = 99;
+        // 三種の神器：八玉を8種類1つずつ使って1つ作る。装備とは別の宝物で、ずっと持つ（売れない・なくならない・1つずつ）。
+        // 真・八岐大蛇の特殊な攻撃を1つずつ封じる
+        const TREASURES = {
+          kusanagi: { name: "草薙の剣", icon: "🗡️", text: "真・八岐大蛇の再生を封じる" },
+          yata: { name: "八咫鏡", icon: "🪞", text: "真・八岐大蛇の幻惑を防ぐ" },
+          magatama: { name: "八尺瓊勾玉", icon: "🟢", text: "真・八岐大蛇の魂喰い（回復の封印）を防ぐ" },
+        };
+        const hasTreasure = (k) => !!(forgeSave().treasures || {})[k];
+        const treasureCount = () => Object.keys(TREASURES).filter(hasTreasure).length;
+        function craftTreasure(k) {
+          if (!TREASURES[k]) return "その宝物は作れません。";
+          if (hasTreasure(k)) return TREASURES[k].name + "はもう持っています（ずっと持つ宝物です）。";
+          if (!gemsComplete()) return "八玉が8種類そろっていません（" + gemKinds() + "/8）。";
+          const F = forgeSave(),
+            before = { gems: Object.assign({}, F.gems), treasures: Object.assign({}, F.treasures) };
+          for (const g of GEMS) if (--F.gems[g.k] <= 0) delete F.gems[g.k];
+          F.treasures = Object.assign({}, F.treasures, { [k]: true });
+          if (persistHeroes()) return null;
+          F.gems = before.gems;
+          F.treasures = before.treasures;
+          return "保存できなかったので作りませんでした（八玉は元のまま）。";
+        }
         const scrollCount = (k) => ((forgeSave().scrolls || {})[k] || 0);
         const gemsComplete = () => GEMS.every((g) => gemCount(g.k) > 0);
         function craftScroll(k) {
@@ -12556,7 +12579,30 @@ OFF</button>
                   ">作る</button></div>",
               )
               .join("") +
-            '<p class="muted"><small>三種の神器は、のちの段階で追加します。</small></p>';
+            '<h3 class="hg-h">⛩️ 三種の神器 <small>' +
+            treasureCount() +
+            "/3（八玉8種類を1つずつ使う・ずっと持つ宝物）</small></h3>" +
+            Object.entries(TREASURES)
+              .map(
+                ([k, t]) =>
+                  '<div class="pick-row' +
+                  (hasTreasure(k) ? " got" : "") +
+                  '"><span>' +
+                  t.icon +
+                  " <b>" +
+                  t.name +
+                  "</b>" +
+                  (hasTreasure(k) ? ' <small class="saved">所持</small>' : "") +
+                  "<br><small>" +
+                  esc(t.text) +
+                  "</small></span>" +
+                  (hasTreasure(k)
+                    ? "<button disabled>所持</button>"
+                    : '<button data-treasure-craft="' + k + '"' + (ok ? "" : " disabled") + ">作る</button>") +
+                  "</div>",
+              )
+              .join("") +
+            (treasureCount() === 3 ? '<p class="saved"><small>三種の神器がそろった！ 真・八岐大蛇に挑む準備ができた。</small></p>' : "");
           const own = Object.keys(GEM_CRAFT).filter((k) => scrollCount(k) > 0);
           if (!own.length) return html;
           html += '<h3 class="hg-h">📜 書を使う <small>（ウェーブの合間に）</small></h3>' + (busy ? '<p class="injured">' + esc(busy) + "</p>" : "");
@@ -13051,7 +13097,13 @@ OFF</button>
           else if (d.bookPick) gearPickBook = d.bookPick;
           else if (d.pickCancel !== undefined) gearPickUid = gearPickBook = gearPickLBook = gearPickFruit = null;
           else if (d.lbookPick) gearPickLBook = +d.lbookPick;
-          else if (d.scrollCraft) {
+          else if (d.treasureCraft) {
+            err = craftTreasure(d.treasureCraft);
+            if (!err) {
+              gearNote = "⛩️ " + TREASURES[d.treasureCraft].name + "を作りました（ずっと持つ宝物）。";
+              toast(gearNote);
+            }
+          } else if (d.scrollCraft) {
             err = craftScroll(d.scrollCraft);
             if (!err) gearNote = GEM_CRAFT[d.scrollCraft].icon + " " + GEM_CRAFT[d.scrollCraft].name + "を作りました（八玉を8種類1つずつ使いました）。";
           } else if (d.scrollUse) gemUse = { k: d.scrollUse, pick: null };
@@ -18713,6 +18765,9 @@ OFF</button>
             },
             gemApi: {
               GEM_CRAFT,
+              TREASURES,
+              craftTreasure,
+              treasures: () => Object.assign({}, forgeSave().treasures),
               craftScroll,
               summonNamed,
               reviveFallen,
