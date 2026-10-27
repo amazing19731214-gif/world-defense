@@ -62,7 +62,7 @@ try {
     });
     check(Math.abs(r.ratio-1.3)<1e-9,'信玄は10人でも最大5人分');
     check(r.rate===1&&r.range===1,'混成部隊の弓兵に回復支援が漏れない');
-    check(Math.abs(r.medicRate-0.8)<1e-9&&Math.abs(r.medicRange-1.2)<1e-9,'混成部隊の衛生兵には回復支援が有効');await context.close();
+    check(r.medicRate===1&&r.medicRange===1,'兼続の自然回復化後、混成部隊の衛生兵にも旧支援倍率が残らない');await context.close();
   }
   console.log(`結果: ${checks} 件成功 / 0 件失敗`);
 } finally {await browser.close();await new Promise(r=>server.close(r));}
