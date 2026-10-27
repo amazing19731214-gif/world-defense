@@ -139,7 +139,7 @@ r = await ev(() => {
     at: p && p.at,
     n: rare.length,
     msg: document.getElementById("msg").textContent,
-    toast: document.getElementById("toast").textContent,
+    toast: document.getElementById("mapNotice").textContent,
   };
   WD_DEBUG.rareApi.setRng(() => 1);
   WD_DEBUG.stopSpawning();
@@ -193,7 +193,7 @@ r = await ev(() => {
   const out = {
     gone: !S().enemies.includes(e),
     hp: S().hp - hp0,
-    msg: document.getElementById("toast").textContent,
+    msg: document.getElementById("mapNotice").textContent,
     playing: S().playing,
   };
   return out;
@@ -243,7 +243,7 @@ r = await ev(() => {
   const out = {
     need,
     got,
-    toast: document.getElementById("toast").textContent,
+    toast: document.getElementById("mapNotice").textContent,
     gone: !S().enemies.includes(e),
   };
   WD_DEBUG.step(0.3);
@@ -275,7 +275,7 @@ r = await ev(() => {
     want: WD_DEBUG.rareApi.RARE.gold.koban(w),
     saved: JSON.parse(localStorage.getItem("worldDefense.warlords.v1")).forge.koban,
     koban: F.koban(),
-    toast: document.getElementById("toast").textContent,
+    toast: document.getElementById("mapNotice").textContent,
   };
   WD_DEBUG.step(0.3);
   return out;

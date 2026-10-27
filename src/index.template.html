@@ -666,15 +666,6 @@
         padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
         font-size: 15px;
       }
-      .counter-banner {
-        margin: 8px 0 0;
-        padding: 8px 12px;
-        border: 1px solid #ef6a58;
-        border-radius: 10px;
-        background: #5a1f1acc;
-        color: #ffe3d8;
-        line-height: 1.45;
-      }
       .target-card {
         margin: 8px 0 2px;
         padding: 8px 10px;
@@ -2347,6 +2338,32 @@
       #towerGrowthSheet summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
       .t-level { display: block; font-size: 12px; }
       @media (min-width: 700px) { .tower-growth-grid { grid-template-columns: 1fr 1fr; } }
+      .game-view { position: relative; margin: 6px 0; }
+      .game-view canvas { margin: 0; }
+      .map-notice {
+        position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+        width: max-content; max-width: calc(100% - 20px); padding: 7px 10px;
+        border: 1px solid #e6ca7c; border-radius: 12px; background: #10343cf2;
+        color: #fff3ce; box-shadow: 0 3px 9px #0006; font-size: 14px;
+        line-height: 1.4; white-space: pre-line; pointer-events: none; z-index: 2;
+      }
+      .map-notice[data-kind="counter"] { border-color: #ef9e73; background: #45271cf2; }
+      .level-notices { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      .level-bubble {
+        position: absolute; transform: translate(-50%, -100%); max-width: min(230px, calc(100% - 16px));
+        padding: 5px 8px; border: 1px solid #e8c85a; border-radius: 11px;
+        background: #173d36f5; color: #fff1ac; box-shadow: 0 2px 7px #0005;
+        font-size: 12px; font-weight: 700; line-height: 1.4;
+        animation: level-pop 0.24s ease-out;
+      }
+      .level-bubble span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .level-bubble::after { content: ""; position: absolute; width: 7px; height: 7px; left: 22px; bottom: -5px; background: #173d36; border-right: 1px solid #e8c85a; border-bottom: 1px solid #e8c85a; transform: rotate(45deg); }
+      @keyframes level-pop {
+        0% { opacity: 0; transform: translate(-50%, -85%); }
+        100% { opacity: 1; transform: translate(-50%, -100%); }
+      }
+      .notice-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      @media (prefers-reduced-motion: reduce) { .level-bubble { animation: none; } }
     </style>
   </head>
   <body>
@@ -2369,8 +2386,13 @@
           </div>
         </div>
       </header>
-      <p id="counterBanner" class="counter-banner" role="status" hidden></p>
-      <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
+      <div id="gameView" class="game-view">
+        <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
+        <div id="mapNotice" class="map-notice" role="status" aria-live="polite" hidden></div>
+        <div id="levelNotices" class="level-notices" aria-hidden="true"></div>
+      </div>
+      <span id="counterStatus" class="notice-sr"></span>
+      <span id="levelNewsStatus" class="notice-sr" role="status" aria-live="polite"></span>
       <section id="trainBar" class="panel train-bar" hidden aria-label="修練場">
         <div id="trainInfo" class="battle-info"></div>
         <button id="trainRetreat" class="retreat">↩ 修練場から撤退</button>
@@ -2473,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v71（塔6基・種類別の永続育成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v71（塔育成・マップ内通知）</small>
     </main>
     <div id="towerGrowthSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="towerGrowthTitle">
@@ -2718,6 +2740,9 @@ OFF</button>
         };
         const TOWER_NAMES = { arrow: "弓の塔", cannon: "大砲の塔", magic: "鉄砲の塔", ice: "水攻めの塔" };
         const CANNON_SPLASH = 65;
+        // 画面内のお知らせは表示専用。保存・経験値・戦闘の時間には影響させない。
+        let mapNotice = null, pendingCounterNotice = null, lastCounterNoticeKey = "", levelNewsClock = 0;
+        const levelNews = new Map(), levelBubbles = [];
         // 種類ごとの永続経験値。建設中の塔の Lv1〜5 とは別。増築数で獲得量を増やさない。
         const TOWER_RULES = { maxBuilt: 6, maxLevel: 9999, attackLog: 0.15, hpLog: 0.12 };
         const TOWER_XP_TOTAL = [0, 0];
@@ -2760,6 +2785,7 @@ OFF</button>
             const after = towerResearch(type).level;
             if (after > before) {
               leveled.push(TOWER_NAMES[type] + " Lv" + after);
+              queueTowerLevel(targets[0] && targets[0].t, after, true, type);
               // 耐久の割合を保つ。Lv上昇を全回復として利用することはできない。
               for (const {t, max} of targets) t.hp = Math.min(towerMaxHp(t), towerHp(t) * towerMaxHp(t) / max);
             }
@@ -5001,27 +5027,29 @@ OFF</button>
           renderSquadUI();
           renderBattleBar();
           renderTrainBar();
-          renderCounterBanner();
+          renderCounterNotice();
           renderDefenseSave();
           $("hp").setAttribute("aria-label", "城のハート " + hp + "/" + HEART_RULES.maxHp + "。ゴールドで回復");
           renderHearts();
           renderTowerGrowth();
         }
-        function renderCounterBanner() {
-          const c = territoryReady ? activeCounter() : null,
-            el = $("counterBanner");
-          el.hidden = !c;
-          if (!c) return;
+        function renderCounterNotice() {
+          const c = territoryReady ? activeCounter() : null;
+          if (!c) {
+            lastCounterNoticeKey = "";
+            $("counterStatus").textContent = "";
+            pendingCounterNotice = null;
+            if (mapNotice && mapNotice.kind === "counter") { mapNotice = null; renderMapNotice(); }
+            return;
+          }
           const left = Math.max(0, COUNTER.waves - wave);
-          const t =
-            "⚠ 反撃：" +
-            counterText(c) +
-            "！ 防衛戦でウェーブ" +
-            COUNTER.waves +
-            "まで守り抜こう" +
-            (left ? "（あと" + left + "ウェーブ）" : "") +
-            "。";
-          if (el.textContent !== t) el.textContent = t;
+          const text = "⚠ 反撃！ " + PROVINCES[c.from].name + " → " + PROVINCES[c.province].name + "（" + NPC_CASTLES[PROVINCES[c.province].castle].name + "）\n"
+            + (left ? "防衛WAVE" + COUNTER.waves + "まで守り抜こう（あと" + left + "ウェーブ）" : "次のウェーブを守り抜こう！");
+          if ($("counterStatus").textContent !== text) $("counterStatus").textContent = text;
+          const key = c.province + ":" + c.from + ":" + wave;
+          if (key === lastCounterNoticeKey) return;
+          lastCounterNoticeKey = key;
+          mapToast(text, "counter");
         }
         const upgradePrice = (t) => Math.round(types[t.type].cost * (0.7 + t.level * 0.55));
         const towerLabel = (t) =>
@@ -6012,6 +6040,122 @@ OFF</button>
           clearTimeout(toastTimer);
           toastTimer = setTimeout(() => (el.hidden = true), 2600);
         }
+        // マップ内の通知。レア敵の出現・撃破を優先し、反撃はそのあとに表示する。
+        function mapToast(text, kind = "rare") {
+          const next = { text, kind, left: kind === "counter" ? 4.8 : 3.2 };
+          if (kind === "counter" && mapNotice && mapNotice.kind !== "counter") pendingCounterNotice = next;
+          else {
+            if (kind !== "counter" && mapNotice && mapNotice.kind === "counter") pendingCounterNotice = mapNotice;
+            mapNotice = next;
+          }
+          renderMapNotice();
+        }
+        function mapNewsBlocked() {
+          if (document.hidden || document.querySelector(".sheet-back:not([hidden])")) return true;
+          const r = C.getBoundingClientRect();
+          const top = document.querySelector("header").getBoundingClientRect().bottom;
+          return Math.min(r.bottom, window.innerHeight) - Math.max(r.top, top) < Math.min(80, r.height / 3);
+        }
+        function renderMapNotice() {
+          const el = $("mapNotice");
+          el.hidden = !mapNotice || mapNewsBlocked();
+          if (mapNotice) {
+            if (el.textContent !== mapNotice.text) el.textContent = mapNotice.text;
+            el.dataset.kind = mapNotice.kind;
+          }
+          $("levelNotices").hidden = !!mapNotice || mapNewsBlocked();
+        }
+        function queueSoldierLevel(s, before) {
+          if (s.level <= before) return;
+          const hero = isHeroSoldier(s);
+          const key = hero ? "hero:" + s.id : "squad:" + s.squadId;
+          queueLevelNews({ key, kind: "soldier", squadId: s.squadId,
+            people: new Map([[s.id, { soldier: s, level: s.level, name: soldierName(s) }]]) });
+        }
+        function queueTowerLevel(t, level, research = false, type = t && t.type) {
+          if (!type) return;
+          queueLevelNews({ key: research ? "type:" + type : "tower:" + t.id, kind: "tower", towerId: t && t.id, type, level, research });
+        }
+        function queueLevelNews(news) {
+          const active = levelBubbles.find(b => b.key === news.key);
+          const old = active || levelNews.get(news.key);
+          if (old) {
+            if (news.people) for (const [id, person] of news.people) old.people.set(id, person);
+            if (news.level) old.level = Math.max(old.level, news.level);
+            return;
+          }
+          if (levelNews.size >= 8) levelNews.delete(levelNews.keys().next().value);
+          levelNews.set(news.key, news);
+        }
+        function levelNewsText(news) {
+          if (news.kind === "tower") {
+            const t = towers.find(t => t.id === news.towerId && !t.destroyed);
+            if (news.research ? towerResearch(news.type).level < news.level : !t || t.level < news.level) return "";
+            return "✨ " + TOWER_NAMES[news.type] + (news.research ? " 育成Lv" : " Lv") + news.level + "！";
+          }
+          const people = [...news.people.values()].filter(p => p.soldier.alive && p.soldier.level >= p.level);
+          if (!people.length) return "";
+          if (people.length === 1) return "✨ " + people[0].name + " Lv" + people[0].level + "！";
+          const q = squadById(news.squadId);
+          return "✨ " + (q ? squadName(q) : "部隊") + " " + people.length + "人がLv UP！";
+        }
+        function levelNewsAnchor(news) {
+          if (news.kind === "tower") return towers.find(t => !t.destroyed && (news.research ? t.type === news.type : t.id === news.towerId)) || { x: W / 2, y: 140 };
+          if (battle) {
+            const g = battle.groups.find(g => g.list.some(s => news.people.has(s.id)) && (g.state === "march" || g.state === "fight"));
+            if (g) return g;
+          }
+          const q = squadById(news.squadId);
+          return q && q.state === "deployed" ? q : { x: W / 2, y: 140 };
+        }
+        function clearLevelNews() {
+          levelNews.clear(); levelBubbles.length = 0; levelNewsClock = 0;
+          $("levelNotices").replaceChildren(); $("levelNewsStatus").textContent = "";
+        }
+        function animateMapNews(dt) {
+          if (!mapNotice && !levelNews.size && !levelBubbles.length) return;
+          renderMapNotice();
+          if (mapNewsBlocked()) return; // メニューの裏・画面外にいる間に読み逃さない
+          dt = Math.max(0, Math.min(0.1, dt)); // 倍速や停止とは独立した、表示専用の秒数
+          if (mapNotice) {
+            mapNotice.left -= dt;
+            if (mapNotice.left <= 0) { mapNotice = pendingCounterNotice; pendingCounterNotice = null; renderMapNotice(); }
+            return; // 重要通知とレベルの吹き出しを重ねない
+          }
+          for (let i = levelBubbles.length - 1; i >= 0; i--) {
+            const b = levelBubbles[i];
+            b.age += dt;
+            if (b.age >= 2.8 || !levelNewsText(b)) { b.el.remove(); levelBubbles.splice(i, 1); }
+          }
+          levelNewsClock += dt;
+          if (levelNewsClock >= 0.3) {
+            levelNewsClock = 0;
+            const announcements = [];
+            for (const [key, news] of levelNews) {
+              if (levelBubbles.length >= 3) break;
+              levelNews.delete(key);
+              const text = levelNewsText(news);
+              if (!text) continue;
+              const el = document.createElement("div"); el.className = "level-bubble";
+              el.append(document.createElement("span")); $("levelNotices").append(el);
+              levelBubbles.push({ ...news, age: 0, el });
+              announcements.push(text);
+            }
+            if (announcements.length) $("levelNewsStatus").textContent = announcements.join(" ");
+          }
+          const box = $("gameView").getBoundingClientRect(), placed = [];
+          for (const b of levelBubbles) {
+            const text = levelNewsText(b); if (b.el.firstChild.textContent !== text) b.el.firstChild.textContent = text;
+            const p = levelNewsAnchor(b), w = b.el.offsetWidth, h = b.el.offsetHeight;
+            const x = Math.max(w / 2 + 8, Math.min(box.width - w / 2 - 8, p.x / W * box.width));
+            const baseY = Math.max(h + 12, Math.min(box.height - 12, (p.y - 35) / H * box.height));
+            const candidates = [0, -1, 1, -2, 2, -3, 3].map(lane => Math.max(h + 12, Math.min(box.height - 12, baseY + lane * (h + 6))));
+            const y = candidates.find(y => placed.every(r => Math.abs(x - r.x) >= (w + r.w) / 2 + 4 || y <= r.y - r.h - 5 || y - h >= r.y + 5)) ?? baseY;
+            placed.push({ x, y, w, h });
+            b.el.style.left = x + "px"; b.el.style.top = y + "px";
+            b.el.style.opacity = Math.min(1, (2.8 - b.age) / 0.4);
+          }
+        }
         function pathAt(path, d) {
           for (let i = 1; i < path.length; i++) {
             const a = path[i - 1],
@@ -6095,7 +6239,7 @@ OFF</button>
           };
           enemies.push(e);
           msg(c.icon + " " + c.name + "が現れた！ " + c.escape + "秒で逃げる、早く倒せ！");
-          toast(c.icon + " " + c.name + "が現れた！");
+          mapToast(c.icon + " " + c.name + "が現れた！");
           return e;
         }
         // 倒した：ラッキーは出撃中の兵士みんなに経験値、黄金は小判（保存する）
@@ -6105,14 +6249,14 @@ OFF</button>
             const list = soldiers.filter((s) => s.alive && s.inWave && !s.out);
             for (const s of list) gainXp(s, Math.max(1, Math.round(SQUAD_RULES.xpToLevel(s.level) * c.xpShare)), true);
             msg(c.icon + " " + c.name + "を倒した！ 出撃中の兵士 " + list.length + "人が大量の経験値を得た！");
-            toast(c.icon + " " + c.name + "を倒した！ 経験値ボーナス！");
+            mapToast(c.icon + " " + c.name + "を倒した！ 経験値ボーナス！");
           } else {
             const F = forgeSave(),
               n = Math.round(c.koban(wave) * (0.8 + 0.4 * rareRng()));
             F.koban = Math.min(KOBAN_MAX, (F.koban || 0) + n);
             persistHeroes();
             msg(c.icon + " " + c.name + "を倒した！ 小判 +" + kobanText(n) + "（🎒 装備倉庫）");
-            toast(c.icon + " 小判 +" + kobanText(n) + "！");
+            mapToast(c.icon + " 小判 +" + kobanText(n) + "！");
           }
           burst(e.x, e.y - 10, c.color, "fire"); // 色つきの輪と粒
         }
@@ -6121,7 +6265,7 @@ OFF</button>
           e.hp = -999;
           const c = RARE[e.rare];
           msg(c.icon + " " + c.name + "は逃げてしまった…");
-          toast(c.icon + " " + c.name + "は逃げてしまった…");
+          mapToast(c.icon + " " + c.name + "は逃げてしまった…");
           burst(e.x, e.y, c.color, "vanish");
         }
         // ===== 乱入する裏ボスと八玉 =====
@@ -7045,6 +7189,7 @@ OFF</button>
         // 経験値。戦闘中に得る分は1ウェーブ xpWaveCap まで（ウェーブ終了の生存ボーナスは別枠）
         function gainXp(s, n, waveBonus, tag = "battle") {
           if (!s.alive || !(n > 0)) return;
+          const levelBefore = s.level;
           if (!waveBonus) {
             n = Math.min(n, xpCap() - (s.waveXp || 0));
             if (n <= 0) return;
@@ -7069,6 +7214,7 @@ OFF</button>
             onLevelUp(s, fresh);
           }
           if (s.level >= SQUAD_RULES.maxLevel) s.xp = 0;
+          queueSoldierLevel(s, levelBefore); // 一度に複数Lv上がっても、最後のLvを1回だけ知らせる
         }
         let skillRng = Math.random; // スキル習得の乱数（テストで差し替え可能）
         // 兵種に合うスキルから、まだ習得していないものをランダムに1つ習得する。
@@ -10383,6 +10529,7 @@ OFF</button>
           });
         }
         function animateVisuals(dt) {
+          animateMapNews(dt);
           if (paused || document.hidden) return;
           dt = gameStep(dt);
           visualTime += dt;
@@ -11198,6 +11345,7 @@ OFF</button>
           const before = towerMaxHp(selectedTower);
           towerHp(selectedTower);
           selectedTower.level++;
+          queueTowerLevel(selectedTower, selectedTower.level);
           selectedTower.hp += towerMaxHp(selectedTower) - before; // 強化で増えた分の耐久を足す
           msg("塔をレベル" + selectedTower.level + "に強化！");
           updateUI();
@@ -11241,6 +11389,7 @@ OFF</button>
           selectedTower = null;
           towers = [];
           towerWaveTypes.clear();
+          clearLevelNews();
           enemies = [];
           shots = [];
           effects.length = 0;
@@ -19840,6 +19989,8 @@ OFF</button>
             towerApi: { towerHp, towerMaxHp, damageTower, repairCost, TOWER_HP },
             towerGrowthApi: { TOWER_RULES, TOWER_XP_TOTAL, TOWER_XP_MAX, towerResearch, towerGrowth, towerWaveXp, builtTowerCount,
               research: () => ({...heroSave.towerResearch}), fire },
+            noticeApi: { state: () => ({ notice: mapNotice && {...mapNotice}, pendingCounter: pendingCounterNotice && {...pendingCounterNotice},
+              levels: levelBubbles.map(b => ({ key:b.key, text:levelNewsText(b), age:b.age })), pendingLevels: levelNews.size }) },
             towerStats,
             setGold: (g) => {
               gold = g;
@@ -20057,6 +20208,11 @@ OFF</button>
         }
         new MutationObserver(syncViewport).observe($("squadPanel"), { attributes: true, attributeFilter: ["hidden"] });
         new MutationObserver(syncViewport).observe($("towerPanel"), { attributes: true, attributeFilter: ["hidden"] });
+        const noticeObserver = new MutationObserver(() => {
+          if (mapNotice || levelNews.size || levelBubbles.length) renderMapNotice();
+        });
+        for (const el of document.querySelectorAll(".sheet-back"))
+          noticeObserver.observe(el, { attributes: true, attributeFilter: ["hidden"] });
         syncViewport();
         restoreDefenseCheckpoint();
         if (grantTenkaGun()) setTimeout(() => toast("🔥 天下統一の報酬：爆炎の鉄砲を手に入れた！（🎒 装備倉庫）"), 600);
