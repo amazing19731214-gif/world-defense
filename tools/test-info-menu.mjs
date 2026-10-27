@@ -1,3 +1,4 @@
+import { togglePause, toggleSpeed } from './ui-test-utils.mjs';
 // 情報メニューとコンパクトな配置表示の実際のブラウザ操作（戦闘計算は変更しない）。
 import {createRequire} from 'node:module';
 import {readFileSync,mkdirSync} from 'node:fs';
@@ -45,13 +46,13 @@ try{
   await context.close();
  }
  {
-  const{p,context}=await setup(390);await click(p,'#speed');await click(p,'#start');await p.waitForTimeout(200);await click(p,'#infoOpen');
+  const{p,context}=await setup(390);await toggleSpeed(p);await click(p,'#start');await p.waitForTimeout(200);await click(p,'#infoOpen');
   const before=await p.evaluate(()=>{const s=WD_DEBUG.state();return JSON.stringify({hp:s.hp,gold:s.gold,wave:s.wave,enemies:s.enemies.map(e=>({hp:e.hp,d:e.d})),speed:s.speed});});
   await p.evaluate(()=>WD_DEBUG.step(3));const after=await p.evaluate(()=>{const s=WD_DEBUG.state();return JSON.stringify({hp:s.hp,gold:s.gold,wave:s.wave,enemies:s.enemies.map(e=>({hp:e.hp,d:e.d})),speed:s.speed});});
   check(before===after,'情報閲覧中は戦闘時間・敵・HP・ゴールド・速度が変化しない');
   await click(p,'#towerGrowthOpen');await click(p,'#towerGrowthClose');
   check(await p.evaluate(()=>!WD_DEBUG.state().paused&&WD_DEBUG.state().speed===2&&document.activeElement.id==='infoOpen')&&await p.locator('#infoSheet').isHidden(),'詳細の閉じるボタンはゲームへ戻り、倍速を維持して再開');
-  await click(p,'#pause');await click(p,'#infoOpen');await click(p,'#infoClose');check(await p.evaluate(()=>WD_DEBUG.state().paused),'元から停止中なら情報を閉じても停止を維持');await context.close();
+  await togglePause(p);await click(p,'#infoOpen');await click(p,'#infoClose');check(await p.evaluate(()=>WD_DEBUG.state().paused),'元から停止中なら情報を閉じても停止を維持');await context.close();
  }
  {
   const{p,context}=await setup(390,844,false);await click(p,'#infoOpen');check((await p.locator('#infoHeroSummary').innerText()).includes('0人')&&(await p.locator('#infoSoldierSummary').innerText()).includes('0人'),'未所持・兵士なしでも情報を表示');await click(p,'#infoClose');await p.goto(base);await click(p,'#infoOpen');await click(p,'#towerGrowthOpen');check(await p.locator('[data-growth]').count()===4&&!await p.evaluate(()=>!!window.WD_DEBUG),'通常URLでも情報メニューと塔育成を操作できる');await context.close();

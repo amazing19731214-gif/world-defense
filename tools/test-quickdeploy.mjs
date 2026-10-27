@@ -252,7 +252,7 @@ if (!(await page.isVisible("[data-u]"))) await page.tap("#hireToggle");
 const lay = await page.evaluate(() => {
   const els = [
     ...document.querySelectorAll(
-      "[data-chip], [data-u], #hireToggle, #organize, #start, #speed, #pause, .menu-tools button, [data-t]",
+      "[data-chip], [data-u], #hireToggle, #organize, #start, #pace, #recoverAll, .menu-tools button, [data-t]",
     ),
   ].filter((b) => b.getClientRects().length); // 出していないボタン（試作版だけのボタンなど）は数えない
   return {

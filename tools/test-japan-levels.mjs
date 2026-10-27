@@ -76,7 +76,7 @@ try {
       a.setTarget(castle);
       const err = a.startBattle();
       if (err) return { err };
-      if (D.state().paused) document.getElementById('pause').click();
+      if (D.state().paused) WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().paused ? 'x1' : 'paused');
       const B = a.battle(), g = B.groups[0], s = g.list[0], e = B.garrison[0], t = B.towers[0];
       const initial = { wave: D.state().wave, max: B.castleMax, guardHp: e.max, towerDamage: t.damage };
       B.nextUnit = 4;

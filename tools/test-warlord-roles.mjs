@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { openInfoEntry } from './ui-test-utils.mjs';
+import { openInfoEntry, togglePause } from './ui-test-utils.mjs';
 // v17: role-based passives, actual combat effects, targeting, economy and lifecycle.
 import {createRequire} from 'node:module';
 import path from 'node:path';
@@ -48,7 +48,7 @@ try{
  r=await run('hideyoshi',()=>{const {A,S,q,h,other,D}=F;const m=S.members(other)[0];m.hp=10;const max=S.soldierStats(m).maxHp;A.useSkill(h);return {hp:m.hp,max,state:other.state,cd:h.cd};});check('秀吉：周囲の生存兵を即時25%回復し部隊を撤退させない',Math.abs(r.hp-Math.min(r.max,10+r.max*.25))<.001&&r.state==='deployed'&&r.cd===45,r);
  r=await run('yukimura',()=>{const {A,S,q,h,D}=F;const m=S.members(q)[0],st=S.soldierStats(m),base=S.soldierStats(m,true);m.hp=10;A.useSkill(h);const guard=A.heroGuard(m,false);D.step(1);return {max:st.maxHp,base:base.maxHp,def:st.def,baseDef:base.def,hp:m.hp,guard};});check('幸村：HP+30%・防御+20%、必殺技で軽減と継続回復',r.max===Math.round(r.base*1.3)&&Math.abs(r.def/r.baseDef-1.2)<1e-8&&r.hp>10&&r.guard===.5,r);
  r=await run('yukimura',()=>{const {A,S,q,h,D}=F;const m=S.members(q)[0];m.hp=10;A.unassignHero('yukimura');A.assignHero('yukimura',q);const first=m.hp;m.hp=S.soldierStats(m).maxHp;A.unassignHero('yukimura');const clamped=m.hp;A.assignHero('yukimura',q);A.useSkill(h);D.step(9);return {first,clamped,base:S.soldierStats(m,true).maxHp,hp:m.hp,max:S.soldierStats(m).maxHp,guard:A.heroGuard(m,false)};});check('幸村：再配属で無料回復せず、解除でHP上限を守り必殺技は終了',r.first===10&&r.clamped===r.base&&r.hp<=r.max&&r.guard===1,r);
- r=await run('yukimura',()=>{const {A,S,q,h,D}=F;const m=S.members(q)[0],dead=S.members(q)[1];m.hp=10;dead.alive=false;dead.hp=0;A.useSkill(h);document.getElementById('pause').click();D.step(1);const paused=m.hp;document.getElementById('pause').click();D.step(1);return {paused,hp:m.hp,dead:dead.hp,alive:dead.alive};});check('幸村：停止中は回復せず、戦死者を復活させない',r.paused===10&&r.hp>10&&r.dead===0&&!r.alive,r);
+ r=await run('yukimura',()=>{const {A,S,q,h,D}=F;const m=S.members(q)[0],dead=S.members(q)[1];m.hp=10;dead.alive=false;dead.hp=0;A.useSkill(h);WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().paused ? 'x1' : 'paused');D.step(1);const paused=m.hp;WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().paused ? 'x1' : 'paused');D.step(1);return {paused,hp:m.hp,dead:dead.hp,alive:dead.alive};});check('幸村：停止中は回復せず、戦死者を復活させない',r.paused===10&&r.hp>10&&r.dead===0&&!r.alive,r);
  r=await run('kanetsugu',()=>{const {A,S,q,h,D}=F;const m=S.members(q)[0],patient=S.members(F.other)[0];patient.hp=20;S.members(q).forEach(s=>s.hp=20);A.useSkill(h,{point:{x:650,y:300}});D.step(2);return {hp:patient.hp,field:h.field,dead:D.state().soldiers.filter(s=>!s.alive).length};});check('兼続：救護陣は毎秒、生存兵を回復',r.hp>20&&r.field&&r.dead===0,r);
  r=await run('masamune',()=>{const {A,q,h,e}=F;const before=q.x;A.useSkill(h,{point:{x:620,y:300}});return {before,after:q.x,cd:h.cd};});check('政宗：騎兵部隊が安全な道へ移動',r.after!==r.before&&r.cd>0,r);
  r=await run('tadakatsu',()=>{const {A,S,q,h,other,D}=F;const m=S.members(q)[0],patient=S.members(other)[0],st=S.soldierStats(m),base=S.soldierStats(m,true);const guard=A.heroGuard(m,false);A.useSkill(h);return {max:st.maxHp,base:base.maxHp,guard,active:A.heroGuard(m,false),other:A.heroGuard(patient,false),tower:A.heroGuard(F.t,false)};});check('忠勝：HP+30%、槍兵は25%軽減、必殺技で周囲も40%軽減',r.max===Math.round(r.base*1.3)&&r.guard===.75&&Math.abs(r.active-.45)<.001&&r.other===.6&&r.tower===.6,r);
@@ -130,7 +130,7 @@ try{
  check('救援は別の分岐ルートにも移動し、道と部隊間隔を守る',r.used&&r.moved&&r.off<1&&r.gap>=60,r);
  r=await run('motoyasu',()=>{const {A,h,S}=F;A.useSkill(h);const late=S.hireSquad('ashigaru',570,300),m=S.members(late)[0];S.damageSquad(late,1e6,false);return !m.alive;});
  check('致命傷防止は発動後に雇った兵へ追加付与しない',r);
- r=await run('dosan',()=>{const {A,h,e,D}=F;A.useSkill(h,{point:{x:700,y:300}});const before=h.cd;document.getElementById('speed').click();D.step(1);return {elapsed:before-h.cd,left:e.poisonLeft};});
+ r=await run('dosan',()=>{const {A,h,e,D}=F;A.useSkill(h,{point:{x:700,y:300}});const before=h.cd;WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().speed === 1 ? 'x2' : 'x1');D.step(1);return {elapsed:before-h.cd,left:e.poisonLeft};});
  check('2倍速は再使用待ち・毒の時間へ一度だけ反映',Math.abs(r.elapsed-2)<.001&&Math.abs(r.left-4)<.001,r);
  // Range checks and invalid/cancelled targeting do not consume a skill.
  r=await run('masamune',()=>{const {A,h,q,other}=F;const before=h.cd;const used=A.useSkill(h,{point:{x:740,y:300}});return {used,cd:h.cd,before,x:q.x};});check('重複配置になる突撃は消費せず拒否',!r.used&&r.cd===r.before&&r.x===650,r);
@@ -162,12 +162,12 @@ try{
  check('回復対象が満タンなら消費しない',await run('hanbei',()=>{const {A,S,h,D}=F;const used=A.useSkillFrom(h);return !used&&h.cd===0&&!D.state().paused;}));
  check('回復は瀕死でも戦死・範囲外の兵を選ばない',await run('hanbei',()=>{const {A,S,h,q,other}=F;const dead=S.members(q)[0];dead.hp=0;dead.alive=false;other.x=950;const far=S.members(other)[0];far.hp=1;return A.autoSkillInput(h)===null&&!A.useSkillFrom(h)&&h.cd===0;}));
  check('救護陣は傷ついた味方の近くへ自動発動',await run('kanetsugu',()=>{const {A,S,h,other}=F;const m=S.members(other)[0];m.hp=1;const used=A.useSkillFrom(h);return used&&m.hp>1&&!F.D.state().paused;}));
- check('手動停止中は必殺技で勝手に再開しない',await run('mitsuhide',()=>{const {A,h,D}=F;document.getElementById('pause').click();return !A.useSkillFrom(h)&&D.state().paused&&h.cd===0;}));
+ check('手動停止中は必殺技で勝手に再開しない',await run('mitsuhide',()=>{const {A,h,D}=F;WD_DEBUG.playbackApi.setMode(WD_DEBUG.state().paused ? 'x1' : 'paused');return !A.useSkillFrom(h)&&D.state().paused&&h.cd===0;}));
  await setup('mitsuhide');await page.evaluate(()=>F.A.useSkillFrom(F.h));
  await openInfoEntry(page, '#skillGuideOpen');check('一覧が部隊用・塔用を分けて説明',(await page.locator('#skillGuidePanel').innerText()).includes('部隊：')&&(await page.locator('#skillGuidePanel').innerText()).includes('塔：'));
  if(process.env.SCREENSHOTS){fs.mkdirSync(process.env.SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.SCREENSHOTS,'warlords-v17-guide.png')});}
  await page.tap('#skillGuideClose');
- await page.tap('#pause');const before=await page.evaluate(()=>F.h.cd);await page.evaluate(()=>WD_DEBUG.step(2));check('停止中は新しいスキルの待ちも進まない',await page.evaluate(()=>F.h.cd)===before);
+ await togglePause(page);const before=await page.evaluate(()=>F.h.cd);await page.evaluate(()=>WD_DEBUG.step(2));check('停止中は新しいスキルの待ちも進まない',await page.evaluate(()=>F.h.cd)===before);
  check('390pxで横スクロールなし',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  check('全ケースでJavaScript例外なし',errorLog.length===0,errorLog);
 }finally{await browser.close();}
