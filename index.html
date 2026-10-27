@@ -2450,7 +2450,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v66（全国の城・推奨Lv5刻み）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v67（攻城戦の敵Lv・装甲・対馬最終解放）</small>
     </main>
     <div id="skillGuideSheet" class="sheet-back" hidden>
       <section
@@ -14791,7 +14791,7 @@ OFF</button>
               TC.name +
               "</b>（" +
               TC.province +
-              "）<br><small>推奨Lv" + recLevel(TC) + "（目安・制限なし）・城の耐久 " +
+              "）<br><small>推奨Lv" + recLevel(TC) + "（目安・制限なし）・敵Lv" + TC.enemyLevel + "・城の耐久 " +
               TC.hp +
               "・防衛塔 " +
               TC.towers.length +
@@ -15021,7 +15021,7 @@ OFF</button>
               C.power.toFixed(2) +
               "・推奨 Lv" +
               recLevel(C) +
-              "（目安・制限なし）<br>城の耐久 " +
+              "（目安・制限なし）・敵Lv" + C.enemyLevel + "<br>装甲：兵種と敵Lvで変化（槍兵が最も硬い）。貫通・装甲無視が有効。<br>城の耐久 " +
               C.hp +
               "・防衛塔 " +
               C.towers.length +
@@ -15054,13 +15054,15 @@ OFF</button>
               '"' +
               (err || blocked || battle ? " disabled" : "") +
               ">" +
-              (st === "own" ? "⚔️ 演習に出陣（攻城編成へ）" : st === "open" ? "⚔️ 出陣（攻城編成へ）" : "🔒 隣の国を取ると攻められる") +
+              (st === "own" ? "⚔️ 演習に出陣（攻城編成へ）" : st === "open" ? "⚔️ 出陣（攻城編成へ）" : p === "tsushima" && !tsushimaReady() ? "🔒 対馬以外の日本67か国を制圧すると解放" : "🔒 隣の国を取ると攻められる") +
               "</button>" +
               (blocked && !err ? '<p class="injured"><small>反撃を退けるまで新しい国は攻められません。</small></p>' : "");
           }
+          if (p === "tsushima" && !tsushimaReady()) html += '<p class="muted">日本最後の城。対馬以外の日本67か国を制圧すると解放されます。</p>';
           return html + "</div>";
         }
         function provinceRows(list) {
+          const target = targetCastleId(); // 新しい条件で無効になった旧目標には印を付けない
           return list
             .map((p) => {
               const P = PROVINCES[p],
@@ -15075,7 +15077,7 @@ OFF</button>
                 '" aria-expanded="' +
                 (mapProv === p) +
                 '"><span>' +
-                (C && conquestMeta.target === P.castle ? "🎯" : "") +
+                (C && target === P.castle ? "🎯" : "") +
                 P.name +
                 " <small>" +
                 (P.home ? P.homeCastle : C.name) +
@@ -15352,6 +15354,26 @@ OFF</button>
           garrisonHp: { goblin: 90, knight: 260, dragon: 150, wolf: 110, boss: 1200 },
           garrisonReward: { goblin: 10, knight: 22, dragon: 27, wolf: 12, boss: 150 }, // 経験値の計算用
         };
+        // 攻城戦専用。清洲城Lv5は従来どおり（装甲0）。高Lvでも装甲は最大30。
+        // 修練場の段階的な伸びを参考にし、通常防衛戦・修練場の設定には依存させない。
+        const SIEGE_LEVEL = {
+          armorCap: 30,
+          armorRole: { goblin: 0.25, wolf: 0.5, knight: 1, dragon: 0.2, boss: 0.8 },
+          armor: (lv) => Math.max(0, 0.1 * (Math.min(lv, 100) - 5) + 0.02 * Math.max(0, lv - 100)),
+        };
+        function siegeEnemyStats(kind, lv) {
+          const power = castlePowerAtLevel(lv);
+          return {
+            lv,
+            max: Math.round(SIEGE_BATTLE.garrisonHp[kind] * power),
+            attack: ENEMY_VS_UNIT[kind].damage * power,
+            armor: Math.min(SIEGE_LEVEL.armorCap, SIEGE_LEVEL.armor(lv) * SIEGE_LEVEL.armorRole[kind]),
+          };
+        }
+        function siegeArmorDamage(e, raw, s) {
+          const pierce = s ? Math.min(1, Math.max(0, skillSum(s, "armorPierce"))) : 0;
+          return raw * 30 / (30 + Math.max(0, e.armor || 0) * (1 - pierce));
+        }
         // ===== NPCの城と領土（7か国） =====
         // 国ごとにNPCの城が1つある。自国（三河・岡崎城）から始め、自分の領土の隣の国だけ攻められる。
         // 城を攻め落とすとその国が領土になる。初めて攻め落としたときだけ報酬、7か国そろうと統一の報酬。
@@ -15752,17 +15774,86 @@ OFF</button>
               return pts[i - 1][0] + ((lv - pts[i - 1][1]) / (pts[i][1] - pts[i - 1][1])) * (pts[i][0] - pts[i - 1][0]);
           return 8 + (lv - 100) / 17.5;
         }
-        // 三河は自国。残る67城にLv5・10…335を固定で割り当てる。
-        // 制圧・敗北・再読込では変わらず、城IDや保存形式も変えない。
+        // v66の城IDごとの難易度を固定。海外の航路・並び替えで日本のレベルや耐久を変えない。
+        const JAPAN_CASTLE_STATS = {
+          kiyosu: { level: 5, hp: 1600 },
+          hikuma: { level: 10, hp: 2618 },
+          inabayama: { level: 15, hp: 3661 },
+          sunpu: { level: 20, hp: 4551 },
+          fukashi: { level: 25, hp: 5451 },
+          tsutsujigasaki: { level: 30, hp: 6600 },
+          okochi: { level: 35, hp: 4734 },
+          kawagoe: { level: 40, hp: 5128 },
+          kannonji: { level: 45, hp: 7179 },
+          matsukura: { level: 50, hp: 5917 },
+          minowa: { level: 55, hp: 8205 },
+          ichijodani: { level: 60, hp: 8718 },
+          toyama: { level: 65, hp: 7101 },
+          kasugayama: { level: 70, hp: 9274 },
+          nijo: { level: 75, hp: 9075 },
+          shigisan: { level: 80, hp: 9469 },
+          maruyama: { level: 85, hp: 7823 },
+          nakiri: { level: 90, hp: 8136 },
+          nirayama: { level: 95, hp: 8449 },
+          odawara: { level: 100, hp: 10573 },
+          motosakura: { level: 105, hp: 9075 },
+          utsunomiya: { level: 110, hp: 9388 },
+          kurokawa: { level: 115, hp: 9364 },
+          yamagata: { level: 120, hp: 10014 },
+          nochiseyama: { level: 125, hp: 10327 },
+          oyama: { level: 130, hp: 13415 },
+          nanao: { level: 135, hp: 13810 },
+          kawarada: { level: 140, hp: 11265 },
+          yakami: { level: 145, hp: 14599 },
+          saika: { level: 150, hp: 11891 },
+          iimoriyama: { level: 155, hp: 11143 },
+          kishiwada: { level: 160, hp: 11429 },
+          ishiyama: { level: 165, hp: 14868 },
+          okamoto: { level: 170, hp: 12000 },
+          kururi: { level: 175, hp: 12286 },
+          ota: { level: 180, hp: 12527 },
+          tatebeyama: { level: 185, hp: 12857 },
+          konosumi: { level: 190, hp: 13143 },
+          himeji: { level: 195, hp: 13429 },
+          shozui: { level: 200, hp: 13714 },
+          tottori: { level: 205, hp: 16522 },
+          takada: { level: 210, hp: 13310 },
+          tenjinyama: { level: 215, hp: 13576 },
+          sumoto: { level: 220, hp: 13842 },
+          sogo: { level: 225, hp: 14108 },
+          yuzuki: { level: 230, hp: 14374 },
+          oko: { level: 235, hp: 14450 },
+          uejishi: { level: 240, hp: 14400 },
+          bitchumatsuyama: { level: 245, hp: 17914 },
+          koriyama: { level: 250, hp: 18029 },
+          funai: { level: 255, hp: 14828 },
+          gassantoda: { level: 260, hp: 17591 },
+          sanbonmatsu: { level: 265, hp: 14758 },
+          kofuo: { level: 270, hp: 15000 },
+          kannabe: { level: 275, hp: 15242 },
+          konomine: { level: 280, hp: 15484 },
+          tachibana: { level: 285, hp: 19470 },
+          yanagawa: { level: 290, hp: 19770 },
+          kawara: { level: 295, hp: 16210 },
+          hitoyoshi: { level: 300, hp: 16452 },
+          tonokori: { level: 305, hp: 16694 },
+          katsuyama: { level: 310, hp: 15935 },
+          muranaka: { level: 315, hp: 16192 },
+          koyama: { level: 320, hp: 16390 },
+          uchijo: { level: 325, hp: 20731 },
+          kameoka: { level: 330, hp: 16846 },
+          kaneishi: { level: 335, hp: 16592 },
+        };
         const JAPAN_CASTLES = JAPAN.filter((p) => PROVINCES[p].castle);
-        for (const [i, p] of JAPAN_CASTLES.entries()) {
-          const C = NPC_CASTLES[PROVINCES[p].castle],
-            level = (i + 1) * 5,
-            power = castlePowerAtLevel(level);
-          C.hp = Math.round(C.hp * power / C.power);
-          C.power = power;
-          C.level = level;
+        for (const p of JAPAN_CASTLES) {
+          const castle = PROVINCES[p].castle,
+            C = NPC_CASTLES[castle],
+            base = JAPAN_CASTLE_STATS[castle];
+          C.hp = base.hp;
+          C.power = castlePowerAtLevel(base.level);
+          C.level = C.enemyLevel = base.level;
         }
+
         function recLevel(C) {
           if (C.level != null) return C.level;
           const pts = RECLV_POINTS,
@@ -15972,13 +16063,16 @@ OFF</button>
           PROVINCE_ORDER.filter((p) => PROVINCE_BONUS[p] && ownsProvince(p)).map(
             (p) => PROVINCE_BONUS[p].name + "（" + PROVINCE_BONUS[p].text + "）",
           );
-        // 攻められる国：まだ領土でなく、領土の隣にある国
-        const canAttackProvince = (p) => !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince);
+        // 対馬は日本の最後。過去に制圧した城の再攻略・旧セーブの演習は制限しない。
+        const tsushimaReady = () => conquestMeta.tenka || conquest.kaneishi.wins > 0 || JAPAN.every((p) => p === "tsushima" || ownsProvince(p));
+        // 攻められる国：まだ領土でなく、領土の隣にある国（対馬の初回だけ追加条件）
+        const canAttackProvince = (p) => !ownsProvince(p) && PROVINCES[p].adj.some(ownsProvince) && (p !== "tsushima" || tsushimaReady());
         // 城を目標にできるか：攻められる国の城、または占領済みの城（演習）
         function targetError(castleId) {
           const p = provinceOf(castleId);
           if (!p) return "その城はありません。";
           if (ownsProvince(p) || canAttackProvince(p)) return null;
+          if (p === "tsushima" && !tsushimaReady()) return "対馬は日本最後の城です。対馬以外の日本67か国を制圧すると解放されます。";
           return PROVINCES[p].name + "は領土の隣ではないので、まだ攻められません。";
         }
         function setTarget(castleId) {
@@ -16608,7 +16702,8 @@ OFF</button>
             boss = bossTarget,
             C = boss
               ? { name: BOSSES[boss].name, province: BOSSES[boss].place, hp: BOSSES[boss].hp, power: 1, towers: [], garrison: [], towerLevel: 1 }
-              : NPC_CASTLES[castleId];
+              : NPC_CASTLES[castleId],
+            enemyLevel = boss ? null : C.enemyLevel;
           const towersNpc = C.towers.map((c, i) => {
             const t = {
               id: 900 + i,
@@ -16629,8 +16724,10 @@ OFF</button>
             for (let i = 0; i < g.n; i++) {
               const d = g.d + i * 12,
                 p = pathAt(path, d),
-                hp = Math.round(SIEGE_BATTLE.garrisonHp[g.kind] * C.power);
+                stats = siegeEnemyStats(g.kind, enemyLevel),
+                hp = stats.max;
               garrison.push({
+                ...stats,
                 kind: g.kind,
                 path,
                 d,
@@ -16669,6 +16766,7 @@ OFF</button>
             garrison,
             castleId,
             castleName: C.name,
+            enemyLevel,
             castleMax: C.hp,
             power: C.power,
             practice: !boss && conquest[castleId].captured, // 占領済みの城は演習（報酬・占領なし。経験値は得られる）
@@ -16849,7 +16947,7 @@ OFF</button>
         }
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
         function battleHitGarrison(e, dmg, s) {
-          if (e.boss) dmg = bossTakeDamage(e, dmg, s);
+          dmg = e.boss ? bossTakeDamage(e, dmg, s) : siegeArmorDamage(e, dmg, s);
           e.hp -= dmg;
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
@@ -17168,7 +17266,7 @@ OFF</button>
                 col: "#a56b35",
               });
             }
-            battleHurt(tg, a.damage * B.power, !!a.ranged, e.kind);
+            battleHurt(tg, e.attack, !!a.ranged, e.kind);
           }
           // NPCの塔の攻撃
           for (const t of B.towers) {
@@ -19104,6 +19202,10 @@ OFF</button>
               endBattle,
               retreatBattle,
               SIEGE_BATTLE,
+              SIEGE_LEVEL,
+              siegeEnemyStats,
+              siegeArmorDamage,
+              battleHitGarrison,
               NPC_CASTLES,
               conquest: () => conquest,
               conquestMeta: () => conquestMeta,
@@ -19140,6 +19242,7 @@ OFF</button>
               targetCastleId,
               ownsProvince,
               canAttackProvince,
+              tsushimaReady,
               activeCounter,
               maybeCounter,
               borderProvinces,
