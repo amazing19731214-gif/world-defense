@@ -532,11 +532,20 @@ check("ウェーブ中は補充できない", /ウェーブ中/.test(await api(p
 
 console.log("■ 撤退・再配置");
 await tapMap(page, 650, 280);
+// タップ後に別のブラウザ呼び出しを待つ間も実時間が進む。開始時点は同じクリックイベント内で採取する。
+await page.evaluate((id) => {
+  document.getElementById("retreat").addEventListener("click", () => {
+    const q = WD_DEBUG.state().squads.find((q) => q.id === id);
+    window.retreatAtClick = { state: q?.state, left: q?.retreatLeft };
+  }, { once: true });
+}, ash.id);
 await page.tap("#retreat");
+const retreatAtClick = await page.evaluate(() => window.retreatAtClick);
 st = await S(page);
 check(
   "戦闘中の撤退は時間がかかる（撤退中）",
-  sq(st, ash.id).state === "retreating" && near(sq(st, ash.id).retreatLeft, 3, 0.05),
+  retreatAtClick.state === "retreating" && near(retreatAtClick.left, 3, 0.05),
+  JSON.stringify(retreatAtClick),
 );
 await page.evaluate(() => WD_DEBUG.addEnemy({ kind: "goblin", d: 694 + 60, hp: 1e6, speed: 0 }));
 const hpBefore = (await S(page)).soldiers

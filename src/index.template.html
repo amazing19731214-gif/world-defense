@@ -1056,6 +1056,10 @@
         --app-h: 100vh;
         --vv-top: 0px;
         --dock-h: 0px;
+        --header-h: 64px;
+        /* 自動スクロールの中心を、固定ヘッダーと下パネルを除く操作可能な範囲に合わせる。 */
+        scroll-padding-top: calc(var(--header-h) + 8px);
+        scroll-padding-bottom: calc(var(--dock-h) + 8px);
       }
       @supports (height: 100dvh) {
         :root {
@@ -19736,6 +19740,7 @@ OFF</button>
             root.setProperty("--app-h", Math.round(vv.height) + "px");
             root.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
           }
+          root.setProperty("--header-h", Math.ceil(document.querySelector("header").getBoundingClientRect().height) + "px");
           const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
           root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
         }
@@ -19748,6 +19753,7 @@ OFF</button>
           const ro = new ResizeObserver(syncViewport);
           ro.observe($("squadPanel"));
           ro.observe($("towerPanel"));
+          ro.observe(document.querySelector("header"));
         }
         new MutationObserver(syncViewport).observe($("squadPanel"), { attributes: true, attributeFilter: ["hidden"] });
         new MutationObserver(syncViewport).observe($("towerPanel"), { attributes: true, attributeFilter: ["hidden"] });

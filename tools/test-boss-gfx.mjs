@@ -176,13 +176,19 @@ r = await page.evaluate(() => {
 });
 check("跳躍：体を伸ばして跳ぶ（着地に衝撃波）", r.leap && r.fx.includes("bshock"), JSON.stringify(r));
 r = await page.evaluate(() => {
-  const a = WD_DEBUG.squadApi,
-    e = a.bossOf();
+  const a = WD_DEBUG.squadApi, B = a.battle(), e = a.bossOf();
+  // 跳躍後は近接射程内に味方がいないことがある。実際に攻撃できる距離で演出と被弾を検証する。
+  const g = B.groups.find((g) => ["march", "fight"].includes(g.state) && g.list.some((s) => s.alive && !s.siegeOut));
+  g.path = e.path;
+  g.d = e.d - 30;
+  Object.assign(g, WD_DEBUG.pathAt(g.path, g.d));
+  // ボスは最も近い部隊を狙うため、ほかの部隊への命中も含めて実際の被弾を確認する。
+  const before = B.groups.flatMap((g) => g.list).filter((s) => s.alive && !s.siegeOut).map((s) => ({ s, hp: s.hp }));
   e.cd = 0;
   WD_DEBUG.step(0.05);
-  return { swipe: e.swipe };
+  return { swipe: e.swipe, hurt: before.some(({ s, hp }) => s.hp < hp) };
 });
-check("攻撃：前脚を振り下ろす", r.swipe > 0, JSON.stringify(r));
+check("攻撃：前脚を振り下ろし、射程内の味方が被弾する", r.swipe > 0 && r.hurt, JSON.stringify(r));
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 

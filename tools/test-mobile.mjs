@@ -172,6 +172,13 @@ for (const [w, h] of [
   check("パネルのボタンにすべて届く（パネルの中をスクロール）", r.length === 0, r.join());
   r = await reachAll(page, MAIN_BUTTONS);
   check("パネルを開いていても、ほかのボタンに届く（下に余白）", r.length === 0, r.join());
+  if (h === 560) {
+    // 縦が短く下パネルが画面中央を覆う場合も、実際のタップが編成ボタンへ届く。
+    await page.tap("#organize");
+    check("短い画面でも部隊パネルの上から編成ボタンを押せる", await page.isVisible("#squadSheet"));
+    await page.tap("#squadClose");
+    check("編成を閉じても選択中の部隊パネルへ戻れる", await page.isVisible("#squadPanel"));
+  }
   await page.tap("#sqHero");
   r = await ev(page, () => {
     const p = document.getElementById("squadPanel");
