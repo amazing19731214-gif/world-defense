@@ -2297,6 +2297,11 @@
       .squad-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
       .tools.unit-tools .squad-chip { min-width: 0; }
       #hireToggle { font-size: 14px; }
+      #squadList .formation-soldier-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 90px; }
+      #squadList .formation-soldier-actions button { min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 14px; }
+      #squadList .soldier-row > span { min-width: 0; overflow-wrap: anywhere; }
+      #soldierSheet.from-formation .s-card .card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #soldierSheet.from-formation .panel-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 6px 0; }
       #siegeTabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
       #squadSheet .formation-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 12px 0 6px; margin-top: -12px; }
       #pace, #recoverAll { white-space: pre-line; font-size: 14px; line-height: 1.3; padding: 6px 1px; }
@@ -2457,7 +2462,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v76（編成画面の統合・世界から直接出陣）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v77（編成から兵士の詳細・育成）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -11613,7 +11618,7 @@ OFF</button>
           selectedUnitType = null;
           placeSquadId = null;
           closeSquadSheet(false);
-          closeSoldierSheet();
+          closeSoldierSheet(false);
           battle = null; // 攻城戦の途中なら中止（戦死はすでに保存済み）
           $("battleSheet").hidden = true;
           resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
@@ -12162,8 +12167,9 @@ OFF</button>
                         '">' +
                         (bulkPick.includes(s.id) ? "☑ 選択中" : "☐ 選ぶ") +
                         "</button>"
-                      : !playing && !moving
-                        ? '<button data-move="' + s.id + '">移籍</button>'
+                      : !moving
+                        ? '<div class="formation-soldier-actions"><button data-formation-soldier="' + s.id + '" aria-label="' + esc(soldierName(s)) + 'の詳細・育成">詳細・育成</button>' +
+                          (!playing ? '<button data-move="' + s.id + '">移籍</button>' : '') + '</div>'
                         : moving && moving.id === s.id
                           ? '<span class="moving-tag">移籍中</span>'
                           : moving && s.squadId !== moving.squadId
@@ -12250,6 +12256,7 @@ OFF</button>
           const b = ev.target.closest("button");
           if (!b || b.id === "squadClose" || b.closest("#formationTabs, #siegeSheet")) return;
           const d = b.dataset;
+          if (d.formationSoldier) return openFormationSoldier(+d.formationSoldier);
           let err = null;
           if (d.bulkStart !== undefined) {
             bulkPick = [];
@@ -13551,6 +13558,7 @@ OFF</button>
           $("gearSheet").hidden = true;
           if (!$("heroGrowthSheet").hidden) renderHeroGrowth();
           if (!$("soldierSheet").hidden) renderSoldierSheet();
+          focusFormationSoldierAction("[data-gear-open]");
           updateUI();
         }
         $("gearOpen").onclick = () => openGear(null);
@@ -14293,6 +14301,7 @@ OFF</button>
           // 開いていた画面（主人公・兵士名簿）を新しい職業で描き直す
           if (!$("heroGrowthSheet").hidden) renderHeroGrowth();
           if (!$("soldierSheet").hidden) renderSoldierSheet();
+          focusFormationSoldierAction("[data-job-open]");
           updateUI();
         }
         $("jobClose").onclick = closeJobSheet;
@@ -14329,7 +14338,7 @@ OFF</button>
           updateUI();
         });
         // ===== 兵士名簿（在籍の兵士・英霊名鑑） =====
-        let soldierTab = "live";
+        let soldierTab = "live", soldierFocusId = null, soldierFormationReturn = null;
         const skillTags = (ids) =>
           ids.length
             ? ids
@@ -14765,6 +14774,17 @@ OFF</button>
           );
         }
         function renderSoldierSheet() {
+          $("soldierSheet").classList.toggle("from-formation", !!soldierFormationReturn);
+          $("soldierSheet").querySelector(".tabs").hidden = !!soldierFormationReturn;
+          $("soldierTitle").textContent = soldierFormationReturn ? "兵士の詳細・育成" : "兵士名簿";
+          $("soldierClose").textContent = soldierFormationReturn ? "← 編成" : "✕";
+          $("soldierClose").setAttribute("aria-label", soldierFormationReturn ? "育成を閉じて編成に戻る" : "兵士名簿を閉じる");
+          if (soldierFormationReturn) {
+            const s = soldierById(soldierFocusId), q = s && squadById(s.squadId);
+            $("soldierHint").textContent = q ? squadName(q) + "の兵士。装備・転職・命名・指導員への引退を操作できます。各操作の条件は兵士名簿と共通です。" : "この兵士は部隊に在籍していません。編成へ戻って確認してください。";
+            $("soldierList").innerHTML = s && s.alive && q ? soldierCard(s) : '<p class="muted">この兵士は育成の対象ではありません。</p>';
+            return;
+          }
           $("tabLive").classList.toggle("active", soldierTab === "live");
           $("tabFallen").classList.toggle("active", soldierTab === "fallen");
           $("tabLive").setAttribute("aria-selected", soldierTab === "live");
@@ -14845,15 +14865,42 @@ OFF</button>
           }
           $("soldierList").innerHTML = html;
         }
+        function openFormationSoldier(id) {
+          const s = soldierById(id);
+          if (!s || !s.alive || !squadById(s.squadId)) return;
+          soldierFormationReturn = { id, scroll: $("squadSheet").querySelector(".sheet").scrollTop };
+          soldierFocusId = id;
+          $("squadSheet").hidden = true;
+          renderSoldierSheet();
+          $("soldierSheet").querySelector(".sheet").scrollTop = 0;
+          $("soldierSheet").hidden = false;
+          $("soldierClose").focus();
+        }
         function openSoldierSheet(tab) {
+          soldierFormationReturn = null; soldierFocusId = null;
           soldierTab = tab || "live";
           renderSoldierSheet();
           $("soldierSheet").hidden = false;
           $("soldierClose").focus();
         }
-        const closeSoldierSheet = () => ($("soldierSheet").hidden = true);
+        function focusFormationSoldierAction(selector) {
+          if (soldierFormationReturn && !$("soldierSheet").hidden)
+            $("soldierList").querySelector(selector)?.focus({ preventScroll: true });
+        }
+        function closeSoldierSheet(restoreFormation = true) {
+          const back = soldierFormationReturn;
+          soldierFormationReturn = null; soldierFocusId = null;
+          $("soldierSheet").hidden = true;
+          if (back && restoreFormation) {
+            renderSquadSheet();
+            $("squadSheet").hidden = false;
+            $("squadSheet").querySelector(".sheet").scrollTop = back.scroll;
+            const button = $("squadList").querySelector('[data-formation-soldier="' + back.id + '"]');
+            (button || $("squadClose")).focus({ preventScroll: true });
+          }
+        }
         $("soldiers").onclick = () => openSoldierSheet("live");
-        $("soldierClose").onclick = closeSoldierSheet;
+        $("soldierClose").onclick = () => closeSoldierSheet();
         $("tabLive").onclick = () => openSoldierSheet("live");
         $("tabFallen").onclick = () => openSoldierSheet("fallen");
         $("tabMentor").onclick = () => openSoldierSheet("mentor");
@@ -14950,7 +14997,7 @@ OFF</button>
           $("retireSheet").hidden = false;
           $("retireClose").focus();
         }
-        const closeRetire = () => ($("retireSheet").hidden = true);
+        const closeRetire = () => { $("retireSheet").hidden = true; focusFormationSoldierAction("[data-retire]"); };
         $("retireClose").onclick = closeRetire;
         $("retireSheet").addEventListener("click", (ev) => {
           if (ev.target === $("retireSheet")) return closeRetire();
@@ -14977,7 +15024,8 @@ OFF</button>
               );
               if (retireBonus) toast("🌟 超秘伝書「" + LEGEND.abil[retireBonus.k].name + "」を手に入れた！");
               closeRetire();
-              if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
+              if (soldierFormationReturn) closeSoldierSheet();
+              else if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
               updateUI();
               return;
             }
@@ -19865,6 +19913,9 @@ OFF</button>
           closeJobSheet();
         });
         document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape" && soldierFormationReturn && !$("soldierSheet").hidden) {
+            ev.preventDefault(); ev.stopImmediatePropagation(); closeSoldierSheet(); return;
+          }
           if (ev.key === "Escape" && !$("heroSheet").hidden) closeSheet();
           if (ev.key === "Escape" && !$("squadSheet").hidden) closeSquadSheet();
           if (ev.key === "Escape" && !$("gachaSheet").hidden) closeGacha();
