@@ -2479,7 +2479,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v79（編成をコンパクト化・まとめて交代）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v80（商店に裏ボスの呼び札）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4807,6 +4807,8 @@ OFF</button>
             rng: { name: "射程の実", icon: "🍇", stat: "射程", up: 1 },
           },
           fruitPrice: 5000, // 実の値段（両）
+          bossLurePrice: 30000, // 裏ボスの呼び札（軍資金G。小判ではない）
+          bossLureMax: 99,
           maxStock: 999, // 倉庫に置ける実の数（種類ごと）
           maxEat: 1e6, // 兵士1人が食べられる数（種類ごと・保存の安全のため）
           bookSell: { skill: 150, legend: 500, super: 3000 }, // 書の売値（両）：スキルの書・伝承の秘伝書・🌟超秘伝書
@@ -5117,6 +5119,7 @@ OFF</button>
             bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
             koban: int(o.koban, KOBAN_MAX), // 小判（両）：装備の売却で増える永続の通貨（以前の保存データは 0 から）
+            bossLures: int(o.bossLures, SHOP.bossLureMax), // 未使用の裏ボスの呼び札。旧セーブは0個
             fruits: Object.fromEntries(
               Object.keys(SHOP.fruits)
                 .map((k) => [k, int(o.fruits && o.fruits[k], SHOP.maxStock)])
@@ -6406,9 +6409,45 @@ OFF</button>
         };
         let intrudeRng = Math.random, // 乱入の抽選・玉の抽選（テストで差し替え可能）
           intruderPlan = null, // このウェーブに乱入させるか { wave, at, forced }
-          pendingIntruder = null; // 読み込み直す前に乱入していたウェーブ（同じウェーブで必ず乱入させる）
+          pendingIntruder = null; // 呼び札の予約・再読込前の乱入ウェーブ（必ず乱入させる）
         const gemCount = (k) => ((forgeSave().gems || {})[k] || 0);
         const gemKinds = () => GEMS.filter((g) => gemCount(g.k) > 0).length;
+        const bossLureCount = () => forgeSave().bossLures || 0;
+        const bossLurePending = () => pendingIntruder === wave + 1;
+        function bossLureError(use = false) {
+          if (training || battle) return "通常防衛戦の準備中だけ購入・使用できます。";
+          if (playing) return "ウェーブの合間に購入・使用してください。";
+          if (over || hp <= 0 || wave >= waveGoal) return "次のウェーブに進める状態で購入・使用してください（目標達成後は目標を延ばせます）。";
+          if (use) {
+            if (!bossLureCount()) return "裏ボスの呼び札を持っていません。";
+            if (bossLurePending()) return "次のWAVEには裏ボスが出現予定です。呼び札は残しています。";
+          } else {
+            if (bossLureCount() >= SHOP.bossLureMax) return "呼び札は" + SHOP.bossLureMax + "個まで持てます。";
+            if (gold < SHOP.bossLurePrice) return "軍資金が足りません（30,000G）。小判では購入できません。";
+          }
+          return null;
+        }
+        // 軍資金・所持数・次WAVEの出現予約を同じチェックポイントで確定する。
+        function changeBossLure(use) {
+          const error = bossLureError(use);
+          if (error) return error;
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return "未保存の進行があります。先に途中保存をやり直してください。";
+          const F = forgeSave(), before = { gold, count: F.bossLures, pending: pendingIntruder, defense: heroSave.defense, batch: gameSaveBatch, active: gameSaveBatchActive };
+          if (use) { F.bossLures--; pendingIntruder = wave + 1; }
+          else { gold -= SHOP.bossLurePrice; F.bossLures = bossLureCount() + 1; }
+          let saved = false;
+          try { saved = saveDefenseCheckpoint(); } catch (err) { saved = false; }
+          if (!saved) {
+            gold = before.gold; F.bossLures = before.count; pendingIntruder = before.pending; heroSave.defense = before.defense;
+            gameSaveBatch = before.batch; gameSaveBatchActive = before.active;
+            updateUI();
+            return "保存できなかったため取り消しました。軍資金と呼び札は元のままです。";
+          }
+          updateUI();
+          return null;
+        }
+        const buyBossLure = () => changeBossLure(false);
+        const useBossLure = () => changeBossLure(true);
         function planIntruder() {
           intruderPlan = null;
           if (training || battle) return;
@@ -13326,6 +13365,16 @@ OFF</button>
             "<button data-scroll-cancel>やめる</button></div>"
           );
         }
+        function bossLureHtml() {
+          const buyError = bossLureError(), useError = bossLureError(true);
+          return '<div class="gear-line" id="bossLureCard"><p><b>👹 裏ボスの呼び札</b> <small>所持 ' + bossLureCount() + ' / ' + SHOP.bossLureMax + '</small></p>'
+            + '<p>1枚 <b>30,000G</b>（軍資金）。使用すると、次の通常防衛WAVEの途中に「怨霊・玉梓」が必ず1体出現します。WAVE50未満でも使用できます。</p>'
+            + '<p class="muted"><small>購入だけでは出現しません。倒すと八玉を1つ獲得。城に到達すると❤️−3。準備中のみ使用でき、予約はリロード・修練場・攻城戦を挟んでも残ります。「最初から」で予約は解除されます（使用済みの札は戻りません）。</small></p>'
+            + '<p data-lure-status role="status">' + (pendingIntruder ? '⚠ 次の通常防衛WAVE ' + pendingIntruder + ' に出現予約済み。追加使用は不要です。' : '軍資金：' + Math.floor(gold).toLocaleString("ja-JP") + 'G（小判とは別）') + '</p>'
+            + '<div class="card-actions"><button data-boss-lure-buy' + (buyError ? ' disabled' : '') + '>買う 30,000G</button>'
+            + '<button data-boss-lure-use' + (useError ? ' disabled' : '') + '>1枚使う</button></div>'
+            + ((buyError || useError) ? '<p class="muted"><small>' + esc(buyError || useError) + '</small></p>' : '') + '</div>';
+        }
         function renderGearStore() {
           const F = forgeSave(),
             busy = gearBusy();
@@ -13360,7 +13409,7 @@ OFF</button>
               "から、ごくまれに乱入する裏ボス「" +
               INTRUDER.icon +
               INTRUDER.name +
-              "」を倒すと1つ手に入ります（持っていない種類が出やすい）。乱入した裏ボスとの戦いは、読み込み直しても避けられません。</small></p>" +
+              "」を倒すと1つ手に入ります（持っていない種類が出やすい）。商店の「裏ボスの呼び札」（30,000G）でも次のWAVEに呼べます。乱入した裏ボスとの戦いは、読み込み直しても避けられません。</small></p>" +
               '<p><b>集めた種類 ' +
               n +
               "/8</b></p>" +
@@ -13385,6 +13434,7 @@ OFF</button>
           }
           if (gearTab === "shop") {
             const st = F.fruits || {};
+            html += bossLureHtml();
             html +=
               '<p class="muted"><small>能力の実：兵士に使うと、その兵士の能力がずっと上がります（攻撃・防御・射程は +1、最大HPは +10。何個でも・転職しても消えない）。1個 ' +
               kobanText(SHOP.fruitPrice) +
@@ -13788,6 +13838,13 @@ OFF</button>
               toast(gearNote);
             }
             gemUse = null;
+          } else if (d.bossLureBuy !== undefined) {
+            err = buyBossLure();
+            if (!err) gearNote = "👹 裏ボスの呼び札を購入しました（30,000G）。出現させるには「1枚使う」を押してください。";
+          } else if (d.bossLureUse !== undefined) {
+            if (!confirm("裏ボスの呼び札を1枚使い、次の通常防衛WAVE " + (wave + 1) + "に「怨霊・玉梓」を呼びますか？ 城に到達するとハートが3減ります。")) return;
+            err = useBossLure();
+            if (!err) { gearNote = "👹 次のWAVE " + pendingIntruder + "に裏ボス「怨霊・玉梓」が出現します。予約は保存しました。"; mapToast(gearNote); }
           } else if (d.fruitBuy) {
             err = buyFruit(d.fruitBuy);
             if (!err) gearNote = SHOP.fruits[d.fruitBuy].name + "を買いました（" + kobanText(SHOP.fruitPrice) + "）。";
@@ -20143,6 +20200,10 @@ OFF</button>
             intruderApi: {
               INTRUDER,
               GEMS,
+              buyBossLure,
+              useBossLure,
+              bossLureCount,
+              bossLureError,
               setRng: (f) => (intrudeRng = f || Math.random),
               spawnIntruder,
               rollGem,
@@ -20496,8 +20557,9 @@ OFF</button>
           return {
             version: 1, wave, waveGoal, gold, hp, heartPurchases, speed, runId, clock: combatClock,
             bossRewardThrough: old && old.runId === runId ? old.bossRewardThrough || 0 : 0,
-            // 乱入して決着がつく前に保存し直すことはない（ウェーブの始めだけ保存する）。念のため同じ流れの未決着は引き継ぐ
-            intruder: old && old.runId === runId && old.intruder && old.intruder.wave > wave ? old.intruder : null,
+            // 呼び札の次WAVE予約と、再読込前の未決着の乱入を引き継ぐ。
+            intruder: pendingIntruder === wave + 1 ? { wave: pendingIntruder }
+              : old && old.runId === runId && old.intruder && old.intruder.wave > wave ? old.intruder : null,
             towers: towers.filter(t => !t.destroyed).map(t => ({ id:t.id, type:t.type, x:t.x, y:t.y, level:t.level, spent:t.spent, hp:towerHp(t), cd:t.cd || 0 })),
             towerLevels: towerLevels(),
             warlordLevels: Object.fromEntries(ownedIds().map(id => [id, warlordLevel(id).level])),
@@ -20590,7 +20652,7 @@ OFF</button>
           playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;
           // 乱入した裏ボスとの戦いの途中で閉じた：次のウェーブ（同じウェーブ）で必ず乱入させる
           pendingIntruder = d.intruder && Number.isInteger(d.intruder.wave) && d.intruder.wave === d.wave + 1 ? d.intruder.wave : null;
-          if (pendingIntruder) defenseSaveMessage = "⚠ 前回、裏ボス「" + INTRUDER.name + "」が乱入したウェーブです。次のウェーブで必ず乱入します。";
+          if (pendingIntruder) defenseSaveMessage = "⚠ 次のWAVE " + pendingIntruder + "で裏ボス「" + INTRUDER.name + "」が必ず乱入します（呼び札・前回の乱入を引き継ぎ）。";
           renderPace(); renderPace();
           msg("💾 WAVE " + wave + " 終了時点から再開しました。" + (over ? (wave < MAX_WAVE ? "目標達成済みです。WAVEから目標を延ばせます。" : "全" + MAX_WAVE + "ウェーブ達成済みです。「最初から」で新しく挑戦できます。") : "次は WAVE " + (wave+1) + "。「ウェーブ開始」を押して続けよう。"));
           return true;
