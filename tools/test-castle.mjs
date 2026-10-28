@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // NPC城の攻略（Phase 5：清洲城の占領・報酬・演習・保存）の動作確認（Playwright / Chromium・iPhone相当の画面幅）
 //   node tools/test-castle.mjs
 //   SCREENSHOTS=dir node tools/test-castle.mjs … 画面写真も保存
@@ -95,7 +96,7 @@ const fight = (page, castle) =>
 let { page, errors, context } = await newContext();
 
 console.log("■ 攻略目標");
-await page.tap("#siege");
+await openSiegeFormation(page);
 let text = await page.textContent("#siegeTarget");
 check(
   "攻城編成の画面に攻略目標（清洲城・尾張・耐久・塔・守備兵・報酬）",
@@ -137,7 +138,7 @@ await page.tap("#battleClose");
 console.log("■ 再読み込み・次の目標・演習");
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
-await page.tap("#siege");
+await openSiegeFormation(page);
 text = await page.textContent("#siegeTarget");
 check(
   "清洲城を取ると、次の攻略目標は隣の国の城（曳馬城・遠江）",

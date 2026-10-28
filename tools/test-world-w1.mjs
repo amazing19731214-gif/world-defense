@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // W1: 日本の難易度固定、対馬の初回条件と旧セーブ互換、敵Lv・装甲・装甲無視の実ダメージ。
 import fs from 'node:fs';
 import http from 'node:http';
@@ -95,7 +96,7 @@ try{
  r=await p.evaluate(()=>{const a=WD_DEBUG.squadApi;a.setTarget('kaneishi');return {n:a.JAPAN.filter(a.ownsProvince).length,tenka:a.isTenka(),stored:JSON.parse(localStorage.getItem('worldDefense.conquest.v1')),levels:a.JAPAN.filter(k=>a.PROVINCES[k].castle).map(k=>a.recLevel(a.NPC_CASTLES[a.PROVINCES[k].castle]))};});
  check('全68か国制圧・天下統一・保存形式version2を維持',r.n===68&&r.tenka&&r.stored.version===2&&r.stored.tenka,r);
  await p.reload();check('再読み込みでも推奨Lvと制圧が変わらない',JSON.stringify(r.levels)===JSON.stringify(await p.evaluate(()=>{const a=WD_DEBUG.squadApi;return a.JAPAN.filter(k=>a.PROVINCES[k].castle).map(k=>a.recLevel(a.NPC_CASTLES[a.PROVINCES[k].castle]));})));
- await p.locator('#siege').tap();check('攻城編成に敵Lv335を表示',/敵Lv335/.test(await p.locator('#siegeTarget').innerText()));
+ await openSiegeFormation(p);check('攻城編成に敵Lv335を表示',/敵Lv335/.test(await p.locator('#siegeTarget').innerText()));
  check('JavaScriptエラーなし',errors.length===0,errors);
  await context.close();
 }finally{await browser.close();server.close();}

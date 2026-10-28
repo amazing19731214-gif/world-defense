@@ -80,8 +80,8 @@ let r = await page.evaluate(() => ({
 }));
 check("移籍先の案内に「⇄ 入れ替え」の説明", /入れ替え/.test(r.hint), r.hint);
 check(
-  "部隊が上限（4つ）なら「新しい部隊へ」を出さない・満員なので「ここへ編入」もない",
-  r.newBtn === 0 && r.moveTo === 0,
+  "4部隊保有なら空き4枠の「新しい部隊へ」を表示・既存の満員部隊へは編入できない",
+  r.newBtn === 1 && r.moveTo === 1,
   JSON.stringify(r),
 );
 check(
@@ -123,8 +123,8 @@ check("槍兵#1 は第二部隊へ、弓兵#11 は第一部隊へ", (await where
 check("人数は変わらない（10人ずつのまま）", (await sizes()) === "10,10,10,10", await sizes());
 check("入れ替えたと知らせる・移籍の選択を終える", /と .*を入れ替えた/.test(r.msg) && r.swaps === 0, r.msg);
 check(
-  "両方の部隊は混成部隊になる",
-  /混成/.test(r.names[0]) && /混成/.test(r.names[1]),
+  "異なる兵種を入れ替えても部隊名は接尾辞なし",
+  r.names[0] === "第一部隊" && r.names[1] === "第二部隊",
   JSON.stringify(r.names),
 );
 check("戦歴に入れ替えを記録", /入れ替え/.test(r.h1) && /入れ替え/.test(r.h11), r.h1 + " / " + r.h11);
@@ -136,7 +136,7 @@ r = await page.evaluate(() =>
     .squads.map((q) => WD_DEBUG.squadApi.squadName(q))
     .join(","),
 );
-check("元に戻すと部隊の名前も元どおり", /槍兵/.test(r) && /弓兵/.test(r) && !/混成/.test(r), r);
+check("元に戻しても部隊名は番号を維持", r === "第一部隊,第二部隊,第三部隊,第四部隊", r);
 await page.tap('[data-move="1"]');
 await page.tap("[data-cancel-move]");
 check("取消で何も変えずに戻る", (await where(1)) === 1 && (await page.$$("[data-swap]")).length === 0);

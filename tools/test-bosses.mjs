@@ -144,23 +144,10 @@ check(
   JSON.stringify(r),
 );
 await page.tap('[data-boss-go="hiei"]');
-let text = await page.textContent("#siegeTarget");
-check(
-  "出陣：攻城編成の画面で討伐目標・推奨Lv・永久戦死の注意",
-  !(await page.isHidden("#siegeSheet")) &&
-    /討伐目標：雷獣・白虎/.test(text) &&
-    /推奨 Lv200/.test(text) &&
-    /入場制限なし/.test(text) &&
-    /永久戦死/.test(text) &&
-    /主人公は戦死するとLv1から再出発/.test(text),
-  text,
-);
-check(
-  "出陣ボタンは「討伐（雷獣・白虎に挑む）」",
-  /討伐（雷獣・白虎に挑む）/.test(await page.textContent("#siegeGo")),
-);
-if (shots) await page.screenshot({ path: path.join(shots, "b1-target.png") });
-await page.tap("#siegeGo");
+let text = dialogs.join(" / ");
+check("世界から秘境討伐へ直接出陣",(await page.isHidden("#squadSheet"))&&(await page.isHidden("#mapSheet"))&&await page.evaluate(()=>WD_DEBUG.squadApi.battle()?.boss==="hiei"));
+check("出陣確認に目標・推奨Lv・永久戦死・主人公の再出発",/雷獣・白虎/.test(text)&&/推奨Lv200/.test(text)&&/永久戦死/.test(text)&&/主人公はLv1から再出発/.test(text),text);
+if (shots) await page.screenshot({path:path.join(shots,"b1-target.png")});
 check(
   "出陣の確認でも永久戦死を知らせる",
   dialogs.some((d) => /雷獣・白虎/.test(d) && /永久戦死/.test(d)),
