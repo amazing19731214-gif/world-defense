@@ -2307,6 +2307,20 @@
       #soldierSheet.from-formation .panel-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 6px 0; }
       #siegeTabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
       #squadSheet .formation-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 12px 0 6px; margin-top: -12px; }
+      /* 編成だけを小さくする。ゲーム本体の操作ボタンには適用しない。 */
+      #squadSheet .sheet { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); }
+      #squadSheet .formation-head { top: -8px; padding: 8px 0 4px; margin-top: -8px; }
+      #squadSheet button { min-height: 34px; padding: 4px 8px; border-width: 1px; border-radius: 7px; box-shadow: none; font-size: 13px; line-height: 1.2; }
+      #squadSheet #formationTabs { gap: 4px; margin: 4px 0 2px; }
+      #squadSheet #formationTabs button { font-size: 14px; }
+      #squadSheet #squadRosterTabs button, #squadSheet #squadList .formation-soldier-actions button { min-height: 32px; padding: 3px 2px; font-size: 13px; }
+      #squadSheet #squadList .formation-soldier-actions { flex-basis: 76px; gap: 3px; }
+      #squadSheet #squadList .soldier-row { padding: 3px 0; gap: 6px; }
+      #squadSheet #squadHint { font-size: 13px; line-height: 1.35; }
+      #squadSheet .squad-card h3 { margin: 4px 0; font-size: 15px; }
+      #squadSheet #squadClose { min-height: 32px; }
+      #squadSheet .bulk-swap-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; margin-top: 4px; font-size: 12px; }
+      #squadSheet .bulk-swap-note { margin: 4px 0; font-size: 13px; }
       #pace, #recoverAll { white-space: pre-line; font-size: 14px; line-height: 1.3; padding: 6px 1px; }
       #pace[data-mode="paused"] { background: #495f62; }
       #infoSheet { z-index: 9; }
@@ -2465,7 +2479,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v78（部隊タブ・指導員候補）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v79（編成をコンパクト化・まとめて交代）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2548,6 +2562,7 @@ OFF</button>
             <button id="siege" role="tab" aria-selected="false" aria-controls="siegeSheet" tabindex="-1">攻城用武将</button>
           </div>
           <div id="squadRosterTabs" role="tablist" aria-label="部隊・指導員候補の表示"></div>
+          <div id="bulkSwapControls" aria-live="polite" hidden></div>
         </div>
         <div id="formationSoldierPanel" role="tabpanel" aria-labelledby="formationSoldiers">
           <p id="squadHint" style="margin: 6px 0"></p>
@@ -5317,7 +5332,7 @@ OFF</button>
           return out;
         }
         const zukan = loadZukan();
-        let recruitSaving = false;
+        let recruitSaving = false, formationSaving = false;
         let zukanReady = false; // 起動して兵士を読み込むまでは記録しない
         function persistZukan() {
           try {
@@ -5331,7 +5346,7 @@ OFF</button>
         }
         // 図鑑に登録する：今の状態（と履歴）にあるものをすべて記録する。何度呼んでも同じ（増えるだけ）
         function zukanSync() {
-          if (!zukanReady || recruitSaving) return 0;
+          if (!zukanReady || recruitSaving || formationSaving) return 0;
           let n = 0;
           const add = (c, id) => {
             if (!zukan[c][id]) {
@@ -8754,6 +8769,48 @@ OFF</button>
           logHistory(b, squadName(qa) + " に編入（" + soldierName(a) + " と入れ替え）");
           return null;
         }
+        // まとめて交代：全員を検証してから2部隊の同数を一括交換し、途中保存と同じログで確定する。
+        function bulkSwapPlan(ids) {
+          if (battle) return { error: "攻城戦の最中は交代できません。" };
+          if (training) return { error: "修練場中は交代できません。" };
+          if (playing) return { error: "ウェーブ中は交代できません。" };
+          if (hp <= 0) return { error: "ゲームオーバー後は交代できません。" };
+          if (!Array.isArray(ids) || !ids.length) return { error: "2部隊から同じ人数を選んでください。" };
+          if (new Set(ids).size !== ids.length) return { error: "同じ兵士を重複して選べません。" };
+          const list = ids.map(soldierById);
+          if (list.some(s => !s || !s.alive || !squadById(s.squadId))) return { error: "選んだ兵士が部隊に在籍していません。" };
+          const groups = [...new Set(list.map(s => s.squadId))];
+          if (groups.length !== 2) return { error: "交代する兵士は2部隊から選んでください。" };
+          const left = list.filter(s => s.squadId === groups[0]), right = list.filter(s => s.squadId === groups[1]);
+          if (left.length !== right.length) return { error: "両部隊の選択人数を同じにしてください。" };
+          return { left, right, qa: squadById(groups[0]), qb: squadById(groups[1]) };
+        }
+        function swapMany(ids) {
+          const plan = bulkSwapPlan(ids);
+          if (plan.error) return { swapped: 0, error: plan.error };
+          if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return { swapped: 0, error: "未保存の進行があります。先に途中保存をやり直してください。" };
+          const { left, right, qa, qb } = plan;
+          const before = { roster: JSON.parse(JSON.stringify(soldierSave)), defense: heroSave.defense, batch: gameSaveBatch, active: gameSaveBatchActive,
+            types: squads.map(q => [q, q.type]),
+            soldiers: [...roster(qa), ...roster(qb)].map(s => ({ s, squadId: s.squadId, hp: s.hp, ratio: Math.min(1, s.hp / soldierStats(s).maxHp), history: s.history.slice() })) };
+          for (const s of left) { s.squadId = qb.id; logHistory(s, squadName(qb) + " に編入（まとめて交代）"); }
+          for (const s of right) { s.squadId = qa.id; logHistory(s, squadName(qa) + " に編入（まとめて交代）"); }
+          refreshSquadType(qa); refreshSquadType(qb);
+          for (const v of before.soldiers) v.s.hp = soldierStats(v.s).maxHp * v.ratio;
+          let saved = false;
+          formationSaving = true;
+          try { saved = saveDefenseCheckpoint(); } catch (err) { saved = false; } finally { formationSaving = false; }
+          if (!saved) {
+            for (const v of before.soldiers) { v.s.squadId = v.squadId; v.s.hp = v.hp; v.s.history = v.history; }
+            for (const [q, type] of before.types) q.type = type;
+            for (const key of Object.keys(soldierSave)) delete soldierSave[key];
+            Object.assign(soldierSave, before.roster); heroSave.defense = before.defense;
+            gameSaveBatch = before.batch; gameSaveBatchActive = before.active;
+            return { swapped: 0, error: "保存できなかったため交代を取り消しました。途中保存を確認してください。" };
+          }
+          refreshSiege(); zukanSync();
+          return { swapped: left.length, error: null };
+        }
         // まとめて移籍：選んだ兵士を順に同じ部隊へ移す（"new" は1人目で新しい部隊を作り、残りもそこへ）。
         // 移す先が満員になったら、入りきらなかった兵士はそのまま残す
         function transferMany(ids, target) {
@@ -9102,7 +9159,7 @@ OFF</button>
           soldierSave.seq = Math.max(soldierSave.seq, soldierSeq);
           soldierSave.squadSeq = Math.max(soldierSave.squadSeq, squadSeq);
           writeSoldierSave();
-          if (siegeReady && !recruitSaving) refreshSiege(); // 保存された新兵も攻城の部隊に入る（起動中は攻城編成の読み込み前）
+          if (siegeReady && !recruitSaving && !formationSaving) refreshSiege(); // 保存された新兵も攻城の部隊に入る（起動中は攻城編成の読み込み前）
         }
         // 保存済みの兵士だけを書き換える（名前など。戦闘中の経験値はここでは保存しない）
         function patchSavedSoldier(s, fields) {
@@ -12048,7 +12105,7 @@ OFF</button>
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
-        let squadRosterFilter = "all", formationRetireReturn = null;
+        let squadRosterFilter = "all", formationRetireReturn = null, bulkSwapMode = false;
         const squadFilterValues = () => [...SQUAD_RULES.slotNames.map((_, i) => String(i)), "all", "candidates"];
         function renderSquadRosterTabs() {
           const tab = (value, text) => '<button id="squadFilter-' + value + '" role="tab" data-squad-filter="' + value + '" aria-controls="squadList" aria-selected="' + (squadRosterFilter === value) + '" tabindex="' + (squadRosterFilter === value ? 0 : -1) + '" class="' + (squadRosterFilter === value ? "active" : "") + '">' + text + '</button>';
@@ -12057,7 +12114,8 @@ OFF</button>
         }
         function selectSquadRosterFilter(value) {
           if (!squadFilterValues().includes(value)) return;
-          squadRosterFilter = value; movingSoldierId = null; bulkPick = null;
+          squadRosterFilter = value; movingSoldierId = null;
+          if (!bulkSwapMode || value === "candidates") { bulkPick = null; bulkSwapMode = false; }
           renderSquadSheet();
           $("squadSheet").querySelector(".sheet").scrollTop = 0;
           $("squadFilter-" + value).focus({ preventScroll: true });
@@ -12076,6 +12134,18 @@ OFF</button>
         }
         let movingSoldierId = null,
           bulkPick = null; // まとめて移籍で選んでいる兵士の ID（選ぶモードでないときは null）
+        function bulkSwapCanSelect(qid) {
+          const groups = new Set((bulkPick || []).map(soldierById).filter(Boolean).map(s => s.squadId));
+          return !bulkSwapMode || groups.size < 2 || groups.has(qid);
+        }
+        function renderBulkSwapControls() {
+          $("bulkSwapControls").hidden = !bulkSwapMode;
+          if (!bulkSwapMode) return;
+          const ids = bulkPick || [], counts = new Map();
+          for (const id of ids) { const s = soldierById(id); if (s) counts.set(s.squadId, (counts.get(s.squadId) || 0) + 1); }
+          const plan = bulkSwapPlan(ids), summary = [...counts].map(([id, n]) => squadName(squadById(id)) + " " + n + "人").join(" ／ ");
+          $("bulkSwapControls").innerHTML = '<div class="bulk-swap-controls"><span>' + esc(summary || "交代する兵士を選択") + '</span><button data-bulk-swap-go' + (plan.error ? ' disabled title="' + esc(plan.error) + '"' : '') + '>' + (plan.error ? "交代" : plan.left.length + "人ずつ交代") + '</button><button data-bulk-swap-cancel>取消</button></div>';
+        }
         function squadStateText(q) {
           return q.state === "deployed"
             ? "配置中"
@@ -12087,14 +12157,17 @@ OFF</button>
         }
         function renderSquadSheet() {
           renderSquadRosterTabs();
+          $("bulkSwapControls").hidden = !bulkSwapMode;
           if (squadRosterFilter === "candidates") return renderMentorCandidates();
           const moving = soldierById(movingSoldierId);
           if (moving && !moving.alive) movingSoldierId = null;
-          if (bulkPick && (playing || battle)) bulkPick = null;
+          if (bulkPick && (playing || battle)) { bulkPick = null; bulkSwapMode = false; }
           if (bulkPick) bulkPick = bulkPick.filter((id) => soldierById(id) && soldierById(id).alive);
           const bulk = !!bulkPick,
             picked = bulk ? bulkPick.length : 0;
-          $("squadHint").textContent = bulk
+          renderBulkSwapControls();
+          $("squadHint").textContent = bulkSwapMode ? "2部隊から同じ人数を選び、上の交代ボタンで確定。部隊タブを切り替えても選択は残ります。"
+            : bulk
             ? "移籍する兵士を選んで（部隊ごとに「全員を選ぶ」も可）、下の移す先を押してください。選択中 " + picked + "人"
             : movingSoldierId
             ? soldierName(moving) + " の移籍先を選んでください。空きのある部隊へ「ここへ編入」、満員の部隊でも兵士の「⇄ 入れ替え」で交換できます。"
@@ -12102,7 +12175,8 @@ OFF</button>
               ? "ウェーブ中は配置・撤退のみ。雇用と移籍はウェーブの合間にできます。"
               : "兵士の移籍・入れ替えができます。雇用は「＋ 雇う」からランダムに配属されます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
           let html = "";
-          if (bulk) {
+          if (bulkSwapMode) html += '<p class="bulk-swap-note">☑ まとめて交代：選択中 ' + picked + '人</p>';
+          else if (bulk) {
             // 移す先：選んだ兵士を受け入れられる部隊（空きのある部隊）と新しい部隊
             const dests = squads
               .filter((q) => roster(q).length < SQUAD_RULES.squadSize && bulkPick.some((id) => soldierById(id).squadId !== q.id))
@@ -12134,7 +12208,7 @@ OFF</button>
               (squads.length < SQUAD_RULES.maxSquads ? '<button data-move-to="new">新しい部隊へ</button>' : "") +
               "<button data-cancel-move>取消</button></div>";
           else if (!playing && !battle && soldiers.some((x) => x.alive))
-            html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button></div>';
+            html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button>' + (!training ? '<button data-bulk-swap-start>⇄ まとめて交代</button>' : '') + '</div>';
           if (!squads.length)
             html += '<p class="muted">部隊がありません。「＋ 雇う」で兵士を雇うと、自動で部隊に配属されます。</p>';
           const visibleSquads = squadRosterFilter === "all" ? squads : squads.filter(q => q.slot === Number(squadRosterFilter));
@@ -12145,7 +12219,7 @@ OFF</button>
             let acts = "";
             if (bulk) {
               const all = list.length && list.every((s) => bulkPick.includes(s.id));
-              if (list.length) acts += '<button data-bulk-all="' + q.id + '">' + (all ? "全員を外す" : "全員を選ぶ") + "</button>";
+              if (list.length) acts += '<button data-bulk-all="' + q.id + '"' + (!bulkSwapCanSelect(q.id) ? ' disabled' : '') + '>' + (all ? "全員を外す" : "全員を選ぶ") + "</button>";
             } else if (moving) {
               if (q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
                 acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
@@ -12196,7 +12270,7 @@ OFF</button>
                         (bulkPick.includes(s.id) ? " on" : "") +
                         '" data-bulk-pick="' +
                         s.id +
-                        '" aria-pressed="' +
+                        '"' + (!bulkSwapCanSelect(q.id) ? ' disabled' : '') + ' aria-pressed="' +
                         bulkPick.includes(s.id) +
                         '">' +
                         (bulkPick.includes(s.id) ? "☑ 選択中" : "☐ 選ぶ") +
@@ -12247,7 +12321,8 @@ OFF</button>
         let formationKind = "soldiers", formationReturnMap = false;
         function selectFormation(kind) {
           formationKind = kind === "siege" ? "siege" : "soldiers";
-          movingSoldierId = null; bulkPick = null;
+          movingSoldierId = null; bulkPick = null; bulkSwapMode = false;
+          $("bulkSwapControls").hidden = true;
           const siege = formationKind === "siege";
           $("formationSoldierPanel").hidden = siege;
           $("siegeSheet").hidden = !siege;
@@ -12270,7 +12345,8 @@ OFF</button>
           $("squadClose").focus();
         }
         function closeSquadSheet(returnToMap = true) {
-          movingSoldierId = null; bulkPick = null;
+          movingSoldierId = null; bulkPick = null; bulkSwapMode = false;
+          $("bulkSwapControls").hidden = true;
           $("squadSheet").hidden = true;
           const back = formationReturnMap;
           formationReturnMap = false;
@@ -12306,15 +12382,25 @@ OFF</button>
           }
           if (d.formationSoldier) return openFormationSoldier(+d.formationSoldier);
           let err = null;
-          if (d.bulkStart !== undefined) {
+          if (d.bulkSwapStart !== undefined) {
+            bulkSwapMode = true; bulkPick = []; movingSoldierId = null;
+          } else if (d.bulkSwapCancel !== undefined) { bulkSwapMode = false; bulkPick = null; }
+          else if (d.bulkSwapGo !== undefined) {
+            const result = swapMany(bulkPick);
+            if (result.error) { err = result.error; toast(err); }
+            else { bulkPick = null; bulkSwapMode = false; msg(result.swapped + "人ずつ、まとめて交代しました。"); toast($("msg").textContent); }
+          } else if (d.bulkStart !== undefined) {
+            bulkSwapMode = false;
             squadRosterFilter = "all";
             bulkPick = [];
             movingSoldierId = null;
-          } else if (d.bulkCancel !== undefined) bulkPick = null;
+          } else if (d.bulkCancel !== undefined) { bulkPick = null; bulkSwapMode = false; }
           else if (d.bulkPick) {
             const id = +d.bulkPick;
+            if (!bulkSwapCanSelect(soldierById(id)?.squadId)) return;
             bulkPick = bulkPick.includes(id) ? bulkPick.filter((x) => x !== id) : bulkPick.concat(id);
           } else if (d.bulkAll) {
+            if (!bulkSwapCanSelect(+d.bulkAll)) return;
             const ids = roster(squadById(+d.bulkAll)).map((s) => s.id),
               all = ids.every((id) => bulkPick.includes(id));
             bulkPick = all ? bulkPick.filter((id) => !ids.includes(id)) : bulkPick.concat(ids.filter((id) => !bulkPick.includes(id)));
@@ -20157,6 +20243,7 @@ OFF</button>
               skillSum,
               transferMany,
               swapSoldiers,
+              swapMany, bulkSwapPlan,
               squadName,
               setHeroSoldier,
               heroSoldier,
