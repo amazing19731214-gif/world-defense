@@ -2297,6 +2297,8 @@
       .squad-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
       .tools.unit-tools .squad-chip { min-width: 0; }
       #hireToggle { font-size: 14px; }
+      #siegeTabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      #squadSheet .formation-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 12px 0 6px; margin-top: -12px; }
       #pace, #recoverAll { white-space: pre-line; font-size: 14px; line-height: 1.3; padding: 6px 1px; }
       #pace[data-mode="paused"] { background: #495f62; }
       #infoSheet { z-index: 9; }
@@ -2448,7 +2450,6 @@ OFF</button>
         <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
         ><button id="gacha">🎴 ガチャ</button
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
-        ><button id="siege">⚔️ 攻城編成</button
         ><button id="mapOpen">🌏 世界</button><button id="zukanOpen">📖 図鑑</button
         ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button>
@@ -2456,7 +2457,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v75（8部隊・兵種ランダム雇用）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v76（編成画面の統合・世界から直接出陣）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2529,12 +2530,29 @@ OFF</button>
     </div>
     <div id="squadSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="squadTitle">
-        <div class="panel-head">
-          <strong id="squadTitle">部隊編成</strong
-          ><button id="squadClose" class="icon-btn" aria-label="閉じる">✕</button>
+        <div class="formation-head">
+          <div class="panel-head">
+            <strong id="squadTitle">部隊編成</strong
+            ><button id="squadClose" class="icon-btn" aria-label="閉じる">✕</button>
+          </div>
+          <div id="formationTabs" class="tabs" role="tablist" aria-label="編成の種類">
+            <button id="formationSoldiers" role="tab" aria-selected="true" aria-controls="formationSoldierPanel">兵士・部隊</button>
+            <button id="siege" role="tab" aria-selected="false" aria-controls="siegeSheet" tabindex="-1">攻城用武将</button>
+          </div>
         </div>
-        <p id="squadHint" style="margin: 6px 0"></p>
-        <div id="squadList"></div>
+        <div id="formationSoldierPanel" role="tabpanel" aria-labelledby="formationSoldiers">
+          <p id="squadHint" style="margin: 6px 0"></p>
+          <div id="squadList"></div>
+        </div>
+        <div id="siegeSheet" role="tabpanel" aria-labelledby="siege" hidden>
+          <p class="muted">兵士は防衛と共通です。攻城・秘境用の武将はここで設定します。世界画面からそのまま出陣できます。</p>
+          <div id="siegeTarget" class="target-card"></div>
+          <div id="siegeTabs" class="tabs four" role="tablist"></div>
+          <p id="siegeSaved" class="saved" aria-live="polite"></p>
+          <div id="siegeUnit"></div>
+          <div id="siegePick"></div>
+          <button id="siegeGo" class="gacha-pull">⚔️ 出陣（攻城戦）</button>
+        </div>
       </div>
     </div>
     <div id="soldierSheet" class="sheet-back" hidden>
@@ -2603,6 +2621,7 @@ OFF</button>
           <strong id="mapTitle">🗾 全国</strong
           ><button id="mapClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
+        <div class="card-actions"><button data-map-formation>📋 編成を確認・変更</button></div>
         <div id="mapBody"></div>
       </div>
     </div>
@@ -2649,20 +2668,6 @@ OFF</button>
           ><button id="jobClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="jobBody"></div>
-      </div>
-    </div>
-    <div id="siegeSheet" class="sheet-back" hidden>
-      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="siegeTitle">
-        <div class="panel-head">
-          <strong id="siegeTitle">⚔️ 攻城部隊編成</strong
-          ><button id="siegeClose" class="icon-btn" aria-label="閉じる">✕</button>
-        </div>
-        <div id="siegeTarget" class="target-card"></div>
-        <div id="siegeTabs" class="tabs four" role="tablist"></div>
-        <p id="siegeSaved" class="saved" aria-live="polite"></p>
-        <div id="siegeUnit"></div>
-        <div id="siegePick"></div>
-        <button id="siegeGo" class="gacha-pull">⚔️ 出陣（攻城戦）</button>
       </div>
     </div>
     <div id="battleSheet" class="sheet-back" hidden>
@@ -11607,9 +11612,8 @@ OFF</button>
           selectedSoldierId = null;
           selectedUnitType = null;
           placeSquadId = null;
-          closeSquadSheet();
+          closeSquadSheet(false);
           closeSoldierSheet();
-          closeSiege();
           battle = null; // 攻城戦の途中なら中止（戦死はすでに保存済み）
           $("battleSheet").hidden = true;
           resetHeroes(); // 所持武将とガチャ券は残し、配属と必殺技の時間だけ初期化
@@ -12200,24 +12204,51 @@ OFF</button>
               "</div>";
           $("squadList").innerHTML = html;
         }
-        function openSquadSheet() {
-          movingSoldierId = null;
-          bulkPick = null;
-          renderSquadSheet();
+        let formationKind = "soldiers", formationReturnMap = false;
+        function selectFormation(kind) {
+          formationKind = kind === "siege" ? "siege" : "soldiers";
+          movingSoldierId = null; bulkPick = null;
+          const siege = formationKind === "siege";
+          $("formationSoldierPanel").hidden = siege;
+          $("siegeSheet").hidden = !siege;
+          for (const [id, on] of [["formationSoldiers", !siege], ["siege", siege]]) {
+            $(id).setAttribute("aria-selected", String(on));
+            $(id).tabIndex = on ? 0 : -1;
+            $(id).classList.toggle("active", on);
+          }
+          if (siege) { refreshSiege(); siegeHeroPick = false; siegeProvinces = false; siegeNote = ""; renderSiege(); }
+          else renderSquadSheet();
+          $("squadSheet").querySelector(".sheet").scrollTop = 0;
+        }
+        function openSquadSheet(kind = "soldiers", fromMap = false) {
+          formationReturnMap = fromMap;
+          selectFormation(kind);
+          $("squadClose").textContent = fromMap ? "← 世界" : "✕ 閉じる";
+          $("squadClose").setAttribute("aria-label", fromMap ? "編成を閉じて世界に戻る" : "編成を閉じる");
           $("squadSheet").hidden = false;
           $("squadClose").focus();
         }
-        function closeSquadSheet() {
-          movingSoldierId = null;
-          bulkPick = null;
+        function closeSquadSheet(returnToMap = true) {
+          movingSoldierId = null; bulkPick = null;
           $("squadSheet").hidden = true;
+          const back = formationReturnMap;
+          formationReturnMap = false;
+          if (back && returnToMap) { renderMap(); $("mapSheet").hidden = false; $("mapClose").focus(); }
+          else if (returnToMap) $("organize").focus({ preventScroll: true });
         }
-        $("organize").onclick = openSquadSheet;
-        $("squadClose").onclick = closeSquadSheet;
+        $("organize").onclick = () => openSquadSheet();
+        $("squadClose").onclick = () => closeSquadSheet();
+        $("formationSoldiers").onclick = () => selectFormation("soldiers");
+        $("formationTabs").addEventListener("keydown", ev => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) return;
+          ev.preventDefault();
+          selectFormation(ev.key === "Home" ? "soldiers" : ev.key === "End" ? "siege" : formationKind === "siege" ? "soldiers" : "siege");
+          $(formationKind === "siege" ? "siege" : "formationSoldiers").focus();
+        });
         $("squadSheet").addEventListener("click", (ev) => {
           if (ev.target === $("squadSheet")) return closeSquadSheet();
           const b = ev.target.closest("button");
-          if (!b || b.id === "squadClose") return;
+          if (!b || b.id === "squadClose" || b.closest("#formationTabs, #siegeSheet")) return;
           const d = b.dataset;
           let err = null;
           if (d.bulkStart !== undefined) {
@@ -12287,7 +12318,7 @@ OFF</button>
             selectedUnitType = null;
             selectedTower = null;
             selectedSquad = null;
-            closeSquadSheet();
+            closeSquadSheet(false);
             msg(squadName(squadById(placeSquadId)) + "：道をタップして配置しよう。");
           }
           if (err) msg(err);
@@ -15406,7 +15437,7 @@ OFF</button>
               : '<p class="muted">' +
                 SIEGE_RULES.names[i] +
                 "はまだありません。防衛戦で「＋ 雇う」から部隊を雇うと、空いている枠に入ります。</p>") +
-            '<div class="card-actions"><button data-organize>📋 編成を開く</button></div>'
+            '<div class="card-actions"><button data-organize>📋 兵士・部隊へ</button></div>'
           );
         }
         function siegeHeroHtml(i) {
@@ -15450,36 +15481,29 @@ OFF</button>
               .join("")
           );
         }
-        function openSiege() {
+        const closeSiege = () => closeSquadSheet();
+        $("siege").onclick = () => selectFormation("siege");
+        function requestBattleStart() {
           refreshSiege();
-          siegeHeroPick = false;
-          siegeProvinces = false;
-          siegeNote = "";
-          renderSiege();
-          $("siegeSheet").hidden = false;
-          $("siegeClose").focus();
-        }
-        const closeSiege = () => ($("siegeSheet").hidden = true);
-        $("siege").onclick = openSiege;
-        $("siegeGo").onclick = () => {
           const err = canStartBattle();
-          if (err) {
-            siegeNote = "⚠ " + err;
-            return renderSiege();
-          }
-          const lists = battleRoster();
-          const plan = lists
-            .map((l, i) => (l.length ? SIEGE_RULES.names[i] + " " + l.length + "人" : ""))
-            .filter(Boolean)
-            .join("・");
-          const bossText = bossTarget
-            ? "\n" + BOSSES[bossTarget].name + "（推奨Lv" + BOSSES[bossTarget].lv + "）に挑みます。\n一般の兵士は戦死すると復活しません（永久戦死）。主人公はLv1から再出発します。"
-            : "\n（戦死した兵士は復活しません）";
-          if (!confirm("出陣しますか？\n" + plan + bossText)) return;
-          closeSiege();
-          startBattle();
+          if (err) return { error: err };
+          const plan = battleRoster()
+            .map((l, i) => l.length ? SIEGE_RULES.names[i] + " " + l.length + "人" + (siegeUnits[i].hero ? "（" + WARLORDS[siegeUnits[i].hero].name + "）" : "") : "")
+            .filter(Boolean).join("・");
+          const target = bossTarget ? BOSSES[bossTarget] : NPC_CASTLES[targetCastleId()];
+          const warning = "\n" + target.name + "（推奨Lv" + (bossTarget ? target.lv : recLevel(target)) + "）に出陣します。" +
+            "\n一般の兵士は戦死すると復活しません（永久戦死）。主人公はLv1から再出発します。";
+          if (!confirm("出陣しますか？\n" + plan + warning)) return { cancelled: true };
+          const error = startBattle();
+          if (error) return { error };
+          closeSquadSheet(false); closeMap();
+          setPaceMode(speed === 2 ? "x2" : "x1");
+          return { started: true };
+        }
+        $("siegeGo").onclick = () => {
+          const result = requestBattleStart();
+          if (result.error) { siegeNote = "⚠ " + result.error; renderSiege(); }
         };
-        $("siegeClose").onclick = closeSiege;
         // ===== 全国（地方の簡易地図・国の一覧・秘境） =====
         // 正確な日本地図の素材はないので、五畿七道をおおよその位置に並べた簡易地図と、地方ごとの国の一覧で表す
         let mapChapter = "japan",
@@ -15547,7 +15571,7 @@ OFF</button>
               '"' +
               (err || blocked || battle ? " disabled" : "") +
               ">" +
-              (st === "own" ? "⚔️ 演習に出陣（攻城編成へ）" : st === "open" ? "⚔️ 出陣（攻城編成へ）" : p === "tsushima" && !tsushimaReady() ? "🔒 対馬以外の日本67か国を制圧すると解放" : "🔒 隣の国を取ると攻められる") +
+              (st === "own" ? "⚔️ 演習に出陣" : st === "open" ? "⚔️ 出陣" : p === "tsushima" && !tsushimaReady() ? "🔒 対馬以外の日本67か国を制圧すると解放" : "🔒 隣の国を取ると攻められる") +
               "</button>" +
               (blocked && !err ? '<p class="injured"><small>反撃を退けるまで新しい国は攻められません。</small></p>' : "");
           }
@@ -15708,7 +15732,7 @@ OFF</button>
               O.text +
               '</small></p><button data-boss-go="orochi"' +
               (battle ? " disabled" : "") +
-              ">⚔️ 討伐に出陣（攻城編成へ）</button></div>";
+              ">⚔️ 討伐に出陣</button></div>";
             for (const [id, S] of Object.entries(SECRETS)) {
               const found = conquestMeta.secrets[id];
               html += found
@@ -15744,7 +15768,7 @@ OFF</button>
                   id +
                   '"' +
                   (battle ? " disabled" : "") +
-                  ">⚔️ 討伐に出陣（攻城編成へ）</button></div>"
+                  ">⚔️ 討伐に出陣</button></div>"
                 : '<div class="secret-card lock"><p><b>？？？</b><br><small>まだ見つかっていない秘境。ある国々を制圧すると、道が開けるという…</small></p></div>';
             }
           }
@@ -15775,7 +15799,9 @@ OFF</button>
           if (!b || b.disabled || b.id === "mapClose") return;
           const d = b.dataset;
           if (!mapNote.startsWith("🗻 秘境を発見")) mapNote = "";
-          if (d.worldHome !== undefined) {
+          if (d.mapFormation !== undefined) {
+            closeMap(); openSquadSheet("siege", true); return;
+          } else if (d.worldHome !== undefined) {
             mapChapter = "world"; mapProv = null;
           } else if (d.mapChapter && CHAPTER_ORDER.includes(d.mapChapter) && chapterUnlocked(d.mapChapter)) {
             mapChapter = d.mapChapter; mapRoad = null; mapProv = null; mapTab = "map";
@@ -15787,26 +15813,13 @@ OFF</button>
             mapRoad = d.mapRoad;
             mapProv = null;
           } else if (d.mapProv) mapProv = mapProv === d.mapProv ? null : d.mapProv;
-          else if (d.bossGo) {
-            const err = setBossTarget(d.bossGo);
+          else if (d.bossGo || d.mapGo) {
+            const err = d.bossGo ? setBossTarget(d.bossGo) : setTarget(d.mapGo);
             if (err) mapNote = "⚠ " + err;
             else {
-              closeMap();
-              openSiege();
-              siegeNote = "🗻 " + BOSSES[d.bossGo].name + "の討伐：部隊を確かめて「討伐」で出陣";
-              renderSiege();
-              return;
-            }
-          }
-          else if (d.mapGo) {
-            const err = setTarget(d.mapGo);
-            if (err) mapNote = "⚠ " + err;
-            else {
-              closeMap();
-              openSiege();
-              siegeNote = "🎯 攻略目標を " + NPC_CASTLES[d.mapGo].name + " にしました。「出陣」で攻め込もう";
-              renderSiege();
-              return;
+              const result = requestBattleStart();
+              if (result.started) return;
+              if (result.error) mapNote = "⚠ " + result.error;
             }
           }
           renderMap();
@@ -15816,9 +15829,8 @@ OFF</button>
           }
         });
         $("siegeSheet").addEventListener("click", (ev) => {
-          if (ev.target === $("siegeSheet")) return closeSiege();
           const b = ev.target.closest("button");
-          if (!b || b.id === "siegeClose" || b.disabled) return;
+          if (!b || b.disabled) return;
           const d = b.dataset,
             i = siegeTab;
           let err = null,
@@ -15847,8 +15859,7 @@ OFF</button>
             changed = false;
             if (!err) siegeNote = "🎯 攻略目標を " + NPC_CASTLES[d.target].name + " にしました";
           } else if (d.organize !== undefined) {
-            closeSiege();
-            openSquadSheet();
+            selectFormation("soldiers");
             return;
           } else if (d.heroPick !== undefined) {
             siegeHeroPick = true;
@@ -17489,7 +17500,7 @@ OFF</button>
           if (training) return "修練場の挑戦中は出陣できません。";
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
           if (battle) return "攻城戦の最中です。";
-          if (!battleRoster().some((l) => l.length)) return "攻城編成に兵士がいません。";
+          if (!battleRoster().some((l) => l.length)) return "出撃できる兵士がいません。通常防衛で「＋ 雇う」から兵士を雇い、「編成」で確認してください。";
           if (bossTarget) return bossError(bossTarget); // 討伐戦は反撃中でもできる
           const c = activeCounter();
           if (c && !ownsProvince(provinceOf(targetCastleId())))

@@ -216,7 +216,6 @@ for (const [w, h] of [
     ["#skillGuideOpen", "#skillGuideSheet", "#skillGuideClose"],
     ["#organize", "#squadSheet", "#squadClose"],
     ["#soldiers", "#soldierSheet", "#soldierClose"],
-    ["#siege", "#siegeSheet", "#siegeClose"],
     ["#gacha", "#gachaSheet", "#gachaClose"],
     ["#roster", "#heroSheet", "#sheetClose"],
   ]) {

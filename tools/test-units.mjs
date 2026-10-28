@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 import { openInfoEntry } from './ui-test-utils.mjs';
 // 鉄砲兵・衛生兵（陣中医）の動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test-units.mjs
@@ -436,7 +437,7 @@ check(
   r.includes("gunner") && r.includes("medic"),
   JSON.stringify(r),
 );
-await page.tap("#siege");
+await openSiegeFormation(page);
 const tab = r.indexOf("gunner");
 await page.tap(`#siegeTabs [data-unit="${tab}"]`);
 text = await page.textContent("#siegeUnit");
@@ -446,7 +447,7 @@ check(
   text.slice(0, 100),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "u2-siege.png") });
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 
 console.log("■ 画面（390px）");
 // 常設の雇用ボタンを測る

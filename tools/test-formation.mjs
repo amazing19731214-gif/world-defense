@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // 防衛戦と攻城戦で同じ第一〜第八部隊（10人まで）を使う動作確認。古い保存データ（5人×8部隊）の引き継ぎ・攻城編成（武将）・保存
 //   node tools/test-formation.mjs
 //   SCREENSHOTS=dir node tools/test-formation.mjs … 画面写真も保存
@@ -160,8 +161,8 @@ check(
 );
 
 console.log("■ 攻城編成の画面（兵士は防衛の部隊のまま）");
-check("メニューに「⚔️ 攻城編成」", /攻城編成/.test(await page.textContent("#siege")));
-await page.tap("#siege");
+check("メインに攻城編成は置かず、共通編成に攻城用武将タブ", await page.locator("main #siege").count()===0 && /攻城用武将/.test(await page.textContent("#siege")));
+await openSiegeFormation(page);
 check("攻城編成の画面を開く", await page.isVisible("#siegeSheet"));
 let tabs = await page.$$eval("#siegeTabs button", (bs) => bs.map((b) => b.textContent));
 check(
@@ -188,16 +189,16 @@ check("攻城編成では兵士を外せない（ボタンなし）", (await pag
 text = await page.textContent("#siegePick");
 check(
   "兵士の入れ替えは「編成」で行うと案内",
-  /防衛戦の部隊と同じ/.test(text) && /編成を開く/.test(text),
+  /防衛戦の部隊と同じ/.test(text) && /兵士・部隊へ/.test(text),
   text,
 );
 await page.tap("#siegePick [data-organize]");
 check(
-  "「編成を開く」で防衛の編成画面へ",
+  "「兵士・部隊へ」で同じ画面の兵士タブへ",
   (await page.isVisible("#squadSheet")) && !(await page.isVisible("#siegeSheet")),
 );
 await page.tap("#squadClose");
-await page.tap("#siege");
+await openSiegeFormation(page);
 if (shots) await page.screenshot({ path: path.join(shots, "f1-unit.png") });
 
 console.log("■ 武将の配置（防衛の配属とは別）");
@@ -248,7 +249,7 @@ r = await ev(page, () => {
   return { e, def: !!WD_DEBUG.heroApi.heroOnSquad(q), siege: a.siege()[2].hero };
 });
 check("防衛で配属中の武将も攻城に配置でき、防衛の配属はそのまま", !r.e && r.def && r.siege === "yukimura");
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 
 console.log("■ 戦死・新兵");
 r = await ev(page, () => {
@@ -278,7 +279,7 @@ r = await ev(page, () => {
   return { id: fresh.id, before: a.siege()[4].soldiers.includes(fresh.id) };
 });
 check("保存される前の新兵は、まだ攻城に出ない", !r.before, JSON.stringify(r));
-await page.tap("#siege");
+await openSiegeFormation(page);
 check(
   "攻城編成の画面で、ウェーブをクリアすると出撃できると案内",
   await ev(page, () => {
@@ -286,7 +287,7 @@ check(
     return /雇ったばかりの兵士 1 人/.test(document.getElementById("siegePick").textContent);
   }),
 );
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 r = await ev(
   page,
   (id) => {
@@ -306,10 +307,10 @@ const before = await units(page);
 await page.goto(url);
 await page.waitForFunction(() => window.WD_DEBUG);
 check("再読み込みしても編成が残る", JSON.stringify(await units(page)) === JSON.stringify(before));
-await page.tap("#siege");
+await openSiegeFormation(page);
 const layout = await ev(page, () => ({
   hScroll: document.documentElement.scrollWidth > innerWidth,
-  width: document.querySelector("#siegeSheet .sheet").getBoundingClientRect().width,
+  width: document.querySelector("#squadSheet .sheet").getBoundingClientRect().width,
   minBtn: Math.min(
     ...[...document.querySelectorAll("#siegeTabs button, #siegeSheet .card-actions button")].map(
       (b) => b.getBoundingClientRect().height,
@@ -321,7 +322,7 @@ check(
   !layout.hScroll && layout.width <= 390 && layout.minBtn >= 40,
   JSON.stringify(layout),
 );
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
@@ -334,7 +335,7 @@ check(
   "部隊が無ければ8部隊とも空",
   r.length === 8 && r.every((x) => !x.soldiers.length && !x.hero) && errors.length === 0,
 );
-await page.tap("#siege");
+await openSiegeFormation(page);
 check(
   "部隊が無いときは雇うよう案内",
   /雇うと、空いている枠に入ります/.test(await page.textContent("#siegePick")),

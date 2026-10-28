@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // 領土（7か国）の動作確認：隣の国だけ攻められる・目標の選択・占領で領土が広がる・城の強さ・統一の報酬・保存
 //   node tools/test-territory.mjs
 //   SCREENSHOTS=dir node tools/test-territory.mjs … 画面写真も保存
@@ -110,7 +111,7 @@ check(
   (await open(page)).sort().join() === "mino,owari,shinano,totomi",
   (await open(page)).join(),
 );
-await page.tap("#siege");
+await openSiegeFormation(page);
 let text = await page.textContent("#siegeTarget");
 check(
   "最初の攻略目標は清洲城（尾張）・領土 1/68（全国）",
@@ -317,7 +318,7 @@ r = await page.evaluate(() => {
 });
 check("雇用では割引後の費用を払う", r.ok && r.paid === 130, JSON.stringify(r));
 await page.tap("#battleClose").catch(() => {});
-await page.tap("#siege");
+await openSiegeFormation(page);
 await page.tap("#siegeTarget [data-provinces]");
 const list = await page.textContent("#siegePick");
 check(
@@ -327,7 +328,7 @@ check(
     /領土の効果：楽市楽座/.test(list),
   list.slice(0, 200),
 );
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 await page.tap("#reset");
 check("最初からやり直しても開始ゴールドに効果", (await page.evaluate(() => WD_DEBUG.state().gold)) === 700);
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));

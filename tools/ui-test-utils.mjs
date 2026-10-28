@@ -19,3 +19,9 @@ export async function toggleSpeed(page) {
   const speed = await page.evaluate(() => WD_DEBUG.state().speed);
   await setPace(page, speed === 1 ? 'x2' : 'x1');
 }
+
+// 共通の「編成」画面から攻城用武将のタブを開く。
+export async function openSiegeFormation(page) {
+  if (!(await page.locator('#squadSheet').isVisible())) await page.locator('#organize').click();
+  await page.locator('#siege').click();
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // 奪い返し（NPCの反撃）の動作確認：国を取ると隣の敵国が反撃・防衛戦で守る／奪われる・保存
 //   node tools/test-counter.mjs
 //   SCREENSHOTS=dir node tools/test-counter.mjs … 画面写真も保存
@@ -159,14 +160,14 @@ r = await page.evaluate(() => {
 check("反撃を退けるまで新しい国は攻められない", /反撃を退けるまで/.test(r.blocked || ""), r.blocked);
 check("演習（領土の城）はできる", r.practice === null, r.practice);
 await page.tap("#battleClose");
-await page.tap("#siege");
+await openSiegeFormation(page);
 check("攻城編成の画面にも反撃を表示", /攻めてきた/.test(await page.textContent("#siegeTarget")));
 await page.tap("#siegeTarget [data-provinces]");
 check(
   "領土の一覧で狙われた国に表示",
   /尾張（清洲城）⚠ 反撃を受けている/.test(await page.textContent("#siegePick")),
 );
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 
 console.log("■ 再読み込み・最初から");
 await page.goto(url);

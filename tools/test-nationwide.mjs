@@ -614,16 +614,11 @@ check(
 await page.tap('[data-map-tab="open"]');
 await page.tap('[data-map-prov="mino"]');
 await page.tap('[data-map-go="inabayama"]');
-check(
-  "出陣：攻城編成の画面へ（目標が選ばれている）",
-  (await page.isHidden("#mapSheet")) &&
-    !(await page.isHidden("#siegeSheet")) &&
-    /稲葉山城を攻める/.test(await page.textContent("#siegeGo")),
-);
-await page.tap("#siegeTarget [data-provinces]");
-check("攻城編成の領土の一覧から全国の画面を開ける", await page.isVisible("#siegePick [data-map-open]"));
-await page.tap("#siegePick [data-map-open]");
-check("（開いた）", !(await page.isHidden("#mapSheet")));
+check("世界から選択した稲葉山城の戦闘へ直接出陣",(await page.isHidden("#mapSheet"))&&(await page.isHidden("#squadSheet"))&&await page.evaluate(()=>WD_DEBUG.squadApi.battle()?.castleId==="inabayama"));
+await page.evaluate(()=>WD_DEBUG.squadApi.endBattle("retreat"));
+await page.tap("#battleClose");
+await page.tap("#mapOpen");await page.tap('[data-map-chapter="japan"]');
+check("結果を閉じて再び世界の画面を開ける",await page.isVisible("#mapSheet"));
 r = await page.evaluate(() => {
   const sh = document.querySelector("#mapSheet .sheet"),
     rr = sh.getBoundingClientRect(),

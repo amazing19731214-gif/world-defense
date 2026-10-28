@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // 攻城戦（Phase 4：基本システム）の動作確認（Playwright / Chromium・iPhone相当の画面幅とタッチ操作）
 //   node tools/test-battle.mjs
 //   SCREENSHOTS=dir node tools/test-battle.mjs … 画面写真も保存
@@ -110,7 +111,7 @@ const B = (page) =>
 let { page, errors, context } = await newContext(seeds());
 
 console.log("■ 出陣");
-await page.tap("#siege");
+await openSiegeFormation(page);
 check(
   "攻城編成の画面に「出陣」ボタン",
   (await page.isVisible("#siegeGo")) && !(await page.isDisabled("#siegeGo")),
@@ -124,8 +125,8 @@ let r = await page.evaluate(() => {
   return e;
 });
 check("防衛のウェーブ中は出陣できない", /ウェーブ中/.test(r || ""), r);
-await page.tap("#siegeClose");
-await page.tap("#siege");
+await page.tap("#squadClose");
+await openSiegeFormation(page);
 await page.tap("#siegeGo");
 r = await B(page);
 check(
@@ -314,7 +315,7 @@ await context.close();
 
 console.log("■ 撤退");
 ({ page, errors, context } = await newContext(seeds(5)));
-await page.tap("#siege");
+await openSiegeFormation(page);
 await page.tap("#siegeGo");
 await page.evaluate(() => WD_DEBUG.step(3));
 const xpBefore = await page.evaluate(() =>
@@ -350,7 +351,7 @@ await context.close();
 
 console.log("■ 編成が無いとき");
 ({ page, errors, context } = await newContext({}));
-await page.tap("#siege");
+await openSiegeFormation(page);
 check("攻城編成に兵士がいなければ出陣ボタンは押せない", await page.isDisabled("#siegeGo"));
 r = await page.evaluate(() => WD_DEBUG.squadApi.startBattle());
 check("出陣の処理も断る", /兵士がいません/.test(r || ""), r);

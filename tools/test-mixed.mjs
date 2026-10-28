@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { openSiegeFormation } from './ui-test-utils.mjs';
 // 異なる兵種が同じ部隊に在籍する動作確認：ランダム雇用・移籍・個別戦闘・撤退・保存・攻城戦
 //   node tools/test-mixed.mjs
 //   SCREENSHOTS=dir node tools/test-mixed.mjs … 画面写真も保存
@@ -199,9 +200,9 @@ r = await ev(page, () => {
   return [...new Set(a.siege()[0].soldiers.map((id) => s.soldiers.find((x) => x.id === id).type))].length;
 });
 check("攻城戦の第一部隊も同じ混成部隊", r >= 3, String(r));
-await page.tap("#siege");
+await openSiegeFormation(page);
 check("攻城編成も接尾辞のない部隊名", /第一部隊/.test(await page.textContent("#siegeUnit")) && !/混成/.test(await page.textContent("#siegeUnit")));
-await page.tap("#siegeClose");
+await page.tap("#squadClose");
 check("エラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
