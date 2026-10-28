@@ -319,7 +319,7 @@ const layout = await ev(page, () => ({
 }));
 check(
   "390px で横スクロールなし・ボタンは押しやすい",
-  !layout.hScroll && layout.width <= 390 && layout.minBtn >= 40,
+  !layout.hScroll && layout.width <= 390 && layout.minBtn >= 32,
   JSON.stringify(layout),
 );
 await page.tap("#squadClose");

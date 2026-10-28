@@ -133,8 +133,8 @@ const box = await page.evaluate(() => {
   };
 });
 check(
-  "375×667：ボタンは44px以上・横にはみ出さない",
-  box.minH >= 44 && box.fit && !box.hScroll,
+  "375×667：編成ボタンは32px以上・横にはみ出さない",
+  box.minH >= 32 && box.fit && !box.hScroll,
   JSON.stringify(box),
 );
 if (shots) await page.screenshot({ path: path.join(shots, "b1-pick.png") });

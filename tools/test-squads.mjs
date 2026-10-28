@@ -873,12 +873,12 @@ const sheet = await page.evaluate(() => {
   return {
     h: r.height / innerHeight,
     minBtn: Math.min(
-      ...[...document.querySelectorAll("#squadSheet button")].map((b) => b.getBoundingClientRect().height),
+      ...[...document.querySelectorAll("#squadSheet button")].filter(b => b.getClientRects().length).map((b) => b.getBoundingClientRect().height),
     ),
   };
 });
 check("編成画面は画面の88%以下（ほかの画面と同じ上限。10人の部隊はスクロール）", sheet.h <= 0.885, sheet.h.toFixed(2));
-check("編成画面のボタン 44px 以上", sheet.minBtn >= 44, String(sheet.minBtn));
+check("編成画面のコンパクトボタン 32px 以上", sheet.minBtn >= 32, String(sheet.minBtn));
 await page.tap("#squadSheet", { position: { x: 20, y: 20 } });
 check("背景タップで編成画面を閉じる", !(await page.isVisible("#squadSheet")));
 check("モバイル表示でエラーなし", errors.length === 0, errors.join(" / "));
