@@ -2297,6 +2297,9 @@
       .squad-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
       .tools.unit-tools .squad-chip { min-width: 0; }
       #hireToggle { font-size: 14px; }
+      #squadRosterTabs .squad-slot-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-top: 4px; }
+      #squadRosterTabs .squad-filter-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+      #squadRosterTabs button { min-height: 44px; min-width: 0; padding: 4px 2px; font-size: 14px; }
       #squadList .formation-soldier-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 90px; }
       #squadList .formation-soldier-actions button { min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 14px; }
       #squadList .soldier-row > span { min-width: 0; overflow-wrap: anywhere; }
@@ -2462,7 +2465,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v77（編成から兵士の詳細・育成）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v78（部隊タブ・指導員候補）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2544,10 +2547,11 @@ OFF</button>
             <button id="formationSoldiers" role="tab" aria-selected="true" aria-controls="formationSoldierPanel">兵士・部隊</button>
             <button id="siege" role="tab" aria-selected="false" aria-controls="siegeSheet" tabindex="-1">攻城用武将</button>
           </div>
+          <div id="squadRosterTabs" role="tablist" aria-label="部隊・指導員候補の表示"></div>
         </div>
         <div id="formationSoldierPanel" role="tabpanel" aria-labelledby="formationSoldiers">
           <p id="squadHint" style="margin: 6px 0"></p>
-          <div id="squadList"></div>
+          <div id="squadList" role="tabpanel"></div>
         </div>
         <div id="siegeSheet" role="tabpanel" aria-labelledby="siege" hidden>
           <p class="muted">兵士は防衛と共通です。攻城・秘境用の武将はここで設定します。世界画面からそのまま出陣できます。</p>
@@ -12044,6 +12048,32 @@ OFF</button>
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
+        let squadRosterFilter = "all", formationRetireReturn = null;
+        const squadFilterValues = () => [...SQUAD_RULES.slotNames.map((_, i) => String(i)), "all", "candidates"];
+        function renderSquadRosterTabs() {
+          const tab = (value, text) => '<button id="squadFilter-' + value + '" role="tab" data-squad-filter="' + value + '" aria-controls="squadList" aria-selected="' + (squadRosterFilter === value) + '" tabindex="' + (squadRosterFilter === value ? 0 : -1) + '" class="' + (squadRosterFilter === value ? "active" : "") + '">' + text + '</button>';
+          $("squadRosterTabs").innerHTML = '<div class="squad-slot-tabs">' + SQUAD_RULES.slotNames.map((name, i) => tab(String(i), name.replace("部隊", ""))).join("") + '</div><div class="squad-filter-main">' + tab("all", "全隊") + tab("candidates", "🎓 指導員候補") + '</div>';
+          $("squadList").setAttribute("aria-labelledby", "squadFilter-" + squadRosterFilter);
+        }
+        function selectSquadRosterFilter(value) {
+          if (!squadFilterValues().includes(value)) return;
+          squadRosterFilter = value; movingSoldierId = null; bulkPick = null;
+          renderSquadSheet();
+          $("squadSheet").querySelector(".sheet").scrollTop = 0;
+          $("squadFilter-" + value).focus({ preventScroll: true });
+        }
+        function mentorCandidates() {
+          return soldiers.filter(s => s.alive && squadById(s.squadId) && s.level >= LEGEND.retireLevel && !isHeroSoldier(s))
+            .slice().sort((a, b) => a.level - b.level || a.id - b.id);
+        }
+        function renderMentorCandidates() {
+          const list = mentorCandidates();
+          $("squadHint").textContent = "指導員候補 " + list.length + "人。Lv" + LEGEND.retireLevel + "以上（主人公を除く）をレベルの低い順に表示。同じLvは兵士ID順です。引退には確認と継承する書の選択が必要です。";
+          $("squadList").innerHTML = list.length ? list.map(s => {
+            const error = retireError(s);
+            return '<div class="soldier-row" data-mentor-candidate="' + s.id + '" data-candidate-level="' + s.level + '"><span><b>' + esc(soldierName(s)) + '</b> Lv' + s.level + '<br><small>' + esc(squadName(squadById(s.squadId))) + '・' + esc(jobName(s)) + '</small>' + (error ? '<br><small class="injured">' + esc(error) + '</small>' : '') + '</span><div class="formation-soldier-actions"><button data-formation-retire="' + s.id + '"' + (error ? ' disabled title="' + esc(error) + '"' : '') + '>🎓 指導員に</button><button data-formation-soldier="' + s.id + '">詳細・育成</button></div></div>';
+          }).join("") : '<p class="muted">指導員候補はいません。主人公以外の兵士をLv' + LEGEND.retireLevel + '以上に育てると表示されます。</p>';
+        }
         let movingSoldierId = null,
           bulkPick = null; // まとめて移籍で選んでいる兵士の ID（選ぶモードでないときは null）
         function squadStateText(q) {
@@ -12056,6 +12086,8 @@ OFF</button>
                 : "待機中";
         }
         function renderSquadSheet() {
+          renderSquadRosterTabs();
+          if (squadRosterFilter === "candidates") return renderMentorCandidates();
           const moving = soldierById(movingSoldierId);
           if (moving && !moving.alive) movingSoldierId = null;
           if (bulkPick && (playing || battle)) bulkPick = null;
@@ -12105,7 +12137,9 @@ OFF</button>
             html += '<div class="card-actions"><button data-bulk-start>☑ まとめて移籍</button></div>';
           if (!squads.length)
             html += '<p class="muted">部隊がありません。「＋ 雇う」で兵士を雇うと、自動で部隊に配属されます。</p>';
-          for (const q of squads) {
+          const visibleSquads = squadRosterFilter === "all" ? squads : squads.filter(q => q.slot === Number(squadRosterFilter));
+          if (!visibleSquads.length && squadRosterFilter !== "all") html += '<p class="muted">' + SQUAD_RULES.slotNames[Number(squadRosterFilter)] + 'にはまだ兵士がいません。</p>';
+          for (const q of visibleSquads) {
             const list = roster(q),
               c = SOLDIER_TYPES[q.type];
             let acts = "";
@@ -12182,7 +12216,7 @@ OFF</button>
               "</div>";
           }
           const fallen = soldiers.filter((s) => !s.alive);
-          if (fallen.length)
+          if (fallen.length && squadRosterFilter === "all")
             html +=
               '<div class="squad-card"><h3>戦没者 ' +
               fallen.length +
@@ -12217,6 +12251,7 @@ OFF</button>
           const siege = formationKind === "siege";
           $("formationSoldierPanel").hidden = siege;
           $("siegeSheet").hidden = !siege;
+          $("squadRosterTabs").hidden = siege;
           for (const [id, on] of [["formationSoldiers", !siege], ["siege", siege]]) {
             $(id).setAttribute("aria-selected", String(on));
             $(id).tabIndex = on ? 0 : -1;
@@ -12251,14 +12286,28 @@ OFF</button>
           selectFormation(ev.key === "Home" ? "soldiers" : ev.key === "End" ? "siege" : formationKind === "siege" ? "soldiers" : "siege");
           $(formationKind === "siege" ? "siege" : "formationSoldiers").focus();
         });
+        $("squadRosterTabs").addEventListener("keydown", ev => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) return;
+          ev.preventDefault();
+          const values = squadFilterValues(), i = values.indexOf(squadRosterFilter);
+          selectSquadRosterFilter(ev.key === "Home" ? values[0] : ev.key === "End" ? values.at(-1) : values[(i + (ev.key === "ArrowLeft" ? -1 : 1) + values.length) % values.length]);
+        });
         $("squadSheet").addEventListener("click", (ev) => {
           if (ev.target === $("squadSheet")) return closeSquadSheet();
           const b = ev.target.closest("button");
           if (!b || b.id === "squadClose" || b.closest("#formationTabs, #siegeSheet")) return;
           const d = b.dataset;
+          if (d.squadFilter !== undefined) return selectSquadRosterFilter(d.squadFilter);
+          if (d.formationRetire) {
+            const candidate = soldierById(+d.formationRetire);
+            if (!candidate || retireError(candidate)) return;
+            formationRetireReturn = { id: candidate.id, scroll: $("squadSheet").querySelector(".sheet").scrollTop };
+            return openRetire(candidate.id);
+          }
           if (d.formationSoldier) return openFormationSoldier(+d.formationSoldier);
           let err = null;
           if (d.bulkStart !== undefined) {
+            squadRosterFilter = "all";
             bulkPick = [];
             movingSoldierId = null;
           } else if (d.bulkCancel !== undefined) bulkPick = null;
@@ -12284,7 +12333,7 @@ OFF</button>
             else if (!err && r.left) err = "移す先が満員です。";
             if (r.moved) err = null;
             bulkPick = null;
-          } else if (d.move) movingSoldierId = +d.move;
+          } else if (d.move) { squadRosterFilter = "all"; movingSoldierId = +d.move; }
           else if (d.cancelMove !== undefined) movingSoldierId = null;
           else if (d.swap) {
             const a = soldierById(movingSoldierId),
@@ -14997,7 +15046,16 @@ OFF</button>
           $("retireSheet").hidden = false;
           $("retireClose").focus();
         }
-        const closeRetire = () => { $("retireSheet").hidden = true; focusFormationSoldierAction("[data-retire]"); };
+        const closeRetire = () => {
+          $("retireSheet").hidden = true;
+          const back = formationRetireReturn; formationRetireReturn = null;
+          if (back && !$("squadSheet").hidden) {
+            renderSquadSheet();
+            $("squadSheet").querySelector(".sheet").scrollTop = back.scroll;
+            ($("squadList").querySelector('[data-formation-retire="' + back.id + '"]') || $("squadFilter-candidates")).focus({ preventScroll: true });
+          }
+          focusFormationSoldierAction("[data-retire]");
+        };
         $("retireClose").onclick = closeRetire;
         $("retireSheet").addEventListener("click", (ev) => {
           if (ev.target === $("retireSheet")) return closeRetire();
