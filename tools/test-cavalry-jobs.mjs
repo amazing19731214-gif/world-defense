@@ -379,7 +379,7 @@ r = await ev(page, () => {
     B2.garrison.reduce((n, e) => n + Math.max(0, e.hp), 0) +
     B2.towers.reduce((n, t) => n + Math.max(0, t.hp || 0), 0);
   const xp = B.groups.map((g) => g.list.reduce((n, s) => n + (s.xp || 0) + (s.level || 0) * 1000, 0));
-  return { err, marching, waiting, dealt: hp0 - hp1, jobs: B.groups.map((g) => g.list[0].job), xp };
+  return { err, marching, waiting, dealt: hp0 - hp1, jobs: B.groups.filter((g) => g.list.length).map((g) => g.list[0].job), xp };
 });
 check(
   "攻城戦を始められる（4職の部隊）",
@@ -524,7 +524,7 @@ check(
   r.teppo && r.yumi && r.yari && r.no,
   JSON.stringify(r),
 );
-check("職業図鑑は14職業", r.count === 14, String(r.count));
+check("職業図鑑は21職業", r.count === 21, String(r.count));
 r = await ev(page, () => {
   const J = WD_DEBUG.jobApi;
   return { aka: J.profNeed("akazonae", 3), cav: J.profNeed("cavalry", 3) };
@@ -563,8 +563,8 @@ r = await ev(page, () => {
   };
 });
 check(
-  "14職業を1行ずつ（詳しい説明は閉じている）・今の職業以外に転職ボタン",
-  r.rows === 14 && r.open === 0 && r.heads === 14 && r.to === 13,
+  "21職業を1行ずつ（詳しい説明は閉じている）・今の職業以外に転職ボタン",
+  r.rows === 21 && r.open === 0 && r.heads === 21 && r.to === 20,
   JSON.stringify(r),
 );
 check(

@@ -1,0 +1,1108 @@
+{
+  "source": "main v80 / 4f0ca901772cb805ab4f873e32409eec02e80a53",
+  "jobs": {
+    "ashigaru": {
+      "name": "足軽",
+      "base": "ashigaru",
+      "icon": "🗡",
+      "text": "基本職。バランス型",
+      "mods": {},
+      "skills": [
+        [
+          "fightOn",
+          3
+        ]
+      ]
+    },
+    "spearman": {
+      "name": "槍兵",
+      "base": "spearman",
+      "icon": "🔱",
+      "text": "防御・迎撃型。敵を3体まで足止め",
+      "mods": {},
+      "skills": [
+        [
+          "intercept",
+          3
+        ]
+      ]
+    },
+    "archer": {
+      "name": "弓兵",
+      "base": "archer",
+      "icon": "🏹",
+      "text": "遠距離攻撃型",
+      "mods": {},
+      "skills": [
+        [
+          "renSha",
+          3
+        ]
+      ]
+    },
+    "gunner": {
+      "name": "鉄砲兵",
+      "base": "gunner",
+      "icon": "💥",
+      "text": "高火力・低連射の遠距離型",
+      "mods": {},
+      "skills": [
+        [
+          "pierceShot",
+          3
+        ]
+      ]
+    },
+    "cavalry": {
+      "name": "騎兵",
+      "base": "cavalry",
+      "icon": "🐎",
+      "text": "高速移動・突撃型。敵の騎兵を止められる",
+      "mods": {},
+      "skills": [
+        [
+          "assault",
+          3
+        ]
+      ]
+    },
+    "medic": {
+      "name": "衛生兵",
+      "base": "medic",
+      "icon": "🩹",
+      "text": "治療支援型（攻撃しない）",
+      "mods": {},
+      "skills": [
+        [
+          "quickFix",
+          3
+        ]
+      ]
+    },
+    "samurai": {
+      "name": "侍",
+      "base": "ashigaru",
+      "icon": "⚔️",
+      "advanced": true,
+      "text": "攻撃・防御の両立（近接）",
+      "mods": {
+        "atk": 1.15,
+        "def": 1.15,
+        "hp": 1.1
+      },
+      "skills": [
+        [
+          "iai",
+          3
+        ],
+        [
+          "guardStance",
+          6
+        ]
+      ]
+    },
+    "ninja": {
+      "name": "忍者",
+      "base": "cavalry",
+      "icon": "🥷",
+      "advanced": true,
+      "text": "高速・回避・奇襲（騎兵の動き）",
+      "mods": {
+        "rate": 0.85,
+        "def": 0.9
+      },
+      "skills": [
+        [
+          "shadowRun",
+          3
+        ],
+        [
+          "evasion",
+          6
+        ]
+      ]
+    },
+    "kensei": {
+      "name": "剣豪",
+      "base": "ashigaru",
+      "icon": "🗡️",
+      "advanced": true,
+      "text": "単体への高火力（近接）",
+      "mods": {
+        "atk": 1.35,
+        "def": 0.9
+      },
+      "skills": [
+        [
+          "issen",
+          3
+        ],
+        [
+          "vitalStrike",
+          6
+        ]
+      ]
+    },
+    "sohei": {
+      "name": "僧兵",
+      "base": "spearman",
+      "icon": "📿",
+      "advanced": true,
+      "text": "防御・回復支援（槍兵の動き・足止め）",
+      "mods": {
+        "def": 1.25,
+        "hp": 1.15,
+        "atk": 0.85
+      },
+      "skills": [
+        [
+          "goho",
+          3
+        ],
+        [
+          "prayer",
+          6
+        ]
+      ]
+    },
+    "kibateppo": {
+      "name": "騎馬鉄砲",
+      "base": "cavalry",
+      "icon": "🏇",
+      "advanced": true,
+      "text": "騎兵の動きで鉄砲を撃つ。高火力だが攻撃が遅い（鉄砲兵より間隔が長い）。動いたら止まってから撃つ",
+      "mods": {},
+      "unit": {
+        "hp": 70,
+        "atk": 22,
+        "def": 3,
+        "rate": 3,
+        "range": 150,
+        "block": 0,
+        "blocksCavalry": false,
+        "charge": 0,
+        "shot": "musket",
+        "aim": 0.8,
+        "grow": {
+          "hp": 7,
+          "atk": 2.8,
+          "def": 0.6
+        }
+      },
+      "skills": [
+        [
+          "kishaHou",
+          3
+        ]
+      ]
+    },
+    "yarikiba": {
+      "name": "槍騎兵",
+      "base": "cavalry",
+      "icon": "🐴",
+      "advanced": true,
+      "text": "敵陣への突撃が得意な近接型。防御より攻撃を重視。遠距離攻撃に弱い",
+      "mods": {},
+      "unit": {
+        "hp": 85,
+        "atk": 14,
+        "def": 4,
+        "charge": 2.6,
+        "rangedWeak": 1.3,
+        "grow": {
+          "hp": 9,
+          "atk": 2,
+          "def": 0.8
+        }
+      },
+      "skills": [
+        [
+          "sokiTotsu",
+          3
+        ]
+      ]
+    },
+    "yumikiba": {
+      "name": "弓騎兵",
+      "base": "cavalry",
+      "icon": "🎯",
+      "advanced": true,
+      "text": "騎兵の動きで弓を射る。機動性と手数（騎馬鉄砲より間隔が短い）に優れるが防御が低い",
+      "mods": {},
+      "unit": {
+        "hp": 60,
+        "atk": 9,
+        "def": 2,
+        "rate": 1.1,
+        "range": 135,
+        "block": 0,
+        "blocksCavalry": false,
+        "charge": 0,
+        "grow": {
+          "hp": 6,
+          "atk": 1.5,
+          "def": 0.5
+        }
+      },
+      "skills": [
+        [
+          "yabusame",
+          3
+        ]
+      ]
+    },
+    "akazonae": {
+      "name": "赤備え",
+      "base": "cavalry",
+      "icon": "🔴",
+      "advanced": true,
+      "text": "精鋭の騎兵。攻撃・防御ともに高い近接型だが、遠距離攻撃はできない。熟練度が上がりにくい（育成に時間がかかる）",
+      "mods": {},
+      "unit": {
+        "hp": 95,
+        "atk": 12,
+        "def": 9,
+        "grow": {
+          "hp": 10,
+          "atk": 1.7,
+          "def": 1.2
+        }
+      },
+      "profMul": 1.5,
+      "skills": [
+        [
+          "akaMoko",
+          3
+        ]
+      ]
+    }
+  },
+  "skills": {
+    "spearMaster": {
+      "name": "槍の達人",
+      "types": [
+        "ashigaru",
+        "spearman"
+      ],
+      "atk": 0.12,
+      "text": "攻撃力 +12%"
+    },
+    "ironWall": {
+      "name": "鉄壁",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.1,
+      "text": "受けるダメージ -10%"
+    },
+    "combo": {
+      "name": "連続攻撃",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "cavalry"
+      ],
+      "combo": 0.15,
+      "text": "15%の確率で追加攻撃"
+    },
+    "dodgeArrow": {
+      "name": "弓回避",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "rangedGuard": 0.25,
+      "text": "遠距離攻撃のダメージ -25%"
+    },
+    "instinct": {
+      "name": "生存本能",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "instinct": true,
+      "text": "HPが3割を切ると撤退を試みる（1ウェーブ1回・成功率60%）"
+    },
+    "generalHunter": {
+      "name": "敵将狙い",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "cavalry"
+      ],
+      "vsBoss": 0.3,
+      "text": "大将への攻撃力 +30%"
+    },
+    "rapidFire": {
+      "name": "速射",
+      "types": [
+        "archer",
+        "gunner"
+      ],
+      "haste": 0.1,
+      "text": "攻撃間隔 -10%"
+    },
+    "longShot": {
+      "name": "遠矢",
+      "types": [
+        "archer",
+        "gunner"
+      ],
+      "range": 0.12,
+      "text": "射程 +12%"
+    },
+    "preciseShot": {
+      "name": "精密射撃",
+      "types": [
+        "gunner"
+      ],
+      "atk": 0.15,
+      "text": "攻撃力 +15%"
+    },
+    "chargeMaster": {
+      "name": "突撃上手",
+      "types": [
+        "cavalry"
+      ],
+      "chargeAdd": 0.5,
+      "text": "突撃の一撃 ×2 → ×2.5"
+    },
+    "horsemanship": {
+      "name": "人馬一体",
+      "types": [
+        "cavalry"
+      ],
+      "spearGuard": 0.5,
+      "text": "槍兵から受ける追加ダメージを半分に"
+    },
+    "goodHealer": {
+      "name": "治療上手",
+      "types": [
+        "medic"
+      ],
+      "healMul": 0.25,
+      "text": "回復量 +25%"
+    },
+    "quickAid": {
+      "name": "早手当",
+      "types": [
+        "medic"
+      ],
+      "haste": 0.15,
+      "text": "回復の間隔 -15%"
+    },
+    "unyielding": {
+      "name": "不屈",
+      "unique": true,
+      "types": [
+        "ashigaru"
+      ],
+      "unyielding": true,
+      "text": "倒れるはずの攻撃を1ウェーブに1回だけHP1で耐える"
+    },
+    "spearWall": {
+      "name": "槍衾",
+      "unique": true,
+      "types": [
+        "spearman"
+      ],
+      "block": 1,
+      "text": "部隊が足止めできる敵 +1"
+    },
+    "sureShot": {
+      "name": "百発百中",
+      "unique": true,
+      "types": [
+        "archer"
+      ],
+      "atk": 0.2,
+      "text": "攻撃力 +20%"
+    },
+    "volley": {
+      "name": "三段撃ち",
+      "unique": true,
+      "types": [
+        "gunner"
+      ],
+      "haste": 0.2,
+      "text": "攻撃間隔 -20%"
+    },
+    "ikkiTousen": {
+      "name": "一騎当千",
+      "unique": true,
+      "types": [
+        "cavalry"
+      ],
+      "atk": 0.2,
+      "text": "攻撃力 +20%"
+    },
+    "masterHealer": {
+      "name": "名医",
+      "unique": true,
+      "types": [
+        "medic"
+      ],
+      "healMul": 0.4,
+      "text": "回復量 +40%"
+    },
+    "fightOn": {
+      "name": "奮戦",
+      "job": "ashigaru",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "atk": 0.08,
+      "text": "攻撃力 +8%"
+    },
+    "intercept": {
+      "name": "迎え撃ち",
+      "job": "spearman",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.08,
+      "text": "受けるダメージ -8%"
+    },
+    "renSha": {
+      "name": "連射",
+      "job": "archer",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "haste": 0.08,
+      "text": "攻撃の間隔 -8%"
+    },
+    "pierceShot": {
+      "name": "貫通射撃",
+      "job": "gunner",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "armorPierce": 0.3,
+      "text": "敵の防御の30%を無視"
+    },
+    "assault": {
+      "name": "突撃",
+      "job": "cavalry",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "chargeAdd": 0.3,
+      "text": "騎兵の突撃の一撃 +30%（騎兵の動きのときだけ）"
+    },
+    "quickFix": {
+      "name": "応急処置",
+      "job": "medic",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "healMul": 0.15,
+      "text": "回復量 +15%"
+    },
+    "iai": {
+      "name": "居合斬り",
+      "job": "samurai",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "iai": 0.6,
+      "text": "新しい敵への最初の一撃 +60%（敵1体に1回）"
+    },
+    "guardStance": {
+      "name": "防御の構え",
+      "job": "samurai",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.08,
+      "text": "受けるダメージ -8%"
+    },
+    "shadowRun": {
+      "name": "影走り",
+      "job": "ninja",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "haste": 0.12,
+      "text": "攻撃の間隔 -12%"
+    },
+    "evasion": {
+      "name": "回避術",
+      "job": "ninja",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "evade": 0.15,
+      "text": "15%の確率で攻撃をかわす（かわした後2秒は発動しない）"
+    },
+    "issen": {
+      "name": "一閃",
+      "job": "kensei",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "issen": 1.5,
+      "text": "4回に1回の攻撃が ×2.5"
+    },
+    "vitalStrike": {
+      "name": "急所攻撃",
+      "job": "kensei",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "vsBoss": 0.35,
+      "text": "大将・中ボスへの攻撃力 +35%"
+    },
+    "goho": {
+      "name": "護法",
+      "job": "sohei",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.1,
+      "text": "受けるダメージ -10%"
+    },
+    "prayer": {
+      "name": "治癒の祈り",
+      "job": "sohei",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "prayer": 0.06,
+      "text": "6秒ごとに、自分の部隊でいちばん傷ついた兵士のHPを最大HPの6%回復"
+    },
+    "kishaHou": {
+      "name": "騎射砲撃",
+      "job": "kibateppo",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "kisha": 1,
+      "text": "止まってからの最初の一発と、その後5発ごとの射撃の威力 +100%"
+    },
+    "sokiTotsu": {
+      "name": "槍騎突撃",
+      "job": "yarikiba",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "chargeAdd": 0.6,
+      "text": "接敵時の突撃（新しい敵への最初の一撃）+60%"
+    },
+    "yabusame": {
+      "name": "流鏑馬",
+      "job": "yumikiba",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "yabusame": 2,
+      "text": "4回に1回、続けて2本の矢を放つ（連続射撃）"
+    },
+    "akaMoko": {
+      "name": "赤備えの猛攻",
+      "job": "akazonae",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "fury": 0.3,
+      "text": "敵を倒すと5秒間、攻撃力 +30%（倒すたびに延びる）"
+    },
+    "shingan": {
+      "name": "心眼",
+      "book": 1,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "crit": 0.05,
+      "text": "会心率 +5%（会心：一撃 ×1.5）"
+    },
+    "kenshu": {
+      "name": "堅守",
+      "book": 1,
+      "line": "defense",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "def": 0.06,
+      "text": "防御 +6%"
+    },
+    "hayawaza": {
+      "name": "早業",
+      "book": 1,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "haste": 0.05,
+      "text": "攻撃・回復の間隔 -5%"
+    },
+    "teate": {
+      "name": "手当の心得",
+      "book": 1,
+      "line": "support",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "healMul": 0.1,
+      "text": "回復量 +10%（衛生兵）"
+    },
+    "goriki": {
+      "name": "剛力",
+      "book": 2,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "atk": 0.1,
+      "text": "攻撃力 +10%"
+    },
+    "mikiri": {
+      "name": "見切り",
+      "book": 2,
+      "line": "defense",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "evade": 0.08,
+      "text": "8%の確率で攻撃をかわす（かわすと2秒は発動しない）"
+    },
+    "gunryaku": {
+      "name": "軍略",
+      "book": 2,
+      "line": "strategy",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "vsBoss": 0.25,
+      "text": "大将への攻撃力 +25%"
+    },
+    "kyugo": {
+      "name": "救護の心得",
+      "book": 2,
+      "line": "support",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "healMul": 0.2,
+      "text": "回復量 +20%（衛生兵）"
+    },
+    "kishinGeki": {
+      "name": "鬼神の一撃",
+      "book": 3,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "atk": 0.05,
+      "crit": 0.1,
+      "text": "攻撃力 +5%・会心率 +10%"
+    },
+    "kongo": {
+      "name": "金剛",
+      "book": 3,
+      "line": "defense",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.12,
+      "text": "受けるダメージ -12%"
+    },
+    "jinrai": {
+      "name": "疾風迅雷",
+      "book": 3,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "haste": 0.12,
+      "text": "攻撃・回復の間隔 -12%"
+    },
+    "saihai": {
+      "name": "采配",
+      "book": 3,
+      "line": "strategy",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "atk": 0.06,
+      "guard": 0.06,
+      "text": "攻撃力 +6%・受けるダメージ -6%"
+    },
+    "jinjutsu": {
+      "name": "仁術",
+      "book": 3,
+      "line": "support",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "healMul": 0.3,
+      "text": "回復量 +30%（衛生兵）"
+    },
+    "tenkaMuso": {
+      "name": "天下無双",
+      "book": 4,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "atk": 0.2,
+      "crit": 0.06,
+      "text": "攻撃力 +20%・会心率 +6%"
+    },
+    "fudoMyoo": {
+      "name": "不動明王",
+      "book": 4,
+      "line": "defense",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "guard": 0.16,
+      "hp": 0.1,
+      "text": "受けるダメージ -16%・最大HP +10%"
+    },
+    "shinsoku": {
+      "name": "神速",
+      "book": 4,
+      "line": "attack",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "haste": 0.18,
+      "text": "攻撃・回復の間隔 -18%"
+    },
+    "kiboku": {
+      "name": "奇謀",
+      "book": 4,
+      "line": "strategy",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "vsBoss": 0.4,
+      "evade": 0.06,
+      "text": "大将への攻撃力 +40%・6%の確率で攻撃をかわす"
+    },
+    "isei": {
+      "name": "医聖",
+      "book": 4,
+      "line": "support",
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "medic",
+        "cavalry"
+      ],
+      "healMul": 0.5,
+      "text": "回復量 +50%（衛生兵）"
+    },
+    "siegeMaster": {
+      "name": "城攻め名人",
+      "future": true,
+      "types": [
+        "ashigaru",
+        "spearman",
+        "archer",
+        "gunner",
+        "cavalry"
+      ],
+      "text": "攻城戦で城門への攻撃力アップ（攻城戦の実装後に習得可能）"
+    }
+  },
+  "legend": {
+    "chance": 0.12,
+    "statShare": 0.5,
+    "stats": {
+      "atkFlat": {
+        "name": "攻撃",
+        "min": 1,
+        "max": 100,
+        "unit": ""
+      },
+      "atkPct": {
+        "name": "攻撃",
+        "min": 1,
+        "max": 15,
+        "unit": "%"
+      },
+      "defFlat": {
+        "name": "防御",
+        "min": 1,
+        "max": 100,
+        "unit": ""
+      },
+      "defPct": {
+        "name": "防御",
+        "min": 1,
+        "max": 20,
+        "unit": "%"
+      },
+      "hpFlat": {
+        "name": "最大HP",
+        "min": 10,
+        "max": 500,
+        "unit": ""
+      },
+      "hpPct": {
+        "name": "最大HP",
+        "min": 1,
+        "max": 25,
+        "unit": "%"
+      },
+      "rngFlat": {
+        "name": "射程",
+        "min": 1,
+        "max": 30,
+        "unit": ""
+      },
+      "rngPct": {
+        "name": "射程",
+        "min": 1,
+        "max": 15,
+        "unit": "%"
+      }
+    },
+    "abil": {
+      "beam": {
+        "name": "貫通ビームサーベル",
+        "icon": "🗡️",
+        "min": 0.6,
+        "max": 1.2
+      },
+      "chain": {
+        "name": "連鎖雷撃",
+        "icon": "⚡",
+        "min": 0.4,
+        "max": 0.9
+      },
+      "blast": {
+        "name": "爆炎斬",
+        "icon": "💥",
+        "min": 0.4,
+        "max": 0.8
+      },
+      "shadow": {
+        "name": "影分身",
+        "icon": "👥",
+        "min": 0.15,
+        "max": 0.35
+      }
+    },
+    "beamLen": 260,
+    "beamWidth": 18,
+    "beamMax": 12,
+    "chainJumps": 4,
+    "chainRange": 120,
+    "chainFade": 0.85,
+    "blastRadius": 70,
+    "shadowMax": 0.8,
+    "gearCost": 2000,
+    "retireLevel": 100,
+    "superBeam": 0.001,
+    "superChain": 0.01,
+    "books": 200,
+    "equipBooks": 4,
+    "mentors": 100,
+    "maxEach": 200
+  },
+  "xpToLevel": {
+    "1": 30,
+    "5": 90,
+    "10": 165,
+    "30": 665,
+    "100": 3000,
+    "200": 7131,
+    "500": 22604,
+    "1000": 55125
+  }
+}

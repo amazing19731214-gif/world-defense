@@ -76,6 +76,11 @@ for (const [id, anims] of Object.entries(manifest.enemies || {})) {
 }
 
 let html = fs.readFileSync(path.join(root, "src", "index.template.html"), "utf8");
+for (const name of ["job-evolution"]) {
+  const marker = `/*@@${name.toUpperCase().replaceAll("-", "_")}@@*/`;
+  if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
+  html = html.replace(marker, () => fs.readFileSync(path.join(root, "src", name + ".js"), "utf8"));
+}
 for (const [marker, value] of [
   ["/*@@EMBEDDED_SPRITES@@*/ {}", sprites],
   ["/*@@HERO_ASSETS@@*/ {}", heroAssets],
