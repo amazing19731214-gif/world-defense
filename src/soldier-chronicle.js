@@ -57,6 +57,7 @@ function cleanChronicle(v, s = {}) {
   out.pending = out.pending.filter((id) => !out.claimed.includes(id));
   out.selected = out.honors.includes(o.selected) ? o.selected : null;
   out.aptitude = cleanChronicleAptitude(o.aptitude);
+  out.revivalCharge = typeof o.revivalCharge === "boolean" ? o.revivalCharge : out.revivals > 0;
   return out;
 }
 function chronicleOf(s) {
@@ -198,6 +199,7 @@ function chronicleBlock(s) {
     "回<br>復活 " +
     c.revivals +
     "回</p>" +
+    chronicleResistanceText(s) +
     c.log.map((x) => "<p><small>" + esc(x) + "</small></p>").join("") +
     "</details>"
   );
@@ -566,7 +568,13 @@ function chronicleGuard(s, ranged, kind) {
   const resist = c && !special ? chronicleResistance(c[ranged ? "rangedPoints" : "meleePoints"]) : 0;
   const state = evolutionState(s),
     brace = chronicleHas(s, "in_history_brace") && state.chronicleBraceUntil > evolutionClock() ? 0.1 : 0;
-  return (1 - resist) * (1 - brace);
+  const revival =
+    chronicleHas(s, "in_history_revival") &&
+    state.chronicleRevivalKey === chronicleKey() &&
+    state.chronicleRevivalUntil > evolutionClock()
+      ? 0.15
+      : 0;
+  return (1 - resist) * (1 - brace) * (1 - revival);
 }
 function chronicleLow(s, before, max) {
   if (
@@ -699,5 +707,107 @@ function chronicleAptitudeBlock(s) {
     "</p><p><small>この人生ではLv" +
     a.startAt +
     "から適用。以前のレベル分には遡及しません。</small></p></details>"
+  );
+}
+CHRONICLE_SKILLS.in_history_revival = {
+  name: "黄泉返り",
+  style: "any",
+  counter: "revivals",
+  need: 1,
+  text: "復活後、この技を有効にして出撃する最初の戦闘で8秒間、被ダメージ-15%。次の正式な復活で再使用可",
+  grade: 0,
+  job: "ashigaru",
+  cd: 0,
+  history: true,
+};
+INSIGHT_SKILLS.in_history_revival = CHRONICLE_SKILLS.in_history_revival;
+for (const [id, k] of Object.entries(CHRONICLE_SKILLS))
+  if (!["in_history_brace", "in_history_killRush", "in_history_rescue"].includes(id)) k.cd = 0;
+function chronicleDeploy(s) {
+  return chronicleDeployMany([s]);
+}
+function chronicleDeployMany(list) {
+  for (const s of list) chronicleTouch(s);
+  if (gameSaveBatchActive || gameSaveBatch) return false;
+  const ready = [];
+  for (const s of list) {
+    const c = chronicleOf(s),
+      saved = savedSoldier(s.id);
+    if (
+      !s.alive ||
+      !c.revivals ||
+      !c.revivalCharge ||
+      !chronicleHas(s, "in_history_revival") ||
+      !saved?.chronicle ||
+      !cleanChronicle(saved.chronicle, saved).revivalCharge
+    )
+      continue;
+    ready.push({ s, c, saved, old: saved.chronicle });
+  }
+  if (!ready.length) return false;
+  for (const x of ready) {
+    x.saved.chronicle = { ...x.old, revivalCharge: false };
+    x.c.revivalCharge = false;
+  }
+  beginGameSaveBatch();
+  writeSoldierSave();
+  if (!commitGameSaveBatch()) {
+    for (const x of ready) {
+      x.saved.chronicle = x.old;
+      x.c.revivalCharge = true;
+    }
+    gameSaveBatch = null;
+    gameSaveBatchActive = false;
+    mapToast("⚠ 黄泉返りは保存待ちです。次の出撃で再試行します。");
+    return false;
+  }
+  for (const x of ready) {
+    const state = evolutionState(x.s);
+    state.chronicleRevivalUntil = evolutionClock() + 8;
+    state.chronicleRevivalKey = chronicleKey();
+    chroniclePulse(x.s, "黄泉返り", "rampart");
+  }
+  return true;
+}
+
+function chronicleGoals(s) {
+  const c = chronicleOf(s),
+    priority = unitOf(s).heal
+      ? ["healed", "rescues", "bossAssists"]
+      : ["kills", "meleePoints", "rangedPoints"],
+    goals = [];
+  for (const counter of priority) {
+    const next = Object.entries(CHRONICLE_HONORS).find(
+      ([id, h]) => h.counter === counter && !c.honors?.includes(id),
+    );
+    if (next) {
+      const [id, h] = next,
+        progress = counter === "kills" ? c.baselineKills + c.kills : c[counter] || 0;
+      goals.push(
+        esc(h.name) +
+          "：" +
+          CHRONICLE_COUNTER_LABELS[counter] +
+          " " +
+          fmt(Math.min(progress, h.need)) +
+          "/" +
+          fmt(h.need),
+      );
+    }
+  }
+  return goals.length ? "<p><small>次の戦歴目標<br>" + goals.join("<br>") + "</small></p>" : "";
+}
+function chronicleResistanceText(s) {
+  const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle;
+  return (
+    "<p><small>現在の耐性：近接 " +
+    Math.round(chronicleResistance(c?.meleePoints || 0) * 100) +
+    "%・遠距離 " +
+    Math.round(chronicleResistance(c?.rangedPoints || 0) * 100) +
+    "%（特殊攻撃は対象外）" +
+    (chronicleOf(s).revivals
+      ? "<br>黄泉返り：" +
+        (chronicleOf(s).revivalCharge ? "技を有効にして次の出撃で使用可" : "使用済み・次の復活で再使用可")
+      : "") +
+    "</small></p>"
   );
 }
