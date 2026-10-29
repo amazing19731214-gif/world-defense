@@ -546,14 +546,16 @@ function chronicleLearn(s) {
 }
 function chronicleStats(s, st) {
   const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle;
-  if (!c) return st;
-  if (chronicleHas(s, "in_history_veteran")) st.atk *= 1 + Math.min(0.1, Math.floor(c.kills / 100) * 0.01);
+  if (c && chronicleHas(s, "in_history_veteran")) st.atk *= 1 + Math.min(0.1, Math.floor(c.kills / 100) * 0.01);
   if (chronicleHas(s, "in_history_killRush")) {
     const state = evolutionState(s);
     if (state.chronicleKillUntil > evolutionClock()) st.atk *= 1.05;
   }
-  if (chronicleHas(s, "in_history_healing"))
+  if (c && chronicleHas(s, "in_history_healing"))
     st.heal *= 1 + (c.healed >= 100000 ? 0.1 : c.healed >= 10000 ? 0.06 : 0.03);
+  const f=chronicleFinesse(s);
+  st.rate *= 1-f.haste;
+  st.range += (unitOf(s).range||0)*f.range;
   return st;
 }
 function chronicleResistance(points) {
@@ -631,6 +633,8 @@ const CHRONICLE_APTITUDES = Object.freeze({
   stout: { name: "頑健型", grow: { hp: 1.05, atk: 0.95, def: 1.05, heal: 1 } },
   healer: { name: "救護型", grow: { hp: 1, atk: 0.95, def: 1, heal: 1.1 } },
   balanced: { name: "万能型", grow: { hp: 1.02, atk: 1.02, def: 1.02, heal: 1.02 } },
+  agile: {name:"俊敏型",grow:{hp:1,atk:1,def:1,heal:1}},
+  sniper: {name:"狙撃型",grow:{hp:1,atk:1,def:1,heal:1}},
 });
 function cleanChronicleAptitude(v) {
   if (!v || v.version !== 1 || !Object.hasOwn(CHRONICLE_APTITUDES, v.type)) return null;
@@ -641,6 +645,7 @@ function cleanChronicleAptitude(v) {
     startAt: intIn(v.startAt, 1, SQUAD_RULES.maxLevel, 1),
     delta: {},
     earned: {},
+    secondary: Number.isFinite(v.secondary)?Math.min(1e6,Math.max(0,v.secondary)):0,
   };
   for (const k of ["hp", "atk", "def", "heal"]) {
     a.earned[k] = Number.isFinite(v.earned?.[k]) ? Math.max(0, Math.min(1e10, v.earned[k])) : 0;
@@ -650,10 +655,10 @@ function cleanChronicleAptitude(v) {
   }
   return a;
 }
-function chronicleAptitude(s, anchor = s.level) {
+function chronicleAptitude(s, anchor = s.level, expanded = false) {
   const c = chronicleOf(s);
   if (c.aptitude) return c.aptitude;
-  const types = Object.keys(CHRONICLE_APTITUDES),
+  const types = Object.keys(CHRONICLE_APTITUDES).slice(0,expanded?6:4),
     type = types[insightHash("aptitude:" + (s.named ? "named:" + s.named : c.life)) % types.length];
   return (c.aptitude = {
     version: 1,
@@ -662,6 +667,7 @@ function chronicleAptitude(s, anchor = s.level) {
     startAt: anchor,
     delta: { hp: 0, atk: 0, def: 0, heal: 0 },
     earned: { hp: 0, atk: 0, def: 0, heal: 0 },
+    secondary:0,
   });
 }
 function chronicleGrow(s, before) {
@@ -678,6 +684,7 @@ function chronicleGrow(s, before) {
       Math.min(a.earned[k] * 0.1, a.delta[k] + amount * (rates[k] - 1)),
     );
   }
+  a.secondary=Math.min(1e6,(a.secondary||0)+diff);
   a.level = s.level;
 }
 function chronicleGrowthBase(s, k) {
@@ -691,6 +698,7 @@ function chronicleGrowthBase(s, k) {
 function chronicleResetGrowth(s) {
   const a = chronicleAptitude(s);
   a.level = a.startAt = 1;
+  a.secondary=0;
   for (const k of ["hp", "atk", "def", "heal"]) a.delta[k] = a.earned[k] = 0;
 }
 function chronicleAptitudeBlock(s) {
@@ -711,7 +719,7 @@ function chronicleAptitudeBlock(s) {
           "%）",
       )
       .join("<br>") +
-    "</p><p><small>この人生ではLv" +
+    "</p>" + chronicleFinesseText(s) + "<p><small>この人生ではLv" +
     a.startAt +
     "から適用。以前のレベル分には遡及しません。</small></p></details>"
   );
@@ -875,4 +883,15 @@ function chronicleCover(target,list,raw,ranged,kind,receive) {
  const before=s.hp;receive(s,raw*.3);
  if(s.hp<before){chronicleAdd(chronicleOf(s),'covered');const seg=chronicleTouch(s);seg.covers=Math.min(1000,(seg.covers||0)+1);}
  chroniclePulse(s,'かばう','rampart');return raw*.7;
+}
+
+function chronicleFinesse(s) {
+ const a=chronicleAptitude(s),earned=Math.max(0,Math.min(a.secondary||0,Math.max(0,SQUAD_RULES.growthLv(s.level)-SQUAD_RULES.growthLv(a.startAt)))),x=earned/(earned+20),u=unitOf(s);
+ return {haste:a.type==='agile'?.03*x:0,evade:a.type==='agile'?.02*x:0,range:a.type==='sniper'&&!u.heal&&u.range>60?.05*x:0};
+}
+function chronicleFinesseText(s) {
+ const a=chronicleAptitude(s),f=chronicleFinesse(s);
+ if(a.type==='agile')return '<p><small>二次成長：行動間隔−'+(f.haste*100).toFixed(2)+'%（上限3%）・回避＋'+(f.evade*100).toFixed(2)+'ポイント（上限2）</small></p>';
+ if(a.type==='sniper')return '<p><small>二次成長：基本射程＋'+(f.range*100).toFixed(2)+'%（遠距離攻撃職のみ・上限5%）。装備・書・果実の射程は増幅しません。</small></p>';
+ return '';
 }

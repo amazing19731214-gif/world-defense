@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v91（仲間をかばう前衛）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v92（俊敏型・狙撃型の成長）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -7369,6 +7369,7 @@ OFF</button>
           if (named) namedNews.push(NAMED_SOLDIERS[named].name + "（" + SOLDIER_TYPES[type].name + "）");
           zukanSync(); // 雇った兵士の職業（初期職）を図鑑へ
           s.chronicle = chronicleNew(s);
+          chronicleAptitude(s,s.level,true);
           return s;
         }
         function newSquad(type) {
@@ -7684,7 +7685,7 @@ OFF</button>
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
         function evadeHit(s, now) {
           const id = battle ? battle.groups.find(g => g.list.includes(s))?.hero : heroOnSquad(squadById(s.squadId))?.id;
-          const p = skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
+          const p = chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
           if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p)) return false;
           s.evadeUntil = now + 2;
           return true;
@@ -20377,7 +20378,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
