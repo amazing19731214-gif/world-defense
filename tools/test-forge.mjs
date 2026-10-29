@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 import { openInfoEntry } from './ui-test-utils.mjs';
 // 秘伝錬成・装備・スキルの書の動作確認：重複武将カードの消費（最初の1枚は保護・★と二重に使わない）、
 // レア度別の抽選確率、外れの欠片と交換、武将の傾向、装備（3枠・1つの装備は1人だけ・職業の制限）、
@@ -76,6 +77,7 @@ async function newPage(warlords, soldiersSave, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  await installJobBookTestFixtures(context);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -748,6 +750,7 @@ r = await ev(
     const F = WD_DEBUG.forgeApi,
       J = WD_DEBUG.jobApi,
       h = WD_DEBUG.state().soldiers[0];
+    seedJobEntry(h, ["samurai"]);
     const before = F.itemsOf(h)
       .map((it) => it.id)
       .sort();
@@ -876,6 +879,7 @@ r = await ev(page, () => {
     a = WD_DEBUG.squadApi,
     h = WD_DEBUG.state().soldiers[0];
   for (let i = 0; i < 200 && h.level < 30; i++) a.gainXp(h, 2000, true);
+  seedJobEntry(h, ["samurai"]);
   J.changeJob(h, "samurai");
   const kept = h.learned.includes("goriki") && h.skills.includes("goriki");
   J.changeJob(h, "spearman");

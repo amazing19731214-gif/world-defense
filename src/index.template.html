@@ -2481,7 +2481,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v81（職業進化・職業固有技・閃きと継承）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v82（職業の書・熟練転職とボス報酬）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4108,6 +4108,7 @@ OFF</button>
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
             scheduleInsightFlush();
+            scheduleJobDropFlush();
             return true;
           } catch (err) { return false; } // 未確定の変更はメモリに残し、次の保存で再試行
         }
@@ -4601,6 +4602,7 @@ OFF</button>
         };
         // 職業ごとの戦い方：兵種の値に職業の unit を重ねたもの（unit のない職業は兵種のまま）
         /*@@JOB_EVOLUTION@@*/
+        /*@@JOB_BOOKS@@*/
         const JOB_UNITS = {};
         for (const [j, J] of Object.entries(JOBS))
           if (J.unit) {
@@ -5141,6 +5143,9 @@ OFF</button>
             seq: Math.max(int(o.seq, 1e9), ...items.map((it) => it.uid), 0),
             items,
             books,
+            jobBooks: cleanJobBooks(o.jobBooks),
+            jobBookClaims: cleanJobBookClaims(o.jobBookClaims),
+            jobDefenseClaims: cleanJobDefenseClaims(o.jobDefenseClaims),
             used,
             // 終盤（試作）：指導員が残した伝承の秘伝書（能力値・特殊能力の数値もそのまま）と指導員名簿
             legendBooks: (Array.isArray(o.legendBooks) ? o.legendBooks : [])
@@ -6858,6 +6863,7 @@ OFF</button>
           persistTrainingSave();
           training = {
             key,
+            jobDropRunId: newJobDropRunId(),
             D,
             waves,
             wave: 0,
@@ -6981,7 +6987,7 @@ OFF</button>
           }
           $("trBody").innerHTML =
             '<p class="muted">強い敵と戦って兵士と主人公を鍛える戦場です。終了ウェーブ数を選べます（無限は負けるか撤退するまで）。5ウェーブごとに中ボス、10ウェーブごとに大将。' +
-            "通常の防衛戦のウェーブ・城・ゴールド・塔は、終わると元に戻ります。戦死はふだんどおり（主人公はLv1から再出発、ほかの兵士は永久）。報酬は経験値と少しのG（ガチャ券・領土はなし）。</p>" +
+            "通常の防衛戦のウェーブ・城・ゴールド・塔は、終わると元に戻ります。戦死はふだんどおり（主人公はLv1から再出発、ほかの兵士は永久）。報酬は経験値と少しのG。ボスから職業の書も入手できます（ガチャ券・領土はなし）。</p>" +
             '<label for="trainingWaves">終了ウェーブ数</label><select id="trainingWaves"' + (TRAINING.diffs[trainPick].endless ? ' disabled' : '') + '>' +
             TRAINING.waveGoals.map(n => '<option value="' + n + '"' + (n === trainingSave.waves ? ' selected' : '') + '>' + n + 'ウェーブ</option>').join('') + '</select>' +
             '<p class="muted">' + (TRAINING.diffs[trainPick].endless ? '無限は回数制限なし。撤退か敗北まで続きます。' : '選んだ回数で、敵Lvがこの難易度の最終Lvまで上がります。挑戦中は回数を変更できません。') + '</p>' +
@@ -7103,6 +7109,7 @@ OFF</button>
             "</b>・クリア <b>+" +
             Math.floor(sum("clear")) +
             "</b></p>" +
+            jobBookResultHtml(T) +
             (T.heroFell
               ? '<p class="injured">👑 主人公が戦死しました。Lv1から再出発します（' + esc(T.heroFell) + "）。</p>"
               : "") +
@@ -7659,28 +7666,16 @@ OFF</button>
           if (training) return "修練場で挑戦中は転職できません。";
           if (playing) return "戦闘中（ウェーブ中）は転職できません。ウェーブの合間に転職しよう。";
           if (jobOf(s) === j) return "すでに" + JOBS[j].name + "です。";
-          const evolutionError=evolutionJobRequirement(s,j);if(evolutionError)return evolutionError;
           if (!jobsOf(s).includes(j) && s.level < JOB_RULES.unlockLevel)
             return "Lv" + JOB_RULES.unlockLevel + "から新しい職業に転職できます（一度なった職業にはいつでも戻れます）。";
+          const evolutionError=jobEntryError(s,j);if(evolutionError)return evolutionError;
           return null;
         }
         // 転職：同じ兵士（ID・レベル・経験値・名前・戦歴・ポイント・スキル）のまま、職業と戦い方だけ変わる
         function changeJob(s, j) {
           const err = jobChangeError(s, j);
           if (err) return err;
-          const from = jobOf(s);
-          s.job = j;
-          s.type = JOBS[j].base;
-          if (!jobsOf(s).includes(j)) s.jobs.push(j);
-          s.jobHist = (s.jobHist || []).concat({ from, to: j, lv: s.level }).slice(-JOB_RULES.histMax);
-          logHistory(s, JOBS[from].name + " から " + JOBS[j].name + " に転職");
-          const q = squadById(s.squadId);
-          if (q) refreshSquadType(q);
-          s.hp = Math.min(s.hp, soldierStats(s).maxHp);
-          s.iaiTarget = null;
-          patchSavedSoldier(s, pickSaved(s));
-          zukanSync(); // まだ保存されていない兵士（このウェーブで雇った）の転職も、すぐ職業図鑑へ
-          return null;
+          return commitJobChange(s, j);
         }
         // ===== 秘伝錬成 =====
         // 武将カード：heroSave.owned[id] が引いた枚数（重複も含む）。★は min(5, 枚数) で決まる。
@@ -9467,6 +9462,7 @@ OFF</button>
               creditKill(e);
               if (e.rare) rareKilled(e);
               if (e.intruder) intruderKilled(e);
+              if (e.kind === "boss") defenseJobBookDrop(e);
               if (e.kind === "boss" && !e.intruder && !training && (!heroSave.defense || (heroSave.defense.bossRewardThrough || 0) < wave)) {
                 if (heroSave.defense) heroSave.defense.bossRewardThrough = wave;
                 grantTickets(GACHA.ticketsPerBoss, "ボス撃破");
@@ -13408,7 +13404,7 @@ OFF</button>
             '<button data-gear-tab="books" aria-pressed="' +
             (gearTab === "books") +
             '">📜 書 <small>' +
-            (Object.values(F.books).reduce((a, b) => a + b, 0) + F.legendBooks.length + F.insightBooks.length) +
+            (Object.values(F.books).reduce((a, b) => a + b, 0) + F.legendBooks.length + F.insightBooks.length + jobBookCount()) +
             "冊</small></button>" +
             '<button data-gear-tab="shop" aria-pressed="' +
             (gearTab === "shop") +
@@ -13498,7 +13494,7 @@ OFF</button>
               "（📜 スキルの書から売れます。装備中の書は売れません）</small></p>";
             return html;
           }
-          if(gearTab === "books")html+=insightStoreHtml();
+          if(gearTab === "books")html+=jobBookStoreHtml()+insightStoreHtml();
           if (gearTab === "gear" && sellConfirm) {
             // 売却の確認：数・一覧・合計・元に戻せないこと
             const list = sellConfirm.map(itemByUid).filter(Boolean),
@@ -14154,7 +14150,7 @@ OFF</button>
             c.range +
             "・間隔 " +
             c.rate +
-            "秒）<br>装備できる武器：" +
+            "秒）<br>初回転職：" + esc(jobEntryText(e.key)) + "<br>装備できる武器：" +
             (weapons.join("・") || "なし（鎧・装飾品のみ）") +
             "<br>職業スキル：" +
             J.skills.map(([id, need]) => "「" + SOLDIER_SKILLS[id].name + "」熟練度" + need).join("・") +
@@ -14408,7 +14404,7 @@ OFF</button>
             "</small></p>" +
             '<p class="muted">Lv' +
             JOB_RULES.unlockLevel +
-            "から新しい職業に転職できます（無料・何度でも）。一度なった職業には、レベルに関係なくいつでも戻れます。レベル・経験値・名前・戦歴・ステータスポイント・習得したスキルはそのまま。熟練度は戦闘の経験で上がります。" +
+            "から新しい職業に転職できます。上級職・最上級職の初回転職は指定の熟練度と対応する職業の書1冊が必要です。最上級はLv100から。一度なった職業には、書を使わずレベルに関係なく戻れます。レベル・経験値・名前・戦歴・ステータスポイント・習得したスキルはそのまま。熟練度は戦闘の経験で上がります。" +
             (fighting ? '<br><span class="injured">戦闘中は転職できません（ウェーブの合間に）。</span>' : "") +
             "</p>";
           // 職業は1行ずつ（アイコン・名前・戦い方・転職ボタン）。行を押すと詳しい説明と今の職業との比較を開く
@@ -14420,7 +14416,7 @@ OFF</button>
               lv = profLv(s, j),
               x = (s.prof && s.prof[j]) || 0,
               next = lv < JOB_RULES.profMax ? profNeed(j, lv + 1) : null,
-              locked = !been && (s.level < JOB_RULES.unlockLevel || !!evolutionJobRequirement(s,j)),
+              locked = !been && (s.level < JOB_RULES.unlockLevel || !!jobEntryError(s,j)),
               style = jobStyle(j),
               after = j === cur ? now : statsAsJob(s, j),
               open = jobOpen === j;
@@ -14454,12 +14450,12 @@ OFF</button>
                   '"' +
                   (err ? " disabled" : "") +
                   ">" +
-                  (locked && !fighting ? (J.ultimate ? "🔒 進化条件" : "🔒 Lv" + JOB_RULES.unlockLevel + "で解放") : "転職") +
+                  (locked && !fighting ? (s.level < JOB_RULES.unlockLevel ? "🔒 Lv" + JOB_RULES.unlockLevel + "で解放" : "🔒 条件を確認") : "転職") +
                   "</button>") +
               '<div class="job-detail"' +
               (open ? "" : " hidden") +
               "><p>" +
-              esc(J.text) + (J.ultimate?"<br>"+esc(evolutionRequirementText(j))+(evolutionJobRequirement(s,j)?"（未達成）":"（達成済み）"):"") +
+              esc(J.text) + jobEntryHtml(s,j) +
               "<br><small>戦い方：" +
               style.attack +
               "・" +
@@ -17764,6 +17760,7 @@ OFF</button>
           }
           persistConquest();
           if (result !== "win") return;
+          battleJobBookDrop(bossOf(B) || { kind: "boss", boss: true }, B);
           const F = forgeSave();
           F.bossRewards = F.bossRewards || {};
           if (!F.bossRewards[id] && !D.reward) {
@@ -17839,6 +17836,7 @@ OFF</button>
                 stats = siegeEnemyStats(g.kind, enemyLevel, g.role, C.guardPower),
                 hp = stats.max;
               garrison.push({
+                jobDropOrdinal: garrison.length,
                 ...stats,
                 kind: g.kind,
                 siegeRole: siegeRoleOf(g.kind, g.role) ? g.role : null,
@@ -17858,6 +17856,8 @@ OFF</button>
             }
           }
           battle = {
+            jobDropRunId: newJobDropRunId(),
+            jobBookDrops: [],
             t: 0,
             nextUnit: 0,
             groups: siegeUnits.map((u, i) => ({
@@ -18073,6 +18073,7 @@ OFF</button>
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
           e.dead = true;
+          if (e.kind === "boss") battleJobBookDrop(e);
           if (e.boss) battle.bossCorpse = e; // 討伐の消える演出に使う
           battle.kills++;
           if (effects.length >= 80) effects.shift();
@@ -18619,6 +18620,7 @@ OFF</button>
                 (B.chapter === "japan" ? "か国</p>" : "拠点</p>")
               : "") +
             (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。' + esc(chapterClearNextText(B.chapter)) + '</p></div>' : '') +
+            jobBookResultHtml(B) +
             (B.savePending ? '<p class="injured">⚠ 進行・報酬が未保存です。ページを閉じずに「途中保存」で保存を再試行してください。</p>' : '') +
             (B.unified
               ? '<p class="capture">🎉 7か国を統一した！ 🎴 ガチャ券 +' + UNIFY_TICKETS + "</p>"
@@ -20341,6 +20343,7 @@ OFF</button>
               openGear,
             },
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
+            jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
               members,

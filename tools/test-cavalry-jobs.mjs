@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 // 騎馬の上級職（騎馬鉄砲・槍騎兵・弓騎兵・赤備え）の確認：
 // データと役割の違い（上位互換にならない）・Lv29/30の転職・戦い方（止まって撃つ・騎射砲撃・流鏑馬・突撃・猛攻・遠距離に弱い）・
 // 防衛戦・攻城戦・修練場・ネームド兵士の転職・保存と再読み込み・図鑑・装備・転職画面（375×667）
@@ -69,6 +70,7 @@ async function newContext(seeds = {}, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  await installJobBookTestFixtures(context);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -203,6 +205,7 @@ r = await ev(
     WD_DEBUG.setGold(99999);
     const out = {};
     const s = WD_DEBUG.state().soldiers.find((x) => x.id === 10); // 騎馬鉄砲の部隊の1人を騎兵に戻してから試す
+    seedJobEntry(s, NEW);
     J.changeJob(s, "cavalry");
     for (const j of NEW) {
       if (j === "kibateppo") continue;
@@ -447,6 +450,7 @@ r = await ev(page, () => {
   const J = WD_DEBUG.jobApi,
     S = WD_DEBUG.state(),
     find = (id) => S.soldiers.find((s) => s.id === id);
+  for (const s of S.soldiers) seedJobEntry(s, ["kibateppo", "akazonae"]);
   return {
     init: [1, 3].map((id) => find(id).jobs[0]),
     k29: J.changeJob(find(3), "kibateppo"),
@@ -544,6 +548,7 @@ const ui = {
   fallen: [],
 };
 ({ page, errors, context } = await newContext({ [SKEY]: JSON.stringify(ui) }, 375, 667));
+await page.evaluate(() => WD_DEBUG.state().soldiers.forEach(s => seedJobEntry(s, ["kibateppo", "yarikiba", "yumikiba", "akazonae"])));
 await page.tap("#heroGrowth");
 await page.tap("[data-hg-job]");
 r = await ev(page, () => {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 import { openInfoEntry } from './ui-test-utils.mjs';
 // 自由転職・職業スキルの動作確認：Lv30での解放、何度でも無料の転職、引き継ぐもの、熟練度と職業スキル、
 // 主人公の戦死（初期職に戻る・一度なった職業へは Lv1 でも戻れる）、戦闘での効果（防衛戦・攻城戦・修練場）、
@@ -69,6 +70,7 @@ async function newPage(seed, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  await installJobBookTestFixtures(context);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -105,6 +107,7 @@ const toLv30 = (page, id) =>
     (id) => {
       const s = WD_DEBUG.state().soldiers.find((x) => x.id === id);
       for (let i = 0; i < 200 && s.level < 30; i++) WD_DEBUG.squadApi.gainXp(s, 2000, true);
+      seedJobEntry(s, ["samurai", "ninja", "sohei"]);
       return s.level;
     },
     id,
@@ -207,6 +210,7 @@ r = await ev(page, () => {
       "spearman",
       "samurai",
     ];
+  seedJobEntry(s);
   const errs = [];
   for (let k = 0; k < 3; k++) for (const j of order) errs.push(J.changeJob(s, j));
   return { errs: errs.filter(Boolean), hist: s.jobHist.length, jobs: s.jobs.length, job: s.job, lv: s.level };
@@ -228,6 +232,7 @@ r = await ev(page, () => {
     s = WD_DEBUG.state().soldiers[0],
     R = J.JOB_RULES,
     out = [];
+  s.prof.samurai = 0; // ここからは熟練度0を起点に職業スキル習得を検査
   // 侍で経験値を得る → 侍の熟練度だけ上がる
   const spear0 = J.profLv(s, "spearman");
   for (let i = 0; i < 400 && J.profLv(s) < 3; i++) a.gainXp(s, 50, true);
@@ -635,6 +640,7 @@ r = await ev(page, () => {
     a = WD_DEBUG.squadApi,
     S = WD_DEBUG.state(),
     h = S.soldiers[0];
+  seedJobEntry(h, ["kensei"]);
   J.changeJob(h, "kensei");
   for (let i = 0; i < 400 && J.profLv(h) < 3; i++) a.gainXp(h, 50, true);
   const kensei = J.profLv(h);
@@ -699,6 +705,7 @@ r = await ev(page, () => {
     S = WD_DEBUG.state(),
     s = S.soldiers.find((x) => x.id === 2);
   for (let i = 0; i < 200 && s.level < 30; i++) a.gainXp(s, 2000, true);
+  seedJobEntry(s, ["sohei"]);
   J.changeJob(s, "sohei");
   document.getElementById("start").click();
   WD_DEBUG.stopSpawning();
@@ -736,6 +743,7 @@ r = await ev(page, () => {
   // 第一部隊の10人を Lv30 にして上級職へ、職業スキルも習得させる
   a.members(S.squads[0]).forEach((s, k) => {
     for (let i = 0; i < 200 && s.level < 30; i++) a.gainXp(s, 2000, true);
+    seedJobEntry(s, [jobs[k % 4]]);
     J.changeJob(s, jobs[k % 4]);
     for (let i = 0; i < 800 && J.profLv(s) < 6; i++) a.gainXp(s, 100, true);
   });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 // 戦国図鑑（武将・スキル・アイテム・職業）の確認：初めて手に入れた・習得した・就いたときの登録、重複で増えない、
 // 錬成・売却・戦死・「最初から」・読み込み直しでも残る、以前の保存データからの移行（推測では登録しない）、未発見の情報を出さない、画面
 //   node tools/test-zukan.mjs
@@ -85,6 +86,7 @@ async function newContext(extra = {}, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  await installJobBookTestFixtures(context);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -218,6 +220,7 @@ r = await page.evaluate(() => {
     learned.every((id) => F.zukan().skills[id]) &&
     Object.keys(F.zukan().skills).length > before;
   for (let i = 0; i < 200 && s5.level < 30; i++) a.gainXp(s5, 2000, true);
+  seedJobEntry(s5, ["ninja"]);
   out.job =
     J.changeJob(s5, "ninja") === null && F.zukan().jobs.ninja === true && F.zukan().jobs.cavalry !== true;
   // 熟練度で職業スキル（影走り）

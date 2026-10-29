@@ -78,6 +78,7 @@ async function setup(width = 390, debug = true) {
         fallen: [],
       }),
     );
+    localStorage.setItem("worldDefense.warlords.v1", JSON.stringify({forge:{jobBooks:Object.fromEntries(jobs.slice(6).map(j=>[j,100]))}}));
     localStorage.setItem("worldDefense.settings.v1", JSON.stringify({ auto: false, waveGoal: 1000 }));
   }, jobs);
   const p = await c.newPage();
@@ -115,7 +116,7 @@ try {
     }
     return res;
   });
-  check(r.every(Boolean), "最上級7職はLv99で拒否し必要熟練とLv100以上で進化できる");
+  check(r.every(Boolean), "最上級7職はLv99で拒否し必要熟練・職業の書・Lv100以上で進化できる");
   r = await p.evaluate(() => {
     const D = WD_DEBUG,
       s = D.state().soldiers[0];
