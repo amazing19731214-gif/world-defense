@@ -1908,7 +1908,7 @@
         background: linear-gradient(90deg, #5cc46b, #ffd34d);
       }
       .zk-tabs {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 4px;
       }
       .zk-tabs button {
@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v84（兵士の戦歴帳・保存の土台）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v85（兵士の称号・記念報酬）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4141,6 +4141,7 @@ OFF</button>
             for (const [key,value] of Object.entries(gameSaveBatch)) gameSaveObserved.set(key,value);
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
+            scheduleChronicleNotices();
             scheduleInsightFlush();
             scheduleJobDropFlush();
             return true;
@@ -4155,6 +4156,7 @@ OFF</button>
             flushBookTransaction();
             localStorage.setItem(key, value);
             gameSaveObserved.set(key,value);
+            scheduleChronicleNotices();
           }
         }
 
@@ -5366,7 +5368,7 @@ OFF</button>
         // 記録は増えるだけで、錬成・売却・戦死・「最初から」でも消えない。
         // 記録するのは実際に持っている・持っていた記録があるものだけ（所持・ガチャ履歴・錬成履歴・英霊名鑑・転職履歴）。推測では登録しない
         const ZUKAN_KEY = "worldDefense.zukan.v1";
-        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs", "named"];
+        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs", "named", "honors"];
         function loadZukan() {
           let d = null;
           try {
@@ -5389,7 +5391,7 @@ OFF</button>
           try {
             localStorage.setItem(
               ZUKAN_KEY,
-              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs, named: zukan.named }),
+              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs, named: zukan.named, honors: zukan.honors }),
             );
           } catch (err) {
             // 保存できない環境でも遊べる
@@ -5415,6 +5417,7 @@ OFF</button>
           for (const it of F.items) if (GEAR[it.id]) add("items", it.id);
           for (const h of F.history) if (h && GEAR[h.got]) add("items", h.got);
           for (const g of Object.keys(GEAR)) if (GEAR[g].boss && (F.bossRewards || {})[GEAR[g].boss]) add("items", g); // 裏ボスの初回報酬
+          for(const id of chronicleDurableHonors())add("honors",id);
           const person = (s) => {
             for (const k of s.learned || s.skills || []) skill(k);
             for (const j of s.jobs || []) job(j);
@@ -7762,7 +7765,7 @@ OFF</button>
           const grade = FORGE.tierGrade[tier],
             lean = gearLean(wid);
           if (kind === "book") return { tier, book: pickWeighted(bookIds(grade), (id) => [SOLDIER_SKILLS[id].line], lean, rng) };
-          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade && !GEAR[id].boss && !GEAR[id].endgame); // 裏ボス・終盤の装備は出ない
+          const ids = Object.keys(GEAR).filter((id) => GEAR[id].grade === grade && !GEAR[id].boss && !GEAR[id].endgame && !GEAR[id].chronicle); // 裏ボス・終盤の装備は出ない
           return { tier, gear: pickWeighted(ids, (id) => gearTags(GEAR[id]), lean, rng) };
         }
         function forgeError(wid, kind) {
@@ -9207,6 +9210,7 @@ OFF</button>
               squads: squadsIn.filter((q) => count[q.id]),
               soldiers: list,
               fallen,
+              honorFound:[...new Set((Array.isArray(d.honorFound)?d.honorFound:[]).filter(id=>CHRONICLE_HONORS[id]))],
               insightFound:[...new Set((Array.isArray(d.insightFound)?d.insightFound:[]).filter(id=>Object.hasOwn(INSIGHT_SKILLS,id)))],
               // 主人公：保存されている生存兵のときだけ（いなければ未設定）
               heroId: list.some((v) => v.id === d.heroId) ? d.heroId : null,
@@ -9219,6 +9223,7 @@ OFF</button>
         const soldierSave = loadSoldierSave();
         let soldierSaveOk = true;
         function writeSoldierSave() {
+          soldierSave.honorFound=[...new Set([...(soldierSave.honorFound||[]),...soldierSave.soldiers.flatMap(s=>s.chronicle?.honors||[])])];
           try {
             writeGameSave(
               SOLDIER_SAVE_KEY,
@@ -9258,6 +9263,7 @@ OFF</button>
           const live = squads.filter((q) => roster(q).length);
           for (const q of live) refreshSquadType(q); // 戦死で主な兵種が変わることがある
           soldierSave.squads = live.map((q) => ({ id: q.id, type: q.type, slot: q.slot }));
+          for (const s of soldiers) if(s.alive)chronicleEvaluate(s);
           soldierSave.soldiers = soldiers
             .filter((s) => s.alive && live.some((q) => q.id === s.squadId))
             .map(pickSaved);
@@ -9350,6 +9356,7 @@ OFF</button>
           return soldiers.length;
         }
         restoreRoster();
+        chronicleBoot();
         gearReady = true;
         checkGear(); // 持ち主がいない装備は倉庫へ
         zukanReady = true;
@@ -13970,6 +13977,7 @@ OFF</button>
             items: Object.keys(GEAR)
               .filter((id) => !GEAR[id].endgame) // 終盤の特殊装備（試作）は図鑑に入れない
               .map((id) => ({ key: id })),
+            honors: Object.keys(CHRONICLE_HONORS).map(id=>({key:id})),
             jobs: Object.keys(JOBS).map((id) => ({ key: id })),
             named: Object.keys(NAMED_SOLDIERS).map((id) => ({ key: id })),
           };
@@ -13981,8 +13989,8 @@ OFF</button>
           const list = zukanEntries()[cat];
           return { found: list.filter((e) => zukanFound(cat, e)).length, total: list.length };
         }
-        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業", named: "⭐ ネームド" };
-        const ZUKAN_TITLES = { warlords: "武将", skills: "スキル", items: "アイテム", jobs: "職業", named: "ネームド兵士" };
+        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業", named: "⭐ ネームド", honors: "🏅 称号" };
+        const ZUKAN_TITLES = { warlords: "武将", skills: "スキル", items: "アイテム", jobs: "職業", named: "ネームド兵士", honors: "称号" };
         const namedIcon = (id) =>
           '<span class="zk-icon zk-famed" style="--c:' + NAMED_SOLDIERS[id].color + '">' + SOLDIER_TYPES[NAMED_SOLDIERS[id].type].icon + "</span>";
         const WEAPON_ICON = { katana: "🗡️", yari: "🔱", yumi: "🏹", teppo: "🔫" };
@@ -13996,6 +14004,7 @@ OFF</button>
           ((f / t) * 100).toFixed(1) +
           '%"></i></span>';
         function zukanDetail(cat, e) {
+          if(cat==="honors"){const h=CHRONICLE_HONORS[e.key];return "<p>🏅 <b>"+esc(h.name)+"</b><br>戦歴の条件："+CHRONICLE_COUNTER_LABELS[h.counter]+" "+h.need+"。称号は表示のみで能力補正はありません。"+(h.reward?"<br>記念報酬："+esc(GEAR[h.reward].name):"")+"</p>";}
           if (cat === "warlords") {
             const c = WARLORDS[e.key],
               n = heroSave.owned[e.key] || 0;
@@ -14080,7 +14089,7 @@ OFF</button>
               "<br>装備できる職業：" +
               gearJobs(e.key) +
               "<br>入手方法：" +
-              (g.boss
+              (g.chronicle ? "兵士の戦歴・称号の記念報酬（詳細・育成から受け取り）" : g.boss
                 ? "秘境の裏ボスを初めて倒す（" + esc(SECRETS[g.boss].name) + "）"
                 : "🔥 秘伝錬成の装備錬成（" + ["", "小当たり", "普通", "当たり", "大当たり"][g.grade] + "）") +
               "<br>倉庫に " +
@@ -14259,6 +14268,7 @@ OFF</button>
               const k = e.insight ? INSIGHT_SKILLS[e.insight] : e.action ? {name:JOB_ACTIONS[e.action].names[e.stage]} : e.wid ? WARLORDS[e.wid].skill : SOLDIER_SKILLS[e.key];
               icon = '<span class="zk-icon">' + (e.insight ? "💡" : e.action ? "⚔️" : e.wid ? "✨" : e.group === "job" ? "🔄" : e.group === "book" ? "📜" : "⭐") + "</span>";
               name = k.name;
+            } else if (zukanTab === "honors") { icon='<span class="zk-icon">🏅</span>'; name=CHRONICLE_HONORS[e.key].name;
             } else if (zukanTab === "items") {
               const g = GEAR[e.key];
               icon = '<span class="zk-icon g' + g.grade + '">' + gearIcon(g) + "</span>";
@@ -14951,6 +14961,7 @@ OFF</button>
             (s.named ? " famed" : "") +
             '"><h3>' +
             esc(soldierName(s)) +
+            (s.chronicle?.selected?" 🏅"+esc(CHRONICLE_HONORS[s.chronicle.selected].name):"") +
             " <small>" +
             JOBS[jobOf(s)].icon +
             jobName(s) +
@@ -14981,7 +14992,7 @@ OFF</button>
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) + chronicleBlock(s) +
+            legendBlock(s) + chronicleHonorBlock(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -18494,6 +18505,7 @@ OFF</button>
               s.unyieldUsed = false;
               s.phoenixUsed = false;
               s.chargeTarget = null;
+              chronicleEvaluate(s);
               patchSavedSoldier(s, pickSaved(s)); // 成長を保存（戦死はその場で保存済み）
             }
             report.push(out);
@@ -20350,7 +20362,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {CHRONICLE_RULES,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {CHRONICLE_RULES,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

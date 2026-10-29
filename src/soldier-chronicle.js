@@ -46,6 +46,16 @@ function cleanChronicle(v, s = {}) {
           ranged: Math.min(5, Math.max(0, Number(o.segment.ranged) || 0)),
         }
       : null;
+  const honorIds = Object.keys(CHRONICLE_HONORS);
+  out.honors = [...new Set(Array.isArray(o.honors) ? o.honors : [])].filter((id) => honorIds.includes(id));
+  out.pending = [...new Set(Array.isArray(o.pending) ? o.pending : [])].filter(
+    (id) => out.honors.includes(id) && CHRONICLE_HONORS[id].reward,
+  );
+  out.claimed = [...new Set(Array.isArray(o.claimed) ? o.claimed : [])].filter(
+    (id) => out.honors.includes(id) && CHRONICLE_HONORS[id].reward,
+  );
+  out.pending = out.pending.filter((id) => !out.claimed.includes(id));
+  out.selected = out.honors.includes(o.selected) ? o.selected : null;
   return out;
 }
 function chronicleOf(s) {
@@ -184,4 +194,249 @@ function chronicleBlock(s) {
     c.log.map((x) => "<p><small>" + esc(x) + "</small></p>").join("") +
     "</details>"
   );
+}
+// 称号は既存の階級補正と別。条件達成と受取を兵士保存の正本へ記録する。
+const CHRONICLE_HONORS = Object.fromEntries(
+  [
+    ["kills100", "百人斬り", "kills", 100, "chronicleBlade"],
+    ["kills500", "五百の武功", "kills", 500, null],
+    ["kills1000", "千軍の猛者", "kills", 1000, "chronicleWarCharm"],
+    ["kills5000", "万軍への道", "kills", 5000, null],
+    ["heal1000", "命をつなぐ者", "healed", 1000, null],
+    ["heal10000", "戦場の救護者", "healed", 10000, "chronicleMedicCharm"],
+    ["heal100000", "万人の癒やし手", "healed", 100000, null],
+    ["rescue10", "命の守り手", "rescues", 10, "chronicleMedicCharm"],
+    ["rescue50", "救命の達人", "rescues", 50, null],
+    ["rescue100", "命脈を守りし者", "rescues", 100, null],
+    ["low30", "土壇場の兵", "survived30", 1, null],
+    ["low10", "死線を越えし者", "survived10", 1, null],
+    ["single", "九死に一生", "survivedSingle", 1, "chronicleLifeCharm"],
+    ["revived", "黄泉帰り", "revivals", 1, "chronicleRevivalCharm"],
+    ["melee", "傷だらけの古強者", "meleePoints", 10, null],
+    ["ranged", "矢雨を歩く者", "rangedPoints", 10, null],
+    ["boss", "大将討ち", "bossKills", 1, null],
+    ["support", "強敵を支えし者", "bossAssists", 1, null],
+  ].map(([id, name, counter, need, reward]) => [id, { name, counter, need, reward }]),
+);
+Object.assign(GEAR, {
+  chronicleBlade: {
+    name: "百人斬りの刀",
+    slot: "weapon",
+    wtype: "katana",
+    grade: 2,
+    chronicle: true,
+    fx: { atk: 0.12 },
+    text: "戦歴報酬：攻撃+12%。刀を扱う職業用",
+  },
+  chronicleWarCharm: {
+    name: "千軍の武功章",
+    slot: "accessory",
+    grade: 2,
+    chronicle: true,
+    fx: { atk: 0.06, def: 0.06 },
+    text: "戦歴報酬：攻撃・防御+6%",
+  },
+  chronicleMedicCharm: {
+    name: "救命の数珠",
+    slot: "accessory",
+    grade: 2,
+    chronicle: true,
+    fx: { healMul: 0.1 },
+    text: "戦歴報酬：回復量+10%",
+  },
+  chronicleLifeCharm: {
+    name: "生還の護符",
+    slot: "accessory",
+    grade: 2,
+    chronicle: true,
+    fx: { hp: 0.05 },
+    text: "戦歴報酬：最大HP+5%",
+  },
+  chronicleRevivalCharm: {
+    name: "黄泉の守り",
+    slot: "accessory",
+    grade: 2,
+    chronicle: true,
+    fx: { guard: 0.03 },
+    text: "戦歴報酬：被ダメージ-3%",
+  },
+});
+function chronicleEvaluate(s) {
+  const c = chronicleOf(s);
+  c.honors ||= [];
+  c.claimed ||= [];
+  c.pending ||= [];
+  for (const [id, h] of Object.entries(CHRONICLE_HONORS)) {
+    const earned = (c[h.counter] || 0) >= h.need;
+    const retro = h.counter === "kills" && c.baselineKills + c.kills >= h.need;
+    if ((earned || retro) && !c.honors.includes(id)) {
+      c.honors.push(id);
+      chronicleLog(s, "🏅 " + h.name);
+    }
+    if (earned && h.reward && !c.pending.includes(id) && !c.claimed.includes(id)) c.pending.push(id);
+  }
+  return c;
+}
+function chronicleHonorBlock(s) {
+  const c = chronicleOf(s),
+    earned = c.honors || [],
+    pending = c.pending || [];
+  return (
+    '<details class="chronicle-honors"><summary>🏅 称号・記念報酬（' +
+    earned.length +
+    '）</summary><p><small>称号は表示のみ。既存の階級による能力補正とは別です。過去の討伐は称号だけ遡及します。</small></p><div class="card-actions"><button data-chronicle-title="' +
+    s.id +
+    ':">表示なし</button>' +
+    earned
+      .map(
+        (id) =>
+          '<button data-chronicle-title="' +
+          s.id +
+          ":" +
+          id +
+          '" aria-pressed="' +
+          (c.selected === id) +
+          '">' +
+          esc(CHRONICLE_HONORS[id].name) +
+          "</button>",
+      )
+      .join("") +
+    "</div>" +
+    pending
+      .map(
+        (id) =>
+          "<p>" +
+          esc(CHRONICLE_HONORS[id].name) +
+          "：" +
+          esc(GEAR[CHRONICLE_HONORS[id].reward].name) +
+          ' <button data-chronicle-reward="' +
+          s.id +
+          ":" +
+          id +
+          '">受け取る</button></p>',
+      )
+      .join("") +
+    (pending.length ? "" : "<p><small>受取待ちの報酬はありません。</small></p>") +
+    "</details>"
+  );
+}
+function chronicleSavedAction(s, action) {
+  const error = legendBusyError();
+  if (error) return error;
+  const saved = savedSoldier(s?.id);
+  if (!saved || !s.alive) return "兵士を途中保存してから操作してください。";
+  const before = {
+    live: JSON.parse(JSON.stringify(chronicleOf(s))),
+    saved: JSON.parse(JSON.stringify(saved)),
+    forge: JSON.parse(JSON.stringify(forgeSave())),
+    batch: gameSaveBatch,
+    active: gameSaveBatchActive,
+  };
+  const err = action(chronicleOf(s));
+  if (err) return err;
+  saved.chronicle = JSON.parse(JSON.stringify(s.chronicle));
+  if (!commitLegend()) {
+    s.chronicle = before.live;
+    Object.assign(saved, before.saved);
+    heroSave.forge = before.forge;
+    gearMap = bookMap = null;
+    gameSaveBatch = before.batch;
+    gameSaveBatchActive = before.active;
+    return "保存できなかったため変更しませんでした。報酬は受取待ちに残っています。";
+  }
+  return null;
+}
+function chronicleClaim(s, id) {
+  const h = CHRONICLE_HONORS[id];
+  if (!h?.reward) return "その報酬はありません。";
+  return chronicleSavedAction(s, (c) => {
+    if (!c.pending?.includes(id) || c.claimed?.includes(id)) return "受取待ちの報酬ではありません。";
+    const durable = JSON.parse(currentGameSave(SOLDIER_SAVE_KEY) || "{}").soldiers?.find(
+      (x) => x.id === s.id,
+    )?.chronicle;
+    if (!durable?.pending?.includes(id) || durable.claimed?.includes(id) || durable.life !== c.life)
+      return "戦歴の保存が完了していません。先に途中保存してください。";
+    const F = forgeSave();
+    if (F.items.filter((it) => !GEAR[it.id].boss).length >= FORGE.maxItems)
+      return "倉庫がいっぱいです。報酬は受取待ちに残っています。";
+    if (F.seq >= 999999998) return "装備の発行上限です。報酬は受取待ちに残っています。";
+    F.items.push({ uid: ++F.seq, id: h.reward, owner: null, lock: true });
+    gearMap = null;
+    c.pending = c.pending.filter((x) => x !== id);
+    c.claimed.push(id);
+    return null;
+  });
+}
+function chronicleSelectTitle(s, id) {
+  return chronicleSavedAction(s, (c) => {
+    if (id && !c.honors?.includes(id)) return "未獲得の称号です。";
+    c.selected = id || null;
+    return null;
+  });
+}
+let chronicleNoticeQueued = false;
+const chronicleAnnounced = new Set();
+function chronicleBoot() {
+  for (const s of soldierSave.soldiers)
+    for (const id of s.chronicle?.honors || []) chronicleAnnounced.add(s.chronicle.life + ":" + id);
+}
+function scheduleChronicleNotices() {
+  if (chronicleNoticeQueued) return;
+  chronicleNoticeQueued = true;
+  queueMicrotask(() => {
+    chronicleNoticeQueued = false;
+    let d;
+    try {
+      d = JSON.parse(currentGameSave(SOLDIER_SAVE_KEY) || "{}");
+    } catch {
+      return;
+    }
+    const notes = [];
+    for (const s of d.soldiers || [])
+      for (const id of s.chronicle?.honors || []) {
+        const key = s.chronicle.life + ":" + id;
+        if (!chronicleAnnounced.has(key)) {
+          chronicleAnnounced.add(key);
+          notes.push((s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_HONORS[id].name);
+        }
+      }
+    zukanSync();
+    if (notes.length)
+      mapToast(
+        "🏅 " + notes.slice(0, 2).join("／") + (notes.length > 2 ? " ほか" + (notes.length - 2) + "件" : ""),
+      );
+  });
+}
+document.addEventListener("click", (ev) => {
+  const button = ev.target.closest("[data-chronicle-title],[data-chronicle-reward]");
+  if (!button) return;
+  const reward = button.dataset.chronicleReward,
+    [sid, id] = (reward ?? button.dataset.chronicleTitle).split(":");
+  const s = soldierById(+sid);
+  if (!s) return;
+  const err = reward ? chronicleClaim(s, id) : chronicleSelectTitle(s, id);
+  if (err) mapToast(err);
+  renderSoldierSheet();
+  updateUI();
+});
+
+const CHRONICLE_COUNTER_LABELS = {
+  kills: "導入後の討伐数",
+  healed: "実回復量",
+  rescues: "瀕死の味方の救命",
+  survived30: "HP30%以下からの生還",
+  survived10: "HP10%以下からの生還",
+  survivedSingle: "HP一桁からの生還",
+  revivals: "復活の書などでの復活",
+  meleePoints: "近接被弾の生還点",
+  rangedPoints: "遠距離被弾の生還点",
+  bossKills: "強敵への最後の一撃",
+  bossAssists: "強敵討伐への支援参加",
+};
+function chronicleDurableHonors() {
+  try {
+    return JSON.parse(currentGameSave(SOLDIER_SAVE_KEY) || "{}").honorFound || [];
+  } catch {
+    return [];
+  }
 }

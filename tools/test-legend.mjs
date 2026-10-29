@@ -668,7 +668,7 @@ check(
   r.wear.every(Boolean),
   JSON.stringify(r.wear),
 );
-check("図鑑のアイテムの数は変えていない（35）", r.zukanItems === 35, String(r.zukanItems));
+check("図鑑のアイテムは既存35と戦歴報酬5（40）", r.zukanItems === 40, String(r.zukanItems));
 check("ここまでエラーなし", errors.length === 0, errors.join(" / "));
 await context.close();
 
