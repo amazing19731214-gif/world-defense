@@ -2338,7 +2338,6 @@
       .tower-growth-card p { margin: 6px 0; }
       .tower-growth-card progress { width: 100%; height: 16px; accent-color: #8cd48b; }
       #towerGrowthSheet summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
-      .t-level { display: block; font-size: 12px; }
       @media (min-width: 700px) { .tower-growth-grid { grid-template-columns: 1fr 1fr; } }
       .game-view { position: relative; margin: 6px 0; }
       .game-view canvas { margin: 0; }
@@ -2804,11 +2803,6 @@ OFF</button>
         function renderTowerGrowth() {
           const count = builtTowerCount();
           $("towerCount").textContent = "塔 " + count + "/" + TOWER_RULES.maxBuilt + (count > TOWER_RULES.maxBuilt ? "（旧セーブ）" : "");
-          document.querySelectorAll("[data-t]").forEach(b => {
-            let el = b.querySelector(".t-level");
-            if (!el) { el = document.createElement("span"); el.className = "t-level"; b.querySelector(".t-text").append(el); }
-            el.textContent = "育成Lv" + towerResearch(b.dataset.t).level;
-          });
           if ($("towerGrowthSheet").hidden) return;
           $("towerGrowthSave").textContent = !saveOk || gameSaveBatch
             ? "⚠ 未保存の成長があります。空き容量を確認してください。通常防衛戦の準備中は「途中保存」で再試行できます。"
