@@ -2299,8 +2299,23 @@
       .squad-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
       .tools.unit-tools .squad-chip { min-width: 0; }
       #hireToggle { font-size: 14px; }
-      #squadRosterTabs .squad-slot-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-top: 4px; }
-      #squadRosterTabs .squad-filter-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+      #squadRosterTabs { display: flex; gap: 4px; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; padding: 3px 0 5px; scroll-snap-type: x proximity; }
+      #squadSheet #squadRosterTabs button { flex: 0 0 auto; min-width: 62px; padding: 4px 10px; white-space: nowrap; scroll-snap-align: start; }
+      .formation-view-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px; align-items: center; margin-top: 4px; }
+      #squadSheet .formation-view-controls button, #squadSheet .formation-view-controls select { width: 100%; min-width: 0; min-height: 34px; margin: 0; font-size: 13px; line-height: 1.2; }
+      #squadSheet .formation-view-controls select { padding: 4px; border-radius: 7px; }
+      #squadSheet #formationSort { font-size: 16px; }
+      #squadSheet #formationSortDirection { min-width: 74px; }
+      .formation-tab-drawer { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 180ms ease; }
+      .formation-tab-drawer.collapsed { grid-template-rows: 0fr; }
+      .formation-tab-inner { min-height: 0; overflow: hidden; }
+      .formation-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 6px; line-height: 1.4; }
+      .formation-record { display: block; opacity: .85; }
+      .formation-group-controls summary { cursor: pointer; padding: 8px 0; min-height: 34px; }
+      .formation-group-controls { margin: 8px 0; }
+      .formation-sort-hint { margin: 4px 0; font-size: 12px; }
+      .formation-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      @media (prefers-reduced-motion: reduce) { .formation-tab-drawer { transition: none; } }
       #squadRosterTabs button { min-height: 44px; min-width: 0; padding: 4px 2px; font-size: 14px; }
       #squadList .formation-soldier-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 90px; }
       #squadList .formation-soldier-actions button { min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 14px; }
@@ -2480,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v82（職業の書・熟練転職とボス報酬）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v83（編成の能力順・スワイプ部隊タブ）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2562,7 +2577,15 @@ OFF</button>
             <button id="formationSoldiers" role="tab" aria-selected="true" aria-controls="formationSoldierPanel">兵士・部隊</button>
             <button id="siege" role="tab" aria-selected="false" aria-controls="siegeSheet" tabindex="-1">攻城用武将</button>
           </div>
-          <div id="squadRosterTabs" role="tablist" aria-label="部隊・指導員候補の表示"></div>
+          <div id="formationRosterTools">
+            <div class="formation-view-controls">
+              <button id="formationTabsToggle" aria-controls="squadTabDrawer" aria-expanded="true">部隊：全隊 ▾</button>
+              <label for="formationSort" class="formation-sr-only">兵士の並べ替え</label>
+              <select id="formationSort" aria-label="兵士の並べ替え"><option value="squad">部隊順</option><option value="hp">最大HP</option><option value="atk">攻撃力</option><option value="def">防御力</option><option value="range">射程</option><option value="level">Lv</option></select>
+              <button id="formationSortDirection" aria-label="並び順を切り替え">↓ 高い順</button>
+            </div>
+            <div id="squadTabDrawer" class="formation-tab-drawer"><div class="formation-tab-inner"><div id="squadRosterTabs" role="tablist" aria-label="部隊・指導員候補の表示（左右にスワイプ）"></div></div></div>
+          </div>
           <div id="bulkSwapControls" aria-live="polite" hidden></div>
         </div>
         <div id="formationSoldierPanel" role="tabpanel" aria-labelledby="formationSoldiers">
@@ -13228,6 +13251,7 @@ function jobBookResultHtml(B) {
         // 一時停止中・ほかの画面（シート）を開いている間は数えない。目標ウェーブのクリア後・ゲームオーバー・攻城戦・討伐戦では始めない。
         // 修練場では、終わる（クリア・撤退・敗北）まで続ける（無限なら負けるか撤退するまで）
         const SETTINGS_KEY = "worldDefense.settings.v1";
+        const FORMATION_SORTS = { squad: "部隊順", hp: "最大HP", atk: "攻撃力", def: "防御力", range: "射程", level: "Lv" };
         const AUTO_DELAY = 5;
         function loadSettings() {
           let d = null;
@@ -13240,6 +13264,11 @@ function jobBookResultHtml(B) {
           return {
             auto: !!(d && d.auto === true),
             waveGoal: d && WAVE_GOALS.includes(d.waveGoal) ? d.waveGoal : 20, // 以前の設定は 20
+            formation: {
+              sort: Object.hasOwn(FORMATION_SORTS, d?.formation?.sort) ? d.formation.sort : "squad",
+              direction: d?.formation?.direction === "asc" ? "asc" : "desc",
+              tabsCollapsed: d?.formation?.tabsCollapsed === true,
+            },
             gear: {
               sort: typeof g.sort === "string" ? g.sort : "grade-desc",
               type: typeof g.type === "string" ? g.type : "all",
@@ -13954,11 +13983,223 @@ function jobBookResultHtml(B) {
           updateUI();
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
+        // 表示だけを並べ替える。兵士・部隊・攻城編成の配列を並べ替えない。
+function formationEffectiveSort() {
+  return movingSoldierId || bulkPick || bulkSwapMode || squadRosterFilter === "candidates"
+    ? "squad"
+    : settings.formation.sort;
+}
+function sortFormationSoldiers(list, stats, key) {
+  const copy = list.slice();
+  if (key === "squad") return copy;
+  const value = (s) => (key === "level" ? s.level : stats.get(s.id)?.[key === "hp" ? "maxHp" : key] || 0);
+  const slot = (s) => {
+    const q = squadById(s.squadId);
+    return q?.slot >= 0 ? q.slot : SQUAD_RULES.maxDeployed + (q?.id || 0);
+  };
+  return copy.sort(
+    (a, b) =>
+      (value(a) - value(b)) * (settings.formation.direction === "asc" ? 1 : -1) ||
+      slot(a) - slot(b) ||
+      a.id - b.id,
+  );
+}
+function renderFormationViewControls() {
+  const candidate = squadRosterFilter === "candidates",
+    editing = !!(movingSoldierId || bulkPick || bulkSwapMode),
+    collapsed = settings.formation.tabsCollapsed,
+    name =
+      squadRosterFilter === "all"
+        ? "全隊"
+        : candidate
+          ? "候補"
+          : SQUAD_RULES.slotNames[+squadRosterFilter].replace("部隊", ""),
+    toggle = $("formationTabsToggle"),
+    drawer = $("squadTabDrawer");
+  toggle.textContent = "部隊：" + name + (collapsed ? " ▸" : " ▾");
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.setAttribute(
+    "aria-label",
+    "部隊タブを" + (collapsed ? "開く" : "閉じる") + "（" + (candidate ? "指導員候補" : name) + "）",
+  );
+  drawer.classList.toggle("collapsed", collapsed);
+  drawer.inert = collapsed;
+  drawer.setAttribute("aria-hidden", String(collapsed));
+  $("formationSort").value = candidate ? "level" : editing ? "squad" : settings.formation.sort;
+  $("formationSort").disabled = candidate || editing;
+  $("formationSort").title = candidate
+    ? "指導員候補はLvの低い順です"
+    : editing
+      ? "移籍・交代中は部隊順で表示します"
+      : "HPは最大HPを比較します";
+  const asc = candidate || settings.formation.direction === "asc";
+  $("formationSortDirection").textContent = asc ? "↑ 低い順" : "↓ 高い順";
+  $("formationSortDirection").disabled = candidate || editing || settings.formation.sort === "squad";
+  $("formationSortDirection").setAttribute(
+    "aria-label",
+    "並び順：現在" + (asc ? "低い順" : "高い順") + "。押すと" + (asc ? "高い順" : "低い順"),
+  );
+}
+function revealSquadFilter() {
+  if (settings.formation.tabsCollapsed || $("squadSheet").hidden || formationKind !== "soldiers") return;
+  const rail = $("squadRosterTabs"),
+    button = $("squadFilter-" + squadRosterFilter);
+  if (!button) return;
+  const a = rail.getBoundingClientRect(),
+    b = button.getBoundingClientRect();
+  if (b.left < a.left) rail.scrollLeft += b.left - a.left - 4;
+  else if (b.right > a.right) rail.scrollLeft += b.right - a.right + 4;
+}
+$("formationTabsToggle").onclick = (ev) => {
+  ev.stopPropagation();
+  settings.formation.tabsCollapsed = !settings.formation.tabsCollapsed;
+  renderFormationViewControls();
+  saveSettings();
+  if (!settings.formation.tabsCollapsed) revealSquadFilter();
+};
+$("formationSort").onchange = () => {
+  const value = $("formationSort").value;
+  if (!Object.hasOwn(FORMATION_SORTS, value) || $("formationSort").disabled) return;
+  settings.formation.sort = value;
+  saveSettings();
+  renderSquadSheet();
+  $("squadSheet").querySelector(".sheet").scrollTop = 0;
+};
+$("formationSortDirection").onclick = (ev) => {
+  ev.stopPropagation();
+  if ($("formationSortDirection").disabled) return;
+  settings.formation.direction = settings.formation.direction === "asc" ? "desc" : "asc";
+  saveSettings();
+  renderSquadSheet();
+  $("squadSheet").querySelector(".sheet").scrollTop = 0;
+};
+function formationSquadActions(q, list, moving, bulk) {
+  let acts = "";
+  if (bulk) {
+    const all = list.length && list.every((s) => bulkPick.includes(s.id));
+    if (list.length)
+      acts +=
+        '<button data-bulk-all="' +
+        q.id +
+        '"' +
+        (!bulkSwapCanSelect(q.id) ? " disabled" : "") +
+        ">" +
+        (all ? "全員を外す" : "全員を選ぶ") +
+        "</button>";
+  } else if (moving) {
+    if (q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
+      acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
+  } else {
+    if (q.state === "reserve" && !q.locked) acts += '<button data-place="' + q.id + '">配置する</button>';
+    if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
+    if (!playing && q.state === "reserve") acts += '<button data-disband="' + q.id + '">解散</button>';
+    if (!playing && healCost(q))
+      acts += '<button data-heal="' + q.id + '">🩹 治療 ' + healCost(q) + "G</button>";
+  }
+  return acts;
+}
+function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
+  const heal = !!unitOf(s).heal;
+  const metric =
+    '<small class="formation-stats"><span>HP ' +
+    Math.ceil(s.hp) +
+    "/" +
+    st.maxHp +
+    "</span><span>" +
+    (heal ? "回復 " + fmt(st.heal) : "攻 " + fmt(st.atk)) +
+    "</span><span>防 " +
+    fmt(st.def) +
+    "</span><span>射程 " +
+    fmt(st.range) +
+    "</span></small>";
+  let acts;
+  if (bulk)
+    acts =
+      '<button class="pick' +
+      (bulkPick.includes(s.id) ? " on" : "") +
+      '" data-bulk-pick="' +
+      s.id +
+      '"' +
+      (!bulkSwapCanSelect(q.id) ? " disabled" : "") +
+      ' aria-pressed="' +
+      bulkPick.includes(s.id) +
+      '">' +
+      (bulkPick.includes(s.id) ? "☑ 選択中" : "☐ 選ぶ") +
+      "</button>";
+  else if (!moving)
+    acts =
+      '<div class="formation-soldier-actions"><button data-formation-soldier="' +
+      s.id +
+      '" aria-label="' +
+      esc(soldierName(s)) +
+      'の詳細・育成">詳細・育成</button>' +
+      (!playing ? '<button data-move="' + s.id + '">移籍</button>' : "") +
+      "</div>";
+  else if (moving.id === s.id) acts = '<span class="moving-tag">移籍中</span>';
+  else acts = s.squadId !== moving.squadId ? '<button data-swap="' + s.id + '">⇄ 入れ替え</button>' : "";
+  return (
+    '<div class="soldier-row' +
+    (moving?.id === s.id ? " moving" : "") +
+    '" data-formation-row="' +
+    s.id +
+    '"><span><b>' +
+    esc(soldierName(s)) +
+    "</b>" +
+    (s.out ? "（離脱中）" : "") +
+    " Lv" +
+    s.level +
+    " " +
+    titleText(s) +
+    metric +
+    '<small class="formation-record">' +
+    (showSquad ? esc(squadName(q)) + "・" : "") +
+    "撃破" +
+    s.kills +
+    "・生存" +
+    s.wavesSurvived +
+    "W</small></span>" +
+    acts +
+    "</div>"
+  );
+}
+function formationGroupHtml(q, list, stats, moving, bulk) {
+  const title = q
+    ? SOLDIER_TYPES[q.type].icon +
+      " " +
+      esc(squadName(q)) +
+      " <small>" +
+      squadStateText(q) +
+      "・生存" +
+      list.length +
+      "・戦死" +
+      q.fallen +
+      "</small>"
+    : esc(FORMATION_SORTS[settings.formation.sort]) +
+      (settings.formation.direction === "asc" ? "の低い順" : "の高い順") +
+      " <small>全隊 " +
+      list.length +
+      "人</small>";
+  const acts = q ? formationSquadActions(q, list, moving, bulk) : "";
+  return (
+    '<div class="squad-card"><h3>' +
+    title +
+    "</h3>" +
+    list
+      .map((s) => formationSoldierRow(s, squadById(s.squadId), stats.get(s.id), moving, bulk, !q))
+      .join("") +
+    (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
+    "</div>"
+  );
+}
+
         let squadRosterFilter = "all", formationRetireReturn = null, bulkSwapMode = false;
-        const squadFilterValues = () => [...SQUAD_RULES.slotNames.map((_, i) => String(i)), "all", "candidates"];
+        const squadFilterValues = () => ["all", ...SQUAD_RULES.slotNames.map((_, i) => String(i)), "candidates"];
         function renderSquadRosterTabs() {
           const tab = (value, text) => '<button id="squadFilter-' + value + '" role="tab" data-squad-filter="' + value + '" aria-controls="squadList" aria-selected="' + (squadRosterFilter === value) + '" tabindex="' + (squadRosterFilter === value ? 0 : -1) + '" class="' + (squadRosterFilter === value ? "active" : "") + '">' + text + '</button>';
-          $("squadRosterTabs").innerHTML = '<div class="squad-slot-tabs">' + SQUAD_RULES.slotNames.map((name, i) => tab(String(i), name.replace("部隊", ""))).join("") + '</div><div class="squad-filter-main">' + tab("all", "全隊") + tab("candidates", "🎓 指導員候補") + '</div>';
+          const left = $("squadRosterTabs").scrollLeft;
+          $("squadRosterTabs").innerHTML = tab("all", "全隊") + SQUAD_RULES.slotNames.map((name, i) => tab(String(i), name.replace("部隊", ""))).join("") + tab("candidates", "🎓 指導員候補");
+          $("squadRosterTabs").scrollLeft = left;
+          renderFormationViewControls();
           $("squadList").setAttribute("aria-labelledby", "squadFilter-" + squadRosterFilter);
         }
         function selectSquadRosterFilter(value) {
@@ -13968,6 +14209,7 @@ function jobBookResultHtml(B) {
           renderSquadSheet();
           $("squadSheet").querySelector(".sheet").scrollTop = 0;
           $("squadFilter-" + value).focus({ preventScroll: true });
+          revealSquadFilter();
         }
         function mentorCandidates() {
           return soldiers.filter(s => s.alive && squadById(s.squadId) && s.level >= LEGEND.retireLevel && !isHeroSoldier(s))
@@ -14015,6 +14257,7 @@ function jobBookResultHtml(B) {
           const bulk = !!bulkPick,
             picked = bulk ? bulkPick.length : 0;
           renderBulkSwapControls();
+          renderFormationViewControls();
           $("squadHint").textContent = bulkSwapMode ? "2部隊から同じ人数を選び、上の交代ボタンで確定。部隊タブを切り替えても選択は残ります。"
             : bulk
             ? "移籍する兵士を選んで（部隊ごとに「全員を選ぶ」も可）、下の移す先を押してください。選択中 " + picked + "人"
@@ -14062,81 +14305,15 @@ function jobBookResultHtml(B) {
             html += '<p class="muted">部隊がありません。「＋ 雇う」で兵士を雇うと、自動で部隊に配属されます。</p>';
           const visibleSquads = squadRosterFilter === "all" ? squads : squads.filter(q => q.slot === Number(squadRosterFilter));
           if (!visibleSquads.length && squadRosterFilter !== "all") html += '<p class="muted">' + SQUAD_RULES.slotNames[Number(squadRosterFilter)] + 'にはまだ兵士がいません。</p>';
-          for (const q of visibleSquads) {
-            const list = roster(q),
-              c = SOLDIER_TYPES[q.type];
-            let acts = "";
-            if (bulk) {
-              const all = list.length && list.every((s) => bulkPick.includes(s.id));
-              if (list.length) acts += '<button data-bulk-all="' + q.id + '"' + (!bulkSwapCanSelect(q.id) ? ' disabled' : '') + '>' + (all ? "全員を外す" : "全員を選ぶ") + "</button>";
-            } else if (moving) {
-              if (q.id !== moving.squadId && list.length < SQUAD_RULES.squadSize)
-                acts += '<button data-move-to="' + q.id + '">ここへ編入</button>';
-            } else {
-              if (q.state === "reserve" && !q.locked)
-                acts += '<button data-place="' + q.id + '">配置する</button>';
-              if (q.state === "deployed") acts += '<button data-retreat="' + q.id + '">撤退</button>';
-              if (!playing && q.state === "reserve")
-                acts += '<button data-disband="' + q.id + '">解散</button>';
-              if (!playing && healCost(q))
-                acts += '<button data-heal="' + q.id + '">🩹 治療 ' + healCost(q) + "G</button>";
-            }
-            html +=
-              '<div class="squad-card"><h3>' +
-              c.icon +
-              " " +
-              squadName(q) +
-              " <small>" +
-              squadStateText(q) +
-              "・生存" +
-              list.length +
-              "・戦死" +
-              q.fallen +
-              "</small></h3>" +
-              list
-                .map(
-                  (s) =>
-                    '<div class="soldier-row' +
-                    (moving && moving.id === s.id ? " moving" : "") +
-                    '"><span>' +
-                    esc(soldierName(s)) +
-                    (s.out ? "（離脱中）" : "") +
-                    " Lv" +
-                    s.level +
-                    " " +
-                    titleText(s) +
-                    "<br><small>HP " +
-                    Math.ceil(s.hp) +
-                    "/" +
-                    soldierStats(s).maxHp +
-                    "・撃破" +
-                    s.kills +
-                    "・生存" +
-                    s.wavesSurvived +
-                    "W</small></span>" +
-                    (bulk
-                      ? '<button class="pick' +
-                        (bulkPick.includes(s.id) ? " on" : "") +
-                        '" data-bulk-pick="' +
-                        s.id +
-                        '"' + (!bulkSwapCanSelect(q.id) ? ' disabled' : '') + ' aria-pressed="' +
-                        bulkPick.includes(s.id) +
-                        '">' +
-                        (bulkPick.includes(s.id) ? "☑ 選択中" : "☐ 選ぶ") +
-                        "</button>"
-                      : !moving
-                        ? '<div class="formation-soldier-actions"><button data-formation-soldier="' + s.id + '" aria-label="' + esc(soldierName(s)) + 'の詳細・育成">詳細・育成</button>' +
-                          (!playing ? '<button data-move="' + s.id + '">移籍</button>' : '') + '</div>'
-                        : moving && moving.id === s.id
-                          ? '<span class="moving-tag">移籍中</span>'
-                          : moving && s.squadId !== moving.squadId
-                            ? '<button data-swap="' + s.id + '">⇄ 入れ替え</button>'
-                            : "") +
-                    "</div>",
-                )
-                .join("") +
-              (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
-              "</div>";
+          const stats = new Map(visibleSquads.flatMap(q => roster(q)).map(s => [s.id, soldierStats(s)]));
+          const key = formationEffectiveSort();
+          const ranking = key !== "squad" && squadRosterFilter === "all";
+          if (ranking) {
+            const list = sortFormationSoldiers(visibleSquads.flatMap(q => roster(q)), stats, key);
+            html += formationGroupHtml(null, list, stats, moving, bulk);
+            html += '<details class="formation-group-controls"><summary>部隊の配置・撤退・治療</summary>' + visibleSquads.map(q => '<div class="squad-card"><h3>' + esc(squadName(q)) + '</h3><div class="card-actions">' + formationSquadActions(q, roster(q), moving, bulk) + '</div></div>').join("") + '</details>';
+          } else for (const q of visibleSquads) {
+            html += formationGroupHtml(q, sortFormationSoldiers(roster(q), stats, key), stats, moving, bulk);
           }
           const fallen = soldiers.filter((s) => !s.alive);
           if (fallen.length && squadRosterFilter === "all")
@@ -14176,6 +14353,7 @@ function jobBookResultHtml(B) {
           $("formationSoldierPanel").hidden = siege;
           $("siegeSheet").hidden = !siege;
           $("squadRosterTabs").hidden = siege;
+          $("formationRosterTools").hidden = siege;
           for (const [id, on] of [["formationSoldiers", !siege], ["siege", siege]]) {
             $(id).setAttribute("aria-selected", String(on));
             $(id).tabIndex = on ? 0 : -1;
@@ -14191,6 +14369,7 @@ function jobBookResultHtml(B) {
           $("squadClose").textContent = fromMap ? "← 世界" : "✕ 閉じる";
           $("squadClose").setAttribute("aria-label", fromMap ? "編成を閉じて世界に戻る" : "編成を閉じる");
           $("squadSheet").hidden = false;
+          revealSquadFilter();
           $("squadClose").focus();
         }
         function closeSquadSheet(returnToMap = true) {
