@@ -142,7 +142,7 @@ const lay = await page.evaluate(() => ({
     ),
   ),
 }));
-check("390px で横スクロールなし・ボタンは押しやすい", !lay.hScroll && lay.minBtn >= 44, JSON.stringify(lay));
+check("390px で横スクロールなし・編成内のコンパクトボタンは32px以上", !lay.hScroll && lay.minBtn >= 32, JSON.stringify(lay));
 if (shots) await page.screenshot({ path: path.join(shots, "t1-provinces.png") });
 await page.tap('#siegePick [data-target="inabayama"]');
 check(

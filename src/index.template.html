@@ -1632,6 +1632,8 @@
         margin-top: 4px;
       }
       /* 装備倉庫の一覧：1行にまとめる（同じ装備は ×個数） */
+      .insight-box { border:1px solid #d8c56c77; border-radius:8px; padding:8px; margin:8px 0; }
+      .insight-box summary { min-height:44px; cursor:pointer; padding:8px 0; }
       .gear-list {
         display: grid;
         gap: 6px;
@@ -2479,7 +2481,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v80（商店に裏ボスの呼び札）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v81（職業進化・職業固有技・閃きと継承）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4105,6 +4107,7 @@ OFF</button>
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ writes: { ...(previous ? previous.writes : {}), ...gameSaveBatch } }));
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
+            scheduleInsightFlush();
             return true;
           } catch (err) { return false; } // 未確定の変更はメモリに残し、次の保存で再試行
         }
@@ -4597,6 +4600,7 @@ OFF</button>
           },
         };
         // 職業ごとの戦い方：兵種の値に職業の unit を重ねたもの（unit のない職業は兵種のまま）
+        /*@@JOB_EVOLUTION@@*/
         const JOB_UNITS = {};
         for (const [j, J] of Object.entries(JOBS))
           if (J.unit) {
@@ -5119,6 +5123,8 @@ OFF</button>
             bossRewards, // 裏ボスの初回報酬（専用装備）を受け取ったか
             shards: int(o.shards, 99999),
             koban: int(o.koban, KOBAN_MAX), // 小判（両）：装備の売却で増える永続の通貨（以前の保存データは 0 から）
+            insightBooks: cleanInsightBooks(o.insightBooks),
+            insightSeq: Math.max(int(o.insightSeq,999999998),...cleanInsightBooks(o.insightBooks).map(b=>b.uid),0),
             bossLures: int(o.bossLures, SHOP.bossLureMax), // 未使用の裏ボスの呼び札。旧セーブは0個
             fruits: Object.fromEntries(
               Object.keys(SHOP.fruits)
@@ -5349,7 +5355,7 @@ OFF</button>
         }
         // 図鑑に登録する：今の状態（と履歴）にあるものをすべて記録する。何度呼んでも同じ（増えるだけ）
         function zukanSync() {
-          if (!zukanReady || recruitSaving || formationSaving) return 0;
+          if (!zukanReady || recruitSaving || formationSaving || evolutionSaving) return 0;
           let n = 0;
           const add = (c, id) => {
             if (!zukan[c][id]) {
@@ -5362,6 +5368,8 @@ OFF</button>
           for (const [id, c] of Object.entries(heroSave.owned)) if (WARLORDS[id] && c > 0) add("warlords", id);
           for (const h of heroSave.history) if (h && WARLORDS[h.id]) add("warlords", h.id);
           const F = heroSave.forge;
+          for (const id of insightFound()) add("skills","in:"+id);
+          for(const s of soldiers)if(s.alive){const stage=jobActionStage(s),j=jobOf(s);for(let n=0;n<=stage;n++)add("skills","ja:"+j+":"+n);}
           for (const it of F.items) if (GEAR[it.id]) add("items", it.id);
           for (const h of F.history) if (h && GEAR[h.got]) add("items", h.got);
           for (const g of Object.keys(GEAR)) if (GEAR[g].boss && (F.bossRewards || {})[GEAR[g].boss]) add("items", g); // 裏ボスの初回報酬
@@ -5680,7 +5688,7 @@ OFF</button>
           if (s) ignore = Math.max(ignore, skillSum(s, "armorPierce")); // 貫通射撃
           const focus = ownedHeroes().some((v) => activeKind(v, "focus") && v.skillTarget === e);
           const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
-          const armor = Math.max(0, e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0);
+          const armor = evolutionArmor(e,e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0,combatClock);
           damage *= (1 + vulnerability) * 30 / (30 + armor * (1 - Math.min(1, ignore)));
           if (e.rare) damage = Math.min(damage, RARE.hitDamage); // 特別な敵はとても硬い（1回で 1 だけ）
           const hpBefore = e.hp;
@@ -6660,6 +6668,7 @@ OFF</button>
                 ...cleanJob(Object.assign({}, v, { type: rec.type })),
                 legend: cleanLegend(v.legend),
                 fruit: cleanFruit(v.fruit),
+                insight: cleanInsight(v.insight,{...v,id:rec.id,type:rec.type,level}),
                 name: rec.name,
                 named: rec.named || null,
                 battles: rec.battles,
@@ -7296,6 +7305,8 @@ OFF</button>
             atk: 0,
             hit: 0,
           };
+          s.insight=cleanInsight(null,s);
+          s.insight.seed=crypto.getRandomValues(new Uint32Array(1))[0];
           s.hp = soldierStats(s).maxHp;
           logHistory(s, named ? "ネームド兵士として仕官" : "新兵として雇用");
           soldiers.push(s);
@@ -7387,6 +7398,7 @@ OFF</button>
           return id;
         }
         function onLevelUp(s, fresh = true) {
+          queueInsight(s,fresh);
           let note = "";
           const every = SQUAD_RULES.skillEvery,
             from = SQUAD_RULES.skillEveryFrom;
@@ -7647,6 +7659,7 @@ OFF</button>
           if (training) return "修練場で挑戦中は転職できません。";
           if (playing) return "戦闘中（ウェーブ中）は転職できません。ウェーブの合間に転職しよう。";
           if (jobOf(s) === j) return "すでに" + JOBS[j].name + "です。";
+          const evolutionError=evolutionJobRequirement(s,j);if(evolutionError)return evolutionError;
           if (!jobsOf(s).includes(j) && s.level < JOB_RULES.unlockLevel)
             return "Lv" + JOB_RULES.unlockLevel + "から新しい職業に転職できます（一度なった職業にはいつでも戻れます）。";
           return null;
@@ -8377,7 +8390,7 @@ OFF</button>
           const hpBefore = front.hp;
           // 修練場の敵の一撃は、最大HPの6割まで（強い敵でも一撃で倒れ続けない）
           const hit = enemy && enemy.lv ? Math.min(dmg, st.maxHp * TRAINING.maxHit) : dmg;
-          front.hp -= absorbShield(front, hit, ranged);
+          front.hp -= absorbShield(front, evolutionAbsorb(front,hit,ranged,enemy,combatClock), ranged);
           // 防御の経験値：実際に受けたHP＋防御などで減らした分（倒れた兵士には付かない）
           if (front.hp > 0) earnXp(front, "block", Math.max(0, hpBefore - front.hp) + Math.max(0, raw - hit), st.maxHp);
           if (front.hp <= 0) consumeWard(front);
@@ -8589,6 +8602,7 @@ OFF</button>
               }
               target.hit = 0.18;
               touchHero(q);
+              defenseEvolution(s,q,target,"attack",null,st);
               earnXp(s, "hit");
               if (ct.range <= 60) burst(target.x, target.y, "#fff1c4", "slash");
               else {
@@ -8704,7 +8718,8 @@ OFF</button>
           healTarget(best.m, amount, q); // 最大HPを超えず、救護系パッシブを反映
           touchHero(q);
           s.heals = (s.heals || 0) + 1;
-          earnXp(s, "heal", best.m.hp - hpBefore, max); // 実際に回復したHPだけ
+          earnXp(s, "heal", best.m.hp - hpBefore, max);
+          defenseEvolution(s,q,best.m,"heal",hpBefore/max,st); // 実際に回復したHPだけ
           const off = formationOffset(best.o, best.i);
           if (effects.length >= 80) effects.shift();
           effects.push({
@@ -8751,6 +8766,7 @@ OFF</button>
             const q = squadById(s.squadId), extra = q && heroHas(heroOnSquad(q), "terumoto") ? 0.15 * warlordSpecial("terumoto") : 0;
             s.hp = Math.min(max, s.hp + max * (SQUAD_RULES.waveEndHeal + extra));
             s.heroShield = s.heroRegen = null;
+            s.evolutionShield=s.evolutionGuard=null;
           }
           for (const q of squads) {
             q.locked = false;
@@ -8966,6 +8982,7 @@ OFF</button>
           "named",
           "legend",
           "fruit",
+          "insight",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
@@ -9111,6 +9128,7 @@ OFF</button>
                 pts: cleanPoints(v.pts, level),
                 deaths: intIn(v.deaths, 0, 1e9, 0),
                 bestLevel: best,
+                insight: cleanInsight(v.insight,{...v,level,bestLevel:best}),
                 ...cleanJob(v),
                 // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す。ネームド兵士は人物の名前
                 ...(namedOk(v, list)
@@ -9142,6 +9160,7 @@ OFF</button>
               squads: squadsIn.filter((q) => count[q.id]),
               soldiers: list,
               fallen,
+              insightFound:[...new Set((Array.isArray(d.insightFound)?d.insightFound:[]).filter(id=>Object.hasOwn(INSIGHT_SKILLS,id)))],
               // 主人公：保存されている生存兵のときだけ（いなければ未設定）
               heroId: list.some((v) => v.id === d.heroId) ? d.heroId : null,
             };
@@ -9176,7 +9195,7 @@ OFF</button>
           const o = {};
           for (const k of SAVED_FIELDS)
             o[k] =
-              k === "legend"
+              (k === "legend" || k === "insight")
                 ? s[k]
                   ? JSON.parse(JSON.stringify(s[k])) // 中の配列も写す（保存前の変更が保存データに混ざらない）
                   : null
@@ -9235,6 +9254,7 @@ OFF</button>
                   legend: s.legend || null,
                   fruit: s.fruit || null,
                   bestLevel: s.bestLevel,
+                  insight: s.insight,
                 }),
               ),
             });
@@ -9401,7 +9421,7 @@ OFF</button>
               e.siege = null;
               e.siegeDone = true;
             }
-            e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1) * dt;
+            e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1, e.evolutionSlow?.until>combatClock?1-e.evolutionSlow.value:1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
               if (e.rare) {
@@ -10938,6 +10958,7 @@ OFF</button>
           ctx.restore();
         }
         function effect(e) {
+          if(e.kind==="evolution")return drawEvolutionFx(e,Math.min(1,e.age/e.duration),reduced);
           if (e.boss) return drawBossFx(e);
           const p = e.age / e.duration;
           if (e.kind === "lbeam") {
@@ -13386,8 +13407,8 @@ OFF</button>
             "個</small></button>" +
             '<button data-gear-tab="books" aria-pressed="' +
             (gearTab === "books") +
-            '">📜 スキルの書 <small>' +
-            Object.values(F.books).reduce((a, b) => a + b, 0) +
+            '">📜 書 <small>' +
+            (Object.values(F.books).reduce((a, b) => a + b, 0) + F.legendBooks.length + F.insightBooks.length) +
             "冊</small></button>" +
             '<button data-gear-tab="shop" aria-pressed="' +
             (gearTab === "shop") +
@@ -13477,6 +13498,7 @@ OFF</button>
               "（📜 スキルの書から売れます。装備中の書は売れません）</small></p>";
             return html;
           }
+          if(gearTab === "books")html+=insightStoreHtml();
           if (gearTab === "gear" && sellConfirm) {
             // 売却の確認：数・一覧・合計・元に戻せないこと
             const list = sellConfirm.map(itemByUid).filter(Boolean),
@@ -13933,6 +13955,7 @@ OFF</button>
           ["unique", "固有スキル（Lv30）"],
           ["job", "職業スキル"],
           ["book", "秘伝スキル（スキルの書）"],
+          ["action","職業固有技"], ["insight","💡 閃き技"],
         ];
         const skillGroup = (k) => (k.job ? "job" : k.book ? "book" : k.unique ? "unique" : "normal");
         let zukanLists = null;
@@ -13941,6 +13964,8 @@ OFF</button>
           const skills = Object.keys(WARLORDS).map((id) => ({ key: "w:" + id, group: "warlord", wid: id }));
           for (const [g] of ZUKAN_SKILL_GROUPS.slice(1))
             for (const [id, k] of Object.entries(SOLDIER_SKILLS)) if (!k.future && skillGroup(k) === g) skills.push({ key: id, group: g });
+          for(const [id,k] of Object.entries(INSIGHT_SKILLS))skills.push({key:"in:"+id,group:"insight",insight:id});
+          for(const [id,k] of Object.entries(JOB_ACTIONS))for(let stage=0;stage<2;stage++)skills.push({key:"ja:"+id+":"+stage,group:"action",action:id,stage});
           zukanLists = {
             warlords: Object.keys(WARLORDS).map((id) => ({ key: id })),
             skills, // 未実装のスキル（城攻め名人）は入れない
@@ -14001,6 +14026,8 @@ OFF</button>
             );
           }
           if (cat === "skills") {
+            if(e.insight){const k=INSIGHT_SKILLS[e.insight];return "<p><b>💡 "+esc(k.name)+"</b><br>"+esc(k.text)+"<br>再使用 "+k.cd+"秒・適性："+INSIGHT_STYLE_NAMES[k.style]+"<br>自然習得："+JOBS[k.job].name+"・Lv"+INSIGHT_RULES.levels[k.grade]+"・熟練"+INSIGHT_RULES.prof[k.grade]+"以上、新規Lvごとに"+(INSIGHT_RULES.rates[k.grade]*100)+"%<br>指導員の閃き秘伝書でも習得。転職後も保持、既存4冊とは別の有効2枠。</p>";}
+            if(e.action){const k=JOB_ACTIONS[e.action];return "<p><b>"+esc(k.names[e.stage])+"</b>（"+JOBS[e.action].name+"専用・自動）<br>"+esc(jobActionText(e.action,e.stage))+"<br>職業技の継承は不可。既存の職業スキルは従来どおり継承可能。</p>";}
             if (e.wid) {
               const c = WARLORDS[e.wid];
               return (
@@ -14110,7 +14137,7 @@ OFF</button>
             "</span> <b>" +
             J.name +
             "</b>" +
-            (J.advanced ? "（上級職）" : "（基本職）") +
+            (J.ultimate ? "（最上級職）" : J.advanced ? "（上級職）" : "（基本職）") +
             "<br><small>" +
             esc(J.text) +
             "<br>能力：" +
@@ -14231,8 +14258,8 @@ OFF</button>
               icon = avatarHtml(e.key);
               name = WARLORDS[e.key].name;
             } else if (zukanTab === "skills") {
-              const k = e.wid ? WARLORDS[e.wid].skill : SOLDIER_SKILLS[e.key];
-              icon = '<span class="zk-icon">' + (e.wid ? "✨" : e.group === "job" ? "🔄" : e.group === "book" ? "📜" : "⭐") + "</span>";
+              const k = e.insight ? INSIGHT_SKILLS[e.insight] : e.action ? {name:JOB_ACTIONS[e.action].names[e.stage]} : e.wid ? WARLORDS[e.wid].skill : SOLDIER_SKILLS[e.key];
+              icon = '<span class="zk-icon">' + (e.insight ? "💡" : e.action ? "⚔️" : e.wid ? "✨" : e.group === "job" ? "🔄" : e.group === "book" ? "📜" : "⭐") + "</span>";
               name = k.name;
             } else if (zukanTab === "items") {
               const g = GEAR[e.key];
@@ -14393,7 +14420,7 @@ OFF</button>
               lv = profLv(s, j),
               x = (s.prof && s.prof[j]) || 0,
               next = lv < JOB_RULES.profMax ? profNeed(j, lv + 1) : null,
-              locked = !been && s.level < JOB_RULES.unlockLevel,
+              locked = !been && (s.level < JOB_RULES.unlockLevel || !!evolutionJobRequirement(s,j)),
               style = jobStyle(j),
               after = j === cur ? now : statsAsJob(s, j),
               open = jobOpen === j;
@@ -14412,7 +14439,7 @@ OFF</button>
               '</span><span class="jn"><span><b>' +
               J.name +
               "</b> <small>" +
-              (j === cur ? "（今の職業）" : been ? "（なったことがある）" : J.advanced ? "（上級職）" : "") +
+              (j === cur ? "（今の職業）" : been ? "（なったことがある）" : J.ultimate ? "（最上級職）" : J.advanced ? "（上級職）" : "") +
               "</small></span><small class=\"js\">" +
               style.short +
               "・" +
@@ -14427,12 +14454,12 @@ OFF</button>
                   '"' +
                   (err ? " disabled" : "") +
                   ">" +
-                  (locked && !fighting ? "🔒 Lv" + JOB_RULES.unlockLevel + "で解放" : "転職") +
+                  (locked && !fighting ? (J.ultimate ? "🔒 進化条件" : "🔒 Lv" + JOB_RULES.unlockLevel + "で解放") : "転職") +
                   "</button>") +
               '<div class="job-detail"' +
               (open ? "" : " hidden") +
               "><p>" +
-              esc(J.text) +
+              esc(J.text) + (J.ultimate?"<br>"+esc(evolutionRequirementText(j))+(evolutionJobRequirement(s,j)?"（未達成）":"（達成済み）"):"") +
               "<br><small>戦い方：" +
               style.attack +
               "・" +
@@ -14449,7 +14476,7 @@ OFF</button>
               JOB_RULES.profMax +
               "</b>" +
               (next ? "（経験 " + Math.floor(x) + "/" + next + "）" : "（最大）") +
-              "<br>職業スキル：" +
+              "<br>職業固有技：" + esc(JOB_ACTIONS[j].names.join(" → ")) + "<br>"+esc(jobActionText(j,0))+"／上位："+esc(jobActionText(j,1))+"<br>職業スキル：" +
               J.skills
                 .map(
                   ([id, need]) =>
@@ -14588,6 +14615,7 @@ OFF</button>
         });
         // ===== 終盤（試作）：伝説の能力の表示・指導員の引退・伝承の秘伝書・特殊装備 =====
         const legendBookText = (b) =>
+          b.type === "insight" ? "💡「" + INSIGHT_SKILLS[b.id].name + "」（閃き秘伝書）" :
           (b.super ? "🌟超秘伝 " : "") +
           (b.type === "skill"
             ? "「" + SOLDIER_SKILLS[b.id].name + "」（" + SOLDIER_SKILLS[b.id].text + "）"
@@ -14599,6 +14627,7 @@ OFF</button>
         // 引退で残せるスキル：習得したスキル（通常・固有・職業・秘伝）と伝説の能力。ネームド兵士・武将の専用の能力は残せない
         function inheritables(s) {
           const out = [];
+          for(const id of insightOf(s).known)out.push({type:"insight",id});
           for (const id of learnedOf(s)) if (SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future) out.push({ type: "skill", id });
           if (s.legend) {
             for (const st of s.legend.stats) out.push({ type: "stat", k: st.k, v: st.v });
@@ -14620,7 +14649,7 @@ OFF</button>
           if (s.level < LEGEND.retireLevel) return "Lv" + LEGEND.retireLevel + "から指導員として引退できます（今 Lv" + s.level + "）。";
           if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから引退できます。";
           if (!inheritables(s).length) return "残せるスキルがありません。";
-          if (forgeSave().legendBooks.length >= LEGEND.books) return "伝承の秘伝書がいっぱいです（" + LEGEND.books + "冊まで）。";
+          if (forgeSave().legendBooks.length >= LEGEND.books && !insightOf(s).known.length) return "伝承の秘伝書がいっぱいです（" + LEGEND.books + "冊まで）。";
           return legendBusyError();
         }
         // 秘伝スキル（スキルの書で覚えるスキル）は、今までの「スキルの書」として残す（同じ倉庫・同じ使い方）
@@ -14641,6 +14670,8 @@ OFF</button>
           if (err) return err;
           let pick = inheritables(s)[pickIndex];
           if (!pick) return "残すスキルを選んでください。";
+          if(pendingInsights.has(id)&&!flushInsights())return "閃きの記録が保存待ちです。先に途中保存をやり直してください。";
+          if(pick.type === "insight" ? forgeSave().insightBooks.length >= INSIGHT_RULES.books || forgeSave().insightSeq >= 999999998 : !asOldBook(pick) && forgeSave().legendBooks.length >= LEGEND.books) return "選んだ秘伝書の倉庫または発行上限です。";
           if (pick.type === "statRoll") pick = rollStatBook(pick.g); // 能力値の書：ここで数値が決まる
           if (asOldBook(pick) && (forgeSave().books[pick.id] || 0) >= FORGE.maxBooks)
             return "その「スキルの書」はもういっぱいです（" + FORGE.maxBooks + "冊まで）。";
@@ -14654,6 +14685,7 @@ OFF</button>
               slots: squads.map((x) => x.slot),
               books: F.legendBooks.slice(),
               bookOwners: F.legendBooks.map((b) => b.owner),
+              insightBooks:F.insightBooks.slice(),insightSeq:F.insightSeq,
               oldBooks: Object.assign({}, F.books),
               lseq: F.lseq,
               mentors: F.mentors.slice(),
@@ -14675,7 +14707,9 @@ OFF</button>
             if (selectedSquad === q) selectedSquad = null;
           } else if (q) refreshSquadType(q);
           let book = null;
-          if (asOldBook(pick)) {
+          if(pick.type === "insight"){
+            book={type:"insight",uid:++F.insightSeq,id:pick.id,from:soldierName(s)};F.insightBooks.push(book);
+          } else if (asOldBook(pick)) {
             F.books[pick.id] = (F.books[pick.id] || 0) + 1;
           } else {
             F.lseq++;
@@ -14695,6 +14729,7 @@ OFF</button>
             soldierSave.squads = before.saveSquads;
             F.legendBooks = before.books;
             F.legendBooks.forEach((b, i) => (before.bookOwners[i] == null ? delete b.owner : (b.owner = before.bookOwners[i])));
+            F.insightBooks=before.insightBooks;F.insightSeq=before.insightSeq;
             bookMap = null;
             F.books = before.oldBooks;
             F.lseq = before.lseq;
@@ -14825,7 +14860,8 @@ OFF</button>
           return null;
         }
         // 兵士の札の下に出す「伝説の能力」
-        function legendBlock(s) {
+        function legendBlock(s) { return jobActionBlock(s)+insightBlock(s)+legacyLegendBlock(s); }
+        function legacyLegendBlock(s) {
           const L = s.legend,
             eq = booksOf(s.id);
           if (!L && !eq.length && !endgameOn()) return "";
@@ -15153,7 +15189,7 @@ OFF</button>
             jobName(s) +
             "・Lv" +
             s.level +
-            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキルか伝説の能力を1つ選んで書に残せます（数値もそのまま）。かわりに能力値の書（攻撃・防御・体力・射程の書）も選べます。数値は引退のときに決まります（固定の数か割合）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます（能力値・特殊能力の書は装備のように付け外しでき、なくなりません。1人' + LEGEND.equipBooks + '冊まで）。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。まれに（' + +(LEGEND.superBeam * 100).toFixed(2) + '%）、別に🌟超秘伝書「貫通ビームサーベル」も手に入ります。</small></p>';
+            '</p><p class="muted"><small>Lv' + LEGEND.retireLevel + '以上の兵士は、いつでも指導員として引退できます。<b>引退した兵士は戦闘に戻れません（元に戻せません）。</b>習得したスキル・伝説の能力・💡閃き技から1つ選んで書に残せます（数値もそのまま）。かわりに能力値の書（攻撃・防御・体力・射程の書）も選べます。数値は引退のときに決まります（固定の数か割合）。秘伝スキルは今までの「スキルの書」に、ほかは「伝承の秘伝書」になり、別の兵士に使えます（能力値・特殊能力の書は装備のように付け外しでき、なくなりません。1人' + LEGEND.equipBooks + '冊まで）。💡閃き秘伝書は消費して習得し、書4冊の装備枠を使いません。ネームド兵士・武将の専用の能力は残せません。装備は倉庫に戻ります。まれに（' + +(LEGEND.superBeam * 100).toFixed(2) + '%）、別に🌟超秘伝書「貫通ビームサーベル」も手に入ります。</small></p>';
           if (err) html += '<p class="injured">' + esc(err) + "</p>";
           html +=
             '<div class="retire-list">' +
@@ -15183,6 +15219,7 @@ OFF</button>
           $("retireBody").innerHTML = html;
         }
         function openRetire(id) {
+          if(pendingInsights.has(id)&&!flushInsights())return toast("閃きの記録が保存待ちです。先に途中保存をやり直してください。");
           retireId = id;
           retirePick = null;
           renderRetire();
@@ -15220,7 +15257,7 @@ OFF</button>
                   name +
                   " が指導員として引退し、" +
                   (retireBook ? legendBookText(retireBook) + " を" : "書を") +
-                  "残しました（🎒 装備倉庫 → 📜 スキルの書）。" +
+                  "残しました（🎒 装備倉庫 → 📜 書）。" +
                   (retireBonus ? " さらに " + legendBookText(retireBonus) + " を手に入れた！" : ""),
               );
               if (retireBonus) toast("🌟 超秘伝書「" + LEGEND.abil[retireBonus.k].name + "」を手に入れた！");
@@ -16215,9 +16252,9 @@ OFF</button>
           }
           startCrossing(); // ちょうど川に着いて終了したフレームでも、その場で待機を開始する。
         }
-        function siegeArmorDamage(e, raw, s) {
-          const pierce = s ? Math.min(1, Math.max(0, skillSum(s, "armorPierce"))) : 0;
-          return raw * 30 / (30 + Math.max(0, e.armor || 0) * (1 - pierce));
+        function siegeArmorDamage(e, raw, s, extraPierce=0) {
+          const pierce = s ? Math.min(.8, Math.max(0, skillSum(s, "armorPierce")+extraPierce)) : 0;
+          return raw * 30 / (30 + evolutionArmor(e,e.armor||0,battle?battle.t:combatClock) * (1 - pierce));
         }
         // ===== NPCの城と領土（7か国） =====
         // 国ごとにNPCの城が1つある。自国（三河・岡崎城）から始め、自分の領土の隣の国だけ攻められる。
@@ -17347,10 +17384,10 @@ OFF</button>
           battleHurt(g, raw, ranged, kind);
         }
         // ボスが受けるダメージ：天魔機神は装甲（装甲無視で減らせる）、八岐は攻撃中の頭も傷つく
-        function bossTakeDamage(e, dmg, s) {
+        function bossTakeDamage(e, dmg, s, extraPierce=0) {
           if (e.boss === "fuji") {
-            const armor = e.phase < 3 ? 0.5 : e.form === "guard" ? 0.85 : 0.3,
-              pierce = s ? Math.min(0.8, skillSum(s, "armorPierce")) : 0;
+            const armor = (e.phase < 3 ? 0.5 : e.form === "guard" ? 0.85 : 0.3) * (e.evolutionArmor?.until>battle.t?1-e.evolutionArmor.value:1),
+              pierce = s ? Math.min(0.8, skillSum(s, "armorPierce")+extraPierce) : 0;
             dmg *= 1 - armor * (1 - pierce);
           }
           if (yamataLike(e)) {
@@ -18030,8 +18067,8 @@ OFF</button>
           return null;
         }
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
-        function battleHitGarrison(e, dmg, s) {
-          dmg = e.boss ? bossTakeDamage(e, dmg, s) : siegeArmorDamage(e, dmg, s);
+        function battleHitGarrison(e, dmg, s, extraPierce=0) {
+          dmg = e.boss ? bossTakeDamage(e, dmg, s, extraPierce) : siegeArmorDamage(e, dmg, s, extraPierce);
           e.hp -= dmg;
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
@@ -18055,7 +18092,7 @@ OFF</button>
         // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
         const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
         // who：範囲攻撃で狙う兵士（省略すると部隊の先頭）
-        function battleHurt(g, raw, ranged, kind, who) {
+        function battleHurt(g, raw, ranged, kind, who, enemy=null) {
           const alive = groupAlive(g),
             s = who || alive[0];
           if (!s) return;
@@ -18066,7 +18103,7 @@ OFF</button>
               weak && kind === "knight"
                 ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) * (1 - skillSum(s, "resist"))
                 : 1;
-          s.hp -=
+          const hurt =
             ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
             (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
             (1 - (g.hero ? warlordGrowth(g.hero).guard || 0 : 0)) *
@@ -18074,6 +18111,7 @@ OFF</button>
             (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) * (unitOf(s).rangedWeak || 1) : 1) *
             (kind === "thunder" ? 1 - Math.min(0.8, skillSum(s, "thunderGuard")) : 1) *
             spear;
+          s.hp -= evolutionAbsorb(s,hurt,ranged,enemy,battle.t);
           s.hit = 0.2;
           if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
             s.unyieldUsed = true;
@@ -18223,9 +18261,11 @@ OFF</button>
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
+                const beforeRatio=best.m.hp/battleStats(best.o,best.m).maxHp;
                 if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
+                battleEvolution(s,g,best.m,null,st,"heal",beforeRatio);
                 if (effects.length >= 80) effects.shift();
                 effects.push({
                   x: best.o.x,
@@ -18312,6 +18352,7 @@ OFF</button>
                 });
               } else if (tower) battleHitTower(tower, dmg);
               else B.castleHp -= dmg;
+              battleEvolution(s,g,target,tower,st);
             }
           }
           B.garrison = B.garrison.filter((e) => e.hp > 0);
@@ -18355,7 +18396,7 @@ OFF</button>
                 col: "#a56b35",
               });
             }
-            battleHurt(tg, e.attack, !!a.ranged, e.kind);
+            battleHurt(tg, e.attack, !!a.ranged, e.kind, undefined, e);
           }
           // NPCの塔の攻撃
           for (const t of B.towers) {
@@ -20145,6 +20186,7 @@ OFF</button>
         if (/[?&]debug\b/.test(location.search)) {
           superRng = () => 1; // 確認用では超秘伝書を出さない（legendApi.setSuperRng で出せる）
           rareRng = () => 1; // 確認用では特別な敵を出さない（rareApi.setRng で出せる）
+          insightRollOverride=()=>1; // 確認用では自然の閃き抽選を止め、専用テストで明示する
           intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
@@ -20298,6 +20340,7 @@ OFF</button>
               openForge,
               openGear,
             },
+            insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
             squadApi: {
               members,
@@ -20564,7 +20607,7 @@ OFF</button>
             towerLevels: towerLevels(),
             warlordLevels: Object.fromEntries(ownedIds().map(id => [id, warlordLevel(id).level])),
             squads: squads.map(q => ({ id:q.id, deployed:q.state === "deployed", x:q.x, y:q.y, fallen:q.fallen || 0 })),
-            soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0 })),
+            soldiers: soldiers.filter(s => s.alive).map(s => ({ id:s.id, hp:s.hp, cd:s.cd || 0, evolution:saveEvolutionCooldowns(s) })),
             heroes: ownedHeroes().map(h => ({ id:h.id, tower:h.tower ? h.tower.id : null, squad:h.squad ? h.squad.id : null, cd:h.cd })),
           };
         }
@@ -20648,6 +20691,7 @@ OFF</button>
             const v = d.soldiers.find(x=>x.id === s.id);
             s.hp = v ? Math.min(v.hp * warlordHpRatio(heroOnSquad(squadById(s.squadId))?.id),rawMaxHp(s)) : rawMaxHp(s);
             s.cd = v ? v.cd : 0;
+            if(v?.evolution)s.evolution=cleanEvolutionCooldowns(v.evolution,combatClock);
           }
           playing = false; paused = true; over = wave >= waveGoal; autoLeft = null;
           // 乱入した裏ボスとの戦いの途中で閉じた：次のウェーブ（同じウェーブ）で必ず乱入させる
