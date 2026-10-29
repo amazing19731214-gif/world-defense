@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v83（編成の能力順・スワイプ部隊タブ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v84（兵士の戦歴帳・保存の土台）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4108,9 +4108,24 @@ OFF</button>
           for (const [key, value] of Object.entries(tx.writes)) localStorage.setItem(key, value);
           localStorage.removeItem(BOOK_TX_KEY);
         }
-        function readGameSave(key) {
+        const gameSaveObserved = new Map();
+        let gameSaveConflict = false;
+        function currentGameSave(key) {
           const tx = pendingBookTransaction();
-          return tx && Object.hasOwn(tx.writes, key) ? tx.writes[key] : localStorage.getItem(key);
+          return tx && Object.hasOwn(tx.writes,key) ? tx.writes[key] : localStorage.getItem(key);
+        }
+        function readGameSave(key) {
+          const value = currentGameSave(key);
+          if (!gameSaveObserved.has(key)) gameSaveObserved.set(key,value);
+          return value;
+        }
+        function assertGameSaveCurrent(keys) {
+          if (gameSaveConflict) throw new Error("別タブの保存を検出しました。再読み込みしてください。");
+          for (const key of keys) if (gameSaveObserved.has(key) && gameSaveObserved.get(key) !== currentGameSave(key)) {
+            gameSaveConflict = true;
+            queueMicrotask(() => mapToast("⚠ 別タブで進行が保存されました。この画面は再読み込みしてから続けてください。"));
+            throw new Error("stale save tab");
+          }
         }
         function beginGameSaveBatch() {
           gameSaveBatch = gameSaveBatch || {};
@@ -4120,8 +4135,10 @@ OFF</button>
           gameSaveBatchActive = false;
           if (!gameSaveBatch) return true;
           try {
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
             const previous = pendingBookTransaction();
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ writes: { ...(previous ? previous.writes : {}), ...gameSaveBatch } }));
+            for (const [key,value] of Object.entries(gameSaveBatch)) gameSaveObserved.set(key,value);
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
             scheduleInsightFlush();
@@ -4134,8 +4151,10 @@ OFF</button>
             gameSaveBatch[key] = value;
             if (!gameSaveBatchActive && !commitGameSaveBatch()) throw new Error("save failed");
           } else {
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
             flushBookTransaction();
             localStorage.setItem(key, value);
+            gameSaveObserved.set(key,value);
           }
         }
 
@@ -4620,6 +4639,7 @@ OFF</button>
         // 職業ごとの戦い方：兵種の値に職業の unit を重ねたもの（unit のない職業は兵種のまま）
         /*@@JOB_EVOLUTION@@*/
         /*@@JOB_BOOKS@@*/
+        /*@@SOLDIER_CHRONICLE@@*/
         const JOB_UNITS = {};
         for (const [j, J] of Object.entries(JOBS))
           if (J.unit) {
@@ -6691,11 +6711,15 @@ OFF</button>
                 legend: cleanLegend(v.legend),
                 fruit: cleanFruit(v.fruit),
                 insight: cleanInsight(v.insight,{...v,id:rec.id,type:rec.type,level}),
+                chronicle: cleanChronicle(v.chronicle,{...v,id:rec.id,type:rec.type,kills:rec.kills}),
                 name: rec.name,
                 named: rec.named || null,
                 battles: rec.battles,
                 kills: rec.kills,
               });
+              chronicleAdd(x.chronicle,"revivals");
+              x.chronicle.segment = null;
+              chronicleLog(x,"復活の書で帰還");
               x.hp = soldierStats(x).maxHp;
               logHistory(x, "復活の書で復活（Lv" + level + "）");
               return x;
@@ -7336,6 +7360,7 @@ OFF</button>
           soldiers.push(s);
           if (named) namedNews.push(NAMED_SOLDIERS[named].name + "（" + SOLDIER_TYPES[type].name + "）");
           zukanSync(); // 雇った兵士の職業（初期職）を図鑑へ
+          s.chronicle = chronicleNew(s);
           return s;
         }
         function newSquad(type) {
@@ -7673,6 +7698,7 @@ OFF</button>
           const max = soldierStats(best).maxHp,
             before = best.hp;
           best.hp = Math.min(max, best.hp + max * p * healTakenMul(best));
+          chronicleHeal(s,best,before,max);
           earnXp(s, "heal", best.hp - before, max);
         }
         // 転職できるか（理由を返す。できるなら null）
@@ -8160,6 +8186,7 @@ OFF</button>
         // 主人公の戦死：その戦いからは外れ（同じ兵士が二重に出ないよう、防衛戦は離脱・攻城戦は戦場を離れる扱い）、Lv1から再出発する。
         // この戦いでは経験値・ウェーブの報酬を受け取らない。すぐ保存するので、負けて読み込み直しても元のレベルには戻らない
         function heroFall(s, where) {
+          chronicleDeath(s);
           s.bestLevel = Math.max(s.bestLevel || 1, s.level);
           s.deaths = (s.deaths || 0) + 1;
           s.level = 1;
@@ -8414,6 +8441,7 @@ OFF</button>
             logHistory(front, "不屈で踏みとどまった");
           }
           phoenixSave(front); // 不死鳥の護符
+          chronicleDamage(front,hpBefore,st.maxHp,ranged,kind);
           if (front.hp <= 0) return killSoldier(front, q);
           // 生存本能：HPが減ると撤退を試みる（1ウェーブに1回。失敗すると戦い続ける）
           if (
@@ -8728,6 +8756,7 @@ OFF</button>
             amount = Math.min(st.heal, max - best.m.hp),
             hpBefore = best.m.hp;
           healTarget(best.m, amount, q); // 最大HPを超えず、救護系パッシブを反映
+          chronicleHeal(s,best.m,hpBefore,max);
           touchHero(q);
           s.heals = (s.heals || 0) + 1;
           earnXp(s, "heal", best.m.hp - hpBefore, max);
@@ -8747,6 +8776,7 @@ OFF</button>
           const s = e.lastHitBy ? soldierById(e.lastHitBy) : null;
           if (!s || !s.alive) return;
           s.kills++;
+          chronicleKill(s,e);
           earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
@@ -8762,6 +8792,7 @@ OFF</button>
             if (s.inWave && s.xpClaim !== claim) {
               s.xpClaim = claim;
               const before = rankTitle(s);
+              chronicleFinish(s,true);
               s.wavesSurvived++;
               earnXp(s, "wave");
               const after = rankTitle(s);
@@ -8995,6 +9026,7 @@ OFF</button>
           "legend",
           "fruit",
           "insight",
+          "chronicle",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
@@ -9141,6 +9173,7 @@ OFF</button>
                 deaths: intIn(v.deaths, 0, 1e9, 0),
                 bestLevel: best,
                 insight: cleanInsight(v.insight,{...v,level,bestLevel:best}),
+                chronicle: cleanChronicle(v.chronicle,v),
                 ...cleanJob(v),
                 // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す。ネームド兵士は人物の名前
                 ...(namedOk(v, list)
@@ -9207,7 +9240,7 @@ OFF</button>
           const o = {};
           for (const k of SAVED_FIELDS)
             o[k] =
-              (k === "legend" || k === "insight")
+              (k === "legend" || k === "insight" || k === "chronicle")
                 ? s[k]
                   ? JSON.parse(JSON.stringify(s[k])) // 中の配列も写す（保存前の変更が保存データに混ざらない）
                   : null
@@ -9240,6 +9273,7 @@ OFF</button>
         }
         // 戦死：保存データから外し、名前付きの兵士は英霊名鑑に記録する
         function recordDeath(s) {
+          chronicleDeath(s);
           soldierSave.soldiers = soldierSave.soldiers.filter((x) => x.id !== s.id);
           refreshSiege(); // 攻城編成からも外す
           if (s.name) {
@@ -9267,6 +9301,7 @@ OFF</button>
                   fruit: s.fruit || null,
                   bestLevel: s.bestLevel,
                   insight: s.insight,
+                  chronicle: chronicleOf(s),
                 }),
               ),
             });
@@ -14944,7 +14979,7 @@ OFF</button>
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) +
+            legendBlock(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -18038,6 +18073,7 @@ OFF</button>
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
           e.dead = true;
+          chronicleKill(s,e);
           if (e.kind === "boss") battleJobBookDrop(e);
           if (e.boss) battle.bossCorpse = e; // 討伐の消える演出に使う
           battle.kills++;
@@ -18077,6 +18113,7 @@ OFF</button>
             (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) * (unitOf(s).rangedWeak || 1) : 1) *
             (kind === "thunder" ? 1 - Math.min(0.8, skillSum(s, "thunderGuard")) : 1) *
             spear;
+          const chronicleHpBefore = s.hp;
           s.hp -= evolutionAbsorb(s,hurt,ranged,enemy,battle.t);
           s.hit = 0.2;
           if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
@@ -18084,6 +18121,7 @@ OFF</button>
             s.hp = 1;
           }
           phoenixSave(s); // 不死鳥の護符
+          chronicleDamage(s,chronicleHpBefore,st.maxHp,ranged,kind);
           if (s.hp <= 0 && isHeroSoldier(s)) {
             // 主人公は消えない：この攻城戦からは外れ、Lv1から再出発
             s.siegeOut = true;
@@ -18227,8 +18265,10 @@ OFF</button>
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
-                const beforeRatio=best.m.hp/battleStats(best.o,best.m).maxHp;
+                const chronicleBefore = best.m.hp, chronicleMax = battleStats(best.o,best.m).maxHp;
+                const beforeRatio=best.m.hp/chronicleMax;
                 if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
+                chronicleHeal(s,best.m,chronicleBefore,chronicleMax);
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
                 battleEvolution(s,g,best.m,null,st,"heal",beforeRatio);
@@ -18444,6 +18484,7 @@ OFF</button>
               if (s.heroFell) B.heroFell = soldierName(s); // 主人公の戦死：生還・勝利の経験値は受け取らない
               else if (launched && result !== "retreat")
                 gainXp(s, SIEGE_BATTLE.xpSurvive + (result === "win" ? SIEGE_BATTLE.xpWin : 0), true);
+              chronicleFinish(s,launched && result === "win");
               s.heroFell = false;
               s.waveXp = 0;
               s.siegeOut = false;
@@ -20307,6 +20348,7 @@ OFF</button>
               openForge,
               openGear,
             },
+            chronicleApi: {CHRONICLE_RULES,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

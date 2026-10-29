@@ -1049,7 +1049,7 @@ function defenseEvolution(s, q, target, event = "attack", beforeRatio = null, st
         { s, q, h: heroOnSquad(q) },
         { normal: false, ignoreArmor: Math.min(0.8, skillSum(s, "armorPierce") + pierce) },
       ),
-    heal: (m, amount) => healTarget(m.s, amount, q),
+    heal: (m, amount) => { const before=m.s.hp; const healed=healTarget(m.s, amount, q); chronicleHeal(s,m.s,before,m.max); return healed; },
   };
   if (event === "heal") {
     c.target = c.friends.find((m) => m.s === target);
@@ -1113,6 +1113,7 @@ function battleEvolution(s, g, target, tower, stats, event = "attack", beforeRat
       if (B.soulEat) return 0;
       const before = m.s.hp;
       m.s.hp = Math.min(m.max, m.s.hp + amount * healTakenMul(m.s));
+      chronicleHeal(s,m.s,before,m.max);
       return Math.max(0, m.s.hp - before);
     },
   };
