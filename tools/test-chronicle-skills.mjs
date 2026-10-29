@@ -34,8 +34,8 @@ try {
     };
   });
   check(
-    r.inactive && r.known.length === 7 && r.slots === 2,
-    "戦歴7技を習得し未保存時は効果なし・有効枠は2つ",
+    r.inactive && r.known.length === 8 && r.slots === 2,
+    "戦歴8技を習得し未保存時は効果なし・有効枠は2つ",
   );
   r = await p.evaluate(() => {
     const D = WD_DEBUG,
@@ -130,9 +130,9 @@ try {
     await p.evaluate(
       () =>
         WD_DEBUG.state().soldiers[0].insight.known.filter((id) => WD_DEBUG.chronicleApi.SKILLS[id]).length ===
-        7,
+        8,
     ),
-    "7技の習得を再読込後も保持",
+    "8技の習得を再読込後も保持",
   );
   r = await p.evaluate(() => {
     const D = WD_DEBUG,

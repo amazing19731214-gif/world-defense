@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v90（死線からの不屈習得）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v91（仲間をかばう前衛）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -8423,10 +8423,11 @@ OFF</button>
         }
 
         // ===== 兵士部隊：被弾・戦死・撤退 =====
-        function damageSquad(q, raw, ranged, kind, enemy = null) {
-          const front = members(q)[0];
+        function damageSquad(q, raw, ranged, kind, enemy = null, who = null, redirected = false) {
+          const front = who || members(q)[0];
           if (!front) return;
           if (evadeHit(front, combatClock)) return; // 回避術
+          if(!redirected)raw=chronicleCover(front,members(q),raw,ranged,kind,(s,part)=>damageSquad(q,part,ranged,kind,enemy,s,true));
           const st = soldierStats(front),
             weak = unitOf(front).spearWeak,
             // 騎兵は敵の槍兵（内部ID knight）に弱い。人馬一体で追加分を減らす
@@ -18120,11 +18121,12 @@ OFF</button>
         // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
         const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
         // who：範囲攻撃で狙う兵士（省略すると部隊の先頭）
-        function battleHurt(g, raw, ranged, kind, who, enemy=null) {
+        function battleHurt(g, raw, ranged, kind, who, enemy=null, redirected=false) {
           const alive = groupAlive(g),
             s = who || alive[0];
           if (!s) return;
           if (evadeHit(s, battle.t)) return; // 回避術
+          if(!redirected)raw=chronicleCover(s,alive,raw,ranged,kind,(protector,part)=>battleHurt(g,part,ranged,kind,protector,enemy,true));
           const st = battleStats(g, s),
             weak = unitOf(s).spearWeak,
             spear =
@@ -20375,7 +20377,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
@@ -20419,7 +20421,7 @@ OFF</button>
               disbandSquad,
               battle: () => battle,
               startBattle,
-              battleStats, tickBattle,
+              battleStats, battleHurt, tickBattle,
               useSiegeSkill,
               siegeSkillType,
               SIEGE_SKILL,
