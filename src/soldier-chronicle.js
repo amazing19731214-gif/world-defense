@@ -822,3 +822,30 @@ function chronicleSummary(s) {
     (title ? '・🏅 ' + esc(title) : '') + '<br>💡 ' +
     (skills.length ? skills.map(esc).join('／') : '有効な閃きなし') + '</small>';
 }
+
+// 不屈は従来の通常スキル1つとして習得する。閃き枠・残機は増やさない。
+function chronicleSurvivalBlock(s) {
+  if (learnedOf(s).includes('unyielding')) return '<p><small>死線の到達点：不屈を習得済み（通常スキル枠で選択）</small></p>';
+  const count=chronicleCommitted.get(chronicleOf(s).life)?.chronicle.survivedSingle || 0;
+  return '<p><small>死線の到達点：HP一桁からの勝利・生還 '+Math.min(3,count)+'/3回<br>達成すると既存の通常スキル「不屈」を習得できます。</small>'+
+    (count>=3?'<br><button data-chronicle-unyielding="'+s.id+'">不屈を習得</button>':'')+'</p>';
+}
+function chronicleLearnUnyielding(s) {
+  const live=chronicleOf(s),durable=chronicleCommitted.get(live.life)?.chronicle;
+  if (!(durable?.survivedSingle>=3)) return '保存済みのHP一桁からの勝利・生還が3回必要です。';
+  if(learnedOf(s).includes('unyielding')) return '不屈は既に習得しています。';
+  const beforeSkills=s.skills.slice(),beforeLearned=learnedOf(s).slice();
+  const err=chronicleSavedAction(s,()=>{
+    learnedOf(s).push('unyielding');
+    if(s.skills.length<SQUAD_RULES.maxSkills)s.skills.push('unyielding');
+    const saved=savedSoldier(s.id);saved.learned=learnedOf(s).slice();saved.skills=s.skills.slice();
+    chronicleLog(s,'死線の経験から「不屈」を習得');return null;
+  });
+  if(err){s.skills=beforeSkills;s.learned=beforeLearned;return err;}
+  zukanSync();mapToast('💡 '+soldierName(s)+'：不屈を習得！');return null;
+}
+document.addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-chronicle-unyielding]');if(!b)return;
+  const s=soldierById(+b.dataset.chronicleUnyielding);if(!s)return;
+  const err=chronicleLearnUnyielding(s);if(err)mapToast(err);renderSoldierSheet();updateUI();
+});
