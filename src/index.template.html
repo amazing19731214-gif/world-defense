@@ -7952,9 +7952,11 @@ OFF</button>
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
               forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch, warlordProgress: heroSave.warlordProgress,
             });
-            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
-              heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
-            }));
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
+            const soldiersJson = JSON.stringify({ version: 1, ...soldierSave });
+            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ heroes, soldiers: soldiersJson }));
+            gameSaveObserved.set(SAVE_KEY,heroes);
+            gameSaveObserved.set(SOLDIER_SAVE_KEY,soldiersJson);
           } catch (err) {
             Object.assign(s, before);
             Object.assign(saved, beforeSaved);

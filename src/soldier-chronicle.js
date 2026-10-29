@@ -158,7 +158,7 @@ function chronicleFinish(s, win) {
 function chronicleBlock(s) {
   const c = chronicleOf(s);
   return (
-    '<details class="legend-box chronicle"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
+    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
     fmt(c.kills) +
     "・強敵 " +
     fmt(c.bossKills) +

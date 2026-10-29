@@ -6599,7 +6599,7 @@ function chronicleFinish(s, win) {
 function chronicleBlock(s) {
   const c = chronicleOf(s);
   return (
-    '<details class="legend-box chronicle"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
+    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
     fmt(c.kills) +
     "・強敵 " +
     fmt(c.bossKills) +
@@ -9939,9 +9939,11 @@ function chronicleBlock(s) {
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
               forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch, warlordProgress: heroSave.warlordProgress,
             });
-            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
-              heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
-            }));
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
+            const soldiersJson = JSON.stringify({ version: 1, ...soldierSave });
+            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ heroes, soldiers: soldiersJson }));
+            gameSaveObserved.set(SAVE_KEY,heroes);
+            gameSaveObserved.set(SOLDIER_SAVE_KEY,soldiersJson);
           } catch (err) {
             Object.assign(s, before);
             Object.assign(saved, beforeSaved);
