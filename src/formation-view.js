@@ -166,6 +166,7 @@ function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
     " " +
     titleText(s) +
     metric +
+    chronicleSummary(s) +
     '<small class="formation-record">' +
     (showSquad ? esc(squadName(q)) + "・" : "") +
     "撃破" +

@@ -790,11 +790,11 @@ function chronicleGoals(s) {
           " " +
           fmt(Math.min(progress, h.need)) +
           "/" +
-          fmt(h.need),
+          fmt(h.need) + ' <progress max="' + h.need + '" value="' + Math.min(progress,h.need) + '" aria-label="' + esc(h.name) + 'の達成状況"></progress>',
       );
     }
   }
-  return goals.length ? "<p><small>次の戦歴目標<br>" + goals.join("<br>") + "</small></p>" : "";
+  return goals.length ? '<p class="chronicle-goals"><small>次の戦歴目標<br>' + goals.join("<br>") + "</small></p>" : "";
 }
 function chronicleResistanceText(s) {
   const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle;
@@ -810,4 +810,15 @@ function chronicleResistanceText(s) {
       : "") +
     "</small></p>"
   );
+}
+
+// 編成の表示だけに使用。成長・称号・装備の保存値を変更しない。
+function chronicleSummary(s) {
+  const c = chronicleOf(s), a = chronicleAptitude(s),
+    title = CHRONICLE_HONORS[c.selected]?.name,
+    skills = insightOf(s).equipped.filter(id => INSIGHT_SKILLS[id]).map(id =>
+      INSIGHT_SKILLS[id].name + (insightCompatible(s,id) ? "" : "（職業・Lv条件外）"));
+  return '<small class="formation-growth">🌱 ' + esc(CHRONICLE_APTITUDES[a.type].name) +
+    (title ? '・🏅 ' + esc(title) : '') + '<br>💡 ' +
+    (skills.length ? skills.map(esc).join('／') : '有効な閃きなし') + '</small>';
 }
