@@ -326,7 +326,7 @@ r = await ev(page, () => {
     m = a.members(q)[0],
     max = a.soldierStats(m).maxHp;
   const rnd = Math.random;
-  Math.random = () => 0; // 撤退は必ず成功
+  Math.random = () => 0.5; // 回避上限40%では外れ、撤退成功率60%では成功
   m.skills = ["instinct"];
   m.hp = max * 0.32;
   a.damageSquad(q, 25, false);
@@ -368,7 +368,7 @@ r = await ev(page, () => {
   s.enemies.length = 0;
   WD_DEBUG.addEnemy({ kind: "knight", d: 0, hp: 1e9, speed: 0, holder: true });
   const rnd = Math.random;
-  Math.random = () => 0;
+  Math.random = () => 0.5; // 俊敏型などの回避を外し、撤退判定を検証する。
   for (const m of a.members(q).slice()) {
     m.skills = ["instinct"];
     m.instinctTried = false;

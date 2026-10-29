@@ -70,6 +70,8 @@ async function newContext(extra = {}, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  // 時間はWD_DEBUG.stepだけで進め、実描画フレームとの二重進行を防ぐ。
+  await context.addInitScript(() => { window.requestAnimationFrame = () => 0; });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));

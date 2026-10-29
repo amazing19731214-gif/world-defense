@@ -46,7 +46,7 @@ function cleanChronicle(v, s = {}) {
           finished: !!o.segment.finished,
           melee: Math.min(5, Math.max(0, Number(o.segment.melee) || 0)),
           ranged: Math.min(5, Math.max(0, Number(o.segment.ranged) || 0)),
-          covers: intIn(o.segment.covers,0,1000,0),
+          covers: intIn(o.segment.covers, 0, 1000, 0),
         }
       : null;
   const honorIds = Object.keys(CHRONICLE_HONORS);
@@ -91,7 +91,8 @@ function chronicleKey() {
 function chronicleTouch(s) {
   const c = chronicleOf(s),
     key = chronicleKey();
-  if (c.segment?.key !== key) c.segment = { key, low: 0, dead: false, finished: false, melee: 0, ranged: 0, covers:0 };
+  if (c.segment?.key !== key)
+    c.segment = { key, low: 0, dead: false, finished: false, melee: 0, ranged: 0, covers: 0 };
   return c.segment;
 }
 function chronicleDamage(s, before, max, ranged, kind) {
@@ -162,7 +163,7 @@ function chronicleFinish(s, win) {
   if (!seg || seg.key !== chronicleKey() || seg.finished) return;
   seg.finished = true;
   if (!win || !s.alive || seg.dead || s.heroFell) return;
-  if(seg.covers>0) chronicleAdd(c,"coverWins");
+  if (seg.covers > 0) chronicleAdd(c, "coverWins");
   chronicleAdd(c, "meleePoints", seg.melee);
   chronicleAdd(c, "rangedPoints", seg.ranged);
   for (const [bit, key] of [
@@ -202,7 +203,11 @@ function chronicleBlock(s) {
     c.survivedSingle +
     "回<br>復活 " +
     c.revivals +
-    "回<br>かばう " + fmt(c.covered) + "回・かばって勝利生還 " + fmt(c.coverWins) + "戦</p>" +
+    "回<br>かばう " +
+    fmt(c.covered) +
+    "回・かばって勝利生還 " +
+    fmt(c.coverWins) +
+    "戦</p>" +
     chronicleResistanceText(s) +
     c.log.map((x) => "<p><small>" + esc(x) + "</small></p>").join("") +
     "</details>"
@@ -546,16 +551,17 @@ function chronicleLearn(s) {
 }
 function chronicleStats(s, st) {
   const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle;
-  if (c && chronicleHas(s, "in_history_veteran")) st.atk *= 1 + Math.min(0.1, Math.floor(c.kills / 100) * 0.01);
+  if (c && chronicleHas(s, "in_history_veteran"))
+    st.atk *= 1 + Math.min(0.1, Math.floor(c.kills / 100) * 0.01);
   if (chronicleHas(s, "in_history_killRush")) {
     const state = evolutionState(s);
     if (state.chronicleKillUntil > evolutionClock()) st.atk *= 1.05;
   }
   if (c && chronicleHas(s, "in_history_healing"))
     st.heal *= 1 + (c.healed >= 100000 ? 0.1 : c.healed >= 10000 ? 0.06 : 0.03);
-  const f=chronicleFinesse(s);
-  st.rate *= 1-f.haste;
-  st.range += (unitOf(s).range||0)*f.range;
+  const f = chronicleFinesse(s);
+  st.rate *= 1 - f.haste;
+  st.range += (unitOf(s).range || 0) * f.range;
   return st;
 }
 function chronicleResistance(points) {
@@ -633,8 +639,8 @@ const CHRONICLE_APTITUDES = Object.freeze({
   stout: { name: "頑健型", grow: { hp: 1.05, atk: 0.95, def: 1.05, heal: 1 } },
   healer: { name: "救護型", grow: { hp: 1, atk: 0.95, def: 1, heal: 1.1 } },
   balanced: { name: "万能型", grow: { hp: 1.02, atk: 1.02, def: 1.02, heal: 1.02 } },
-  agile: {name:"俊敏型",grow:{hp:1,atk:1,def:1,heal:1}},
-  sniper: {name:"狙撃型",grow:{hp:1,atk:1,def:1,heal:1}},
+  agile: { name: "俊敏型", grow: { hp: 1, atk: 1, def: 1, heal: 1 } },
+  sniper: { name: "狙撃型", grow: { hp: 1, atk: 1, def: 1, heal: 1 } },
 });
 function cleanChronicleAptitude(v) {
   if (!v || v.version !== 1 || !Object.hasOwn(CHRONICLE_APTITUDES, v.type)) return null;
@@ -645,7 +651,7 @@ function cleanChronicleAptitude(v) {
     startAt: intIn(v.startAt, 1, SQUAD_RULES.maxLevel, 1),
     delta: {},
     earned: {},
-    secondary: Number.isFinite(v.secondary)?Math.min(1e6,Math.max(0,v.secondary)):0,
+    secondary: Number.isFinite(v.secondary) ? Math.min(1e6, Math.max(0, v.secondary)) : 0,
   };
   for (const k of ["hp", "atk", "def", "heal"]) {
     a.earned[k] = Number.isFinite(v.earned?.[k]) ? Math.max(0, Math.min(1e10, v.earned[k])) : 0;
@@ -658,7 +664,7 @@ function cleanChronicleAptitude(v) {
 function chronicleAptitude(s, anchor = s.level, expanded = false) {
   const c = chronicleOf(s);
   if (c.aptitude) return c.aptitude;
-  const types = Object.keys(CHRONICLE_APTITUDES).slice(0,expanded?6:4),
+  const types = Object.keys(CHRONICLE_APTITUDES).slice(0, expanded ? 6 : 4),
     type = types[insightHash("aptitude:" + (s.named ? "named:" + s.named : c.life)) % types.length];
   return (c.aptitude = {
     version: 1,
@@ -667,7 +673,7 @@ function chronicleAptitude(s, anchor = s.level, expanded = false) {
     startAt: anchor,
     delta: { hp: 0, atk: 0, def: 0, heal: 0 },
     earned: { hp: 0, atk: 0, def: 0, heal: 0 },
-    secondary:0,
+    secondary: 0,
   });
 }
 function chronicleGrow(s, before) {
@@ -684,7 +690,7 @@ function chronicleGrow(s, before) {
       Math.min(a.earned[k] * 0.1, a.delta[k] + amount * (rates[k] - 1)),
     );
   }
-  a.secondary=Math.min(1e6,(a.secondary||0)+diff);
+  a.secondary = Math.min(1e6, (a.secondary || 0) + diff);
   a.level = s.level;
 }
 function chronicleGrowthBase(s, k) {
@@ -698,7 +704,7 @@ function chronicleGrowthBase(s, k) {
 function chronicleResetGrowth(s) {
   const a = chronicleAptitude(s);
   a.level = a.startAt = 1;
-  a.secondary=0;
+  a.secondary = 0;
   for (const k of ["hp", "atk", "def", "heal"]) a.delta[k] = a.earned[k] = 0;
 }
 function chronicleAptitudeBlock(s) {
@@ -719,7 +725,9 @@ function chronicleAptitudeBlock(s) {
           "%）",
       )
       .join("<br>") +
-    "</p>" + chronicleFinesseText(s) + "<p><small>この人生ではLv" +
+    "</p>" +
+    chronicleFinesseText(s) +
+    "<p><small>この人生ではLv" +
     a.startAt +
     "から適用。以前のレベル分には遡及しません。</small></p></details>"
   );
@@ -805,11 +813,20 @@ function chronicleGoals(s) {
           " " +
           fmt(Math.min(progress, h.need)) +
           "/" +
-          fmt(h.need) + ' <progress max="' + h.need + '" value="' + Math.min(progress,h.need) + '" aria-label="' + esc(h.name) + 'の達成状況"></progress>',
+          fmt(h.need) +
+          ' <progress max="' +
+          h.need +
+          '" value="' +
+          Math.min(progress, h.need) +
+          '" aria-label="' +
+          esc(h.name) +
+          'の達成状況"></progress>',
       );
     }
   }
-  return goals.length ? '<p class="chronicle-goals"><small>次の戦歴目標<br>' + goals.join("<br>") + "</small></p>" : "";
+  return goals.length
+    ? '<p class="chronicle-goals"><small>次の戦歴目標<br>' + goals.join("<br>") + "</small></p>"
+    : "";
 }
 function chronicleResistanceText(s) {
   const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle;
@@ -829,69 +846,232 @@ function chronicleResistanceText(s) {
 
 // 編成の表示だけに使用。成長・称号・装備の保存値を変更しない。
 function chronicleSummary(s) {
-  const c = chronicleOf(s), a = chronicleAptitude(s),
+  const c = chronicleOf(s),
+    a = chronicleAptitude(s),
     title = CHRONICLE_HONORS[c.selected]?.name,
-    skills = insightOf(s).equipped.filter(id => INSIGHT_SKILLS[id]).map(id =>
-      INSIGHT_SKILLS[id].name + (insightCompatible(s,id) ? "" : "（職業・Lv条件外）"));
-  return '<small class="formation-growth">🌱 ' + esc(CHRONICLE_APTITUDES[a.type].name) +
-    (title ? '・🏅 ' + esc(title) : '') + '<br>💡 ' +
-    (skills.length ? skills.map(esc).join('／') : '有効な閃きなし') + '</small>';
+    skills = insightOf(s)
+      .equipped.filter((id) => INSIGHT_SKILLS[id])
+      .map((id) => INSIGHT_SKILLS[id].name + (insightCompatible(s, id) ? "" : "（職業・Lv条件外）"));
+  return (
+    '<small class="formation-growth">🌱 ' +
+    esc(CHRONICLE_APTITUDES[a.type].name) +
+    (title ? "・🏅 " + esc(title) : "") +
+    "<br>💡 " +
+    (skills.length ? skills.map(esc).join("／") : "有効な閃きなし") +
+    "</small>"
+  );
 }
 
 // 不屈は従来の通常スキル1つとして習得する。閃き枠・残機は増やさない。
 function chronicleSurvivalBlock(s) {
-  if (learnedOf(s).includes('unyielding')) return '<p><small>死線の到達点：不屈を習得済み（通常スキル枠で選択）</small></p>';
-  const count=chronicleCommitted.get(chronicleOf(s).life)?.chronicle.survivedSingle || 0;
-  return '<p><small>死線の到達点：HP一桁からの勝利・生還 '+Math.min(3,count)+'/3回<br>達成すると既存の通常スキル「不屈」を習得できます。</small>'+
-    (count>=3?'<br><button data-chronicle-unyielding="'+s.id+'">不屈を習得</button>':'')+'</p>';
+  if (learnedOf(s).includes("unyielding"))
+    return "<p><small>死線の到達点：不屈を習得済み（通常スキル枠で選択）</small></p>";
+  const count = chronicleCommitted.get(chronicleOf(s).life)?.chronicle.survivedSingle || 0;
+  return (
+    "<p><small>死線の到達点：HP一桁からの勝利・生還 " +
+    Math.min(3, count) +
+    "/3回<br>達成すると既存の通常スキル「不屈」を習得できます。</small>" +
+    (count >= 3 ? '<br><button data-chronicle-unyielding="' + s.id + '">不屈を習得</button>' : "") +
+    "</p>"
+  );
 }
 function chronicleLearnUnyielding(s) {
-  const live=chronicleOf(s),durable=chronicleCommitted.get(live.life)?.chronicle;
-  if (!(durable?.survivedSingle>=3)) return '保存済みのHP一桁からの勝利・生還が3回必要です。';
-  if(learnedOf(s).includes('unyielding')) return '不屈は既に習得しています。';
-  const beforeSkills=s.skills.slice(),beforeLearned=learnedOf(s).slice();
-  const err=chronicleSavedAction(s,()=>{
-    learnedOf(s).push('unyielding');
-    if(s.skills.length<SQUAD_RULES.maxSkills)s.skills.push('unyielding');
-    const saved=savedSoldier(s.id);saved.learned=learnedOf(s).slice();saved.skills=s.skills.slice();
-    chronicleLog(s,'死線の経験から「不屈」を習得');return null;
+  const live = chronicleOf(s),
+    durable = chronicleCommitted.get(live.life)?.chronicle;
+  if (!(durable?.survivedSingle >= 3)) return "保存済みのHP一桁からの勝利・生還が3回必要です。";
+  if (learnedOf(s).includes("unyielding")) return "不屈は既に習得しています。";
+  const beforeSkills = s.skills.slice(),
+    beforeLearned = learnedOf(s).slice();
+  const err = chronicleSavedAction(s, () => {
+    learnedOf(s).push("unyielding");
+    if (s.skills.length < SQUAD_RULES.maxSkills) s.skills.push("unyielding");
+    const saved = savedSoldier(s.id);
+    saved.learned = learnedOf(s).slice();
+    saved.skills = s.skills.slice();
+    chronicleLog(s, "死線の経験から「不屈」を習得");
+    return null;
   });
-  if(err){s.skills=beforeSkills;s.learned=beforeLearned;return err;}
-  zukanSync();mapToast('💡 '+soldierName(s)+'：不屈を習得！');return null;
+  if (err) {
+    s.skills = beforeSkills;
+    s.learned = beforeLearned;
+    return err;
+  }
+  zukanSync();
+  mapToast("💡 " + soldierName(s) + "：不屈を習得！");
+  return null;
 }
-document.addEventListener('click',ev=>{
-  const b=ev.target.closest('[data-chronicle-unyielding]');if(!b)return;
-  const s=soldierById(+b.dataset.chronicleUnyielding);if(!s)return;
-  const err=chronicleLearnUnyielding(s);if(err)mapToast(err);renderSoldierSheet();updateUI();
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-chronicle-unyielding]");
+  if (!b) return;
+  const s = soldierById(+b.dataset.chronicleUnyielding);
+  if (!s) return;
+  const err = chronicleLearnUnyielding(s);
+  if (err) mapToast(err);
+  renderSoldierSheet();
+  updateUI();
 });
 
 CHRONICLE_SKILLS.in_history_cover = {
- name:'かばう',style:'melee',counter:'meleePoints',need:10,grade:0,job:'ashigaru',cd:12,history:true,
- text:'同じ部隊のHP30%未満の味方への通常攻撃を30%引き受ける。自身HP50%以上、再使用12秒。連鎖・範囲・特殊攻撃は対象外'
+  name: "かばう",
+  style: "melee",
+  counter: "meleePoints",
+  need: 10,
+  grade: 0,
+  job: "ashigaru",
+  cd: 12,
+  history: true,
+  text: "同じ部隊のHP30%未満の味方への通常攻撃を30%引き受ける。自身HP50%以上、再使用12秒。連鎖・範囲・特殊攻撃は対象外",
 };
-INSIGHT_SKILLS.in_history_cover=CHRONICLE_SKILLS.in_history_cover;
-function chronicleCover(target,list,raw,ranged,kind,receive) {
- if(!(raw>0)||!Number.isFinite(raw)||!target.alive||target.hp<=0||target.hp>=soldierStats(target).maxHp*.3||
- ['poison','thunder','breath','beam','fire','blast','wide','cannon','magic'].includes(kind))return raw;
- const now=evolutionClock(),key=chronicleKey();
- const ready=list.filter(s=>s!==target&&s.alive&&!s.out&&!s.siegeOut&&
- s.hp>=soldierStats(s).maxHp*.5&&chronicleHas(s,'in_history_cover')&&
- (evolutionState(s).chronicleCoverKey!==key||(evolutionState(s).ready.chronicleCover||0)<=now));
- ready.sort((a,b)=>b.hp/soldierStats(b).maxHp-a.hp/soldierStats(a).maxHp||a.id-b.id);
- const s=ready[0];if(!s)return raw;
- const state=evolutionState(s);state.ready.chronicleCover=now+12;state.chronicleCoverKey=key;
- const before=s.hp;receive(s,raw*.3);
- if(s.hp<before){chronicleAdd(chronicleOf(s),'covered');const seg=chronicleTouch(s);seg.covers=Math.min(1000,(seg.covers||0)+1);}
- chroniclePulse(s,'かばう','rampart');return raw*.7;
+INSIGHT_SKILLS.in_history_cover = CHRONICLE_SKILLS.in_history_cover;
+function chronicleCover(target, list, raw, ranged, kind, receive) {
+  if (
+    !(raw > 0) ||
+    !Number.isFinite(raw) ||
+    !target.alive ||
+    target.hp <= 0 ||
+    target.hp >= soldierStats(target).maxHp * 0.3 ||
+    ["poison", "thunder", "breath", "beam", "fire", "blast", "wide", "cannon", "magic"].includes(kind)
+  )
+    return raw;
+  const now = evolutionClock(),
+    key = chronicleKey();
+  const ready = list.filter(
+    (s) =>
+      s !== target &&
+      s.alive &&
+      !s.out &&
+      !s.siegeOut &&
+      s.hp >= soldierStats(s).maxHp * 0.5 &&
+      chronicleHas(s, "in_history_cover") &&
+      (evolutionState(s).chronicleCoverKey !== key || (evolutionState(s).ready.chronicleCover || 0) <= now),
+  );
+  ready.sort((a, b) => b.hp / soldierStats(b).maxHp - a.hp / soldierStats(a).maxHp || a.id - b.id);
+  const s = ready[0];
+  if (!s) return raw;
+  const state = evolutionState(s);
+  state.ready.chronicleCover = now + 12;
+  state.chronicleCoverKey = key;
+  const before = s.hp;
+  receive(s, raw * 0.3);
+  if (s.hp < before) {
+    chronicleAdd(chronicleOf(s), "covered");
+    const seg = chronicleTouch(s);
+    seg.covers = Math.min(1000, (seg.covers || 0) + 1);
+  }
+  chroniclePulse(s, "かばう", "rampart");
+  return raw * 0.7;
 }
 
 function chronicleFinesse(s) {
- const a=chronicleAptitude(s),earned=Math.max(0,Math.min(a.secondary||0,Math.max(0,SQUAD_RULES.growthLv(s.level)-SQUAD_RULES.growthLv(a.startAt)))),x=earned/(earned+20),u=unitOf(s);
- return {haste:a.type==='agile'?.03*x:0,evade:a.type==='agile'?.02*x:0,range:a.type==='sniper'&&!u.heal&&u.range>60?.05*x:0};
+  const a = chronicleAptitude(s),
+    earned = Math.max(
+      0,
+      Math.min(
+        a.secondary || 0,
+        Math.max(0, SQUAD_RULES.growthLv(s.level) - SQUAD_RULES.growthLv(a.startAt)),
+      ),
+    ),
+    x = earned / (earned + 20),
+    u = unitOf(s);
+  return {
+    haste: a.type === "agile" ? 0.03 * x : 0,
+    evade: a.type === "agile" ? 0.02 * x : 0,
+    range: a.type === "sniper" && !u.heal && u.range > 60 ? 0.05 * x : 0,
+  };
 }
 function chronicleFinesseText(s) {
- const a=chronicleAptitude(s),f=chronicleFinesse(s);
- if(a.type==='agile')return '<p><small>二次成長：行動間隔−'+(f.haste*100).toFixed(2)+'%（上限3%）・回避＋'+(f.evade*100).toFixed(2)+'ポイント（上限2）</small></p>';
- if(a.type==='sniper')return '<p><small>二次成長：基本射程＋'+(f.range*100).toFixed(2)+'%（遠距離攻撃職のみ・上限5%）。装備・書・果実の射程は増幅しません。</small></p>';
- return '';
+  const a = chronicleAptitude(s),
+    f = chronicleFinesse(s);
+  if (a.type === "agile")
+    return (
+      "<p><small>二次成長：行動間隔−" +
+      (f.haste * 100).toFixed(2) +
+      "%（上限3%）・回避＋" +
+      (f.evade * 100).toFixed(2) +
+      "ポイント（上限2）</small></p>"
+    );
+  if (a.type === "sniper")
+    return (
+      "<p><small>二次成長：基本射程＋" +
+      (f.range * 100).toFixed(2) +
+      "%（遠距離攻撃職のみ・上限5%）。装備・書・果実の射程は増幅しません。</small></p>"
+    );
+  return "";
+}
+
+// 記念装備の段階は装備者の確定戦歴から導出。装備品に実績・段階を保存しない。
+const CHRONICLE_GEAR_GROWTH = {
+  chronicleBlade: { counter: "kills", thresholds: [0, 500, 1000], bonus: { atk: [0, 0.02, 0.04] } },
+  chronicleWarCharm: {
+    counter: "kills",
+    thresholds: [0, 2500, 5000],
+    bonus: { atk: [0, 0.01, 0.02], def: [0, 0.01, 0.02] },
+  },
+  chronicleMedicCharm: {
+    counter: "healed",
+    thresholds: [0, 50000, 100000],
+    bonus: { healMul: [0, 0.02, 0.05] },
+  },
+  chronicleLifeCharm: { counter: "survivedSingle", thresholds: [0, 3, 10], bonus: { hp: [0, 0.02, 0.05] } },
+  chronicleRevivalCharm: { counter: "revivals", thresholds: [0, 3, 10], bonus: { guard: [0, 0.01, 0.02] } },
+};
+for (const [id, rule] of Object.entries(CHRONICLE_GEAR_GROWTH)) GEAR[id].chronicleGrowth = rule;
+function chronicleGearRank(s, g) {
+  const rule = g?.chronicleGrowth;
+  if (!rule || !s) return 0;
+  const c = chronicleCommitted.get(chronicleOf(s).life)?.chronicle,
+    progress = c?.[rule.counter] || 0;
+  return progress >= rule.thresholds[2] ? 2 : progress >= rule.thresholds[1] ? 1 : 0;
+}
+function chronicleGearBonus(s, g, key) {
+  return g?.chronicleGrowth?.bonus[key]?.[chronicleGearRank(s, g)] || 0;
+}
+function chronicleGearText(s, g) {
+  const rule = g?.chronicleGrowth;
+  if (!rule) return "";
+  const rank = chronicleGearRank(s, g),
+    c = s && chronicleCommitted.get(chronicleOf(s).life)?.chronicle,
+    progress = c?.[rule.counter] || 0,
+    labels = { atk: "攻撃", def: "防御", healMul: "回復量", hp: "最大HP", guard: "軽減" },
+    bonus = Object.keys(rule.bonus)
+      .map((k) => labels[k] + "＋" + Math.round(100 * chronicleGearBonus(s, g, k)) + "%")
+      .join("・");
+  return (
+    "<br>戦歴段階 " +
+    ["Ⅰ", "Ⅱ", "Ⅲ"][rank] +
+    "/Ⅲ" +
+    (s ? "（装備者本人）" : "（装備者の戦歴で判定）") +
+    (s ? "<br>追加効果：" + bonus : "") +
+    (rank < 2
+      ? "<br>次の段階：" +
+        CHRONICLE_COUNTER_LABELS[rule.counter] +
+        " " +
+        fmt(progress) +
+        "/" +
+        fmt(rule.thresholds[rank + 1])
+      : "<br>最終段階に到達") +
+    "<br>解放条件：Ⅱ " +
+    fmt(rule.thresholds[1]) +
+    "／Ⅲ " +
+    fmt(rule.thresholds[2]) +
+    "。元の性能は維持。"
+  );
+}
+function chronicleEquipmentBlock(s) {
+  const list = itemsOf(s).filter((it) => GEAR[it.id]?.chronicleGrowth);
+  if (!list.length) return "";
+  return (
+    '<details class="chronicle-equipment"><summary>🎒 記念装備の戦歴成長</summary>' +
+    list
+      .map(
+        (it) =>
+          "<p><b>" +
+          esc(GEAR[it.id].name) +
+          "</b><small>" +
+          chronicleGearText(s, GEAR[it.id]) +
+          "</small></p>",
+      )
+      .join("") +
+    "</details>"
+  );
 }

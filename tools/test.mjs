@@ -224,9 +224,12 @@ await toggleSpeed(page);t0=Date.now();a0=(await S(page)).heroes.kanbei.active;aw
 check("x2：2倍の速さ",near(a0-a1,real*2,.6));await toggleSpeed(page);
 await page.evaluate(()=>WD_DEBUG.step(8));st=await S(page);
 check("効果終了後も再使用待ちは継続",st.heroes.kanbei.active===0&&st.heroes.kanbei.cd>0);
-const cdBefore=st.heroes.kanbei.cd;
+// 再配属自体の影響を検証する間は時計を止め、UI操作時間を再使用待ちの差に混ぜない。
+await togglePause(page);
+const cdBefore=(await S(page)).heroes.kanbei.cd;
 await deselect(page);await assignVia(page,E,"kanbei");await deselect(page);await assignVia(page,B,"kanbei");st=await S(page);
-check("再配属しても再使用待ちは戻らない",near(st.heroes.kanbei.cd,cdBefore,1.5)&&st.heroes.kanbei.cd>20);
+check("再配属しても再使用待ちは戻らない",near(st.heroes.kanbei.cd,cdBefore,.001)&&st.heroes.kanbei.cd>20);
+await togglePause(page);
 check("再使用待ち中は発動できない",await page.isDisabled("#skill"));
 // Recoup existing upgrade/assignment coverage; role-specific effects are tested in test-warlord-roles.mjs.
 console.log("■ 売却・リセット");
