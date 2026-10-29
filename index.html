@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v83（編成の能力順・スワイプ部隊タブ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v84（兵士の戦歴帳・保存の土台）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4108,9 +4108,24 @@ OFF</button>
           for (const [key, value] of Object.entries(tx.writes)) localStorage.setItem(key, value);
           localStorage.removeItem(BOOK_TX_KEY);
         }
-        function readGameSave(key) {
+        const gameSaveObserved = new Map();
+        let gameSaveConflict = false;
+        function currentGameSave(key) {
           const tx = pendingBookTransaction();
-          return tx && Object.hasOwn(tx.writes, key) ? tx.writes[key] : localStorage.getItem(key);
+          return tx && Object.hasOwn(tx.writes,key) ? tx.writes[key] : localStorage.getItem(key);
+        }
+        function readGameSave(key) {
+          const value = currentGameSave(key);
+          if (!gameSaveObserved.has(key)) gameSaveObserved.set(key,value);
+          return value;
+        }
+        function assertGameSaveCurrent(keys) {
+          if (gameSaveConflict) throw new Error("別タブの保存を検出しました。再読み込みしてください。");
+          for (const key of keys) if (gameSaveObserved.has(key) && gameSaveObserved.get(key) !== currentGameSave(key)) {
+            gameSaveConflict = true;
+            queueMicrotask(() => mapToast("⚠ 別タブで進行が保存されました。この画面は再読み込みしてから続けてください。"));
+            throw new Error("stale save tab");
+          }
         }
         function beginGameSaveBatch() {
           gameSaveBatch = gameSaveBatch || {};
@@ -4120,8 +4135,10 @@ OFF</button>
           gameSaveBatchActive = false;
           if (!gameSaveBatch) return true;
           try {
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
             const previous = pendingBookTransaction();
             localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ writes: { ...(previous ? previous.writes : {}), ...gameSaveBatch } }));
+            for (const [key,value] of Object.entries(gameSaveBatch)) gameSaveObserved.set(key,value);
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
             scheduleInsightFlush();
@@ -4134,8 +4151,10 @@ OFF</button>
             gameSaveBatch[key] = value;
             if (!gameSaveBatchActive && !commitGameSaveBatch()) throw new Error("save failed");
           } else {
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
             flushBookTransaction();
             localStorage.setItem(key, value);
+            gameSaveObserved.set(key,value);
           }
         }
 
@@ -5669,7 +5688,7 @@ function defenseEvolution(s, q, target, event = "attack", beforeRatio = null, st
         { s, q, h: heroOnSquad(q) },
         { normal: false, ignoreArmor: Math.min(0.8, skillSum(s, "armorPierce") + pierce) },
       ),
-    heal: (m, amount) => healTarget(m.s, amount, q),
+    heal: (m, amount) => { const before=m.s.hp; const healed=healTarget(m.s, amount, q); chronicleHeal(s,m.s,before,m.max); return healed; },
   };
   if (event === "heal") {
     c.target = c.friends.find((m) => m.s === target);
@@ -5733,6 +5752,7 @@ function battleEvolution(s, g, target, tower, stats, event = "attack", beforeRat
       if (B.soulEat) return 0;
       const before = m.s.hp;
       m.s.hp = Math.min(m.max, m.s.hp + amount * healTakenMul(m.s));
+      chronicleHeal(s,m.s,before,m.max);
       return Math.max(0, m.s.hp - before);
     },
   };
@@ -6417,6 +6437,194 @@ function jobBookResultHtml(B) {
   return ids.length
     ? '<p class="capture">📕 ボス報酬：' + ids.map((j) => esc(JOBS[j].name) + "の書").join("・") + "</p>"
     : "";
+}
+
+        // 戦歴は既存の兵士保存・戦闘確定点と一緒に保存する。未確定XPだけを先に保存しない。
+const CHRONICLE_RULES = Object.freeze({ version: 1, cap: 1e12, logs: 24 });
+const CHRONICLE_COUNTERS = [
+  "kills",
+  "bossKills",
+  "bossAssists",
+  "healed",
+  "rescues",
+  "meleeHits",
+  "rangedHits",
+  "specialHits",
+  "meleeLoss",
+  "rangedLoss",
+  "specialLoss",
+  "meleePoints",
+  "rangedPoints",
+  "survived30",
+  "survived10",
+  "survivedSingle",
+  "revivals",
+];
+function cleanChronicle(v, s = {}) {
+  const o = v && typeof v === "object" ? v : {};
+  const out = {
+    version: 1,
+    life:
+      typeof o.life === "string" && /^[\w:-]{1,100}$/.test(o.life)
+        ? o.life
+        : "legacy:" + (s.id || 0) + ":" + insightHash(s.insight?.seed ?? s.type ?? "soldier"),
+    baselineKills: intIn(o.baselineKills, 0, CHRONICLE_RULES.cap, Math.max(0, s.kills || 0)),
+    log: (Array.isArray(o.log) ? o.log : [])
+      .filter((x) => typeof x === "string")
+      .map((x) => x.slice(0, 100))
+      .slice(-CHRONICLE_RULES.logs),
+  };
+  for (const k of CHRONICLE_COUNTERS)
+    out[k] = Number.isFinite(o[k]) ? Math.max(0, Math.min(CHRONICLE_RULES.cap, o[k])) : 0;
+  out.segment =
+    o.segment && typeof o.segment.key === "string" && o.segment.key.length <= 160
+      ? {
+          key: o.segment.key,
+          low: intIn(o.segment.low, 0, 7, 0),
+          dead: !!o.segment.dead,
+          finished: !!o.segment.finished,
+          melee: Math.min(5, Math.max(0, Number(o.segment.melee) || 0)),
+          ranged: Math.min(5, Math.max(0, Number(o.segment.ranged) || 0)),
+        }
+      : null;
+  return out;
+}
+function chronicleOf(s) {
+  return s.chronicle || (s.chronicle = cleanChronicle(null, s));
+}
+function chronicleNew(s) {
+  const c = cleanChronicle(null, s);
+  c.life =
+    "soldier:" +
+    (globalThis.crypto?.randomUUID?.() ||
+      Date.now().toString(36) + ":" + Math.random().toString(36).slice(2));
+  c.baselineKills = 0;
+  return c;
+}
+function chronicleAdd(c, k, n = 1) {
+  if (Number.isFinite(n) && n > 0) c[k] = Math.min(CHRONICLE_RULES.cap, (c[k] || 0) + n);
+}
+function chronicleLog(s, text) {
+  const c = chronicleOf(s);
+  c.log.push("W" + wave + " " + String(text).slice(0, 85));
+  c.log = c.log.slice(-CHRONICLE_RULES.logs);
+}
+function chronicleKey() {
+  if (battle) return "battle:" + (battle.jobDropRunId ||= newJobDropRunId());
+  if (training) return "training:" + (training.jobDropRunId ||= newJobDropRunId()) + ":" + wave;
+  return "defense:" + runId + ":" + wave;
+}
+function chronicleTouch(s) {
+  const c = chronicleOf(s),
+    key = chronicleKey();
+  if (c.segment?.key !== key) c.segment = { key, low: 0, dead: false, finished: false, melee: 0, ranged: 0 };
+  return c.segment;
+}
+function chronicleDamage(s, before, max, ranged, kind) {
+  const loss = Math.max(0, Math.min(before, before - Math.max(0, s.hp)));
+  if (!loss || !(max > 0)) return;
+  const c = chronicleOf(s),
+    segment = chronicleTouch(s);
+  const special = [
+    "poison",
+    "thunder",
+    "breath",
+    "beam",
+    "fire",
+    "blast",
+    "wide",
+    "cannon",
+    "magic",
+  ].includes(kind);
+  const type = special ? "special" : ranged ? "ranged" : "melee";
+  chronicleAdd(c, type + "Hits");
+  chronicleAdd(c, type + "Loss", loss);
+  if (!special) segment[type] = Math.min(5, segment[type] + loss / max);
+  if (s.hp > 0) {
+    if (s.hp <= max * 0.3) segment.low |= 1;
+    if (s.hp <= max * 0.1) segment.low |= 2;
+    if (max >= 100 && s.hp <= 9) segment.low |= 4;
+  }
+}
+function chronicleHeal(s, target, before, max) {
+  const amount = Math.max(0, Math.min(max, target.hp) - Math.max(0, before));
+  if (!s?.alive || !target.alive || !amount || !(max > 0)) return;
+  const c = chronicleOf(s);
+  chronicleTouch(s);
+  chronicleAdd(c, "healed", amount);
+  if (before / max < 0.3) target._chronicleRescueReady = true;
+  if (target._chronicleRescueReady && target.hp / max >= 0.5) {
+    chronicleAdd(c, "rescues");
+    target._chronicleRescueReady = false;
+  }
+}
+function chronicleKill(s, e) {
+  if (!s?.alive || e._chronicleCredited) return;
+  e._chronicleCredited = true;
+  const c = chronicleOf(s);
+  chronicleTouch(s);
+  chronicleAdd(c, "kills");
+  if (e.kind === "boss" || e.boss) {
+    chronicleAdd(c, "bossKills");
+    chronicleLog(s, "強敵に最後の一撃");
+    const key = chronicleKey();
+    for (const m of soldiers)
+      if (m !== s && m.alive && m.chronicle?.segment?.key === key && !m.chronicle.segment.dead)
+        chronicleAdd(m.chronicle, "bossAssists");
+  }
+}
+function chronicleDeath(s) {
+  chronicleTouch(s).dead = true;
+}
+function chronicleFinish(s, win) {
+  const c = chronicleOf(s),
+    seg = c.segment;
+  if (!seg || seg.key !== chronicleKey() || seg.finished) return;
+  seg.finished = true;
+  if (!win || !s.alive || seg.dead || s.heroFell) return;
+  chronicleAdd(c, "meleePoints", seg.melee);
+  chronicleAdd(c, "rangedPoints", seg.ranged);
+  for (const [bit, key] of [
+    [1, "survived30"],
+    [2, "survived10"],
+    [4, "survivedSingle"],
+  ])
+    if (seg.low & bit) chronicleAdd(c, key);
+  if (seg.low)
+    chronicleLog(
+      s,
+      "死線から生還（" + (seg.low & 4 ? "HP一桁" : seg.low & 2 ? "HP10%以下" : "HP30%以下") + "）",
+    );
+}
+function chronicleBlock(s) {
+  const c = chronicleOf(s);
+  return (
+    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
+    fmt(c.kills) +
+    "・強敵 " +
+    fmt(c.bossKills) +
+    "・支援参加 " +
+    fmt(c.bossAssists) +
+    "<br>実回復 " +
+    fmt(c.healed) +
+    "・救命 " +
+    fmt(c.rescues) +
+    "<br>近接被弾 " +
+    fmt(c.meleeHits) +
+    "・遠距離被弾 " +
+    fmt(c.rangedHits) +
+    "<br>生還：HP30%以下 " +
+    c.survived30 +
+    "回／10%以下 " +
+    c.survived10 +
+    "回／一桁 " +
+    c.survivedSingle +
+    "回<br>復活 " +
+    c.revivals +
+    "回</p>" +
+    c.log.map((x) => "<p><small>" + esc(x) + "</small></p>").join("") +
+    "</details>"
+  );
 }
 
         const JOB_UNITS = {};
@@ -8490,11 +8698,15 @@ function jobBookResultHtml(B) {
                 legend: cleanLegend(v.legend),
                 fruit: cleanFruit(v.fruit),
                 insight: cleanInsight(v.insight,{...v,id:rec.id,type:rec.type,level}),
+                chronicle: cleanChronicle(v.chronicle,{...v,id:rec.id,type:rec.type,kills:rec.kills}),
                 name: rec.name,
                 named: rec.named || null,
                 battles: rec.battles,
                 kills: rec.kills,
               });
+              chronicleAdd(x.chronicle,"revivals");
+              x.chronicle.segment = null;
+              chronicleLog(x,"復活の書で帰還");
               x.hp = soldierStats(x).maxHp;
               logHistory(x, "復活の書で復活（Lv" + level + "）");
               return x;
@@ -9135,6 +9347,7 @@ function jobBookResultHtml(B) {
           soldiers.push(s);
           if (named) namedNews.push(NAMED_SOLDIERS[named].name + "（" + SOLDIER_TYPES[type].name + "）");
           zukanSync(); // 雇った兵士の職業（初期職）を図鑑へ
+          s.chronicle = chronicleNew(s);
           return s;
         }
         function newSquad(type) {
@@ -9472,6 +9685,7 @@ function jobBookResultHtml(B) {
           const max = soldierStats(best).maxHp,
             before = best.hp;
           best.hp = Math.min(max, best.hp + max * p * healTakenMul(best));
+          chronicleHeal(s,best,before,max);
           earnXp(s, "heal", best.hp - before, max);
         }
         // 転職できるか（理由を返す。できるなら null）
@@ -9725,9 +9939,11 @@ function jobBookResultHtml(B) {
               injured: Object.fromEntries(Object.entries(heroSave.injured).map(([id, v]) => [id, v.left])),
               forge: F, defense: heroSave.defense || null, towerResearch: heroSave.towerResearch, warlordProgress: heroSave.warlordProgress,
             });
-            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({
-              heroes, soldiers: JSON.stringify({ version: 1, ...soldierSave }),
-            }));
+            assertGameSaveCurrent([...gameSaveObserved.keys()]);
+            const soldiersJson = JSON.stringify({ version: 1, ...soldierSave });
+            localStorage.setItem(BOOK_TX_KEY, JSON.stringify({ heroes, soldiers: soldiersJson }));
+            gameSaveObserved.set(SAVE_KEY,heroes);
+            gameSaveObserved.set(SOLDIER_SAVE_KEY,soldiersJson);
           } catch (err) {
             Object.assign(s, before);
             Object.assign(saved, beforeSaved);
@@ -9959,6 +10175,7 @@ function jobBookResultHtml(B) {
         // 主人公の戦死：その戦いからは外れ（同じ兵士が二重に出ないよう、防衛戦は離脱・攻城戦は戦場を離れる扱い）、Lv1から再出発する。
         // この戦いでは経験値・ウェーブの報酬を受け取らない。すぐ保存するので、負けて読み込み直しても元のレベルには戻らない
         function heroFall(s, where) {
+          chronicleDeath(s);
           s.bestLevel = Math.max(s.bestLevel || 1, s.level);
           s.deaths = (s.deaths || 0) + 1;
           s.level = 1;
@@ -10213,6 +10430,7 @@ function jobBookResultHtml(B) {
             logHistory(front, "不屈で踏みとどまった");
           }
           phoenixSave(front); // 不死鳥の護符
+          chronicleDamage(front,hpBefore,st.maxHp,ranged,kind);
           if (front.hp <= 0) return killSoldier(front, q);
           // 生存本能：HPが減ると撤退を試みる（1ウェーブに1回。失敗すると戦い続ける）
           if (
@@ -10527,6 +10745,7 @@ function jobBookResultHtml(B) {
             amount = Math.min(st.heal, max - best.m.hp),
             hpBefore = best.m.hp;
           healTarget(best.m, amount, q); // 最大HPを超えず、救護系パッシブを反映
+          chronicleHeal(s,best.m,hpBefore,max);
           touchHero(q);
           s.heals = (s.heals || 0) + 1;
           earnXp(s, "heal", best.m.hp - hpBefore, max);
@@ -10546,6 +10765,7 @@ function jobBookResultHtml(B) {
           const s = e.lastHitBy ? soldierById(e.lastHitBy) : null;
           if (!s || !s.alive) return;
           s.kills++;
+          chronicleKill(s,e);
           earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
@@ -10561,6 +10781,7 @@ function jobBookResultHtml(B) {
             if (s.inWave && s.xpClaim !== claim) {
               s.xpClaim = claim;
               const before = rankTitle(s);
+              chronicleFinish(s,true);
               s.wavesSurvived++;
               earnXp(s, "wave");
               const after = rankTitle(s);
@@ -10794,6 +11015,7 @@ function jobBookResultHtml(B) {
           "legend",
           "fruit",
           "insight",
+          "chronicle",
         ];
         let runId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
         function intIn(v, lo, hi, d) { return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d; }
@@ -10940,6 +11162,7 @@ function jobBookResultHtml(B) {
                 deaths: intIn(v.deaths, 0, 1e9, 0),
                 bestLevel: best,
                 insight: cleanInsight(v.insight,{...v,level,bestLevel:best}),
+                chronicle: cleanChronicle(v.chronicle,v),
                 ...cleanJob(v),
                 // 一度 Lv10 に届いて付けた名前は、主人公が再出発しても残す。ネームド兵士は人物の名前
                 ...(namedOk(v, list)
@@ -11006,7 +11229,7 @@ function jobBookResultHtml(B) {
           const o = {};
           for (const k of SAVED_FIELDS)
             o[k] =
-              (k === "legend" || k === "insight")
+              (k === "legend" || k === "insight" || k === "chronicle")
                 ? s[k]
                   ? JSON.parse(JSON.stringify(s[k])) // 中の配列も写す（保存前の変更が保存データに混ざらない）
                   : null
@@ -11039,6 +11262,7 @@ function jobBookResultHtml(B) {
         }
         // 戦死：保存データから外し、名前付きの兵士は英霊名鑑に記録する
         function recordDeath(s) {
+          chronicleDeath(s);
           soldierSave.soldiers = soldierSave.soldiers.filter((x) => x.id !== s.id);
           refreshSiege(); // 攻城編成からも外す
           if (s.name) {
@@ -11066,6 +11290,7 @@ function jobBookResultHtml(B) {
                   fruit: s.fruit || null,
                   bestLevel: s.bestLevel,
                   insight: s.insight,
+                  chronicle: chronicleOf(s),
                 }),
               ),
             });
@@ -16951,7 +17176,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) +
+            legendBlock(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -20045,6 +20270,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
           e.dead = true;
+          chronicleKill(s,e);
           if (e.kind === "boss") battleJobBookDrop(e);
           if (e.boss) battle.bossCorpse = e; // 討伐の消える演出に使う
           battle.kills++;
@@ -20084,6 +20310,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             (ranged ? (1 - skillSum(s, "rangedGuard")) * (1 - skillSum(s, "resist") * 0.3) * (unitOf(s).rangedWeak || 1) : 1) *
             (kind === "thunder" ? 1 - Math.min(0.8, skillSum(s, "thunderGuard")) : 1) *
             spear;
+          const chronicleHpBefore = s.hp;
           s.hp -= evolutionAbsorb(s,hurt,ranged,enemy,battle.t);
           s.hit = 0.2;
           if (s.hp <= 0 && hasSkill(s, "unyielding") && !s.unyieldUsed) {
@@ -20091,6 +20318,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             s.hp = 1;
           }
           phoenixSave(s); // 不死鳥の護符
+          chronicleDamage(s,chronicleHpBefore,st.maxHp,ranged,kind);
           if (s.hp <= 0 && isHeroSoldier(s)) {
             // 主人公は消えない：この攻城戦からは外れ、Lv1から再出発
             s.siegeOut = true;
@@ -20234,8 +20462,10 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                 }
                 s.cd += st.rate;
                 s.atk = 0.18;
-                const beforeRatio=best.m.hp/battleStats(best.o,best.m).maxHp;
+                const chronicleBefore = best.m.hp, chronicleMax = battleStats(best.o,best.m).maxHp;
+                const beforeRatio=best.m.hp/chronicleMax;
                 if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
+                chronicleHeal(s,best.m,chronicleBefore,chronicleMax);
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
                 battleEvolution(s,g,best.m,null,st,"heal",beforeRatio);
@@ -20451,6 +20681,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               if (s.heroFell) B.heroFell = soldierName(s); // 主人公の戦死：生還・勝利の経験値は受け取らない
               else if (launched && result !== "retreat")
                 gainXp(s, SIEGE_BATTLE.xpSurvive + (result === "win" ? SIEGE_BATTLE.xpWin : 0), true);
+              chronicleFinish(s,launched && result === "win");
               s.heroFell = false;
               s.waveXp = 0;
               s.siegeOut = false;
@@ -22314,6 +22545,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               openForge,
               openGear,
             },
+            chronicleApi: {CHRONICLE_RULES,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
