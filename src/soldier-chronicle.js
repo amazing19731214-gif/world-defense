@@ -18,6 +18,8 @@ const CHRONICLE_COUNTERS = [
   "survived10",
   "survivedSingle",
   "revivals",
+  "covered",
+  "coverWins",
 ];
 function cleanChronicle(v, s = {}) {
   const o = v && typeof v === "object" ? v : {};
@@ -44,6 +46,7 @@ function cleanChronicle(v, s = {}) {
           finished: !!o.segment.finished,
           melee: Math.min(5, Math.max(0, Number(o.segment.melee) || 0)),
           ranged: Math.min(5, Math.max(0, Number(o.segment.ranged) || 0)),
+          covers: intIn(o.segment.covers,0,1000,0),
         }
       : null;
   const honorIds = Object.keys(CHRONICLE_HONORS);
@@ -88,7 +91,7 @@ function chronicleKey() {
 function chronicleTouch(s) {
   const c = chronicleOf(s),
     key = chronicleKey();
-  if (c.segment?.key !== key) c.segment = { key, low: 0, dead: false, finished: false, melee: 0, ranged: 0 };
+  if (c.segment?.key !== key) c.segment = { key, low: 0, dead: false, finished: false, melee: 0, ranged: 0, covers:0 };
   return c.segment;
 }
 function chronicleDamage(s, before, max, ranged, kind) {
@@ -159,6 +162,7 @@ function chronicleFinish(s, win) {
   if (!seg || seg.key !== chronicleKey() || seg.finished) return;
   seg.finished = true;
   if (!win || !s.alive || seg.dead || s.heroFell) return;
+  if(seg.covers>0) chronicleAdd(c,"coverWins");
   chronicleAdd(c, "meleePoints", seg.melee);
   chronicleAdd(c, "rangedPoints", seg.ranged);
   for (const [bit, key] of [
@@ -198,7 +202,7 @@ function chronicleBlock(s) {
     c.survivedSingle +
     "回<br>復活 " +
     c.revivals +
-    "回</p>" +
+    "回<br>かばう " + fmt(c.covered) + "回・かばって勝利生還 " + fmt(c.coverWins) + "戦</p>" +
     chronicleResistanceText(s) +
     c.log.map((x) => "<p><small>" + esc(x) + "</small></p>").join("") +
     "</details>"
@@ -225,6 +229,7 @@ const CHRONICLE_HONORS = Object.fromEntries(
     ["ranged", "矢雨を歩く者", "rangedPoints", 10, null],
     ["boss", "大将討ち", "bossKills", 1, null],
     ["support", "強敵を支えし者", "bossAssists", 1, null],
+    ["cover", "仲間の盾", "coverWins", 3, null],
   ].map(([id, name, counter, need, reward]) => [id, { name, counter, need, reward }]),
 );
 Object.assign(GEAR, {
@@ -453,6 +458,8 @@ const CHRONICLE_COUNTER_LABELS = {
   rangedPoints: "遠距離被弾の生還点",
   bossKills: "強敵への最後の一撃",
   bossAssists: "強敵討伐への支援参加",
+  covered: "かばった回数",
+  coverWins: "かばって勝利・生還した戦闘",
 };
 function chronicleDurableHonors() {
   try {
@@ -849,3 +856,23 @@ document.addEventListener('click',ev=>{
   const s=soldierById(+b.dataset.chronicleUnyielding);if(!s)return;
   const err=chronicleLearnUnyielding(s);if(err)mapToast(err);renderSoldierSheet();updateUI();
 });
+
+CHRONICLE_SKILLS.in_history_cover = {
+ name:'かばう',style:'melee',counter:'meleePoints',need:10,grade:0,job:'ashigaru',cd:12,history:true,
+ text:'同じ部隊のHP30%未満の味方への通常攻撃を30%引き受ける。自身HP50%以上、再使用12秒。連鎖・範囲・特殊攻撃は対象外'
+};
+INSIGHT_SKILLS.in_history_cover=CHRONICLE_SKILLS.in_history_cover;
+function chronicleCover(target,list,raw,ranged,kind,receive) {
+ if(!(raw>0)||!Number.isFinite(raw)||!target.alive||target.hp<=0||target.hp>=soldierStats(target).maxHp*.3||
+ ['poison','thunder','breath','beam','fire','blast','wide','cannon','magic'].includes(kind))return raw;
+ const now=evolutionClock(),key=chronicleKey();
+ const ready=list.filter(s=>s!==target&&s.alive&&!s.out&&!s.siegeOut&&
+ s.hp>=soldierStats(s).maxHp*.5&&chronicleHas(s,'in_history_cover')&&
+ (evolutionState(s).chronicleCoverKey!==key||(evolutionState(s).ready.chronicleCover||0)<=now));
+ ready.sort((a,b)=>b.hp/soldierStats(b).maxHp-a.hp/soldierStats(a).maxHp||a.id-b.id);
+ const s=ready[0];if(!s)return raw;
+ const state=evolutionState(s);state.ready.chronicleCover=now+12;state.chronicleCoverKey=key;
+ const before=s.hp;receive(s,raw*.3);
+ if(s.hp<before){chronicleAdd(chronicleOf(s),'covered');const seg=chronicleTouch(s);seg.covers=Math.min(1000,(seg.covers||0)+1);}
+ chroniclePulse(s,'かばう','rampart');return raw*.7;
+}

@@ -124,8 +124,8 @@ let { page, errors, context } = await newContext();
 console.log("■ 図鑑の数");
 let r = await counts(page);
 check(
-  "武将30・スキル156（未実装の「城攻め名人」は入れない）・アイテム40・職業21（職業技42・閃き21・最上級7職を追加）",
-  r.warlords.total === 30 && r.skills.total === 156 && r.items.total === 40 && r.jobs.total === 21,
+  "武将30・スキル157（未実装の「城攻め名人」は入れない）・アイテム40・職業21（職業技42・閃き21・最上級7職を追加）",
+  r.warlords.total === 30 && r.skills.total === 157 && r.items.total === 40 && r.jobs.total === 21,
   JSON.stringify(r),
 );
 
@@ -293,10 +293,10 @@ let text = await page.textContent("#zukanBody");
 r = await counts(page);
 const total = r.warlords.found + r.skills.found + r.items.found + r.jobs.found;
 check(
-  "総合の発見数と達成率（ネームド兵士を含む283）・タブと発見数",
-  new RegExp("総合 " + total + "/283（" + Math.floor((total / 283) * 100) + "%）").test(text) &&
+  "総合の発見数と達成率（ネームド兵士を含む285）・タブと発見数",
+  new RegExp("総合 " + total + "/285（" + Math.floor((total / 285) * 100) + "%）").test(text) &&
     /武将3\/30/.test(text.replace(/\s/g, "")) &&
-    /スキル6\/156/.test(text.replace(/\s/g, "")) &&
+    /スキル6\/157/.test(text.replace(/\s/g, "")) &&
     /アイテム3\/40/.test(text.replace(/\s/g, "")) &&
     /職業4\/21/.test(text.replace(/\s/g, "")),
   text.slice(0, 200),
@@ -346,9 +346,9 @@ r = await page.evaluate(() => ({
   hidden: !/影走り|天下無双|一騎当千/.test(document.getElementById("zukanBody").innerHTML),
 }));
 check(
-  "スキル図鑑：武将の必殺技・兵士のスキル・固有・職業・秘伝に分ける（156）",
+  "スキル図鑑：武将の必殺技・兵士のスキル・固有・職業・秘伝に分ける（157）",
   r.groups === "武将の必殺技|兵士のスキル|固有スキル（Lv30）|職業スキル|秘伝スキル（スキルの書）|💡 閃き技|職業固有技" &&
-    r.tiles === 156,
+    r.tiles === 157,
   JSON.stringify(r),
 );
 check("未実装のスキルは出さない・未習得の名前も出さない", r.noFuture && r.hidden);
@@ -453,7 +453,7 @@ console.log("■ 画面（390×844）・新しいゲーム");
 ));
 r = await counts(page);
 check(
-  "何も持っていない新しいゲームは 0/283（ネームド兵士18・騎馬の上級職を含む）",
+  "何も持っていない新しいゲームは 0/285（ネームド兵士18・騎馬の上級職を含む）",
   r.warlords.found + r.skills.found + r.items.found + r.jobs.found === 0,
   JSON.stringify(r),
 );
@@ -463,8 +463,8 @@ r = await page.evaluate(() => ({
   text: document.getElementById("zukanBody").textContent,
 }));
 check(
-  "390×844：横にはみ出さない・総合 0/283（0%）",
-  !r.hScroll && /総合 0\/283（0%）/.test(r.text),
+  "390×844：横にはみ出さない・総合 0/285（0%）",
+  !r.hScroll && /総合 0\/285（0%）/.test(r.text),
   r.text.slice(0, 80),
 );
 await page.tap("#zukanClose");
