@@ -251,9 +251,9 @@ function flushInsights() {
   return true;
 }
 function insightFound() {
-  const ids = new Set((soldierSave.insightFound || []).filter((id) => INSIGHT_SKILLS[id]));
+  const ids = new Set((soldierSave.insightFound || []).filter((id) => INSIGHT_SKILLS[id] && (!INSIGHT_SKILLS[id].history || chronicleLearnedConfirmed.has(id))));
   for (const v of soldierSave.soldiers)
-    for (const id of v.insight?.known || []) if (INSIGHT_SKILLS[id]) ids.add(id);
+    for (const id of v.insight?.known || []) if (INSIGHT_SKILLS[id] && (!INSIGHT_SKILLS[id].history || chronicleLearnedConfirmed.has(id))) ids.add(id);
   return ids;
 }
 function insightUseError(s, uid) {
@@ -345,6 +345,8 @@ function insightCompatible(s, id) {
     gun = u.shot === "musket",
     mounted = JOBS[jobOf(s)].base === "cavalry";
   return {
+    any: true,
+    attack: !heal,
     heal,
     gun: !heal && gun,
     bow: !heal && !gun && range > 60,
@@ -705,6 +707,7 @@ function evolutionAction(s, c, event = "attack") {
     }
   }
   if (state.common > now) return;
+  if(chronicleAction(s,c,event))return;
   const alive = () => c.enemies.filter((e) => !e.gone && !e.dead && e.hp > 0);
   const inRange = () => alive().filter((e) => Math.hypot(e.x - c.pos.x, e.y - c.pos.y) <= c.stats.range);
   const sameTeam = () => c.friends.filter((m) => m.team === c.team && m.s.alive && !m.s.out && !m.s.siegeOut);
@@ -776,7 +779,7 @@ function evolutionAction(s, c, event = "attack") {
   };
   for (const id of insightOf(s).equipped) {
     const k = INSIGHT_SKILLS[id];
-    if (!insightCompatible(s, id) || event !== (k.style === "heal" ? "heal" : "attack")) continue;
+    if (k.history || !insightCompatible(s, id) || event !== (k.style === "heal" ? "heal" : "attack")) continue;
     if (
       cast(
         id,

@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v85（兵士の称号・記念報酬）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v86（戦歴の閃き・近接と遠距離の耐性）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -5707,7 +5707,8 @@ OFF</button>
           if (!e || e.gone || e.hp <= 0 || raw <= 0) return 0;
           const { h, q, t, s } = source;
           const normal = options.normal !== false;
-          let damage = raw, ignore = options.ignoreArmor || 0;
+          if(s)chronicleTouch(s);
+          let damage = raw * (s && e.kind === "boss" && chronicleHas(s,"in_history_bossHunter") ? 1.05 : 1), ignore = options.ignoreArmor || 0;
           if (normal && h) {
             const token = (s ? "s" + s.id : "tower") + ":" + enemyToken(e), fresh = !seenTarget(h, token);
             if (q && h.id === "mitsuhide" && e.hp >= e.max - 0.001) damage *= 1 + (favorite(h, q) ? 0.5 : 0.25) * warlordSpecial(h.id);
@@ -6580,7 +6581,7 @@ OFF</button>
           e.pulseClock = 0;
           e.pulseWarn = false;
           const a = ENEMY_VS_UNIT.boss;
-          for (const q of fieldSquads()) if (dist(q, e) <= P.radius) damageSquad(q, a.damage * e.atkMul * P.power, false, "boss", e);
+          for (const q of fieldSquads()) if (dist(q, e) <= P.radius) damageSquad(q, a.damage * e.atkMul * P.power, false, "blast", e);
           burst(e.x, e.y, INTRUDER.color, "cannon");
         }
         // ===== 八玉の交換：復活の書・召喚の書 =====
@@ -7297,7 +7298,7 @@ OFF</button>
           out.atk += fruitUp(s, "atk");
           out.def += fruitUp(s, "def");
           out.range += fruitUp(s, "rng");
-          return out;
+          return chronicleStats(s,out);
         }
         // 能力の表示（衛生兵は攻撃のかわりに回復量と間隔）
         const statText = (s, st) =>
@@ -8169,7 +8170,7 @@ OFF</button>
           return true;
         }
         // 受ける回復の倍率（鬼神の鎧で下がる）
-        const healTakenMul = (s) => Math.max(0.2, 1 + skillSum(s, "healTaken"));
+        const healTakenMul = (s) => Math.max(0.2, 1 + skillSum(s, "healTaken") + (chronicleHas(s,"in_history_tenacity") && s.hp < rawMaxHp(s)*0.3 ? 0.15 : 0));
         // ===== 主人公 =====
         // 兵士の中から一人を主人公にする（保存データの heroId に兵士のIDだけを持つ。複製はしない）。
         // 主人公は戦死しても消えず、Lv1から再出発する（名前・戦歴・習得したスキルと装備は残る）
@@ -8430,7 +8431,7 @@ OFF</button>
               (1 - skillSum(front, "guard")) *
               (ranged ? (1 - skillSum(front, "rangedGuard")) * (1 - skillSum(front, "resist") * 0.3) * (unitOf(front).rangedWeak || 1) : 1) *
               spear;
-          const dmg = ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard * heroGuard(front, ranged, enemy || (kind ? { kind } : null));
+          const dmg = chronicleGuard(front,ranged,kind) * ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) * guard * heroGuard(front, ranged, enemy || (kind ? { kind } : null));
           const hpBefore = front.hp;
           // 修練場の敵の一撃は、最大HPの6割まで（強い敵でも一撃で倒れ続けない）
           const hit = enemy && enemy.lv ? Math.min(dmg, st.maxHp * TRAINING.maxHit) : dmg;
@@ -8779,9 +8780,9 @@ OFF</button>
         }
         function creditKill(e) {
           const s = e.lastHitBy ? soldierById(e.lastHitBy) : null;
+          chronicleKill(s,e);
           if (!s || !s.alive) return;
           s.kills++;
-          chronicleKill(s,e);
           earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
@@ -9223,6 +9224,7 @@ OFF</button>
         const soldierSave = loadSoldierSave();
         let soldierSaveOk = true;
         function writeSoldierSave() {
+          soldierSave.insightFound=[...new Set([...(soldierSave.insightFound||[]),...soldierSave.soldiers.flatMap(s=>s.insight?.known||[])])];
           soldierSave.honorFound=[...new Set([...(soldierSave.honorFound||[]),...soldierSave.soldiers.flatMap(s=>s.chronicle?.honors||[])])];
           try {
             writeGameSave(
@@ -14033,7 +14035,7 @@ OFF</button>
             );
           }
           if (cat === "skills") {
-            if(e.insight){const k=INSIGHT_SKILLS[e.insight];return "<p><b>💡 "+esc(k.name)+"</b><br>"+esc(k.text)+"<br>再使用 "+k.cd+"秒・適性："+INSIGHT_STYLE_NAMES[k.style]+"<br>自然習得："+JOBS[k.job].name+"・Lv"+INSIGHT_RULES.levels[k.grade]+"・熟練"+INSIGHT_RULES.prof[k.grade]+"以上、新規Lvごとに"+(INSIGHT_RULES.rates[k.grade]*100)+"%<br>指導員の閃き秘伝書でも習得。転職後も保持、既存4冊とは別の有効2枠。</p>";}
+            if(e.insight){const k=INSIGHT_SKILLS[e.insight];if(k.history)return "<p>💡 <b>"+esc(k.name)+"</b><br>"+esc(k.text)+"<br>習得：戦歴「"+CHRONICLE_COUNTER_LABELS[k.counter]+"」が"+k.need+"に到達して保存。Lv10以上・適性："+INSIGHT_STYLE_NAMES[k.style]+"。閃き2枠から選択、指導員で1つ継承できます。</p>";return "<p><b>💡 "+esc(k.name)+"</b><br>"+esc(k.text)+"<br>再使用 "+k.cd+"秒・適性："+INSIGHT_STYLE_NAMES[k.style]+"<br>自然習得："+JOBS[k.job].name+"・Lv"+INSIGHT_RULES.levels[k.grade]+"・熟練"+INSIGHT_RULES.prof[k.grade]+"以上、新規Lvごとに"+(INSIGHT_RULES.rates[k.grade]*100)+"%<br>指導員の閃き秘伝書でも習得。転職後も保持、既存4冊とは別の有効2枠。</p>";}
             if(e.action){const k=JOB_ACTIONS[e.action];return "<p><b>"+esc(k.names[e.stage])+"</b>（"+JOBS[e.action].name+"専用・自動）<br>"+esc(jobActionText(e.action,e.stage))+"<br>職業技の継承は不可。既存の職業スキルは従来どおり継承可能。</p>";}
             if (e.wid) {
               const c = WARLORDS[e.wid];
@@ -14635,7 +14637,7 @@ OFF</button>
         // 引退で残せるスキル：習得したスキル（通常・固有・職業・秘伝）と伝説の能力。ネームド兵士・武将の専用の能力は残せない
         function inheritables(s) {
           const out = [];
-          for(const id of insightOf(s).known)out.push({type:"insight",id});
+          for(const id of insightOf(s).known)if(!INSIGHT_SKILLS[id].history||chronicleCommitted.get(chronicleOf(s).life)?.known.has(id))out.push({type:"insight",id});
           for (const id of learnedOf(s)) if (SOLDIER_SKILLS[id] && !SOLDIER_SKILLS[id].future) out.push({ type: "skill", id });
           if (s.legend) {
             for (const st of s.legend.stats) out.push({ type: "stat", k: st.k, v: st.v });
@@ -18082,6 +18084,8 @@ OFF</button>
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
         function battleHitGarrison(e, dmg, s, extraPierce=0) {
           dmg = e.boss ? bossTakeDamage(e, dmg, s, extraPierce) : siegeArmorDamage(e, dmg, s, extraPierce);
+          if(s && dmg>0)chronicleTouch(s);
+          if(s && (e.kind === "boss" || e.boss) && chronicleHas(s,"in_history_bossHunter"))dmg*=1.05;
           e.hp -= dmg;
           e.hit = 0.18;
           if (e.hp > 0 || e.dead) return false;
@@ -18119,7 +18123,7 @@ OFF</button>
                 ? 1 + (weak - 1) * (1 - skillSum(s, "spearGuard")) * (1 - skillSum(s, "resist"))
                 : 1;
           const hurt =
-            ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
+            chronicleGuard(s,ranged,kind) * ((raw * SQUAD_RULES.defenseScale) / (SQUAD_RULES.defenseScale + st.def)) *
             (g.guard > 0 ? SIEGE_SKILL.guard.hurt : 1) *
             (1 - (g.hero ? warlordGrowth(g.hero).guard || 0 : 0)) *
             (1 - skillSum(s, "guard")) *
@@ -20362,7 +20366,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {CHRONICLE_RULES,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {CHRONICLE_RULES,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

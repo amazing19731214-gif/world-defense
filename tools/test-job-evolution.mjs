@@ -100,8 +100,8 @@ try {
     };
   });
   check(
-    r.jobs === 21 && r.actions === 21 && r.insight === 21,
-    "基本6・上級8・最上級7と42段階の職業技・21閃き技を定義",
+    r.jobs === 21 && r.actions === 21 && r.insight === 28,
+    "基本6・上級8・最上級7と42段階の職業技・職業21＋戦歴7の閃き技を定義",
   );
   r = await p.evaluate(() => {
     const D = WD_DEBUG,
