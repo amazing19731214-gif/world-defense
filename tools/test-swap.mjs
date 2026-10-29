@@ -94,12 +94,12 @@ const box = await page.evaluate(() => {
   const bs = [...document.querySelectorAll("#squadSheet button")].filter((b) => b.getClientRects().length);
   return {
     minH: Math.min(...bs.map((b) => b.getBoundingClientRect().height)),
-    fit: bs.every((b) => b.getBoundingClientRect().right <= innerWidth + 0.5),
+    fit: bs.filter(b => !b.closest("#squadRosterTabs")).every((b) => { const r = b.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 0.5; }) && (() => { const rail = document.getElementById("squadRosterTabs"), r = rail.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 0.5 && getComputedStyle(rail).overflowX === "auto"; })(),
     hScroll: document.documentElement.scrollWidth > innerWidth,
   };
 });
 check(
-  "375×667：編成ボタンは32px以上・横にはみ出さない",
+  "375×667：編成ボタンは32px以上・部隊タブだけ枠内で横スクロール",
   box.minH >= 32 && box.fit && !box.hScroll,
   JSON.stringify(box),
 );
