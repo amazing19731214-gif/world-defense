@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v86（戦歴の閃き・近接と遠距離の耐性）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v87（兵士ごとの成長適性）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -5590,8 +5590,8 @@ OFF</button>
         }
         const squadWarlordHp = q => { const h = q && heroOnSquad(q); return h ? 1 + (warlordGrowth(h.id).hp || 0) : 1; };
         const rawMaxHp = (s) => {
-          const c = unitOf(s), lv = SQUAD_RULES.growthLv(s.level); // HPはこれまでの成長のまま（ポイントでは上がらない）
-          return legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1) * squadWarlordHp(squadById(s.squadId))));
+          // HPの個人成長は基礎値に一度だけ反映する。
+          return legendHp(s, Math.round(chronicleGrowthBase(s,"hp") * (JOBS[jobOf(s)].mods.hp || 1) * (1 + skillSum(s, "hp")) * (squadPassive(squadById(s.squadId)).hpMul || 1) * squadWarlordHp(squadById(s.squadId))));
         };
         const baseTowerMax = (t) => Math.round(TOWER_HP.base[t.type] * (1 + TOWER_HP.perLevel * (t.level - 1)) * (t.npc ? 1 : towerGrowth(t.type).hp));
         const enemyToken = (e) => e.warlordId || (e.warlordId = ++enemySerial);
@@ -7270,7 +7270,6 @@ OFF</button>
         // 能力は兵種の基本値＋レベル成長＋称号・階級・スキル・ステータスポイントから毎回計算する（積み上がらない）
         function soldierStats(s, ignoreHero = false) {
           const c = unitOf(s),
-            lv = SQUAD_RULES.growthLv(s.level),
             t = rankTitle(s),
             ls = s.lastSurvivor ? SQUAD_RULES.lastSurvivor : { atk: 0, def: 0 },
             el = s.level >= SQUAD_RULES.eliteLevel ? SQUAD_RULES.elite : { atk: 0, def: 0 };
@@ -7281,13 +7280,13 @@ OFF</button>
           const jm = JOBS[jobOf(s)].mods,
             pf = 1 + JOB_RULES.profBonus * profLv(s);
           const out = {
-            maxHp: ignoreHero ? legendHp(s, Math.round((c.hp + c.grow.hp * lv) * (jm.hp || 1) * (1 + skillSum(s, "hp")))) : rawMaxHp(s),
-            atk: (c.atk + c.grow.atk * lv) * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * (jm.atk || 1) * pf * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
-            def: (c.def + c.grow.def * lv) * (1 + t.def + ls.def + el.def + skillSum(s, "def")) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
+            maxHp: ignoreHero ? legendHp(s, Math.round(chronicleGrowthBase(s,"hp") * (jm.hp || 1) * (1 + skillSum(s, "hp")))) : rawMaxHp(s),
+            atk: chronicleGrowthBase(s,"atk") * (1 + t.atk + ls.atk + el.atk + skillSum(s, "atk")) * (1 + pointBonus(s, "atk")) * (jm.atk || 1) * pf * hm.atk * (ignoreHero ? 1 : soldierHeroAtk(s)),
+            def: chronicleGrowthBase(s,"def") * (1 + t.def + ls.def + el.def + skillSum(s, "def")) * (1 + pointBonus(s, "def")) * (jm.def || 1) * pf * hm.def,
             rate: ((c.rate * (1 - skillSum(s, "haste"))) / (1 + pointBonus(s, "spd"))) * (jm.rate || 1) / hm.speed * support.interval,
             range: c.range * (1 + skillSum(s, "range")) * (1 + pointBonus(s, "rng")) * hm.range * support.range,
             // 衛生兵の回復量（ほかの兵種は 0）
-            heal: ((c.heal || 0) + ((c.grow && c.grow.heal) || 0) * lv) * (1 + skillSum(s, "healMul")) * support.heal,
+            heal: chronicleGrowthBase(s,"heal") * (1 + skillSum(s, "healMul")) * support.heal,
           };
           // 伝説の能力値（自分の有効な1つ＋装備している書）：割合は足してから掛け、固定値は足す
           const lv2 = (k) => legendStatVal(s, k);
@@ -7422,6 +7421,7 @@ OFF</button>
           while (s.level < SQUAD_RULES.maxLevel && s.xp >= SQUAD_RULES.xpToLevel(s.level)) {
             s.xp -= SQUAD_RULES.xpToLevel(s.level);
             s.level++;
+            chronicleGrow(s,s.level-1);
             // 最大HPだけ上がり、現在HPは回復しない（成長を回復手段にしない）
             logHistory(s, "Lv" + s.level + " に上がった");
             s.lvUp = 1;
@@ -8196,6 +8196,7 @@ OFF</button>
           s.bestLevel = Math.max(s.bestLevel || 1, s.level);
           s.deaths = (s.deaths || 0) + 1;
           s.level = 1;
+          chronicleResetGrowth(s);
           s.xp = 0;
           s.pts = emptyPoints(); // ステータスポイントと能力は初期値へ（スキル・スキルのレベル・装備・名前・戦歴は残す）
           // 職業は初期職へ（なったことのある職業・熟練度・転職履歴は残るので、いつでも戻れる）
@@ -14994,7 +14995,7 @@ OFF</button>
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) + chronicleHonorBlock(s) + chronicleBlock(s) +
+            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleHonorBlock(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -20366,7 +20367,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {CHRONICLE_RULES,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {CHRONICLE_RULES,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
