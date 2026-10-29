@@ -1,0 +1,654 @@
+{
+  "version": "v86",
+  "commit": "76d5d39a3ba1c14f989aefd755405f9a273825eb",
+  "seed": {
+    "seq": 24,
+    "squadSeq": 3,
+    "soldiers": [
+      {
+        "id": 1,
+        "type": "ashigaru",
+        "job": "ashigaru",
+        "jobs": [
+          "ashigaru"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 2,
+        "type": "ashigaru",
+        "job": "ashigaru",
+        "jobs": [
+          "ashigaru"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 3,
+        "type": "ashigaru",
+        "job": "ashigaru",
+        "jobs": [
+          "ashigaru"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 4,
+        "type": "ashigaru",
+        "job": "ashigaru",
+        "jobs": [
+          "ashigaru"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 5,
+        "type": "spearman",
+        "job": "spearman",
+        "jobs": [
+          "spearman"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 6,
+        "type": "spearman",
+        "job": "spearman",
+        "jobs": [
+          "spearman"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 7,
+        "type": "spearman",
+        "job": "spearman",
+        "jobs": [
+          "spearman"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 8,
+        "type": "spearman",
+        "job": "spearman",
+        "jobs": [
+          "spearman"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 9,
+        "type": "archer",
+        "job": "archer",
+        "jobs": [
+          "archer"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 10,
+        "type": "archer",
+        "job": "archer",
+        "jobs": [
+          "archer"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 1,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 11,
+        "type": "archer",
+        "job": "archer",
+        "jobs": [
+          "archer"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 12,
+        "type": "archer",
+        "job": "archer",
+        "jobs": [
+          "archer"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 13,
+        "type": "gunner",
+        "job": "gunner",
+        "jobs": [
+          "gunner"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 14,
+        "type": "gunner",
+        "job": "gunner",
+        "jobs": [
+          "gunner"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 15,
+        "type": "gunner",
+        "job": "gunner",
+        "jobs": [
+          "gunner"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 16,
+        "type": "gunner",
+        "job": "gunner",
+        "jobs": [
+          "gunner"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 17,
+        "type": "cavalry",
+        "job": "cavalry",
+        "jobs": [
+          "cavalry"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 18,
+        "type": "cavalry",
+        "job": "cavalry",
+        "jobs": [
+          "cavalry"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 19,
+        "type": "cavalry",
+        "job": "cavalry",
+        "jobs": [
+          "cavalry"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 20,
+        "type": "cavalry",
+        "job": "cavalry",
+        "jobs": [
+          "cavalry"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 2,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 21,
+        "type": "medic",
+        "job": "medic",
+        "jobs": [
+          "medic"
+        ],
+        "level": 1,
+        "bestLevel": 1,
+        "squadId": 3,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 22,
+        "type": "medic",
+        "job": "medic",
+        "jobs": [
+          "medic"
+        ],
+        "level": 30,
+        "bestLevel": 30,
+        "squadId": 3,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 23,
+        "type": "medic",
+        "job": "medic",
+        "jobs": [
+          "medic"
+        ],
+        "level": 100,
+        "bestLevel": 100,
+        "squadId": 3,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      },
+      {
+        "id": 24,
+        "type": "medic",
+        "job": "medic",
+        "jobs": [
+          "medic"
+        ],
+        "level": 9999,
+        "bestLevel": 9999,
+        "squadId": 3,
+        "kills": 40,
+        "wavesSurvived": 10,
+        "skills": [],
+        "learned": []
+      }
+    ],
+    "squads": [
+      {
+        "id": 1,
+        "type": "ashigaru",
+        "slot": 0
+      },
+      {
+        "id": 2,
+        "type": "ashigaru",
+        "slot": 1
+      },
+      {
+        "id": 3,
+        "type": "ashigaru",
+        "slot": 2
+      }
+    ],
+    "fallen": []
+  },
+  "stats": [
+    {
+      "id": 1,
+      "stats": {
+        "maxHp": 70,
+        "atk": 7.5600000000000005,
+        "def": 4.32,
+        "rate": 0.9,
+        "range": 40,
+        "heal": 0
+      }
+    },
+    {
+      "id": 2,
+      "stats": {
+        "maxHp": 222,
+        "atk": 33.67400000000001,
+        "def": 25.990000000000002,
+        "rate": 0.9,
+        "range": 40,
+        "heal": 0
+      }
+    },
+    {
+      "id": 3,
+      "stats": {
+        "maxHp": 362,
+        "atk": 57.404,
+        "def": 45.76500000000001,
+        "rate": 0.9,
+        "range": 40,
+        "heal": 0
+      }
+    },
+    {
+      "id": 4,
+      "stats": {
+        "maxHp": 1954,
+        "atk": 327.23096428637376,
+        "def": 270.6208035719781,
+        "rate": 0.9,
+        "range": 40,
+        "heal": 0
+      }
+    },
+    {
+      "id": 5,
+      "stats": {
+        "maxHp": 95,
+        "atk": 8.64,
+        "def": 12.96,
+        "rate": 1.1,
+        "range": 48,
+        "heal": 0
+      }
+    },
+    {
+      "id": 6,
+      "stats": {
+        "maxHp": 304,
+        "atk": 34.804,
+        "def": 56.50000000000001,
+        "rate": 1.1,
+        "range": 48,
+        "heal": 0
+      }
+    },
+    {
+      "id": 7,
+      "stats": {
+        "maxHp": 497,
+        "atk": 58.534000000000006,
+        "def": 96.05000000000001,
+        "rate": 1.1,
+        "range": 48,
+        "heal": 0
+      }
+    },
+    {
+      "id": 8,
+      "stats": {
+        "maxHp": 2685,
+        "atk": 328.36096428637376,
+        "def": 545.7616071439562,
+        "rate": 1.1,
+        "range": 48,
+        "heal": 0
+      }
+    },
+    {
+      "id": 9,
+      "stats": {
+        "maxHp": 45,
+        "atk": 9.72,
+        "def": 1.08,
+        "rate": 1.2,
+        "range": 150,
+        "heal": 0
+      }
+    },
+    {
+      "id": 10,
+      "stats": {
+        "maxHp": 140,
+        "atk": 44.52200000000001,
+        "def": 11.865000000000002,
+        "rate": 1.2,
+        "range": 150,
+        "heal": 0
+      }
+    },
+    {
+      "id": 11,
+      "stats": {
+        "maxHp": 228,
+        "atk": 76.16200000000002,
+        "def": 21.7525,
+        "rate": 1.2,
+        "range": 150,
+        "heal": 0
+      }
+    },
+    {
+      "id": 12,
+      "stats": {
+        "maxHp": 1222,
+        "atk": 435.931285715165,
+        "def": 134.18040178598906,
+        "rate": 1.2,
+        "range": 150,
+        "heal": 0
+      }
+    },
+    {
+      "id": 13,
+      "stats": {
+        "maxHp": 40,
+        "atk": 21.6,
+        "def": 1.08,
+        "rate": 2.4,
+        "range": 165,
+        "heal": 0
+      }
+    },
+    {
+      "id": 14,
+      "stats": {
+        "maxHp": 116,
+        "atk": 78.42200000000001,
+        "def": 11.865000000000002,
+        "rate": 2.4,
+        "range": 165,
+        "heal": 0
+      }
+    },
+    {
+      "id": 15,
+      "stats": {
+        "maxHp": 186,
+        "atk": 129.83700000000002,
+        "def": 21.7525,
+        "rate": 2.4,
+        "range": 165,
+        "heal": 0
+      }
+    },
+    {
+      "id": 16,
+      "stats": {
+        "maxHp": 982,
+        "atk": 714.462089287143,
+        "def": 134.18040178598906,
+        "rate": 2.4,
+        "range": 165,
+        "heal": 0
+      }
+    },
+    {
+      "id": 17,
+      "stats": {
+        "maxHp": 85,
+        "atk": 11.88,
+        "def": 6.48,
+        "rate": 1,
+        "range": 60,
+        "heal": 0
+      }
+    },
+    {
+      "id": 18,
+      "stats": {
+        "maxHp": 256,
+        "atk": 46.78200000000001,
+        "def": 28.250000000000004,
+        "rate": 1,
+        "range": 60,
+        "heal": 0
+      }
+    },
+    {
+      "id": 19,
+      "stats": {
+        "maxHp": 414,
+        "atk": 78.42200000000001,
+        "def": 48.025000000000006,
+        "rate": 1,
+        "range": 60,
+        "heal": 0
+      }
+    },
+    {
+      "id": 20,
+      "stats": {
+        "maxHp": 2204,
+        "atk": 438.191285715165,
+        "def": 272.8808035719781,
+        "rate": 1,
+        "range": 60,
+        "heal": 0
+      }
+    },
+    {
+      "id": 21,
+      "stats": {
+        "maxHp": 55,
+        "atk": 0,
+        "def": 3.24,
+        "rate": 3,
+        "range": 120,
+        "heal": 5
+      }
+    },
+    {
+      "id": 22,
+      "stats": {
+        "maxHp": 169,
+        "atk": 0,
+        "def": 20.566000000000006,
+        "rate": 3,
+        "range": 120,
+        "heal": 12.600000000000001
+      }
+    },
+    {
+      "id": 23,
+      "stats": {
+        "maxHp": 274,
+        "atk": 0,
+        "def": 36.38600000000001,
+        "rate": 3,
+        "range": 120,
+        "heal": 19.6
+      }
+    },
+    {
+      "id": 24,
+      "stats": {
+        "maxHp": 1468,
+        "atk": 0,
+        "def": 216.27064285758252,
+        "rate": 3,
+        "range": 120,
+        "heal": 99.19497471574446
+      }
+    }
+  ]
+}

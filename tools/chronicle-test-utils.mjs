@@ -12,7 +12,7 @@ export async function harness() {
     errors = [];
   return {
     errors,
-    async setup() {
+    async setup(seed = null) {
       const c = await browser.newContext({
         viewport: { width: 390, height: 844 },
         isMobile: true,
@@ -49,6 +49,12 @@ export async function harness() {
           JSON.stringify({ owned: {}, forge: { scrolls: { revive: 2 } } }),
         );
       });
+      if (seed)
+        await c.addInitScript((seed) => {
+          if (sessionStorage.customSeed) return;
+          sessionStorage.customSeed = "1";
+          localStorage.setItem("worldDefense.soldiers.v1", JSON.stringify(seed));
+        }, seed);
       const p = await c.newPage();
       p.on("pageerror", (e) => errors.push(e.message));
       await p.goto("http://127.0.0.1:" + server.address().port + "/?debug");

@@ -56,6 +56,7 @@ function cleanChronicle(v, s = {}) {
   );
   out.pending = out.pending.filter((id) => !out.claimed.includes(id));
   out.selected = out.honors.includes(o.selected) ? o.selected : null;
+  out.aptitude = cleanChronicleAptitude(o.aptitude);
   return out;
 }
 function chronicleOf(s) {
@@ -609,4 +610,94 @@ function chronicleAction(s, c, event) {
 function chroniclePulse(s, name, fx) {
   const pos = battle ? battle.groups.find((g) => g.list.includes(s)) : squadById(s.squadId);
   if (pos) evolutionFx({ pos }, name, fx, [pos], true);
+}
+const CHRONICLE_APTITUDES = Object.freeze({
+  mighty: { name: "豪腕型", grow: { hp: 0.95, atk: 1.1, def: 1, heal: 1 } },
+  stout: { name: "頑健型", grow: { hp: 1.05, atk: 0.95, def: 1.05, heal: 1 } },
+  healer: { name: "救護型", grow: { hp: 1, atk: 0.95, def: 1, heal: 1.1 } },
+  balanced: { name: "万能型", grow: { hp: 1.02, atk: 1.02, def: 1.02, heal: 1.02 } },
+});
+function cleanChronicleAptitude(v) {
+  if (!v || v.version !== 1 || !Object.hasOwn(CHRONICLE_APTITUDES, v.type)) return null;
+  const a = {
+    version: 1,
+    type: v.type,
+    level: intIn(v.level, 1, SQUAD_RULES.maxLevel, 1),
+    startAt: intIn(v.startAt, 1, SQUAD_RULES.maxLevel, 1),
+    delta: {},
+    earned: {},
+  };
+  for (const k of ["hp", "atk", "def", "heal"]) {
+    a.earned[k] = Number.isFinite(v.earned?.[k]) ? Math.max(0, Math.min(1e10, v.earned[k])) : 0;
+    a.delta[k] = Number.isFinite(v.delta?.[k])
+      ? Math.max(-a.earned[k] * 0.1, Math.min(a.earned[k] * 0.1, v.delta[k]))
+      : 0;
+  }
+  return a;
+}
+function chronicleAptitude(s, anchor = s.level) {
+  const c = chronicleOf(s);
+  if (c.aptitude) return c.aptitude;
+  const types = Object.keys(CHRONICLE_APTITUDES),
+    type = types[insightHash("aptitude:" + (s.named ? "named:" + s.named : c.life)) % types.length];
+  return (c.aptitude = {
+    version: 1,
+    type,
+    level: anchor,
+    startAt: anchor,
+    delta: { hp: 0, atk: 0, def: 0, heal: 0 },
+    earned: { hp: 0, atk: 0, def: 0, heal: 0 },
+  });
+}
+function chronicleGrow(s, before) {
+  const a = chronicleAptitude(s, before);
+  if (!(s.level > before) || a.level >= s.level) return;
+  const diff = Math.max(0, SQUAD_RULES.growthLv(s.level) - SQUAD_RULES.growthLv(Math.max(before, a.level))),
+    unit = unitOf(s),
+    rates = CHRONICLE_APTITUDES[a.type].grow;
+  for (const k of ["hp", "atk", "def", "heal"]) {
+    const amount = (unit.grow?.[k] || 0) * diff;
+    a.earned[k] = Math.min(1e10, a.earned[k] + amount);
+    a.delta[k] = Math.max(
+      -a.earned[k] * 0.1,
+      Math.min(a.earned[k] * 0.1, a.delta[k] + amount * (rates[k] - 1)),
+    );
+  }
+  a.level = s.level;
+}
+function chronicleGrowthBase(s, k) {
+  const c = unitOf(s),
+    base = (c[k] || 0) + (c.grow?.[k] || 0) * SQUAD_RULES.growthLv(s.level),
+    a = chronicleAptitude(s);
+  if (k === "heal" && !c.heal) return 0;
+  const limit = (c.grow?.[k] || 0) * SQUAD_RULES.growthLv(s.level) * 0.1;
+  return Math.max(k === "hp" ? 1 : 0, base + Math.max(-limit, Math.min(limit, a.delta[k])));
+}
+function chronicleResetGrowth(s) {
+  const a = chronicleAptitude(s);
+  a.level = a.startAt = 1;
+  for (const k of ["hp", "atk", "def", "heal"]) a.delta[k] = a.earned[k] = 0;
+}
+function chronicleAptitudeBlock(s) {
+  const a = chronicleAptitude(s),
+    type = CHRONICLE_APTITUDES[a.type],
+    labels = { hp: "HP", atk: "攻撃", def: "防御", heal: "回復" };
+  return (
+    '<details class="chronicle-aptitude"><summary>🌱 成長適性：' +
+    type.name +
+    "</summary><p><small>職業の成長分だけに適用。装備・書・果実はそのままです。転職・復活でも適性は変わりません。</small></p><p>" +
+    Object.entries(type.grow)
+      .map(
+        ([k, v]) =>
+          labels[k] +
+          "の伸び：" +
+          (v > 1 ? "得意（+" : v < 1 ? "控えめ（" : "普通（") +
+          Math.round((v - 1) * 100) +
+          "%）",
+      )
+      .join("<br>") +
+    "</p><p><small>この人生ではLv" +
+    a.startAt +
+    "から適用。以前のレベル分には遡及しません。</small></p></details>"
+  );
 }
