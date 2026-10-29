@@ -1,3 +1,4 @@
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 // 共通編成から対象1人の育成へ：実際の装備・転職・命名・引退と旧経路・保存・スマホを確認。
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,6 +16,7 @@ async function setup(width=390,debug=true){
   const save={seq:80,squadSeq:8,heroId:1,squads:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',slot:i})),soldiers:Array.from({length:80},(_,i)=>({id:i+1,type:i===12?'gunner':'spearman',squadId:Math.floor(i/10)+1,level:i===11?5:120,xp:0,name:i===12?'雑賀孫市':i===10?'老兵':null,named:i===12?'magoichi':null,skills:[],learned:[]})),fallen:[]};
   localStorage.setItem(S,JSON.stringify(save));localStorage.setItem(W,JSON.stringify({owned:{nobunaga:2},tickets:7,forge:{seq:1,items:[{uid:1,id:'nanbando',owner:null,lock:false}],shards:0,books:{},koban:800}}));
  },{S,W});
+ await installJobBookTestFixtures(c);
  const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{p,c};
 }
 const open=async(p,id)=>{if(!await p.locator('#squadSheet').isVisible())await p.locator('#organize').click();await p.locator(`[data-formation-soldier="${id}"]`).click();};
@@ -27,6 +29,7 @@ try{
   p.once('dialog',d=>d.accept('編成で命名'));await p.locator('[data-name="11"]').click();check(await p.evaluate(()=>WD_DEBUG.state().soldiers.find(s=>s.id===11).name==='編成で命名'),'編成の育成画面から実際に名前を変更');
   await p.locator('[data-gear-open="11"]').click();await p.locator('[data-gear-on="1"]').click();check(await p.evaluate(()=>WD_DEBUG.forgeApi.save().items[0].owner===11),'編成で選んだ兵士へ防具を装着');
   await p.keyboard.press('Escape');check(await p.locator('#gearSheet').isHidden()&&await p.locator('#soldierSheet').isVisible()&&/南蛮胴/.test(await p.locator('#soldierList').innerText()),'装備を閉じると更新済みの対象詳細へ戻る');
+  await p.evaluate(() => seedJobEntry(WD_DEBUG.state().soldiers.find(s => s.id === 11), ["samurai"]));
   await p.locator('[data-job-open="11"]').click();await p.locator('[data-job-to="samurai"]').click();await p.locator('#jobClose').click();check(await p.evaluate(()=>WD_DEBUG.state().soldiers.find(s=>s.id===11).job==='samurai')&&/侍/.test(await p.locator('#soldierList').innerText()),'転職を実行し詳細へ反映');
   await p.locator('#soldierClose').click();check(await p.locator('#squadSheet').isVisible()&&/編成で命名/.test(await p.locator('#squadList').innerText())&&Math.abs(await p.locator('#squadSheet .sheet').evaluate(e=>e.scrollTop)-scroll)<5,'編成へ戻り名前・職業・元のスクロール位置を維持');
   await p.locator('#squadClose').click();await p.reload();check(await p.evaluate(()=>{const s=WD_DEBUG.state().soldiers.find(s=>s.id===11);return s.name==='編成で命名'&&s.job==='samurai'&&WD_DEBUG.forgeApi.save().items[0].owner===11&&WD_DEBUG.heroApi.save().tickets===7;}),'再読込でも命名・転職・装備・通貨を保持');

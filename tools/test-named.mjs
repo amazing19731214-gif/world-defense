@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installJobBookTestFixtures } from "./job-book-test-utils.mjs";
 // ネームド兵士（戦国の有名人物）の確認：データ（武将との重複なし・兵種）、抽選の確率、対応する兵種で登場、同時に重複しない、
 // 費用は通常どおり、固有スキル、戦死・再登場（Lv1）、保存と以前の保存データ、戦国図鑑（発見・戦死しても残る・再読み込み）、画面
 //   node tools/test-named.mjs
@@ -43,6 +44,7 @@ async function newContext(seeds = {}, width = 390, height = 844) {
     isMobile: true,
     hasTouch: true,
   });
+  await installJobBookTestFixtures(context);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -443,7 +445,8 @@ r = await ev(page, () => {
   };
   hanzo.level = 29;
   out.lv29 = J.changeJob(hanzo, "ninja");
-  for (const s of [hanzo, kotaro, normal]) s.level = 30;
+  for (const s of [hanzo, kotaro, normal]) { s.level = 30; seedJobEntry(s, ["ninja"]); }
+  a.saveRoster();
   out.ok = [J.changeJob(hanzo, "ninja"), J.changeJob(kotaro, "ninja"), J.changeJob(normal, "ninja")];
   out.after = [hanzo, kotaro].map((s) => s.named + ":" + s.name + ":" + s.type + ":" + s.job);
   out.rate = a.soldierStats(kotaro).rate / a.soldierStats(normal).rate;
