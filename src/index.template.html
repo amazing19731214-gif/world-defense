@@ -2495,7 +2495,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v87（兵士ごとの成長適性）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v88（戦歴・称号・個人成長の完成）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4141,6 +4141,7 @@ OFF</button>
             for (const [key,value] of Object.entries(gameSaveBatch)) gameSaveObserved.set(key,value);
             gameSaveBatch = null; // ログへの書き込みが確定点。転記失敗時にも読み込める。
             try { flushBookTransaction(); } catch (err) { /* 次の保存で再試行 */ }
+            chronicleSyncCommitted();
             scheduleChronicleNotices();
             scheduleInsightFlush();
             scheduleJobDropFlush();
@@ -4156,6 +4157,7 @@ OFF</button>
             flushBookTransaction();
             localStorage.setItem(key, value);
             gameSaveObserved.set(key,value);
+            if(key === "worldDefense.soldiers.v1")chronicleSyncCommitted();
             scheduleChronicleNotices();
           }
         }
@@ -6722,6 +6724,7 @@ OFF</button>
                 kills: rec.kills,
               });
               chronicleAdd(x.chronicle,"revivals");
+              x.chronicle.revivalCharge=true;
               x.chronicle.segment = null;
               chronicleLog(x,"復活の書で帰還");
               x.hp = soldierStats(x).maxHp;
@@ -8217,6 +8220,7 @@ OFF</button>
         // 兵士が部隊としてウェーブに参加した時点で戦闘数を数える
         function joinWave(q) {
           if (!playing || q.state !== "deployed") return;
+          chronicleDeployMany(members(q).filter(s=>!s.inWave));
           for (const s of members(q))
             if (!s.inWave) {
               s.inWave = true;
@@ -8787,6 +8791,7 @@ OFF</button>
           earnXp(s, "kill", 1, e);
         }
         function squadsWaveStart() {
+          chronicleDeployMany(fieldSquads().flatMap(q=>members(q)).filter(s=>!s.inWave));
           for (const h of ownedHeroes()) { h.waveSeconds = 0; h.seen.clear(); h.economyGold = 0; if (h.couponWave < wave) h.couponWave = -1; }
           for (const q of squads) joinWave(q);
         }
@@ -14995,7 +15000,7 @@ OFF</button>
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleHonorBlock(s) + chronicleBlock(s) +
+            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleHonorBlock(s) + chronicleGoals(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -17931,6 +17936,7 @@ OFF</button>
           g.state = "march";
           g.d = 0;
           Object.assign(g, pathAt(g.path, 0));
+          chronicleDeployMany(g.list);
           for (const s of g.list) {
             s.battles++;
             s.cd = 0.3 + Math.random() * 0.4;
@@ -20367,7 +20373,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {CHRONICLE_RULES,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

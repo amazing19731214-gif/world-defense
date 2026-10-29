@@ -116,8 +116,13 @@ try {
       };
     });
     check(
-      v.made === null && v.err === null && v.seed === v.oldSeed && v.known.length === 2 && v.trial === 100,
-      "戦死の控えと復活の書で同じ閃き・seed・評価位置を引き継ぐ",
+      v.made === null &&
+        v.err === null &&
+        v.seed === v.oldSeed &&
+        v.known.length === 3 &&
+        ["in_ashigaru", "in_medic", "in_history_revival"].every((id) => v.known.includes(id)) &&
+        v.trial === 100,
+      "戦死の控えと復活の書で元の閃き・seed・評価位置を保持し、黄泉返りだけ追加",
     );
     v = await p.evaluate(() => {
       const D = WD_DEBUG,

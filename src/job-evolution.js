@@ -394,9 +394,7 @@ function insightBlock(s) {
               esc(k.name) +
               "</button><br><small>" +
               esc(k.text) +
-              "／再使用" +
-              k.cd +
-              "秒<br>" +
+              (k.history && !k.cd ? "／条件中は常時<br>" : "／再使用"+k.cd+"秒<br>") +
               (fit
                 ? "適性あり"
                 : "現在使用不可：" +
