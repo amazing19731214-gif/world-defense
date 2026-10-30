@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v94（戦歴で育つ兵士の能力）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v95（中東・インド編と兵士の能力表示）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -10651,11 +10651,16 @@ function chronicleWarBonusBlock(s) {
         }
         // 待ち時間の残り（防衛戦と攻城戦は時計が別なので、待ち時間より長く残っていたら古い値として無視する）
         const coolLeft = (until, now, len) => (until > now && until - now <= len ? until - now : 0);
-        // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
-        function evadeHit(s, now) {
+        // 能力表示と実判定で同じ合計・上限を使う。発動後の待ちは確率と分ける。
+        function soldierEvadeChance(s) {
           const id = battle ? battle.groups.find(g => g.list.includes(s))?.hero : heroOnSquad(squadById(s.squadId))?.id;
           const p = chronicleWarBonus(s).evade + chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
-          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p)) return false;
+          return Math.min(0.4, p);
+        }
+        // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
+        function evadeHit(s, now) {
+          const p = soldierEvadeChance(s);
+          if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= p) return false;
           s.evadeUntil = now + 2;
           return true;
         }
@@ -18128,7 +18133,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         function soldierCard(s) {
           const max = s.level >= SQUAD_RULES.maxLevel,
             need = SQUAD_RULES.xpToLevel(s.level),
-            st = soldierStats(s);
+            group = battle?.groups.find(g => g.list.includes(s)),
+            st = group ? battleStats(group, s) : soldierStats(s);
           let act = "";
           if (!s.named && Math.max(s.level, s.bestLevel || 1) >= SQUAD_RULES.nameLevel)
             act +=
@@ -18172,7 +18178,11 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             st.maxHp +
             statText(s, st) +
             (SOLDIER_TYPES[s.type].heal ? "・治療 " + (s.heals || 0) + "回" : "") +
-            "</small>" +
+            '</small><p class="soldier-combat-status"><b>' +
+            (unitOf(s).heal ? "回復間隔：" : "攻撃間隔：") +
+            (st.rate * (group?.frozen > 0 ? 2 : 1)).toFixed(2) +
+            "秒／回避率：" + (soldierEvadeChance(s) * 100).toFixed(1) +
+            "%</b><br><small>スキル・適性・装備・戦歴・配属武将を反映。ゲーム内時間。回避後2秒は再発動しません。</small></p>" +
             (s.named
               ? '<p class="famed-skill">⭐ ネームド兵士・固有「' +
                 esc(NAMED_SOLDIERS[s.named].skill.name) +
@@ -19417,6 +19427,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         const SIEGE_TERRAIN = {
           forest: { name: "密林", from: 260, to: 430, speed: 0.75, text: "密林では味方の進軍速度75%" },
           river: { name: "渡河", at: 480, wait: 1.5, text: "川では部隊ごとに1回、渡河待ち1.5秒（攻撃・回復・被弾は継続）" },
+          desert: { name: "砂漠", from: 260, to: 460, speed: 0.85, color: "#d6a34788", labelColor: "#ffe1a0", label: "砂漠 速度85%", text: "砂漠では味方の進軍速度85%（攻撃・回復間隔は変化なし）" },
         };
         const siegeTerrainText = (C) => (C.terrain || []).map((id) => SIEGE_TERRAIN[id].text).join("／");
         const siegeMarchFactor = (B, d) => (B.terrain || []).reduce((n, id) => {
@@ -19981,8 +19992,61 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             },
           },
         });
-        const CHAPTER_ORDER = ["japan", "korea", "china", "southeast"];
-        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"], ["cn_nanhai", "se_redriver", "紅河航路"]];
+        // 第五章。地名を参考にした架空の城・勢力で、既存の章の能力や報酬を変えない。
+        const MIDDLEEAST_LEVELS = {
+          me_malabar: 1750, me_deccan: 1800, me_gujarat: 1850,
+          me_sindh: 1900, me_makran: 1950, me_hormuz: 2000,
+          me_oman: 2050, me_arabia: 2100, me_mesopotamia: 2150,
+          me_levant: 2200, me_anatolia: 2250, me_nile: 2300,
+        };
+        Object.assign(CHAPTERS, {
+          middleeast: {
+            name: "中東・インド", icon: "🏜️", entry: "me_malabar", clearTickets: 12, requiredChapter: "southeast", bonusProvince: "me_nile",
+            intro: "東南アジアの海峡諸港から西洋航路へ。砂漠では道の一部で味方の進軍速度85%、攻撃・回復間隔は変化しません。要塞都市には城門と防衛塔、重装騎兵には貫通・装甲無視を組み合わせよう。地名を参考にした架空の城・勢力です。",
+            kuni: [
+              ["me_malabar", "マラバール", "me_india", "me_fort_malabar", "蒼帆の海門", "砂海守護隊・マラバール", ["sea", "spear"]],
+              ["me_deccan", "デカン", "me_india", "me_fort_deccan", "赤砂の砦", "砂海守護隊・デカン", ["cavalry", "archer"]],
+              ["me_gujarat", "グジャラート", "me_india", "me_fort_gujarat", "月輪の都城", "砂海守護隊・グジャラート", ["fortress", "crossbow"]],
+              ["me_sindh", "シンド", "me_persia", "me_fort_sindh", "白河の関", "砂海守護隊・シンド", ["spear", "archer"]],
+              ["me_makran", "マクラン", "me_persia", "me_fort_makran", "陽炎の砦", "砂海守護隊・マクラン", ["heavyCavalry"]],
+              ["me_hormuz", "ホルムズ", "me_persia", "me_fort_hormuz", "双海の門", "砂海守護隊・ホルムズ", ["fortress", "sea"]],
+              ["me_oman", "オマーン", "me_desert", "me_fort_oman", "琥珀城", "砂海守護隊・オマーン", ["heavyCavalry", "spear"]],
+              ["me_arabia", "アラビア", "me_desert", "me_fort_arabia", "砂星の砦", "砂海守護隊・アラビア", ["cavalry", "crossbow"]],
+              ["me_mesopotamia", "メソポタミア", "me_desert", "me_fort_mesopotamia", "双河の都城", "砂海守護隊・メソポタミア", ["fortress", "crossbow"]],
+              ["me_levant", "レバント", "me_west", "me_fort_levant", "星灯の関", "砂海守護隊・レバント", ["spear", "gun"]],
+              ["me_anatolia", "アナトリア", "me_west", "me_fort_anatolia", "天穹の砦", "砂海守護隊・アナトリア", ["heavyCavalry", "archer"]],
+              ["me_nile", "ナイル", "me_west", "me_fort_nile", "双陽の都城", "砂海守護隊・ナイル", ["fortress", "heavyCavalry", "warlord"]],
+            ],
+            land: `
+              me_malabar: me_deccan
+              me_deccan: me_malabar me_gujarat
+              me_gujarat: me_deccan me_sindh
+              me_sindh: me_gujarat me_makran
+              me_makran: me_sindh me_hormuz
+              me_hormuz: me_makran me_oman me_mesopotamia
+              me_oman: me_hormuz me_arabia
+              me_arabia: me_oman me_mesopotamia
+              me_mesopotamia: me_hormuz me_arabia me_levant
+              me_levant: me_mesopotamia me_anatolia me_nile
+              me_anatolia: me_levant me_nile
+              me_nile: me_levant me_anatolia
+            `,
+            sea: [], roads: { me_india: "インド西岸", me_persia: "ペルシャ沿岸", me_desert: "砂漠と双河", me_west: "西方の要塞" },
+            levels: MIDDLEEAST_LEVELS,
+            // 槍と鉄砲の重なるレバントは、推奨Lvの40人編成での実戦結果から3%補正。
+            power: (dist, styles, id) => castlePowerAtLevel(625) * Math.sqrt(MIDDLEEAST_LEVELS[id] / 625) * (id === "me_levant" ? 0.97 : 1),
+            scaleGuards: true,
+            hp: (lv, styles) => Math.round(43775 * Math.sqrt(lv / 1100) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100,
+            terrain: {
+              me_malabar: [], me_deccan: ["desert"], me_gujarat: [],
+              me_sindh: ["river"], me_makran: ["desert"], me_hormuz: [],
+              me_oman: ["desert"], me_arabia: ["desert"], me_mesopotamia: ["desert", "river"],
+              me_levant: ["desert"], me_anatolia: [], me_nile: ["desert", "river"],
+            },
+          },
+        });
+        const CHAPTER_ORDER = ["japan", "korea", "china", "southeast", "middleeast"];
+        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"], ["cn_nanhai", "se_redriver", "紅河航路"], ["se_straits", "me_malabar", "西洋航路"]];
         (() => {
           for (const cid of CHAPTER_ORDER) {
             const CH = CHAPTERS[cid],
@@ -22594,15 +22658,15 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                 const p = pathAt(path, d);
                 if (d === from) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
               }
-              ctx.strokeStyle = t.speed ? "#276b3870" : "#69c9eeaa";
+              ctx.strokeStyle = t.color || (t.speed ? "#276b3870" : "#69c9eeaa");
               ctx.lineWidth = t.speed ? 36 : 40;
               ctx.stroke();
               const p = pathAt(path, (from + to) / 2);
               ctx.fillStyle = "#153e36ee";
               ctx.fillRect(p.x - 50, p.y - 54, 100, 21);
-              ctx.fillStyle = t.speed ? "#b8f2b0" : "#a9e6ff";
+              ctx.fillStyle = t.labelColor || (t.speed ? "#b8f2b0" : "#a9e6ff");
               ctx.font = "bold 14px system-ui"; ctx.textAlign = "center";
-              ctx.fillText(t.speed ? "密林 速度75%" : "渡河 1.5秒", p.x, p.y - 39);
+              ctx.fillText(t.label || (t.speed ? "密林 速度75%" : "渡河 1.5秒"), p.x, p.y - 39);
             }
           }
           ctx.restore();
