@@ -2391,19 +2391,19 @@
       /* イベントウィンドウ（v105.4）：戦闘は止めず、戦場の中央の手前に半透明で出す。上の通知と城は隠さない */
       .event-win {
         position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%);
-        display: flex; gap: 8px; align-items: center; width: min(300px, 72%);
-        padding: 6px 10px; border: 2px solid #e8c85a; border-radius: 12px;
+        display: flex; gap: 10px; align-items: center; width: min(360px, 88%);
+        padding: 10px 14px; border: 2px solid #e8c85a; border-radius: 14px;
         background: #102c33c4; color: #fff3ce; box-shadow: 0 6px 18px #0008; z-index: 3; cursor: pointer;
         animation: event-pop 0.28s ease-out;
       }
       .event-win[data-kind="boss"], .event-win[data-kind="revive"] { border-color: #ffd34d; background: #3a1d2ac4; }
-      .event-icon { flex: none; font-size: 24px; line-height: 1; }
+      .event-icon { flex: none; font-size: 34px; line-height: 1; }
       .event-body { flex: 1; min-width: 0; }
-      .event-title { display: block; font-size: 14px; color: #ffe27a; }
-      .event-lines { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+      .event-title { display: block; font-size: 18px; color: #ffe27a; }
+      .event-lines { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
       .event-lines div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-      .event-hint { display: block; font-size: 10px; opacity: 0.65; }
-      @media (min-width: 700px) { .event-win { width: min(380px, 50%); padding: 10px 14px; } .event-icon { font-size: 32px; } .event-title { font-size: 17px; } .event-lines { font-size: 14px; } }
+      .event-hint { display: block; margin-top: 2px; font-size: 11px; opacity: 0.65; }
+      @media (min-width: 700px) { .event-win { width: min(480px, 56%); padding: 14px 18px; gap: 14px; } .event-icon { font-size: 44px; } .event-title { font-size: 22px; } .event-lines { font-size: 17px; } .event-hint { font-size: 13px; } }
       @keyframes event-pop { from { opacity: 0; transform: translate(-50%, -42%) scale(0.92); } to { opacity: 1; transform: translate(-50%, -50%); } }
       @media (prefers-reduced-motion: reduce) { .event-win { animation: none; } }
       #eventLogList { list-style: none; margin: 0; padding: 0; }
