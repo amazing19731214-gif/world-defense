@@ -2509,7 +2509,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v99（名将の専用行動と強敵図鑑）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v100（真・八岐大蛇の停止を修正）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -17932,6 +17932,7 @@ OFF</button>
                 msg("🌀 " + g.name + " が幻惑された！（" + OROCHI.illusionTime + "秒、攻撃が当たらない）");
               },
               "breath",
+              { head: Number.isInteger(e.head) && e.heads[e.head] ? e.head : 0 }, // 予兆の光を出す首（なしだと描画が止まっていた）
             );
           }
         }
@@ -19483,7 +19484,7 @@ OFF</button>
             k = i % 4,
             deg = row === 0 ? [-170, -142, -114, -86][k] : [-195, -165, -135, -105][k],
             len = row === 0 ? 150 : 90,
-            h = e.heads[i],
+            h = e.heads[i] || e.heads[0] || {},
             lunge = h.anim > 0 ? Math.sin((h.anim / 0.5) * Math.PI) * 34 : 0,
             droop = h.sealed > 0 ? 10 : 0,
             bob = reduced ? 0 : Math.sin(visualTime * 1.3 + i * 0.9) * (h.sealed ? 2 : 6),
@@ -19754,8 +19755,8 @@ OFF</button>
               ctx.globalAlpha = blink;
               if (!reduced && k > 0.5) drawBolt(g.x - 6, 0, g.x - 6, g.y - 40, Math.floor(visualTime * 10), "#ffffff", 2, 5);
             }
-          else if (w.kind === "breath") {
-            const p = yamataHeadPos(e, w.head);
+          else if (w.kind === "breath" && e.heads?.length) {
+            const p = yamataHeadPos(e, Number.isInteger(w.head) ? w.head : 0);
             ctx.globalAlpha = 0.5 + 0.5 * k;
             bloom(p.x - 12, p.y, 10 + 22 * k, "#ff8a3acc");
           } else if (w.kind === "beam" || w.kind === "cannon" || w.kind === "wide") {
@@ -20718,6 +20719,15 @@ OFF</button>
         });
         let squadSig = "";
         function frame(now) {
+          // 1つの処理で例外が起きても次の描画を必ず予約し、ゲーム全体が止まらないようにする
+          try {
+            frameBody(now);
+          } catch (err) {
+            console.error(err);
+          }
+          requestAnimationFrame(frame);
+        }
+        function frameBody(now) {
           const dt = last ? (now - last) / 1000 : 0;
           last = now;
           tick(dt);
@@ -20731,7 +20741,6 @@ OFF</button>
             squadSig = sig;
             renderSquadUI();
           }
-          requestAnimationFrame(frame);
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
         if (/[?&]debug\b/.test(location.search)) {
