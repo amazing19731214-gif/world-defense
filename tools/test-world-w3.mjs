@@ -38,7 +38,7 @@ try{
  check('v68の日本・朝鮮半島76拠点の設定と既存城を維持',r.changed.length===0&&r.castleChanged.length===0,r);
  check('通常防衛戦・修練場の敵設定を変更しない',r.defense,r);
  await p.locator('#mapOpen').tap();
- check('世界に5章、中国は？？？と正しい解放条件',await p.locator('[data-map-chapter]').count()===5&&await p.locator('[data-map-chapter="china"]').isDisabled()&&/？？？.*朝鮮半島を制覇/s.test(await p.locator('[data-map-chapter="china"]').innerText()));
+ check('世界に7章、中国は？？？と正しい解放条件',await p.locator('[data-map-chapter]').count()===7&&await p.locator('[data-map-chapter="china"]').isDisabled()&&/？？？.*朝鮮半島を制覇/s.test(await p.locator('[data-map-chapter="china"]').innerText()));
  check('未解放の中国はAPIでも出陣不可',/朝鮮半島.*解放/.test(await p.evaluate(()=>WD_DEBUG.squadApi.setTarget('cn_fort_liaodong'))));
  await seed(p,{japan:true});
  check('天下統一だけでは中国を解放しない',await p.evaluate(()=>WD_DEBUG.squadApi.chapterUnlocked('korea')&&!WD_DEBUG.squadApi.chapterUnlocked('china')));
@@ -69,7 +69,7 @@ try{
  check('入口に敵Lvと弩兵の特色・対策を表示',/敵Lv625/.test(await p.locator('#mapBody').innerText())&&/弩兵：射程210/.test(await p.locator('#mapBody').innerText()));
  check('390pxの中国拠点詳細が横にはみ出さない',await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  r=await p.evaluate(route=>{const a=WD_DEBUG.squadApi;return {count:a.PROVINCE_ORDER.length,levels:route.map(p=>a.NPC_CASTLES[a.PROVINCES[p].castle].enemyLevel),regions:Object.keys(a.CHAPTERS.china.roads).map(k=>a.chapterProvinces('china').filter(p=>a.PROVINCES[p].road===k).length),seen:a.chapterProvinces('china').filter(a.provinceDiscovered)};},route);
- check('全120拠点、中国は4拠点ずつの5地域',r.count===120&&r.regions.every(n=>n===4),r);
+ check('全140拠点、中国は4拠点ずつの5地域',r.count===140&&r.regions.every(n=>n===4),r);
  check('中国の敵Lvは625から25刻みで1100まで',r.levels.every((lv,i)=>lv===625+i*25),r.levels);
  check('最初に発見する中国拠点は入口だけ',r.seen.join()==='cn_liaodong',r.seen);
  for(const result of ['lose','retreat','timeup']){r=await fight(p,'cn_liaodong',result);check(result+'では占領・報酬なしで挑戦回数だけ増える',!r.err&&!r.owned&&r.tickets===0&&r.attempts>0,r);}

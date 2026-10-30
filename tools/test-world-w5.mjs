@@ -130,7 +130,7 @@ try {
   await seed(p, { southeast: false });
   await p.locator("#mapOpen").click();
   check(
-    (await p.locator("[data-map-chapter]").count()) === 5 &&
+    (await p.locator("[data-map-chapter]").count()) === 7 &&
       (await p.locator('[data-map-chapter="middleeast"]').isDisabled()),
     "世界の第五章は東南アジア制覇まで閉じる",
   );
@@ -208,7 +208,7 @@ try {
       boss: A.NPC_CASTLES.me_fort_nile.garrison.some((g) => g.kind === "boss"),
     };
   }, route);
-  check(r.total === 120 && r.regions.every((n) => n === 3), "全120拠点、中東は3拠点ずつの4地域");
+  check(r.total === 140 && r.regions.every((n) => n === 3), "全140拠点、中東は3拠点ずつの4地域");
   check(
     r.levels.every((lv, i) => lv === 1750 + i * 50),
     "12拠点の敵Lvと推奨Lvを50刻みで設定",

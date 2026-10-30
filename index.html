@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v95（中東・インド編と兵士の能力表示）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v96（ヨーロッパ・ロシア編と世界征服）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -19111,10 +19111,13 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         };
         const chapterClearNextText = (cid) => {
           const next = CHAPTER_ORDER[CHAPTER_ORDER.indexOf(cid) + 1];
+          if (!next && worldConquered()) return '全' + CHAPTER_ORDER.length + '章を制覇しました。';
           return next && chapterUnlocked(next) ? '🌏 世界から次の章「' + CHAPTERS[next].name + '」へ進めます。' : '次の章は今後追加予定です。';
         };
+        // 世界征服：日本の天下統一と全海外章の初回制覇（記録は失地後も残る）。天下統一・完全クリアとは別の達成。
+        const worldConquered = () => CHAPTER_ORDER.every((cid) => cid === "japan" ? conquestMeta.tenka || isTenka() : conquestMeta.world.cleared[cid] === true);
         function renderWorld() {
-          let html = (mapNote ? '<p class="saved">' + esc(mapNote) + '</p>' : '') + '<p>日本から海を越えて、新しい章へ。育てた兵士・武将・装備をそのまま使えます。</p><div class="world-chapters">';
+          let html = (mapNote ? '<p class="saved">' + esc(mapNote) + '</p>' : '') + (worldConquered() ? '<p class="saved world-conquest">🌍 世界征服達成（称号「世界の覇者」）</p>' : '') + '<p>日本から海を越えて、新しい章へ。育てた兵士・武将・装備をそのまま使えます。</p><div class="world-chapters">';
           for (const [i, cid] of CHAPTER_ORDER.entries()) {
             const CH = CHAPTERS[cid], list = chapterProvinces(cid), open = chapterUnlocked(cid), n = ownedCount(list);
             html += '<button class="world-chapter" data-map-chapter="' + cid + '"' + (open ? '' : ' disabled') + '><b>第' + (i + 1) + '章 ' + (open ? CH.icon + ' ' + CH.name : '🔒 ？？？') + '</b><small>';
@@ -19428,6 +19431,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           forest: { name: "密林", from: 260, to: 430, speed: 0.75, text: "密林では味方の進軍速度75%" },
           river: { name: "渡河", at: 480, wait: 1.5, text: "川では部隊ごとに1回、渡河待ち1.5秒（攻撃・回復・被弾は継続）" },
           desert: { name: "砂漠", from: 260, to: 460, speed: 0.85, color: "#d6a34788", labelColor: "#ffe1a0", label: "砂漠 速度85%", text: "砂漠では味方の進軍速度85%（攻撃・回復間隔は変化なし）" },
+          mountain: { name: "山岳", from: 300, to: 470, speed: 0.8, color: "#8a857488", labelColor: "#ece4cc", label: "山岳 速度80%", text: "山岳では味方の進軍速度80%（攻撃・回復間隔は変化なし）" },
+          snow: { name: "雪原", from: 220, to: 500, speed: 0.7, color: "#eef6ffd0", labelColor: "#ffffff", label: "雪原 速度70%", text: "雪原では味方の進軍速度70%（攻撃・回復間隔は変化なし）" },
         };
         const siegeTerrainText = (C) => (C.terrain || []).map((id) => SIEGE_TERRAIN[id].text).join("／");
         const siegeMarchFactor = (B, d) => (B.terrain || []).reduce((n, id) => {
@@ -19758,6 +19763,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           fortress: { name: "堅城", hp: 1.25, towerLevel: 1, towers: [{ type: "cannon", x: 880, y: 190, damage: 24 }] },
           crossbow: { name: "弩兵陣", garrison: [{ path: "upper", d: 620, kind: "dragon", role: "crossbow", n: 2 }, { path: "lower", d: 600, kind: "dragon", role: "crossbow", n: 2 }] },
           heavyCavalry: { name: "重装騎兵", garrison: [{ path: "upper", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }, { path: "lower", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }] },
+          artillery: { name: "砲兵陣地", towers: [{ type: "cannon", x: 640, y: 170, damage: 26 }, { type: "cannon", x: 640, y: 430, damage: 26 }] },
           warlord: { name: "名将", power: 1.08, garrison: [{ path: "upper", d: 900, kind: "boss", n: 1 }] },
         };
         // 新しい国の領土の効果（小さめ。合計には上限 BONUS_CAPS）
@@ -20045,8 +20051,101 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             },
           },
         });
-        const CHAPTER_ORDER = ["japan", "korea", "china", "southeast", "middleeast"];
-        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"], ["cn_nanhai", "se_redriver", "紅河航路"], ["se_straits", "me_malabar", "西洋航路"]];
+        // 第六章・第七章。地名を参考にした架空の城・勢力。既存の章の能力や報酬を変えない。
+        const EUROPE_LEVELS = {
+          eu_balkan: 2350, eu_hellas: 2400, eu_italia: 2450,
+          eu_pannonia: 2500, eu_bohemia: 2550, eu_alps: 2600,
+          eu_gallia: 2650, eu_iberia: 2700, eu_flanders: 2750,
+          eu_germania: 2800, eu_baltic: 2850, eu_britannia: 2900,
+        };
+        const RUSSIA_LEVELS = {
+          ru_novgorod: 2950, ru_smolensk: 3000, ru_arkhangelsk: 3050, ru_vologda: 3100,
+          ru_ural: 3150, ru_siberia: 3200, ru_volga: 3250, ru_moskva: 3300,
+        };
+        const lateChapterPower = (levels) => (dist, styles, id) => castlePowerAtLevel(625) * Math.sqrt(levels[id] / 625);
+        const lateChapterHp = (lv, styles) => Math.round(43775 * Math.sqrt(lv / 1100) * styles.reduce((n, s) => n * (s.hp || 1), 1) / 100) * 100;
+        Object.assign(CHAPTERS, {
+          europe: {
+            name: "ヨーロッパ", icon: "🏰", entry: "eu_balkan", clearTickets: 15, requiredChapter: "middleeast", bonusProvince: "eu_britannia",
+            intro: "中東のアナトリアからボスポラス航路へ。山岳では道の一部で味方の進軍速度80%。砲兵陣地は大砲の塔を2基加えます。塔を壊す部隊と城門を攻める部隊を分けよう。地名を参考にした架空の城・勢力です。",
+            kuni: [
+              ["eu_balkan", "バルカン", "eu_south", "eu_fort_balkan", "鉄門の砦", "西方騎士団・バルカン", ["spear", "cavalry"]],
+              ["eu_hellas", "ヘラス", "eu_south", "eu_fort_hellas", "白柱の都城", "西方騎士団・ヘラス", ["sea", "archer"]],
+              ["eu_italia", "イタリア", "eu_south", "eu_fort_italia", "七丘の都城", "西方騎士団・イタリア", ["fortress", "crossbow"]],
+              ["eu_pannonia", "パンノニア", "eu_central", "eu_fort_pannonia", "草海の関", "西方騎士団・パンノニア", ["heavyCavalry", "cavalry"]],
+              ["eu_bohemia", "ボヘミア", "eu_central", "eu_fort_bohemia", "銀嶺の城", "西方騎士団・ボヘミア", ["artillery", "spear"]],
+              ["eu_alps", "アルプス", "eu_central", "eu_fort_alps", "氷峰の関", "西方騎士団・アルプス", ["crossbow", "archer"]],
+              ["eu_gallia", "ガリア", "eu_west", "eu_fort_gallia", "百合紋の城", "西方騎士団・ガリア", ["heavyCavalry", "spear"]],
+              ["eu_iberia", "イベリア", "eu_west", "eu_fort_iberia", "陽門の城", "西方騎士団・イベリア", ["sea", "gun"]],
+              ["eu_flanders", "フランドル", "eu_west", "eu_fort_flanders", "風車の城塞", "西方騎士団・フランドル", ["artillery", "crossbow"]],
+              ["eu_germania", "ゲルマニア", "eu_north", "eu_fort_germania", "黒森の砦", "西方騎士団・ゲルマニア", ["heavyCavalry", "archer"]],
+              ["eu_baltic", "バルト", "eu_north", "eu_fort_baltic", "琥珀海の城", "西方騎士団・バルト", ["fortress", "sea"]],
+              ["eu_britannia", "ブリタニア", "eu_north", "eu_fort_britannia", "霧島の王城", "西方騎士団・ブリタニア", ["fortress", "artillery", "warlord"]],
+            ],
+            land: `
+              eu_balkan: eu_hellas eu_pannonia
+              eu_hellas: eu_balkan eu_italia
+              eu_italia: eu_hellas eu_pannonia eu_alps
+              eu_pannonia: eu_balkan eu_italia eu_bohemia
+              eu_bohemia: eu_pannonia eu_alps eu_germania
+              eu_alps: eu_italia eu_bohemia eu_gallia
+              eu_gallia: eu_alps eu_iberia eu_flanders
+              eu_iberia: eu_gallia
+              eu_flanders: eu_gallia eu_germania
+              eu_germania: eu_bohemia eu_flanders eu_baltic
+              eu_baltic: eu_germania
+              eu_britannia:
+            `,
+            sea: [["eu_flanders", "eu_britannia", "ドーバー航路"]],
+            roads: { eu_south: "南欧の半島", eu_central: "中欧と山脈", eu_west: "西欧の平野", eu_north: "北の海" },
+            levels: EUROPE_LEVELS,
+            power: lateChapterPower(EUROPE_LEVELS),
+            scaleGuards: true,
+            hp: lateChapterHp,
+            terrain: {
+              eu_balkan: ["mountain"], eu_hellas: [], eu_italia: ["river"],
+              eu_pannonia: ["river"], eu_bohemia: ["forest"], eu_alps: ["mountain"],
+              eu_gallia: ["river"], eu_iberia: ["mountain"], eu_flanders: ["river"],
+              eu_germania: ["forest"], eu_baltic: [], eu_britannia: ["river"],
+            },
+          },
+          russia: {
+            name: "ロシア", icon: "❄️", entry: "ru_novgorod", clearTickets: 20, requiredChapter: "europe", bonusProvince: "ru_moskva",
+            intro: "ヨーロッパのバルトから氷海航路へ。雪原では道の一部で味方の進軍速度70%。攻撃・回復間隔は変化しません。最後の章です。全8拠点を制覇すると世界征服を達成します。地名を参考にした架空の城・勢力です。",
+            kuni: [
+              ["ru_novgorod", "ノヴゴロド", "ru_west", "ru_fort_novgorod", "白樺の城", "雪原守護隊・ノヴゴロド", ["spear", "archer"]],
+              ["ru_smolensk", "スモレンスク", "ru_west", "ru_fort_smolensk", "双塔の砦", "雪原守護隊・スモレンスク", ["artillery", "heavyCavalry"]],
+              ["ru_arkhangelsk", "アルハンゲリスク", "ru_north", "ru_fort_arkhangelsk", "北光の港城", "雪原守護隊・アルハンゲリスク", ["sea", "crossbow"]],
+              ["ru_vologda", "ヴォログダ", "ru_north", "ru_fort_vologda", "氷湖の砦", "雪原守護隊・ヴォログダ", ["heavyCavalry", "spear"]],
+              ["ru_ural", "ウラル", "ru_east", "ru_fort_ural", "鉄嶺の関", "雪原守護隊・ウラル", ["fortress", "crossbow"]],
+              ["ru_siberia", "シベリア", "ru_east", "ru_fort_siberia", "凍土の砦", "雪原守護隊・シベリア", ["heavyCavalry", "cavalry"]],
+              ["ru_volga", "ヴォルガ", "ru_heart", "ru_fort_volga", "大河の城", "雪原守護隊・ヴォルガ", ["artillery", "archer"]],
+              ["ru_moskva", "モスクワ", "ru_heart", "ru_fort_moskva", "雪冠の王城", "雪原守護隊・モスクワ", ["fortress", "heavyCavalry", "warlord"]],
+            ],
+            land: `
+              ru_novgorod: ru_smolensk ru_arkhangelsk
+              ru_smolensk: ru_novgorod ru_moskva
+              ru_arkhangelsk: ru_novgorod ru_vologda
+              ru_vologda: ru_arkhangelsk ru_ural ru_moskva
+              ru_ural: ru_vologda ru_siberia ru_volga
+              ru_siberia: ru_ural
+              ru_volga: ru_ural ru_moskva
+              ru_moskva: ru_smolensk ru_vologda ru_volga
+            `,
+            sea: [],
+            roads: { ru_west: "西部の森", ru_north: "白海の凍土", ru_east: "東の山脈", ru_heart: "雪の都" },
+            levels: RUSSIA_LEVELS,
+            power: lateChapterPower(RUSSIA_LEVELS),
+            scaleGuards: true,
+            hp: lateChapterHp,
+            terrain: {
+              ru_novgorod: ["snow"], ru_smolensk: ["forest"], ru_arkhangelsk: ["snow"], ru_vologda: ["snow", "river"],
+              ru_ural: ["mountain"], ru_siberia: ["snow"], ru_volga: ["river"], ru_moskva: ["snow"],
+            },
+          },
+        });
+        const CHAPTER_ORDER = ["japan", "korea", "china", "southeast", "middleeast", "europe", "russia"];
+        const CHAPTER_LINKS = [["tsushima", "kr_gyeongsang", "釜山航路"], ["kr_pyeongan", "cn_liaodong", "遼東航路"], ["cn_nanhai", "se_redriver", "紅河航路"], ["se_straits", "me_malabar", "西洋航路"], ["me_anatolia", "eu_balkan", "ボスポラス航路"], ["eu_baltic", "ru_novgorod", "氷海航路"]];
         (() => {
           for (const cid of CHAPTER_ORDER) {
             const CH = CHAPTERS[cid],
@@ -21820,7 +21919,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           B.captureTickets = B.captured && (!overseas || firstCapture) ? NPC_CASTLES[B.castleId].reward.tickets : 0;
           if (overseas && result === "win" && conquestMeta.world.cleared[B.chapter] && !conquestMeta.world.rewards[B.chapter]) {
             conquestMeta.world.rewards[B.chapter] = true;
-            B.chapterClear = { name: CHAPTERS[B.chapter].name, tickets: CHAPTERS[B.chapter].clearTickets };
+            B.chapterClear = { name: CHAPTERS[B.chapter].name, tickets: CHAPTERS[B.chapter].clearTickets, world: worldConquered() };
           }
           persistConquest();
           if (B.captured) {
@@ -21901,7 +22000,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                 chapterProvinces(B.chapter || "japan").length +
                 (B.chapter === "japan" ? "か国</p>" : "拠点</p>")
               : "") +
-            (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。' + esc(chapterClearNextText(B.chapter)) + '</p></div>' : '') +
+            (B.chapterClear ? '<div class="tenka"><p>' + B.chapterClear.name + 'を制覇！ 🎴 ガチャ券 +' + B.chapterClear.tickets + '</p><p>初回制覇を記録しました。' + esc(chapterClearNextText(B.chapter)) + '</p>' + (B.chapterClear.world ? '<p class="tenka-title">🌍 世界征服達成！</p><p>日本から' + esc(CHAPTERS[B.chapter].name) + 'まで全' + CHAPTER_ORDER.length + '章を制覇した。<br>称号「世界の覇者」を得た（🌏 世界に記録）</p>' : '') + '</div>' : '') +
             jobBookResultHtml(B) +
             (B.savePending ? '<p class="injured">⚠ 進行・報酬が未保存です。ページを閉じずに「途中保存」で保存を再試行してください。</p>' : '') +
             (B.unified
@@ -23712,6 +23811,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               CHAPTER_LINKS,
               chapterProvinces,
               chapterUnlocked,
+              worldConquered,
               provinceDiscovered,
               syncWorldProgress,
               persistConquest,
