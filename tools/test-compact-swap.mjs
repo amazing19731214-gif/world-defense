@@ -16,7 +16,7 @@ async function setup(width=390,debug=true){
   localStorage.setItem(S,JSON.stringify({seq:80,squadSeq:8,heroId:1,squads:types.map((type,i)=>({id:i+1,type,slot:i})),soldiers:Array.from({length:80},(_,i)=>({id:i+1,type:types[Math.floor(i/10)],squadId:Math.floor(i/10)+1,level:120+i,name:'兵'+(i+1),skills:[],learned:[]})),fallen:[]}));
   localStorage.setItem(W,JSON.stringify({owned:{nobunaga:2,yukimura:2},tickets:7,forge:{seq:1,items:[{uid:1,id:'nanbando',owner:1,lock:false}],shards:0,books:{},koban:800}}));
  },{S,W});
- const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{p,c};
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':'?layout=classic'));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{p,c};
 }
 const choose=(p,i)=>p.locator(`[data-squad-filter="${i}"]`).click();
 const state=p=>p.evaluate(()=>({positions:WD_DEBUG.state().soldiers.map(s=>[s.id,s.squadId]),counts:WD_DEBUG.state().squads.map(q=>WD_DEBUG.squadApi.roster(q).length),gear:WD_DEBUG.forgeApi.save().items[0].owner,tickets:WD_DEBUG.heroApi.save().tickets,gold:WD_DEBUG.state().gold}));

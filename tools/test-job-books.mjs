@@ -63,7 +63,7 @@ async function setup({ width = 390, debug = true, books = {}, known = [] } = {})
   );
   const p = await c.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
-  await p.goto(url + (debug ? "?debug" : ""));
+  await p.goto(url + (debug ? "?debug" : "?layout=classic"));
   return { p, c };
 }
 async function fault(p, key) {

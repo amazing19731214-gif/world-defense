@@ -16,7 +16,7 @@ async function setup(width=390,debug=true,empty=false){
   localStorage.setItem(S,JSON.stringify({seq:16,squadSeq:8,heroId:empty?null:1,squads:empty?[]:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',slot:i})),soldiers:empty?[]:levels.map((level,i)=>({id:i+1,type:i===2?'ashigaru':'spearman',squadId:Math.floor(i/2)+1,level,name:i===2?'吉川元春':'兵'+(i+1),named:i===2?'motoharu':null,skills:[],learned:[]})),fallen:[]}));
   localStorage.setItem(W,JSON.stringify({owned:{nobunaga:2},tickets:7,forge:{seq:1,items:[{uid:1,id:'nanbando',owner:empty?null:4,lock:false}],shards:0,books:{},koban:800}}));
  },{S,W,empty});
- const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);await p.locator('#organize').click();return{p,c};
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':'?layout=classic'));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);await p.locator('#organize').click();return{p,c};
 }
 const choose=(p,value)=>p.locator(`[data-squad-filter="${value}"]`).click();
 const candidateIds=p=>p.locator('[data-mentor-candidate]').evaluateAll(es=>es.map(e=>+e.dataset.mentorCandidate));

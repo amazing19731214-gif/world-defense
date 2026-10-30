@@ -146,7 +146,7 @@ try {
   pt = await at(p, 330, 300);
   await p.touchscreen.tap(pt.x, pt.y);
   check((await towers(p)).length === 1, "タッチ：草地のタップでいつも通り塔を建てる");
-  await p.evaluate(() => window.scrollTo(0, 120));
+  await p.evaluate(() => window.scrollTo(0, 30)); // 少しスクロールした状態（部隊は固定ヘッダーの下に見えている）
   const scroll0 = await p.evaluate(() => scrollY);
   q0 = (await squadsOf(p))[0];
   await touchDrag(p, cdp, [q0.x, q0.y - 12], [300, 445]);

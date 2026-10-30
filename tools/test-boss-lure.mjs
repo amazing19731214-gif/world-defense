@@ -18,7 +18,7 @@ async function setup({count,width=390,debug=true,goal=100}={}){
   localStorage.setItem('worldDefense.settings.v1',JSON.stringify({auto:false,waveGoal:goal}));
   localStorage.setItem(S,JSON.stringify({seq:1,squadSeq:1,squads:[{id:1,type:'spearman',slot:0}],soldiers:[{id:1,type:'spearman',squadId:1,level:30}],fallen:[]}));
  },{count,goal,W,S});
- const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));return{p,c};
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':'?layout=classic'));return{p,c};
 }
 const snapshot=p=>p.evaluate(()=>({gold:WD_DEBUG.state().gold,count:WD_DEBUG.intruderApi.bossLureCount(),pending:WD_DEBUG.intruderApi.pending(),wave:WD_DEBUG.state().wave,koban:WD_DEBUG.forgeApi.koban()}));
 const finish=p=>p.evaluate(()=>{WD_DEBUG.stopSpawning();WD_DEBUG.state().enemies.length=0;WD_DEBUG.step(.1);});

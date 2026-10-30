@@ -20,7 +20,7 @@ async function setup(width=390,seed=true,debug=true){
   localStorage.setItem(S,JSON.stringify({seq:8,squadSeq:8,squads:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',slot:i})),soldiers:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',squadId:i+1,level:30,name:'旧兵'+i})),fallen:[]}));
   localStorage.setItem(F,JSON.stringify({version:1,units:[{hero:'yukimura'}]}));
  },{seed,W,S,F});
- const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':'?layout=classic'));
  if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{c,p};
 }
 const openJapan=async p=>{await p.locator('#mapOpen').click();await p.locator('[data-map-chapter="japan"]').click();await p.locator('[data-map-tab="open"]').click();};

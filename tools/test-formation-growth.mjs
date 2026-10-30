@@ -17,7 +17,7 @@ async function setup(width=390,debug=true){
   localStorage.setItem(S,JSON.stringify(save));localStorage.setItem(W,JSON.stringify({owned:{nobunaga:2},tickets:7,forge:{seq:1,items:[{uid:1,id:'nanbando',owner:null,lock:false}],shards:0,books:{},koban:800}}));
  },{S,W});
  await installJobBookTestFixtures(c);
- const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':''));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{p,c};
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url+(debug?'?debug':'?layout=classic'));if(debug)await p.waitForFunction(()=>window.WD_DEBUG);return{p,c};
 }
 const open=async(p,id)=>{if(!await p.locator('#squadSheet').isVisible())await p.locator('#organize').click();await p.locator(`[data-formation-soldier="${id}"]`).click();};
 try{
