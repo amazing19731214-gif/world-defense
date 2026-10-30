@@ -1852,6 +1852,10 @@
       .tools.menu-tools #wipeData {
         font-size: 13px;
       }
+      /* グラフィックの切り替え（v105試作）：2列分。後ろの「全機能を表示」の位置を変えない */
+      .tools.menu-tools #gfxToggle {
+        grid-column: span 2;
+      }
       /* 目標ウェーブ */
       #wave, #hp {
         cursor: pointer;
@@ -2570,7 +2574,7 @@ OFF</button>
         ><button id="gearOpen">🎒 装備倉庫</button><button id="menuShop" class="compact-only">🏪 商店</button><button id="forgeOpen">🔥 秘伝錬成</button
         ><h3 class="menu-group">記録・その他</h3
         ><button id="zukanOpen">📖 図鑑</button><button id="checkpointSave">💾 途中保存</button><button id="reset">↻ 最初から</button
-        ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button><button id="fieldToggle">🧪 縦向きの戦場</button><button id="gfxToggle">🎨 グラフィック：従来版</button
+        ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button><button id="fieldToggle">🧪 縦向きの戦場</button><button id="gfxToggle" title="グラフィック：従来版／新ドット絵（試作）の切り替え">🎨 絵：従来版</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button
         ><button id="showAllFeatures" hidden>🔓 全機能を表示</button>
       </div>
@@ -13495,7 +13499,7 @@ function chronicleWarBonusBlock(s) {
         const PIX_ENEMY = { goblin: "ashigaru", slime: "ashigaru", knight: "spearman", wolf: "cavalry", dragon: "archer" };
         const pixEnemyKind = (e) => (pixelOn() && !e.boss && !e.intruder && !e.rare && PIX_ENEMY[e.kind]) || null;
         function drawPixelEnemy(e, kind) {
-          const pose = e.atkAnim > 0 ? "attack0" : e.blockedBy || e.siege ? "idle" + (Math.floor((reduced ? 0 : visualTime) * 1.6 + (e.id || 0) * 0.37) % 2) : "walk" + (Math.floor(e.d / 9) % 2);
+          const pose = e.atkAnim > 0 ? "attack0" : e.blockedBy || e.siege ? "idle" + (Math.floor((reduced ? 0 : visualTime) * 1.6 + (e.id || 0) * 0.37) % 2) : "walk" + (Math.floor((e.d || 0) / 9) % 2);
           ellipse(e.x + 2, e.y + 10, e.r + 2, 4, "#2e523855");
           ctx.save();
           const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole);
@@ -13508,7 +13512,7 @@ function chronicleWarBonusBlock(s) {
         // 背景：地面（道の形はゲームと同じ）と木・岩・灯籠。家の位置には灯籠と柵
         const PIX_DECOR = [
           ["round0", 55, 75], ["pine0", 120, 38], ["sakura0", 217, 32], ["round1", 520, 68], ["bamboo0", 675, 85], ["pine1", 784, 65],
-          ["round0", 47, 524], ["sakura1", 120, 487], ["pine0", 335, 550], ["round1", 462, 520], ["bamboo1", 590, 528], ["pine1", 712, 506],
+          ["round0", 47, 524], ["sakura1", 120, 487], ["pine0", 250, 588], ["round1", 462, 520], ["bamboo1", 590, 528], ["pine1", 712, 506],
           ["bush0", 805, 551], ["pine0", 170, 70], ["round1", 585, 72], ["sakura0", 750, 540], ["pine1", 40, 420],
           ["rock", 280, 78], ["rock", 615, 480], ["rock", 768, 155], ["rock", 84, 165], ["bush1", 300, 470], ["bush0", 640, 120],
           ["lantern", 336, 92], ["fence", 362, 96], ["lantern", 646, 545], ["fence", 672, 548],
@@ -13529,7 +13533,7 @@ function chronicleWarBonusBlock(s) {
           PIX.stats.ground++;
         }
         // 城：防衛戦は自分の城（最初の7か国を統一すると強化した城）、攻城戦は敵の城（赤い旗）
-        const pixCastleLevel = () => (!battle && typeof STAGE1 !== "undefined" && ownedCount(STAGE1) >= STAGE1.length ? 2 : 1);
+        const pixCastleLevel = () => (!battle && ownedCount(STAGE1) >= STAGE1.length ? 2 : 1); // 描くのは起動の後（素材の読み込み後）だけ
         function pixelCastle() {
           // 縦向きの戦場では道の中心（y=300）を軸に立て、城の下端が画面の下の端に来るようにする
           const bottom = VERTICAL ? 362 : 374;
@@ -21343,7 +21347,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (!dockReady) return;
           $("layoutToggle").textContent = compactUi() ? "📱 表示：コンパクト" : "🖥 表示：従来";
           $("fieldToggle").textContent = fieldPref ? "🧪 戦場：攻めは縦" : "🧪 戦場：横";
-          $("gfxToggle").textContent = GFX === "pixel" ? "🎨 グラフィック：新ドット絵" : "🎨 グラフィック：従来版";
+          $("gfxToggle").textContent = GFX === "pixel" ? "🎨 絵：新ドット絵" : "🎨 絵：従来版";
           if (!compactUi()) return;
           if (drawerOpen && (selectedTower || selectedSquad)) {
             drawerOpen = null; // 部隊・塔を選んだら、その操作パネルを優先する
