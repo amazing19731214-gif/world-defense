@@ -1,4 +1,4 @@
-// 戦闘の試作（v106試作）：修練場の「新しい戦い（試作）」だけで、新しい敵（鉄砲足軽・盾兵の連携）と3つの技（三方撃ち・貫通弾・八方斬撃）・奥義の演出を使う
+// 戦闘の試作（v106試作・v106.1で奥義ゲージを廃止）：修練場の「新しい戦い（試作）」だけで、新しい敵（鉄砲足軽・盾兵の連携）と3つの技（三方撃ち・貫通弾・八方斬撃）・奥義の演出を使う
 //   node tools/test-combat-proto.mjs
 //   通常の防衛戦・修練場（試作なし）の戦闘の処理が変わらないこと、当たる範囲・盾の守り・止まって撃つ動き・演出の数の上限を確かめる
 import assert from "node:assert/strict";
@@ -289,12 +289,12 @@ try {
   const pat = trainOn.stats.patterns;
   check(trainOn.behaviors.includes("tate") && trainOn.behaviors.includes("teppo"), "修練場（試作）に盾兵・鉄砲足軽が出る", trainOn.behaviors);
   check(pat.eightSlash > 0 && pat.threeWay > 0 && pat.pierce > 0, "槍兵・足軽は八方斬撃、弓兵は三方撃ち、鉄砲兵は貫通弾を使う", pat);
-  check(trainOn.stats.ougi > 0 && Object.keys(pat).some((k) => k.endsWith("Ougi")), "ゲージがたまると奥義を使う", trainOn.stats);
+  check(trainOn.stats.ougi === 0 && !Object.keys(pat).some((k) => k.endsWith("Ougi")), "奥義ゲージは廃止：長く戦っても奥義は自動で出ない（v106.1）", trainOn.stats);
   r = await p.evaluate((k) => {
     const raw = localStorage.getItem(k) || "";
     return { proto: /proto/i.test(raw), on: WD_DEBUG.combat.on() };
   }, SKEY);
-  check(!r.proto, "試作の技のゲージなどは兵士の保存データに入れない", r);
+  check(!r.proto, "試作の技の回数などは兵士の保存データに入れない", r);
   await p.evaluate(() => WD_DEBUG.trainingApi.endTraining("retreat"));
   check(!(await p.evaluate(() => WD_DEBUG.combat.on())), "修練場を終えると試作の戦闘はオフ");
   await c.close();
