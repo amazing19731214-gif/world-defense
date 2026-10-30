@@ -113,7 +113,7 @@ function formationSquadActions(q, list, moving, bulk) {
   }
   return acts;
 }
-function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
+function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
   const heal = !!unitOf(s).heal;
   const metric =
     '<small class="formation-stats"><span>HP ' +
@@ -157,7 +157,13 @@ function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
     (moving?.id === s.id ? " moving" : "") +
     '" data-formation-row="' +
     s.id +
-    '"><span><b>' +
+    '"' +
+    (order && order.drag ? ' data-drag-soldier="' + s.id + '" data-drag-squad="' + q.id + '"' : "") +
+    "><span>" +
+    // 部隊内の並べ替え（v105.4）：つまみをドラッグ。先頭は敵の攻撃を最初に受ける
+    (order && order.drag ? '<span class="drag-handle" aria-hidden="true">☰</span>' : "") +
+    (order && order.front ? '<em class="front-tag" title="先頭：敵の攻撃を最初に受けます">🛡先頭</em>' : "") +
+    "<b>" +
     esc(soldierName(s)) +
     "</b>" +
     (s.out ? "（離脱中）" : "") +
@@ -201,7 +207,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
     title +
     "</h3>" +
     list
-      .map((s) => formationSoldierRow(s, squadById(s.squadId), stats.get(s.id), moving, bulk, !q))
+      .map((s, i) => formationSoldierRow(s, squadById(s.squadId), stats.get(s.id), moving, bulk, !q, q && formationEffectiveSort() === "squad" ? { front: i === 0, drag: soldierReorderOk() && !moving && !bulk && list.length > 1 } : null))
       .join("") +
     (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
     "</div>"
