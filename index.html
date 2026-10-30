@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v93（戦歴で育つ記念装備）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v94（戦歴で育つ兵士の能力）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -6629,11 +6629,11 @@ function chronicleFinish(s, win) {
 function chronicleBlock(s) {
   const c = chronicleOf(s);
   return (
-    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
+    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>導入後討伐 ' +
     fmt(c.kills) +
-    "・強敵 " +
+    "・ボス討伐 " +
     fmt(c.bossKills) +
-    "・支援参加 " +
+    "・ボス支援 " +
     fmt(c.bossAssists) +
     "<br>実回復 " +
     fmt(c.healed) +
@@ -6970,15 +6970,20 @@ function chronicleSyncCommitted() {
   } catch {
     return;
   }
-  for (const id of d.insightFound || []) chronicleLearnedConfirmed.add(id);
-  for (const s of d.soldiers || [])
-    for (const id of s.insight?.known || []) chronicleLearnedConfirmed.add(id);
-  for (const s of d.soldiers || [])
-    if (s.chronicle?.life)
-      chronicleCommitted.set(s.chronicle.life, {
-        chronicle: cleanChronicle(s.chronicle, s),
-        known: new Set(s.insight?.known || []),
-      });
+  if (!d || typeof d !== "object") return;
+  const list = (Array.isArray(d.soldiers) ? d.soldiers : []).filter((s) => s && typeof s === "object");
+  for (const id of Array.isArray(d.insightFound) ? d.insightFound : []) chronicleLearnedConfirmed.add(id);
+  for (const s of list)
+    for (const id of Array.isArray(s.insight?.known) ? s.insight.known : [])
+      chronicleLearnedConfirmed.add(id);
+  for (const s of list) {
+    const c = cleanChronicle(s.chronicle, s);
+    chronicleCommitted.set(c.life, {
+      chronicle: c,
+      known: new Set(Array.isArray(s.insight?.known) ? s.insight.known : []),
+      war: chronicleWarBonusFrom(s, c),
+    });
+  }
 }
 function chronicleHas(s, id) {
   return !!(
@@ -7010,6 +7015,10 @@ function chronicleStats(s, st) {
   const f = chronicleFinesse(s);
   st.rate *= 1 - f.haste;
   st.range += (unitOf(s).range || 0) * f.range;
+  const war = chronicleWarBonus(s);
+  st.atk += war.atk;
+  st.def += war.def;
+  st.rate /= 1 + war.speed;
   return st;
 }
 function chronicleResistance(points) {
@@ -7524,6 +7533,84 @@ function chronicleEquipmentBlock(s) {
   );
 }
 
+// 保存された生涯の戦歴から導出。能力値や記録を加算保存しない。
+const CHRONICLE_WAR_BONUS_RULES = Object.freeze(
+  [
+    { counter: "waves", name: "生存W（累計）", every: 1, stat: "hp", amount: 1 },
+    { counter: "kills", name: "討伐数（従来分を含む累計）", every: 100, stat: "atk", amount: 1 },
+    { counter: "bossKills", name: "ボス討伐", every: 10, stat: "atk", amount: 1 },
+    { counter: "bossAssists", name: "ボス討伐支援", every: 100, stat: "speed", amount: 0.001, cap: 0.1 },
+    { counter: "meleeHits", name: "近接被弾", every: 1000, stat: "def", amount: 1 },
+    { counter: "rangedHits", name: "遠距離被弾", every: 2000, stat: "def", amount: 1 },
+    { counter: "survived30", name: "HP30%以下から勝利・生還", every: 100, stat: "def", amount: 1 },
+    { counter: "survived10", name: "HP10%以下から勝利・生還", every: 50, stat: "def", amount: 1 },
+    {
+      counter: "survivedSingle",
+      name: "HP一桁から勝利・生還",
+      every: 100,
+      stat: "evade",
+      amount: 0.001,
+      cap: 0.05,
+    },
+  ].map(Object.freeze),
+);
+const CHRONICLE_WAR_ZERO = Object.freeze({ hp: 0, atk: 0, def: 0, speed: 0, evade: 0, parts: [] });
+function chronicleWarBonusFrom(s, c) {
+  const counts = { ...c, kills: intIn(s.kills, 0, 1e6, 0), waves: intIn(s.wavesSurvived, 0, 1e6, 0) },
+    bonus = { hp: 0, atk: 0, def: 0, speed: 0, evade: 0, parts: [] };
+  for (const r of CHRONICLE_WAR_BONUS_RULES) {
+    const count = intIn(counts[r.counter], 0, CHRONICLE_RULES.cap, 0),
+      value = Math.min(r.cap ?? Infinity, Math.floor(count / r.every) * r.amount);
+    bonus[r.stat] += value;
+    bonus.parts.push({ ...r, count, value });
+  }
+  return bonus;
+}
+function chronicleWarBonus(s) {
+  return chronicleCommitted.get(chronicleOf(s).life)?.war || CHRONICLE_WAR_ZERO;
+}
+function chronicleWarBonusBlock(s) {
+  const b = chronicleWarBonus(s),
+    labels = { hp: "最大HP", atk: "攻撃", def: "防御", speed: "攻撃・回復速度", evade: "回避率" },
+    text = (stat, value) =>
+      stat === "speed"
+        ? (value * 100).toFixed(1) + "%"
+        : stat === "evade"
+          ? (value * 100).toFixed(1) + "ポイント"
+          : Math.round(value).toLocaleString("ja-JP");
+  return (
+    '<details class="chronicle-war-bonus"><summary>📈 戦歴ボーナス</summary><p><b>最大HP＋' +
+    b.hp.toLocaleString("ja-JP") +
+    "・攻撃＋" +
+    b.atk.toLocaleString("ja-JP") +
+    "・防御＋" +
+    b.def.toLocaleString("ja-JP") +
+    "</b><br>行動速度＋" +
+    text("speed", b.speed) +
+    "・回避＋" +
+    text("evade", b.evade) +
+    "</p><p><small>保存済みの記録で計算します。固定値は割合補正の後に加算。最大HPが増えても、その場で回復しません。</small></p>" +
+    b.parts
+      .map(
+        (r) =>
+          "<p><small>" +
+          r.name +
+          "：" +
+          r.count.toLocaleString("ja-JP") +
+          "（" +
+          r.every.toLocaleString("ja-JP") +
+          "ごと）<br>" +
+          labels[r.stat] +
+          "＋" +
+          text(r.stat, r.value) +
+          (r.cap != null ? "／上限＋" + text(r.stat, r.cap) : "") +
+          "</small></p>",
+      )
+      .join("") +
+    "<p><small>討伐・生存Wは従来の累計、それ以外は戦歴機能の導入後の記録です。速度は最大＋10%、戦歴の回避は最大＋5ポイント（全効果の合計上限40%）です。射程への戦歴補正はありません。</small></p></details>"
+  );
+}
+
         const JOB_UNITS = {};
         for (const [j, J] of Object.entries(JOBS))
           if (J.unit) {
@@ -7755,7 +7842,7 @@ function chronicleEquipmentBlock(s) {
         const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
         const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
         const legendHp = (s, hp) =>
-          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp"));
+          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp")) + chronicleWarBonus(s).hp;
         function rollLegend() {
           const between = (min, max) => min + legendRng() * (max - min),
             pick = (o) => {
@@ -8448,6 +8535,8 @@ function chronicleEquipmentBlock(s) {
           maxExtraGold: 10, extraGoldChance: 0.2, supplyDiscount: 0.3,
         };
         let combatClock = 0, enemySerial = 0;
+        // 保存済みの戦歴スキルは兵士の初回復元時にも能力計算から参照する。
+        let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
         const aliveEnemies = () => enemies.filter((e) => !e.gone && e.hp > 0);
         const heroHas = (h, id) => h && h.id === id;
         const favorite = (h, q) => !!(h && q && WARLORDS[h.id].favorite === q.type);
@@ -9539,6 +9628,7 @@ function chronicleEquipmentBlock(s) {
           saveRoster();
           persistHeroes();
           if (commitGameSaveBatch()) {
+            s.hp = soldierStats(s).maxHp; // 正式な召喚・復活だけは確定後の最大HPまで回復する。
             zukanSync();
             return s;
           }
@@ -9602,6 +9692,7 @@ function chronicleEquipmentBlock(s) {
                 named: rec.named || null,
                 battles: rec.battles,
                 kills: rec.kills,
+                wavesSurvived: intIn(v.wavesSurvived,0,1e6,0),
               });
               chronicleAdd(x.chronicle,"revivals");
               x.chronicle.revivalCharge=true;
@@ -10563,7 +10654,7 @@ function chronicleEquipmentBlock(s) {
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
         function evadeHit(s, now) {
           const id = battle ? battle.groups.find(g => g.list.includes(s))?.hero : heroOnSquad(squadById(s.squadId))?.id;
-          const p = chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
+          const p = chronicleWarBonus(s).evade + chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
           if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p)) return false;
           s.evadeUntil = now + 2;
           return true;
@@ -12111,6 +12202,7 @@ function chronicleEquipmentBlock(s) {
         }
         const soldierSave = loadSoldierSave();
         let soldierSaveOk = true;
+        chronicleSyncCommitted(); // 初回復元のHP計算にも保存済み戦歴を反映する。
         function writeSoldierSave() {
           soldierSave.insightFound=[...new Set([...(soldierSave.insightFound||[]),...soldierSave.soldiers.flatMap(s=>s.insight?.known||[])])];
           soldierSave.honorFound=[...new Set([...(soldierSave.honorFound||[]),...soldierSave.soldiers.flatMap(s=>s.chronicle?.honors||[])])];
@@ -12198,6 +12290,7 @@ function chronicleEquipmentBlock(s) {
                   legend: s.legend || null,
                   fruit: s.fruit || null,
                   bestLevel: s.bestLevel,
+                  wavesSurvived:s.wavesSurvived,
                   insight: s.insight,
                   chronicle: chronicleOf(s),
                 }),
@@ -18091,7 +18184,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleEquipmentBlock(s) + chronicleHonorBlock(s) + chronicleSurvivalBlock(s) + chronicleGoals(s) + chronicleBlock(s) +
+            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleWarBonusBlock(s) + chronicleEquipmentBlock(s) + chronicleHonorBlock(s) + chronicleSurvivalBlock(s) + chronicleGoals(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -20311,7 +20404,6 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           const p = PROVINCE_ORDER.find(canAttackProvince);
           return p ? PROVINCES[p].castle : CASTLE_ORDER[0];
         }
-        let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
         const MERGE_D = pathLength(upper.slice(0, 5)); // 上下の道が合流する地点（道に沿った距離）
         const samePath = (a, b, d) => d >= MERGE_D || a === b;
         // 出陣できるか（防衛のウェーブ中は不可）。各部隊の出撃できる兵士（保存済みの生存兵）を返す
@@ -21041,6 +21133,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         function battleStats(g, s) {
           const st = Object.assign({}, soldierStats(s, true));
           if (g.hero) {
+            const fixed=chronicleWarBonus(s);
+            st.atk-=fixed.atk;st.def-=fixed.def;st.maxHp-=fixed.hp;
             const c = WARLORDS[g.hero];
             st.atk *= (c.siegePassive.damageMul || 1) * starMul(g.hero);
             st.def *= c.siegePassive.defMul || 1;
@@ -21049,8 +21143,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             st.maxHp *= 1 + (grow.hp || 0); st.range *= 1 + (grow.range || 0); st.rate /= 1 + (grow.speed || 0);
             // 固有追撃などの成長は攻城戦の既存の攻撃補正に加算して反映する。
             st.atk *= 1 + (grow.special || 0) * 0.2;
+            st.atk+=fixed.atk;st.def+=fixed.def;st.maxHp+=fixed.hp;
           }
-          if (g.rally > 0) st.atk *= SIEGE_SKILL.rally.atk;
+          if (g.rally > 0) {const fixed=chronicleWarBonus(s).atk;st.atk=(st.atk-fixed)*SIEGE_SKILL.rally.atk+fixed;}
           return st;
         }
         // ===== 攻城戦の必殺技 =====
@@ -23465,7 +23560,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               openForge,
               openGear,
             },
-            chronicleApi: {GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {WAR_RULES:CHRONICLE_WAR_BONUS_RULES,warBonus:chronicleWarBonus,warBlock:chronicleWarBonusBlock,GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

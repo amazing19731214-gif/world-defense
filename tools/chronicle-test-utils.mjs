@@ -56,7 +56,7 @@ export async function harness() {
           localStorage.setItem("worldDefense.soldiers.v1", JSON.stringify(seed));
         }, seed);
       const p = await c.newPage();
-      p.on("pageerror", (e) => errors.push(e.message));
+      p.on("pageerror", (e) => errors.push(e.stack || e.message));
       await p.goto("http://127.0.0.1:" + server.address().port + "/?debug");
       return { p, c };
     },

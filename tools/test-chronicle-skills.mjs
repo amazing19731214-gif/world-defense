@@ -46,7 +46,7 @@ try {
     Q.saveRoster();
     const base = Q.soldierStats({ ...s, insight: { ...s.insight, equipped: [] } }).atk;
     return {
-      ratio: Q.soldierStats(s).atk / base,
+      ratio: (Q.soldierStats(s).atk - A.warBonus(s).atk) / (base - A.warBonus(s).atk),
       guard: A.guard(s, false, "goblin"),
       special: A.guard(s, true, "thunder"),
       caps: [0, 10, 50, 150, 1e12].map(A.resistance),
@@ -119,7 +119,7 @@ try {
     Q.battleHitGarrison(e, 100, s);
     const delta = before - e.hp;
     Q.endBattle("retreat");
-    return { ratio: stats.atk / base.atk, delta };
+    return { ratio: (stats.atk - A.warBonus(s).atk) / (base.atk - A.warBonus(s).atk), delta };
   });
   check(
     Math.abs(r.ratio - 1.1) < 1e-9 && Math.abs(r.delta - 105) < 1e-8,
