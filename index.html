@@ -2388,6 +2388,12 @@
       }
       .map-notice[data-kind="counter"] { border-color: #ef9e73; background: #45271cf2; }
       .level-notices { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      /* 部隊内の並べ替え（v105.4） */
+      .drag-handle { display: inline-block; padding: 6px 8px; margin: -6px 2px -6px -6px; cursor: grab; touch-action: none; color: #e6d39a; user-select: none; }
+      .chip.draggable { touch-action: none; }
+      .front-tag { font-style: normal; font-size: 12px; margin-right: 4px; padding: 0 5px; border-radius: 8px; background: #6a4a1c; color: #ffe27a; }
+      [data-drag-soldier].dragging { position: relative; z-index: 5; opacity: 0.85; box-shadow: 0 6px 16px #0009; }
+      [data-drag-soldier].drop-target { outline: 3px dashed #ffd34d; outline-offset: 1px; }
       /* イベントウィンドウ（v105.4）：戦闘は止めず、戦場の中央の手前に半透明で出す。上の通知と城は隠さない */
       .event-win {
         position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%);
@@ -12212,6 +12218,88 @@ function chronicleWarBonusBlock(s) {
           logHistory(b, squadName(qa) + " に編入（" + soldierName(a) + " と入れ替え）");
           return null;
         }
+        // 部隊内の並べ替え（v105.4）：兵士の名簿の順番を入れ替える。部隊の先頭（members の最初）が敵の攻撃を最初に受ける。
+        // 移籍と同じく、ウェーブの合間だけ。保存はウェーブクリア・途中保存のときに名簿の順番ごと残る
+        const soldierReorderOk = () => !battle && !playing && !training && hp > 0;
+        function reorderSoldier(id, targetId) {
+          if (battle) return "攻城戦の最中は並べ替えられません。";
+          if (playing) return "ウェーブ中は並べ替えられません。ウェーブの合間に並べ替えよう。";
+          if (training) return "修練場の挑戦中は並べ替えられません。";
+          const s = soldierById(id),
+            t = soldierById(targetId);
+          if (!s || !t || !s.alive || !t.alive || s.squadId !== t.squadId) return "同じ部隊の兵士どうしで並べ替えてください。";
+          if (s === t) return null;
+          const q = squadById(s.squadId),
+            list = roster(q),
+            after = list.indexOf(s) < list.indexOf(t); // 後ろへ動かすときは相手の後ろ、前へ動かすときは相手の前
+          soldiers.splice(soldiers.indexOf(s), 1);
+          soldiers.splice(soldiers.indexOf(t) + (after ? 1 : 0), 0, s);
+          if (q) q.frontId = null; // 並べた順番を優先する
+          return null;
+        }
+        // ドラッグで並べ替え：[data-drag-soldier]（同じ data-drag-squad の中）を指・マウスで動かして離す
+        function setupReorderDrag(container) {
+          let d = null;
+          const clear = () => {
+            if (!d) return;
+            d.el.classList.remove("dragging");
+            d.el.style.transform = "";
+            if (d.over) d.over.classList.remove("drop-target");
+            d = null;
+          };
+          container.addEventListener("pointerdown", (ev) => {
+            const el = ev.target.closest("[data-drag-soldier]");
+            if (!el || ev.button > 0 || !soldierReorderOk()) return;
+            const handle = ev.target.closest(".drag-handle");
+            if (!handle && !el.classList.contains("chip")) return; // 名簿の行はつまみ（☰）から、部隊の兵士の札はどこからでも
+            d = { el, id: +el.dataset.dragSoldier, squad: el.dataset.dragSquad, x: ev.clientX, y: ev.clientY, moving: false, pid: ev.pointerId, over: null };
+            try { el.setPointerCapture(ev.pointerId); } catch (err) { /* 古いブラウザ */ }
+          });
+          container.addEventListener("pointermove", (ev) => {
+            if (!d || ev.pointerId !== d.pid) return;
+            const dx = ev.clientX - d.x, dy = ev.clientY - d.y;
+            if (!d.moving && Math.hypot(dx, dy) < 8) return;
+            d.moving = true;
+            ev.preventDefault();
+            d.el.classList.add("dragging");
+            // 画面の上下の端に近づいたら、名簿を自動で送る（画面外の兵士の位置へも動かせる）
+            let sc = d.el.parentElement;
+            while (sc && !(sc.scrollHeight > sc.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+            const box = sc ? sc.getBoundingClientRect() : { top: 0, bottom: innerHeight },
+              edge = ev.clientY < box.top + 48 ? -14 : ev.clientY > box.bottom - 48 ? 14 : 0;
+            if (edge) {
+              if (sc) sc.scrollTop += edge;
+              else window.scrollBy(0, edge);
+              d.y -= edge; // 送った分だけ、つまんだ位置を合わせる
+            }
+            d.el.style.transform = "translate(" + dx + "px," + (ev.clientY - d.y) + "px)";
+            const under = document.elementsFromPoint(ev.clientX, ev.clientY).map((e) => e.closest("[data-drag-soldier]")).find((e) => e && e !== d.el && e.dataset.dragSquad === d.squad) || null;
+            if (under !== d.over) {
+              if (d.over) d.over.classList.remove("drop-target");
+              d.over = under;
+              if (under) under.classList.add("drop-target");
+            }
+          });
+          container.addEventListener("pointerup", (ev) => {
+            if (!d || ev.pointerId !== d.pid) return;
+            const { moving, over, id } = d;
+            clear();
+            if (!moving) return;
+            container.dataset.dragged = "1"; // このあとの click（選択）は無視する
+            setTimeout(() => delete container.dataset.dragged, 0);
+            if (!over) return;
+            const err = reorderSoldier(id, +over.dataset.dragSoldier);
+            const q = squadById(soldierById(id).squadId);
+            msg(err || soldierName(soldierById(id)) + " を並べ替えた。" + (members(q)[0] ? "先頭は " + soldierName(members(q)[0]) + "（敵の攻撃を最初に受けます）" : ""));
+            if (err) toast(err);
+            if (!$("squadSheet").hidden) renderSquadSheet();
+            updateUI();
+          });
+          container.addEventListener("pointercancel", clear);
+          container.addEventListener("click", (ev) => {
+            if (container.dataset.dragged) ev.stopImmediatePropagation();
+          }, true);
+        }
         // まとめて交代：全員を検証してから2部隊の同数を一括交換し、途中保存と同じログで確定する。
         function bulkSwapPlan(ids) {
           if (battle) return { error: "攻城戦の最中は交代できません。" };
@@ -15753,16 +15841,22 @@ function chronicleWarBonusBlock(s) {
           setHtml(
             $("sqMembers"),
             list
-              .map((s) => {
-                const r = Math.max(0, s.hp / soldierStats(s).maxHp);
+              .map((s, i) => {
+                const r = Math.max(0, s.hp / soldierStats(s).maxHp),
+                  drag = soldierReorderOk() && list.length > 1; // ウェーブの合間はドラッグで並べ替え（v105.4）
                 return (
                   '<button class="chip' +
                   (s.id === selectedSoldierId ? " sel" : "") +
+                  (drag ? " draggable" : "") +
                   '" data-soldier="' +
                   s.id +
-                  '" aria-label="' +
+                  '"' +
+                  (drag ? ' data-drag-soldier="' + s.id + '" data-drag-squad="' + s.squadId + '"' : "") +
+                  ' aria-label="' +
                   esc(soldierName(s)) +
+                  (i === 0 ? "（先頭：敵の攻撃を最初に受ける）" : "") +
                   '"><span>' +
+                  (i === 0 ? "🛡" : "") +
                   (s.name ? "🎖" : "") +
                   "Lv" +
                   s.level +
@@ -15847,6 +15941,8 @@ function chronicleWarBonusBlock(s) {
           $("sqMore").setAttribute("aria-expanded", String(squadDetailOpen));
           renderSkillButton($("sqSkill"), $("sqSkillLabel"), $("sqSkillBar"), hh);
         }
+        setupReorderDrag($("sqMembers"));
+        setupReorderDrag($("squadList"));
         $("sqMembers").addEventListener("click", (ev) => {
           const b = ev.target.closest("[data-soldier]");
           if (!b) return;
@@ -15997,7 +16093,7 @@ function formationSquadActions(q, list, moving, bulk) {
   }
   return acts;
 }
-function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
+function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
   const heal = !!unitOf(s).heal;
   const metric =
     '<small class="formation-stats"><span>HP ' +
@@ -16041,7 +16137,13 @@ function formationSoldierRow(s, q, st, moving, bulk, showSquad) {
     (moving?.id === s.id ? " moving" : "") +
     '" data-formation-row="' +
     s.id +
-    '"><span><b>' +
+    '"' +
+    (order && order.drag ? ' data-drag-soldier="' + s.id + '" data-drag-squad="' + q.id + '"' : "") +
+    "><span>" +
+    // 部隊内の並べ替え（v105.4）：つまみをドラッグ。先頭は敵の攻撃を最初に受ける
+    (order && order.drag ? '<span class="drag-handle" aria-hidden="true">☰</span>' : "") +
+    (order && order.front ? '<em class="front-tag" title="先頭：敵の攻撃を最初に受けます">🛡先頭</em>' : "") +
+    "<b>" +
     esc(soldierName(s)) +
     "</b>" +
     (s.out ? "（離脱中）" : "") +
@@ -16085,7 +16187,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
     title +
     "</h3>" +
     list
-      .map((s) => formationSoldierRow(s, squadById(s.squadId), stats.get(s.id), moving, bulk, !q))
+      .map((s, i) => formationSoldierRow(s, squadById(s.squadId), stats.get(s.id), moving, bulk, !q, q && formationEffectiveSort() === "squad" ? { front: i === 0, drag: soldierReorderOk() && !moving && !bulk && list.length > 1 } : null))
       .join("") +
     (acts ? '<div class="card-actions">' + acts + "</div>" : "") +
     "</div>"
@@ -16165,7 +16267,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             ? soldierName(moving) + " の移籍先を選んでください。空きのある部隊へ「ここへ編入」、満員の部隊でも兵士の「⇄ 入れ替え」で交換できます。"
             : playing
               ? "ウェーブ中は配置・撤退のみ。雇用と移籍はウェーブの合間にできます。"
-              : "兵士の移籍・入れ替えができます。雇用は「＋ 雇う」からランダムに配属されます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
+              : "兵士の移籍・入れ替えができます。部隊内の順番は ☰ をドラッグで並べ替え（🛡先頭が敵の攻撃を最初に受けます）。雇用は「＋ 雇う」からランダムに配属されます。1部隊" + SQUAD_RULES.squadSize + "人まで。";
           let html = "";
           if (bulkSwapMode) html += '<p class="bulk-swap-note">☑ まとめて交代：選択中 ' + picked + '人</p>';
           else if (bulk) {
@@ -24750,6 +24852,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
+            reorderSoldier: (id, target) => reorderSoldier(id, target),
             events: {
               push: (kind, line) => eventNotice(kind, line),
               animate: (dt) => animateEventWin(dt),
