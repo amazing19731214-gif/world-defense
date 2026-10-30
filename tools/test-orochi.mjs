@@ -240,6 +240,35 @@ r = await page.evaluate(() => WD_DEBUG.legendApi.endgameOn());
 check("天下統一＋三大裏ボスで終盤の解放（今までどおり）", r === true, String(r));
 await context.close();
 
+console.log("■ 幻惑の予兆を画面に描いても止まらない（v100の不具合修正）");
+for (const treasures of [{ kusanagi: true, yata: true, magatama: true }, {}]) {
+  ({ page, errors, context } = await newPage(treasures));
+  await start(page);
+  r = await page.evaluate(() => {
+    const a = WD_DEBUG.squadApi,
+      B = a.battle();
+    let illusion = 0,
+      err = null;
+    try {
+      // 実際の画面と同じく、時間を進めるたびに描画する（予兆の演出を含む）
+      for (let i = 0; i < 1200 && a.battle(); i++) {
+        WD_DEBUG.step(0.05);
+        if (B.warn && /幻惑の予兆/.test(B.warn.text)) illusion++;
+        WD_DEBUG.heroApi.draw();
+      }
+    } catch (e) {
+      err = e.message;
+    }
+    return { illusion, err, t: Math.round(B.t), result: B.result };
+  });
+  check(
+    (treasures.yata ? "神器あり" : "神器なし") + "：幻惑の予兆を描画しながら進めても例外なし（60秒または決着まで）",
+    r.illusion > 0 && !r.err && (r.t >= 59 || !!r.result) && errors.length === 0,
+    JSON.stringify(r) + errors.join(" / "),
+  );
+  await context.close();
+}
+
 await browser.close();
 server.close();
 console.log(`\n結果: ${passes} 件成功 / ${failures} 件失敗`);
