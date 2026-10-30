@@ -67,10 +67,19 @@ try {
   await p.evaluate(() => { for (let i = 0; i < 6; i++) WD_DEBUG.events.animate(0.1); });
   r = await win(p);
   check(r.kind === "honor" && r.title === "称号を得た！" && !r.hidden, "約3秒で閉じて、次の出来事（称号）が出る", r);
-  // 4. タップですぐ閉じる
-  await p.click("#eventWin");
+  // 4. タップですぐ閉じる（押した点は下の戦場にも届き、操作を邪魔しない）
+  const tapWin = async () => {
+    const b = await p.evaluate(() => { const r = document.getElementById("eventWin").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await p.touchscreen.tap(b.x, b.y);
+  };
+  r = await p.evaluate(() => {
+    const el = document.getElementById("eventWin"), r = el.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).id;
+  });
+  check(r === "game", "ウィンドウの下の戦場を押せる（戦闘の操作を邪魔しない）", r);
+  await tapWin();
   r = await win(p);
-  check(r.hidden && !r.cur, "タップですぐ閉じる", r);
+  check(r.hidden && !r.cur, "ウィンドウの上をタップするとすぐ閉じる", r);
   // 5. 戦闘を止めない：表示中もウェーブが進む
   r = await p.evaluate(() => {
     const S = WD_DEBUG.state;
@@ -83,7 +92,7 @@ try {
     return { playing: st.playing, paused: st.paused, enemies: st.enemies.length, moved: st.enemies.some((e) => e.d > 0), before, shown: !document.getElementById("eventWin").hidden };
   });
   check(r.playing && !r.paused && r.moved && r.shown, "表示中も戦闘は止まらない（一時停止しない）", r);
-  await p.click("#eventWin");
+  await tapWin();
   // 6. 大事な出来事は記録に残り、メニューの「📜 出来事」で見られる
   await p.evaluate(() => {
     WD_DEBUG.events.push("boss", "雷獣・白虎を初めて討伐した");
@@ -105,7 +114,24 @@ try {
   check(r.winHidden && r.age === 0, "ほかの画面を開いている間は隠し、時間も進めない（読み逃さない）", r);
   r = await p.evaluate(() => { WD_DEBUG.events.animate(0.1); return !document.getElementById("eventWin").hidden; });
   check(r, "画面を閉じると、また表示する");
-  // 7. 375px・PC で横にはみ出さない
+  // 7. ネームド兵士の戦死（防衛戦の実際の処理）
+  r = await p.evaluate(() => {
+    while (WD_DEBUG.events.state().cur) WD_DEBUG.events.animate(5);
+    const S = WD_DEBUG.state(), A = WD_DEBUG.squadApi, q = S.squads[0], s = A.members(q)[1];
+    s.named = "magoichi";
+    A.killSoldier(s, q);
+    const st = WD_DEBUG.events.state(), el = document.getElementById("eventWin");
+    return { st, title: el.querySelector(".event-title").textContent, kind: el.dataset.kind, alive: s.alive };
+  });
+  check(!r.alive && r.kind === "namedFall" && r.title === "ネームド兵士が戦死…" && /雑賀孫市（鉄砲兵）が第.*で戦死した/.test(r.st.cur.lines[0]) && r.st.history[0].startsWith("namedFall:"), "ネームド兵士が戦死すると、イベントウィンドウに出て記録にも残る", r);
+  r = await p.evaluate(() => {
+    const S = WD_DEBUG.state(), A = WD_DEBUG.squadApi, q = S.squads[0], s = A.members(q)[2];
+    const before = WD_DEBUG.events.state().history.length;
+    A.killSoldier(s, q); // ネームドでない兵士
+    return { before, after: WD_DEBUG.events.state().history.length };
+  });
+  check(r.before === r.after, "ネームドでない兵士の戦死では出さない", r);
+  // 8. 375px・PC で横にはみ出さない
   await c.close();
   for (const [w, h, q] of [[375, 667, "?debug&layout=compact"], [1280, 900, "?debug&layout=classic"]]) {
     ({ c, p } = await open(w, h, q));

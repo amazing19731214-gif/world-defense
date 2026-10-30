@@ -2393,10 +2393,12 @@
         position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%);
         display: flex; gap: 10px; align-items: center; width: min(360px, 88%);
         padding: 10px 14px; border: 2px solid #e8c85a; border-radius: 14px;
-        background: #102c33c4; color: #fff3ce; box-shadow: 0 6px 18px #0008; z-index: 3; cursor: pointer;
+        background: #102c33c4; color: #fff3ce; box-shadow: 0 6px 18px #0008; z-index: 3; pointer-events: none;
         animation: event-pop 0.28s ease-out;
       }
       .event-win[data-kind="boss"], .event-win[data-kind="revive"] { border-color: #ffd34d; background: #3a1d2ac4; }
+      .event-win[data-kind="namedFall"] { border-color: #c9a2a2; background: #2a1c22d0; }
+      .event-win[data-kind="namedFall"] .event-title { color: #f0c8c8; }
       .event-icon { flex: none; font-size: 34px; line-height: 1; }
       .event-body { flex: 1; min-width: 0; }
       .event-title { display: block; font-size: 18px; color: #ffe27a; }
@@ -6593,6 +6595,7 @@ OFF</button>
           honor: { icon: "🏅", title: "称号を得た！", many: (n) => n + "件の称号を得た！" },
           book: { icon: "📕", title: "職業の書を入手！", many: (n) => "職業の書を" + n + "冊入手！" },
           named: { icon: "⭐", title: "ネームド兵士が仕官！", many: (n) => n + "人のネームド兵士が仕官！", important: true },
+          namedFall: { icon: "🕯", title: "ネームド兵士が戦死…", many: (n) => n + "人のネームド兵士が戦死…", important: true },
           revive: { icon: "✨", title: "黄泉返り！", many: (n) => n + "人が黄泉返った！", important: true },
           boss: { icon: "👹", title: "裏ボスを初めて討伐！", many: (n) => "裏ボスを討伐！", important: true },
         };
@@ -6617,6 +6620,11 @@ OFF</button>
           if (eventQueue.length >= EVENT_RULES.maxQueue) eventQueue.shift();
           eventQueue.push({ kind, lines: [line], age: 0 });
           if (!eventCur) nextEventWin();
+        }
+        // ネームド兵士の戦死（主人公は戦死しないので対象外）
+        function namedFallNotice(s, where) {
+          const p = s && s.named && NAMED_SOLDIERS[s.named];
+          if (p) eventNotice("namedFall", p.name + "（" + SOLDIER_TYPES[p.type].name + "）が" + where + "で戦死した");
         }
         function nextEventWin() {
           eventCur = eventQueue.shift() || null;
@@ -6647,7 +6655,17 @@ OFF</button>
         function closeEventWin() {
           if (eventCur) nextEventWin();
         }
-        $("eventWin").addEventListener("click", closeEventWin);
+        // ウィンドウは戦場の操作を邪魔しない（押した点は下の戦場にも届く）。ウィンドウの上を押したら閉じる
+        $("gameView").addEventListener(
+          "pointerdown",
+          (ev) => {
+            const el = $("eventWin");
+            if (!eventCur || el.hidden) return;
+            const r = el.getBoundingClientRect();
+            if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) closeEventWin();
+          },
+          true,
+        );
         function renderEventLog() {
           const list = $("eventLogList");
           if (!eventHistory.length) return void (list.innerHTML = '<li class="muted">まだ記録はありません。</li>');
@@ -7026,6 +7044,7 @@ OFF</button>
             logHistory(x, "召喚の書で仕官");
             return x;
           });
+          if (s) eventNotice("named", p.name + "（" + SOLDIER_TYPES[p.type].name + "）が仕官した（召喚の書）");
           return s ? null : "保存できなかったので召喚しませんでした（書は残っています）。";
         }
         // 復活できる英霊（同じネームド兵士が今いれば、その人物は復活できない）
@@ -8859,6 +8878,7 @@ OFF</button>
           s.diedIn = squadName(q);
           logHistory(s, squadName(q) + " で戦死");
           recordDeath(s); // 保存データからすぐ外す（再読み込みしても復活しない）
+          namedFallNotice(s, squadName(q));
           q.fallen++;
           const off = formationOffset(q, 0);
           unitGhosts.push({
@@ -19404,6 +19424,7 @@ OFF</button>
             s.diedIn = g.name + (battle.boss ? "（" + BOSSES[battle.boss].name + "討伐）" : "（攻城戦）");
             logHistory(s, s.diedIn + "で戦死");
             recordDeath(s);
+            namedFallNotice(s, s.diedIn);
             g.fallen++;
             unitGhosts.push({
               type: s.type,
