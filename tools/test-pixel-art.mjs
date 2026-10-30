@@ -92,6 +92,8 @@ try {
   check(r.ui.layout === "classic" && r.ui.maxWave === 12 && r.ui.seen.gacha === true && r.ui.gfx === "classic", "以前の表示の記録はそのまま読め、gfx は従来版で補われる", r.ui);
   let d = await play(p, 60);
   check(d.stats.unit + d.stats.tower + d.stats.castle + d.stats.ground === 0, "従来版では新ドット絵を一切描かない", d.stats);
+  r = await p.evaluate(() => WD_DEBUG.pixel.spread());
+  check(r.x === 1 && r.y === 1, "従来版の隊形の間隔はそのまま", r);
   const classicSim = (await (async () => {
     await c.close();
     ({ c, p } = await open({ seed: 7 }));
@@ -112,7 +114,9 @@ try {
   check(await p.evaluate(() => WD_DEBUG.pixel.on()), "保存した設定（新ドット絵）で起動する");
   check(d.stats.unit > 0 && d.stats.tower >= 4 && d.stats.castle >= 0 && d.stats.enemy > 0, "兵士・敵兵・塔を新ドット絵で描く", d.stats);
   check(d.stats.classicUnit > 0, "上級職（侍）の兵士は従来の絵で描く", d.stats);
-  check(JSON.stringify(d.sim) === JSON.stringify(classicSim), "新ドット絵でも戦闘の処理（位置・体力・資金・塔）は従来版と同じ", { classicSim, pixel: d.sim });
+  r = await p.evaluate(() => WD_DEBUG.pixel.spread());
+  check(r.x > 1.2 && r.y > 1.2, "新ドット絵では隊形を表示だけ広げる（兵士の重なりを減らす）", r);
+  check(JSON.stringify(d.sim) === JSON.stringify(classicSim), "新ドット絵でも隊形を広げても、戦闘の処理（位置・体力・資金・塔）は従来版と同じ", { classicSim, pixel: d.sim });
   r = await p.evaluate(() => {
     WD_DEBUG.heroApi.draw();
     const g = document.getElementById("game"),

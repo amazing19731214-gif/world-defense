@@ -2581,7 +2581,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105試作（新ドット絵の切り替え）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.1試作（新ドット絵・兵士の重なりの改善）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -10848,9 +10848,14 @@ OFF</button>
           [42, -5],
           [42, 9],
         ];
+        // 新ドット絵では隊形を表示だけ広げ、兵士の重なりを減らす（v105.1）。
+        // 戦闘の判定は部隊の中心（q.x, q.y）で行うので、射程・当たり判定・足止めは変わらない。従来版の見た目もそのまま
+        const FORMATION_SPREAD = { x: 1.6, y: 1.55 };
+        const formationSpread = () => (pixelOn() ? FORMATION_SPREAD : { x: 1, y: 1 });
         function formationOffset(q, i) {
-          const f = FORMATION[i % FORMATION.length];
-          return [f[0] * -(q.face || -1), f[1]];
+          const f = FORMATION[i % FORMATION.length],
+            k = formationSpread();
+          return [f[0] * -(q.face || -1) * k.x, f[1] * k.y];
         }
         // 選択範囲（隊形全体＋余白）と戦闘判定（部隊の中心）は別に扱う
         // 縦向きの戦場では部隊を立てたまま描くので、押した点を部隊の描き方（横向き）の座標に直して判定する
@@ -10860,7 +10865,8 @@ OFF</button>
             bestD = 1e9;
           for (const q of fieldSquads()) {
             const { x, y } = drawnPoint(q, px, py);
-            if (x < q.x - 40 || x > q.x + 56 || y < q.y - 56 || y > q.y + 30) continue;
+            const kx = formationSpread().x; // 広げた隊形も選べるように
+            if (x < q.x - 40 * kx || x > q.x + 56 * kx || y < q.y - 56 || y > q.y + 30) continue;
             const d = Math.hypot(q.x - x, q.y - 12 - y);
             if (d < bestD) {
               bestD = d;
@@ -11061,7 +11067,7 @@ OFF</button>
           const pips = Math.min(SQUAD_RULES.squadSize, list.length + q.fallen),
             top = q.y - 50,
             gap = pips > 5 ? 7 : 9,
-            left = q.x - (q.face || -1) * (pips > 5 ? 14 : 0) - ((pips - 1) * gap) / 2;
+            left = q.x - (q.face || -1) * (pips > 5 ? 14 * formationSpread().x : 0) - ((pips - 1) * gap) / 2;
           for (let i = 0; i < pips; i++) {
             const s = list[i];
             if (s) {
@@ -19214,7 +19220,10 @@ OFF</button>
           msg("NPCの" + TOWER_NAMES[t.type] + "を破壊した！");
         }
         // 部隊の中の兵士の位置（先頭が右＝城の側。最大10人を3列で）
-        const battleOffset = (i) => [-Math.floor(i / 3) * 13, ((i % 3) - 1) * 12];
+        const battleOffset = (i) => {
+          const k = formationSpread(); // 攻城戦の隊形も、新ドット絵では表示だけ広げる
+          return [-Math.floor(i / 3) * 13 * k.x, ((i % 3) - 1) * 12 * k.y];
+        };
         // who：範囲攻撃で狙う兵士（省略すると部隊の先頭）
         function battleHurt(g, raw, ranged, kind, who, enemy=null, redirected=false) {
           const alive = groupAlive(g),
@@ -20658,10 +20667,12 @@ OFF</button>
                 ctx.save();
                 ctx.font = "bold 13px system-ui";
                 ctx.textAlign = "center";
+                // 新ドット絵の縦向きの戦場では、後ろの列（画面の上）と重ならないよう部隊の下に出す
+                const ty = VERTICAL && pixelOn() ? g.y + 30 : g.y - 62;
                 ctx.fillStyle = "#143c45dd";
-                ctx.fillRect(g.x - 26, g.y - 62, 52, 17);
+                ctx.fillRect(g.x - 26, ty, 52, 17);
                 ctx.fillStyle = "#ffe3a0";
-                ctx.fillText(g.name.replace("部隊", "") + " " + list.length, g.x, g.y - 49);
+                ctx.fillText(g.name.replace("部隊", "") + " " + list.length, g.x, ty + 13);
                 ctx.restore();
               },
             });
@@ -21396,7 +21407,7 @@ OFF</button>
           intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
-            pixel: { on: () => pixelOn(), ready: () => pixelReady(), stats: PIX.stats, gfx: () => GFX, set: (m) => setGfx(m), enemyKind: (e) => pixEnemyKind(e), frames: () => Object.keys(PIX.frames) },
+            pixel: { on: () => pixelOn(), ready: () => pixelReady(), stats: PIX.stats, gfx: () => GFX, set: (m) => setGfx(m), enemyKind: (e) => pixEnemyKind(e), frames: () => Object.keys(PIX.frames), spread: () => formationSpread() },
             state: () => ({
               gold,
               hp,
