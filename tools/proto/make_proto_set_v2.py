@@ -79,9 +79,10 @@ def jingasa(s, oy, H, mon=None):
         s.set(13, 5 + oy, mon)
 
 
-def soldier_v2(kind, team="ally", pose="idle", frame=0):
+def soldier_v2(kind, team="ally", pose="idle", frame=0, bare=False):
+    """bare=True：武器と腕を描かず、輪郭線も付けない（武器を描き直すための体だけ）"""
     if kind == "cavalry":
-        return cavalry_v2(team, pose, frame)
+        return cavalry_v2(team, pose, frame, bare)
     s = Sprite2(22, 26)
     A, F = AI[team], FLAG[team]
     oy = 1 if (pose == "idle" and frame == 1) else 0
@@ -154,6 +155,8 @@ def soldier_v2(kind, team="ally", pose="idle", frame=0):
         s.set(12, 3 + oy, HERB[2])
     else:
         jingasa(s, oy, HATS[kind], GOLD[2] if kind == "gunner" else None)
+    if bare:
+        return s
     # 腕と武器
     if kind == "ashigaru":  # 刀（長い刃を明るい鋼色で）
         s.rect(15, 14 + oy, 17, 16 + oy, A[1])
@@ -248,7 +251,7 @@ HORSE = [(84, 46, 26), (124, 70, 38), (168, 100, 56), (204, 140, 86), (232, 186,
 MANE = (54, 34, 28)
 
 
-def cavalry_v2(team="ally", pose="idle", frame=0):
+def cavalry_v2(team="ally", pose="idle", frame=0, bare=False):
     """騎兵（34×30）：横向きの馬と、赤い兜の乗り手"""
     s = Sprite2(34, 30)
     A, F = AI[team], FLAG[team]
@@ -299,6 +302,8 @@ def cavalry_v2(team="ally", pose="idle", frame=0):
     s.line(11, ry - 4, 11, ry + 8, WOOD[1])  # 背旗
     s.rect(8, ry - 4, 10, ry + 2, F[2])
     s.rect(8, ry - 4, 8, ry + 2, F[3])
+    if bare:
+        return s
     if atk:
         s.line(16, ry + 6, 33, ry + 5, WOOD[2])
         s.rect(31, ry + 4, 33, ry + 6, STEEL[2])
