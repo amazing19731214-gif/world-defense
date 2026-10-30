@@ -2397,8 +2397,10 @@
       .dock-bar, .skill-dock, .menu-group, .compact-only, .drawer-head { display: none; }
       /* 縦向きの戦場（試作）：入口が上・城が下の縦長 */
       .vertical-field #game { aspect-ratio: 10 / 16; }
+      /* 見えている高さから、ヘッダー・ウェーブ操作・部隊の列の分を引いた高さに戦場を収める（幅は縦横比で決まる） */
+      .compact-ui.vertical-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); margin-left: auto; margin-right: auto; }
       @media (min-width: 601px) {
-        .compact-ui.vertical-field #gameView canvas { max-width: calc((var(--app-h) - 270px) * 0.625); }
+        .compact-ui.vertical-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); }
       }
       .compact-ui .dock-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 6px 0 0; }
       .compact-ui .dock-bar button { position: relative; min-height: 50px; font-size: 14px; line-height: 1.15; padding: 4px 2px; white-space: nowrap; }
@@ -2575,7 +2577,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104試作（縦向きの戦場）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.1試作（縦向きの戦場を画面の高さに合わせる）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -21092,6 +21094,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           applyFieldShape();
           scenery = null; // 背景を新しい向きで描き直す
           setDrawer(null);
+          syncViewport(); // 戦場の大きさの上限を新しい並びで計算し直す
           draw();
         }
         $("layoutToggle").onclick = () => {
@@ -24864,6 +24867,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             root.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
           }
           root.setProperty("--header-h", Math.ceil(document.querySelector("header").getBoundingClientRect().height) + "px");
+          // 縦向きの戦場：ヘッダー・ウェーブ操作・部隊の列が必ず見えるよう、戦場の高さに使えない分を渡す
+          const h = (sel) => Math.ceil(document.querySelector(sel)?.getBoundingClientRect().height || 0);
+          root.setProperty("--field-reserve", h("header") + h(".play-tools") + h("#dockBar") + 36 + "px");
           const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
           root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
         }
