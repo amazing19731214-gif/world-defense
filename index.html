@@ -2488,7 +2488,7 @@ OFF</button>
       <div id="dockBar" class="tools dock-bar" aria-label="操作メニュー">
         <button id="dockUnits" aria-expanded="false" aria-controls="unitTools">⚔️ 部隊<small id="dockUnitsSub"></small></button
         ><button id="dockBuild" aria-expanded="false" aria-controls="towerTools">🏯 建設<small id="dockBuildSub"></small></button
-        ><button id="dockSkills" aria-expanded="false" aria-controls="skillDock">✨ 必殺技<small id="dockSkillsSub"></small></button
+        ><button id="dockOrganize">📋 編成<small id="dockOrganizeSub"></small></button
         ><button id="dockMenu" aria-expanded="false" aria-controls="menuTools">☰ メニュー<i id="dockMenuBadge" class="dock-badge" hidden></i></button>
       </div>
       <p id="nextGoal" class="next-goal" role="status" hidden></p>
@@ -2563,7 +2563,7 @@ OFF</button>
       </div>
       <div id="menuTools" class="tools menu-tools">
         <h3 class="menu-group">戦い</h3
-        ><button id="mapOpen">🌏 世界</button><button id="menuOrganize" class="compact-only">📋 編成</button><button id="trainingOpen">⚔️ 修練場</button
+        ><button id="mapOpen">🌏 世界</button><button id="menuSkills" class="compact-only" aria-expanded="false" aria-controls="skillDock">✨ 必殺技</button><button id="trainingOpen">⚔️ 修練場</button
         ><h3 class="menu-group">武将・兵士の育成</h3
         ><button id="gacha">🎴 ガチャ</button><button id="heroGrowth">👑 主人公</button><button id="menuInfo" class="compact-only">ℹ️ 育成情報</button
         ><h3 class="menu-group">装備・アイテム</h3
@@ -2577,7 +2577,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.1試作（縦向きの戦場を画面の高さに合わせる）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.2試作（下の列に編成ボタン）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -21043,7 +21043,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         const DRAWERS = {
           dockUnits: ["unitTools", "⚔️ 部隊（タップで配置・選択）"],
           dockBuild: ["towerTools", "🏯 建設（選んで草地をタップ）"],
-          dockSkills: ["skillDock", "✨ 武将の必殺技"],
+          menuSkills: ["skillDock", "✨ 武将の必殺技"], // メニューの「戦い」から開く
           dockMenu: ["menuTools", "☰ メニュー"],
         };
         let drawerOpen = null, skillDockKey = "";
@@ -21075,9 +21075,12 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         // メニューの項目を押したら閉じる（開いた画面の操作を邪魔しない）
         $("menuTools").addEventListener("click", (ev) => {
           const b = ev.target.closest("button");
-          if (b && !b.dataset.drawerClose && b.id !== "layoutToggle") setDrawer(null);
+          if (b && !b.dataset.drawerClose && b.id !== "layoutToggle" && b.id !== "menuSkills") setDrawer(null);
         });
-        $("menuOrganize").onclick = () => $("organize").click();
+        $("dockOrganize").onclick = () => {
+          setDrawer(null);
+          $("organize").click(); // 従来の「編成」と同じ画面
+        };
         $("menuInfo").onclick = () => $("infoOpen").click();
         $("menuShop").onclick = () => {
           $("gearOpen").click();
@@ -21131,10 +21134,11 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           const rows = skillDockRows(), ready = rows.filter((r) => r.ready).length;
           $("dockUnitsSub").textContent = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
           $("dockBuildSub").textContent = "塔 " + builtTowerCount() + "/" + TOWER_RULES.maxBuilt;
-          $("dockSkillsSub").textContent = rows.length ? (ready ? "使える " + ready : rows.length + "人") : "配属なし";
+          $("dockOrganizeSub").textContent = "保有 " + squads.length + "/" + SQUAD_RULES.maxSquads;
+          $("menuSkills").textContent = "✨ 必殺技" + (ready ? "（" + ready + "）" : "");
           $("dockMenuBadge").hidden = !document.querySelector("#menuTools .feature-new");
-          for (const id of ["dockUnits", "dockBuild", "dockSkills"]) $(id).disabled = !!battle; // 攻城戦の操作は戦闘バーで行う
-          if (drawerOpen !== "dockSkills") return;
+          for (const id of ["dockUnits", "dockBuild"]) $(id).disabled = !!battle; // 攻城戦の操作は戦闘バーで行う
+          if (drawerOpen !== "menuSkills") return;
           const key = JSON.stringify(rows.map((r) => [r.h.id, r.state, r.ready]));
           if (key === skillDockKey) return;
           skillDockKey = key;

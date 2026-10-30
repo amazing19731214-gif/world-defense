@@ -126,9 +126,14 @@ try {
   await p.locator("#sell").tap();
   check((await p.evaluate(() => WD_DEBUG.state().towers.length)) === 0, "塔の売却（従来どおり）");
 
-  // 必殺技
+  // 編成（下の列）
+  await p.locator("#dockOrganize").tap();
+  check((await shown(p, "#squadSheet")) && /保有 8\/8/.test(await p.locator("#dockOrganize").innerText()), "下の列の「編成」から従来の編成画面を開く（保有数も表示）");
+  await p.evaluate(() => document.querySelectorAll(".sheet-back:not([hidden]) .icon-btn").forEach((b) => b.click()));
+  // 必殺技（メニューの「戦い」から）
   await p.evaluate(() => WD_DEBUG.heroApi.assignHero("nobunaga", WD_DEBUG.state().squads[0]));
-  await p.locator("#dockSkills").tap();
+  await p.locator("#dockMenu").tap();
+  await p.locator("#menuSkills").tap();
   check(/織田信長（部隊）.*ウェーブ中に使えます/.test(await p.locator("#skillDockList").innerText()) && (await p.locator("[data-skill-hero]").isDisabled()), "必殺技の一覧：準備中は使えない理由を表示");
   await p.locator("#skillDock [data-drawer-close]").tap();
   await p.evaluate(() => {
@@ -138,8 +143,10 @@ try {
     for (let i = 0; i < 6; i++) WD_DEBUG.addEnemy({ kind: "goblin", d: 230 + i * 8, hp: 1e9, speed: 0 });
     WD_DEBUG.step(0.05);
   });
-  await p.locator("#dockSkills").tap();
-  check(/使える/.test(await p.locator("#dockSkills").innerText()) && (await p.locator("[data-skill-hero]").isEnabled()), "ウェーブ中は「使える」と表示し発動できる");
+  await p.locator("#dockMenu").tap();
+  check(/必殺技（1）/.test(await p.locator("#menuSkills").innerText()), "メニューの「必殺技」に使える人数を表示");
+  await p.locator("#menuSkills").tap();
+  check(/使える/.test(await p.locator("#skillDockList").innerText()) && (await p.locator("[data-skill-hero]").isEnabled()), "ウェーブ中は「使える」と表示し発動できる");
   await p.locator("[data-skill-hero]").tap();
   const used = await p.evaluate(() => { const h = WD_DEBUG.state().heroState.nobunaga; return { cd: h.cd, active: h.active }; });
   check(used.cd > 0 || used.active > 0, "一覧から必殺技を発動（従来の必殺技ボタンと同じ処理）", used);
@@ -153,12 +160,12 @@ try {
   // メニュー
   await p.locator("#dockMenu").tap();
   const menuText = await p.locator("#menuTools").innerText();
-  check(["戦い", "武将・兵士の育成", "装備・アイテム", "記録・その他", "世界", "編成", "修練場", "ガチャ", "主人公", "育成情報", "装備倉庫", "商店", "秘伝錬成", "図鑑", "途中保存", "最初から", "データ消去", "表示"].every((w) => menuText.includes(w)), "メニューに世界・編成・ガチャ・育成・装備・商店・修練場・図鑑・設定をまとめる", menuText);
+  check(["戦い", "武将・兵士の育成", "装備・アイテム", "記録・その他", "世界", "必殺技", "修練場", "ガチャ", "主人公", "育成情報", "装備倉庫", "商店", "秘伝錬成", "図鑑", "途中保存", "最初から", "データ消去", "表示"].every((w) => menuText.includes(w)), "メニューに世界・必殺技・ガチャ・育成・装備・商店・修練場・図鑑・設定をまとめる", menuText);
   check((await box(p, "#menuTools")).height <= 844 * 0.56, "メニューは画面の半分ほどの高さで、中だけスクロール");
   await p.locator("#mapOpen").tap();
   check((await shown(p, "#mapSheet")) && !(await p.evaluate(() => document.getElementById("menuTools").classList.contains("open"))), "世界を押すと世界地図を開き、メニューは閉じる");
   await p.locator("#mapClose").tap();
-  for (const [btn, sheet, text] of [["#menuOrganize", "#squadSheet", "編成"], ["#menuShop", "#gearSheet", "商店"], ["#menuInfo", "#infoSheet", "育成情報"]]) {
+  for (const [btn, sheet, text] of [["#menuShop", "#gearSheet", "商店"], ["#menuInfo", "#infoSheet", "育成情報"]]) {
     await p.locator("#dockMenu").tap();
     await p.locator(btn).tap();
     const ok = await shown(p, sheet);
