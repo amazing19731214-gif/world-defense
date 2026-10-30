@@ -341,6 +341,12 @@
         font-size: 14px;
         white-space: nowrap;
       }
+      /* 初心者向け：次の目標の1行と、新しく使えるようになった機能の印 */
+      .next-goal { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: #2a3a2ccc; color: #f3e6b8; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+      .next-goal span { flex: 1; min-width: 0; }
+      .next-goal button { flex: none; min-height: 44px; font-size: 14px; }
+      .tools.menu-tools button.feature-new { box-shadow: 0 0 0 3px #f2c14e; }
+      .tools.menu-tools #showAllFeatures { font-size: 13px; }
       /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
       .tools.play-tools {
         display: grid;
@@ -2418,6 +2424,7 @@
         ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める（防衛戦・修練場）">AUTO
 OFF</button>
       </div>
+      <p id="nextGoal" class="next-goal" role="status" hidden></p>
       <section id="towerPanel" class="panel dock" hidden aria-label="選択中の塔">
         <div class="panel-head">
           <strong id="tpTitle"></strong
@@ -2492,12 +2499,13 @@ OFF</button>
         ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
         ><button id="mapOpen">🌏 世界</button><button id="zukanOpen">📖 図鑑</button
         ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
-        ><button id="previewOpen" hidden>🧪 試作：終盤</button>
+        ><button id="previewOpen" hidden>🧪 試作：終盤</button
+        ><button id="showAllFeatures" hidden>🔓 全機能を表示</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v96（ヨーロッパ・ロシア編と世界征服）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v97（初心者向けの段階開放と次の目標）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2757,6 +2765,14 @@ OFF</button>
         const C = document.getElementById("game"),
           ctx = C.getContext("2d");
         const $ = (id) => document.getElementById(id);
+        // 初心者向けの段階開放：保存データが1つもない最初の起動か（起動処理が保存を書く前に判定する）
+        const UI_FRESH_START = (() => {
+          try {
+            return !Object.keys(localStorage).some((k) => k.startsWith("worldDefense."));
+          } catch (err) {
+            return false;
+          }
+        })();
         const W = 960,
           H = 600;
         const types = {
@@ -8046,6 +8062,7 @@ function chronicleWarBonusBlock(s) {
           $("hp").setAttribute("aria-label", "城のハート " + hp + "/" + HEART_RULES.maxHp + "。ゴールドで回復");
           renderHearts();
           renderTowerGrowth();
+          renderOnboarding();
         }
         function renderCounterNotice() {
           const c = territoryReady ? activeCounter() : null;
@@ -12571,6 +12588,7 @@ function chronicleWarBonusBlock(s) {
             }
             gold += Math.round((50 + wave * 8) * (1 + territoryBonus("waveGold"))); // 領土の効果で増える
             const won = wave >= waveGoal;
+            noteWaveCleared(wave);
             msg(
               won
                 ? "🎉 " + wave + "ウェーブクリア！ 勝利！" + (wave < MAX_WAVE ? "（上の「WAVE」から目標を延ばすと続けて戦える）" : "")
@@ -19538,6 +19556,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           shinano: { name: "信濃", castle: "fukashi", adj: ["mino", "mikawa", "totomi", "kai"] },
           kai: { name: "甲斐", castle: "tsutsujigasaki", adj: ["suruga", "shinano"] },
         };
+        var onboardReady = false; // 段階開放の準備ができたか（var：起動の途中のupdateUIでも参照できる）
         var territoryReady = false; // 領土のデータの準備ができたか（var：起動の途中でも参照できる）
         // 領土の効果（国の特産）。領土にした国の効果が防衛戦に効く（同じ種類は足し合わせる）
         //   waveGold … ウェーブクリアのゴールド（割合）、startGold … 開始ゴールド、repair … 塔の修理費の割引、hire … 兵士の雇用・補充費の割引
@@ -20472,6 +20491,144 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           return found;
         }
         checkSecrets(); // 保存データの領土からも計算し直す
+        // ===== 初心者向け：機能の段階開放と「次の目標」 =====
+        // 保存データのない最初の起動だけ、進行に合わせてメニューを見せる。既存のセーブは最初から全機能を表示。
+        // 一度開いた機能は「最初から」や失地でも隠さない。「全機能を表示」でいつでも全部出せる。データ消去で初期化。
+        const UI_KEY = "worldDefense.ui.v1";
+        const ONBOARD_FEATURES = [
+          { id: "mapOpen", need: (s) => s.maxWave >= 3 || s.attempted },
+          { id: "gacha", need: (s) => s.tickets > 0 || s.heroes > 0 },
+          { id: "zukanOpen", need: (s) => s.heroes > 0 || s.maxWave >= 5 },
+          { id: "heroGrowth", need: (s) => s.captured >= 1 || s.maxWave >= 10 },
+          { id: "gearOpen", need: (s) => s.gear > 0 || s.captured >= 1 },
+          { id: "trainingOpen", need: (s) => s.captured >= 1 || s.maxWave >= 10 },
+          { id: "forgeOpen", need: (s) => s.captured >= 3 || s.gear > 0 },
+        ];
+        const uiSave = (() => {
+          let d = null;
+          try {
+            d = JSON.parse(localStorage.getItem(UI_KEY) || "null");
+          } catch (err) {
+            d = null;
+          }
+          const ok = d && typeof d === "object";
+          const seen = {}, fresh = {};
+          for (const F of ONBOARD_FEATURES) {
+            if (ok && d.seen?.[F.id] === true) seen[F.id] = true;
+            if (ok && d.fresh?.[F.id] === true) fresh[F.id] = true;
+          }
+          return {
+            all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
+            maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
+            seen,
+            fresh,
+          };
+        })();
+        function persistUi() {
+          try {
+            localStorage.setItem(UI_KEY, JSON.stringify(uiSave));
+          } catch (err) {
+            /* 表示の記録だけなので、保存できなくても遊べる */
+          }
+        }
+        persistUi(); // 最初の起動の判定を残す（次回はほかの保存データがあっても初心者のまま）
+        function noteWaveCleared(n) {
+          if (n <= uiSave.maxWave) return;
+          uiSave.maxWave = n;
+          persistUi();
+        }
+        function onboardStats() {
+          const castles = Object.values(conquest);
+          return {
+            maxWave: uiSave.maxWave,
+            attempted: castles.some((c) => c.attempts > 0 || c.wins > 0),
+            captured: castles.filter((c) => c.captured).length,
+            tickets: heroSave.tickets || 0,
+            heroes: ownedIds().length,
+            gear: heroSave.forge.items.length,
+          };
+        }
+        const featureOpen = (id) => uiSave.all || !!uiSave.seen[id];
+        function nextGoal(s) {
+          if (s.maxWave < 1 && !s.attempted) {
+            if (wave === 0 && !towers.length) return { text: "塔のボタンを選び、草地をタップして建設しよう" };
+            if (wave === 0 && !squads.length) return { text: "「＋ 雇う」で兵士を雇おう（塔と一緒に道を守ります）" };
+            if (wave === 0 && !fieldSquads().length) return { text: "部隊のボタンを押し、道をタップして配置しよう" };
+            return { text: "「▶ ウェーブ開始」で敵を迎え撃とう" };
+          }
+          if (!s.captured && s.tickets > 0 && !s.heroes) return { text: "🎴 ガチャ券で武将を仲間にしよう（塔や部隊に配属できます）", act: "gacha" };
+          if (s.maxWave < 3 && !s.attempted) return { text: "WAVE 3まで守り抜こう（城攻めの「🌏 世界」が開きます）" };
+          const stage = STAGE1.find((p) => !ownsProvince(p));
+          if (!s.captured && stage) return { text: "🌏 世界 → 日本から" + PROVINCES[stage].name + "の" + NPC_CASTLES[PROVINCES[stage].castle].name + "を攻めよう", act: "map" };
+          if (stage) return { text: "最初の7か国を統一しよう（" + ownedCount(STAGE1) + "/7）", act: "map" };
+          if (!(conquestMeta.tenka || isTenka())) return { text: "日本68か国の天下統一を目指そう（" + ownedCount() + "/68）", act: "map" };
+          const cid = CHAPTER_ORDER.find((id) => id !== "japan" && !conquestMeta.world.cleared[id]);
+          if (cid && chapterUnlocked(cid)) {
+            const list = chapterProvinces(cid);
+            return { text: "第" + (CHAPTER_ORDER.indexOf(cid) + 1) + "章「" + CHAPTERS[cid].name + "」を制覇しよう（" + ownedCount(list) + "/" + list.length + "）", act: "map" };
+          }
+          if (worldConquered()) return { text: "🌍 世界征服達成！ 修練場や図鑑でさらなるやり込みへ" };
+          return null;
+        }
+        let onboardKey = "", onboardShown = false;
+        function renderOnboarding() {
+          if (!onboardReady) return;
+          const s = onboardStats(), opened = [];
+          for (const F of ONBOARD_FEATURES)
+            if (!uiSave.all && !uiSave.seen[F.id] && F.need(s)) {
+              uiSave.seen[F.id] = uiSave.fresh[F.id] = true;
+              opened.push(F.id);
+            }
+          if (opened.length) {
+            persistUi();
+            if (onboardShown) toast("🔓 " + opened.map((id) => $(id).textContent.replace(/\(\d+\)$/, "")).join("・") + " が使えるようになりました");
+          }
+          const goal = battle || training ? null : nextGoal(s);
+          const key = JSON.stringify([uiSave, goal]);
+          if (key === onboardKey) return;
+          onboardKey = key;
+          onboardShown = true;
+          let locked = 0;
+          for (const F of ONBOARD_FEATURES) {
+            const open = featureOpen(F.id);
+            $(F.id).hidden = !open;
+            $(F.id).classList.toggle("feature-new", open && !uiSave.all && !!uiSave.fresh[F.id]);
+            if (!open) locked++;
+          }
+          $("showAllFeatures").hidden = !locked;
+          $("showAllFeatures").textContent = "🔓 全機能を表示（あと" + locked + "）";
+          const el = $("nextGoal");
+          el.hidden = !goal;
+          if (!goal) return;
+          const span = document.createElement("span");
+          span.textContent = "🎯 次の目標：" + goal.text;
+          el.replaceChildren(span);
+          if (goal.act) {
+            const b = document.createElement("button");
+            b.dataset.goalAct = goal.act;
+            b.textContent = goal.act === "map" ? "🌏 開く" : "🎴 開く";
+            el.append(b);
+          }
+        }
+        for (const F of ONBOARD_FEATURES)
+          $(F.id).addEventListener("click", () => {
+            if (!uiSave.fresh[F.id]) return;
+            delete uiSave.fresh[F.id];
+            persistUi();
+            renderOnboarding();
+          });
+        $("showAllFeatures").onclick = () => {
+          uiSave.all = true;
+          persistUi();
+          renderOnboarding();
+          toast("🔓 すべての機能を表示しました");
+        };
+        $("nextGoal").addEventListener("click", (ev) => {
+          const act = ev.target.closest("[data-goal-act]")?.dataset.goalAct;
+          if (act) $(act === "map" ? "mapOpen" : "gacha").click();
+        });
+        onboardReady = true;
+        renderOnboarding();
         const unseenSecrets = () => Object.keys(SECRETS).filter((id) => conquestMeta.secrets[id] && !conquestMeta.secretSeen[id]);
         function markSecretsSeen(ids) {
           for (const id of ids) conquestMeta.secretSeen[id] = true;
