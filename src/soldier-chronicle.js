@@ -422,7 +422,7 @@ function scheduleChronicleNotices() {
         const key = s.chronicle.life + ":" + id;
         if (!chronicleAnnounced.has(key)) {
           chronicleAnnounced.add(key);
-          notes.push("💡 " + (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_SKILLS[id].name);
+          notes.push(["insight", (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_SKILLS[id].name]);
         }
       }
     for (const s of d.soldiers || [])
@@ -430,12 +430,11 @@ function scheduleChronicleNotices() {
         const key = s.chronicle.life + ":" + id;
         if (!chronicleAnnounced.has(key)) {
           chronicleAnnounced.add(key);
-          notes.push("🏅 " + (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_HONORS[id].name);
+          notes.push(["honor", (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_HONORS[id].name]);
         }
       }
     zukanSync();
-    if (notes.length)
-      mapToast(notes.slice(0, 2).join("／") + (notes.length > 2 ? " ほか" + (notes.length - 2) + "件" : ""));
+    for (const [kind, line] of notes) eventNotice(kind, line); // イベントウィンドウ（同じ種類はまとめる）
   });
 }
 document.addEventListener("click", (ev) => {
@@ -798,6 +797,7 @@ function chronicleDeployMany(list) {
     state.chronicleRevivalUntil = evolutionClock() + 8;
     state.chronicleRevivalKey = chronicleKey();
     chroniclePulse(x.s, "黄泉返り", "rampart");
+    eventNotice("revive", soldierName(x.s) + "が黄泉返った");
   }
   return true;
 }
@@ -906,7 +906,7 @@ function chronicleLearnUnyielding(s) {
     return err;
   }
   zukanSync();
-  mapToast("💡 " + soldierName(s) + "：不屈を習得！");
+  eventNotice("insight", soldierName(s) + "：不屈を習得");
   return null;
 }
 document.addEventListener("click", (ev) => {
