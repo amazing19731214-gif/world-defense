@@ -155,5 +155,6 @@ try {
   check(H.errors.length === 0, "ブラウザJavaScriptエラーなし：" + H.errors.join(","));
   console.log("全" + n + "項目が成功");
 } finally {
+  if (H.errors.length) console.log("Browser errors", H.errors);
   await H.close();
 }

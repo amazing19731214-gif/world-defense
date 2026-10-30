@@ -23,9 +23,13 @@ try {
   );
   for (const row of baseline.stats) {
     const current = stats.find((x) => x.id === row.id);
+    const saved = baseline.seed.soldiers.find((s) => s.id === row.id),
+      expected = { ...row.stats };
+    expected.maxHp += saved.wavesSurvived || 0;
+    expected.atk += Math.floor((saved.kills || 0) / 100);
     check(
-      JSON.stringify(current.stats) === JSON.stringify(row.stats),
-      "v86旧セーブの兵士" + row.id + "の全能力を移行時に維持",
+      Object.keys(expected).every((k) => Math.abs(current.stats[k] - expected[k]) < 1e-8),
+      "v86旧セーブの兵士" + row.id + "の基礎能力を維持し、承認済み戦歴の固定値のみ追加",
     );
   }
   check(

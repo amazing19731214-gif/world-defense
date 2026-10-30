@@ -181,11 +181,11 @@ function chronicleFinish(s, win) {
 function chronicleBlock(s) {
   const c = chronicleOf(s);
   return (
-    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>討伐 ' +
+    '<details class="chronicle-box"><summary>📖 戦歴帳</summary><p><small>導入後の記録・保存は戦闘進行と共通</small></p><p>導入後討伐 ' +
     fmt(c.kills) +
-    "・強敵 " +
+    "・ボス討伐 " +
     fmt(c.bossKills) +
-    "・支援参加 " +
+    "・ボス支援 " +
     fmt(c.bossAssists) +
     "<br>実回復 " +
     fmt(c.healed) +
@@ -522,15 +522,20 @@ function chronicleSyncCommitted() {
   } catch {
     return;
   }
-  for (const id of d.insightFound || []) chronicleLearnedConfirmed.add(id);
-  for (const s of d.soldiers || [])
-    for (const id of s.insight?.known || []) chronicleLearnedConfirmed.add(id);
-  for (const s of d.soldiers || [])
-    if (s.chronicle?.life)
-      chronicleCommitted.set(s.chronicle.life, {
-        chronicle: cleanChronicle(s.chronicle, s),
-        known: new Set(s.insight?.known || []),
-      });
+  if (!d || typeof d !== "object") return;
+  const list = (Array.isArray(d.soldiers) ? d.soldiers : []).filter((s) => s && typeof s === "object");
+  for (const id of Array.isArray(d.insightFound) ? d.insightFound : []) chronicleLearnedConfirmed.add(id);
+  for (const s of list)
+    for (const id of Array.isArray(s.insight?.known) ? s.insight.known : [])
+      chronicleLearnedConfirmed.add(id);
+  for (const s of list) {
+    const c = cleanChronicle(s.chronicle, s);
+    chronicleCommitted.set(c.life, {
+      chronicle: c,
+      known: new Set(Array.isArray(s.insight?.known) ? s.insight.known : []),
+      war: chronicleWarBonusFrom(s, c),
+    });
+  }
 }
 function chronicleHas(s, id) {
   return !!(
@@ -562,6 +567,10 @@ function chronicleStats(s, st) {
   const f = chronicleFinesse(s);
   st.rate *= 1 - f.haste;
   st.range += (unitOf(s).range || 0) * f.range;
+  const war = chronicleWarBonus(s);
+  st.atk += war.atk;
+  st.def += war.def;
+  st.rate /= 1 + war.speed;
   return st;
 }
 function chronicleResistance(points) {
@@ -1073,5 +1082,83 @@ function chronicleEquipmentBlock(s) {
       )
       .join("") +
     "</details>"
+  );
+}
+
+// 保存された生涯の戦歴から導出。能力値や記録を加算保存しない。
+const CHRONICLE_WAR_BONUS_RULES = Object.freeze(
+  [
+    { counter: "waves", name: "生存W（累計）", every: 1, stat: "hp", amount: 1 },
+    { counter: "kills", name: "討伐数（従来分を含む累計）", every: 100, stat: "atk", amount: 1 },
+    { counter: "bossKills", name: "ボス討伐", every: 10, stat: "atk", amount: 1 },
+    { counter: "bossAssists", name: "ボス討伐支援", every: 100, stat: "speed", amount: 0.001, cap: 0.1 },
+    { counter: "meleeHits", name: "近接被弾", every: 1000, stat: "def", amount: 1 },
+    { counter: "rangedHits", name: "遠距離被弾", every: 2000, stat: "def", amount: 1 },
+    { counter: "survived30", name: "HP30%以下から勝利・生還", every: 100, stat: "def", amount: 1 },
+    { counter: "survived10", name: "HP10%以下から勝利・生還", every: 50, stat: "def", amount: 1 },
+    {
+      counter: "survivedSingle",
+      name: "HP一桁から勝利・生還",
+      every: 100,
+      stat: "evade",
+      amount: 0.001,
+      cap: 0.05,
+    },
+  ].map(Object.freeze),
+);
+const CHRONICLE_WAR_ZERO = Object.freeze({ hp: 0, atk: 0, def: 0, speed: 0, evade: 0, parts: [] });
+function chronicleWarBonusFrom(s, c) {
+  const counts = { ...c, kills: intIn(s.kills, 0, 1e6, 0), waves: intIn(s.wavesSurvived, 0, 1e6, 0) },
+    bonus = { hp: 0, atk: 0, def: 0, speed: 0, evade: 0, parts: [] };
+  for (const r of CHRONICLE_WAR_BONUS_RULES) {
+    const count = intIn(counts[r.counter], 0, CHRONICLE_RULES.cap, 0),
+      value = Math.min(r.cap ?? Infinity, Math.floor(count / r.every) * r.amount);
+    bonus[r.stat] += value;
+    bonus.parts.push({ ...r, count, value });
+  }
+  return bonus;
+}
+function chronicleWarBonus(s) {
+  return chronicleCommitted.get(chronicleOf(s).life)?.war || CHRONICLE_WAR_ZERO;
+}
+function chronicleWarBonusBlock(s) {
+  const b = chronicleWarBonus(s),
+    labels = { hp: "最大HP", atk: "攻撃", def: "防御", speed: "攻撃・回復速度", evade: "回避率" },
+    text = (stat, value) =>
+      stat === "speed"
+        ? (value * 100).toFixed(1) + "%"
+        : stat === "evade"
+          ? (value * 100).toFixed(1) + "ポイント"
+          : Math.round(value).toLocaleString("ja-JP");
+  return (
+    '<details class="chronicle-war-bonus"><summary>📈 戦歴ボーナス</summary><p><b>最大HP＋' +
+    b.hp.toLocaleString("ja-JP") +
+    "・攻撃＋" +
+    b.atk.toLocaleString("ja-JP") +
+    "・防御＋" +
+    b.def.toLocaleString("ja-JP") +
+    "</b><br>行動速度＋" +
+    text("speed", b.speed) +
+    "・回避＋" +
+    text("evade", b.evade) +
+    "</p><p><small>保存済みの記録で計算します。固定値は割合補正の後に加算。最大HPが増えても、その場で回復しません。</small></p>" +
+    b.parts
+      .map(
+        (r) =>
+          "<p><small>" +
+          r.name +
+          "：" +
+          r.count.toLocaleString("ja-JP") +
+          "（" +
+          r.every.toLocaleString("ja-JP") +
+          "ごと）<br>" +
+          labels[r.stat] +
+          "＋" +
+          text(r.stat, r.value) +
+          (r.cap != null ? "／上限＋" + text(r.stat, r.cap) : "") +
+          "</small></p>",
+      )
+      .join("") +
+    "<p><small>討伐・生存Wは従来の累計、それ以外は戦歴機能の導入後の記録です。速度は最大＋10%、戦歴の回避は最大＋5ポイント（全効果の合計上限40%）です。射程への戦歴補正はありません。</small></p></details>"
   );
 }

@@ -2497,7 +2497,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v93（戦歴で育つ記念装備）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v94（戦歴で育つ兵士の能力）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -4877,7 +4877,7 @@ OFF</button>
         const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
         const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
         const legendHp = (s, hp) =>
-          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp"));
+          Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp")) + chronicleWarBonus(s).hp;
         function rollLegend() {
           const between = (min, max) => min + legendRng() * (max - min),
             pick = (o) => {
@@ -5570,6 +5570,8 @@ OFF</button>
           maxExtraGold: 10, extraGoldChance: 0.2, supplyDiscount: 0.3,
         };
         let combatClock = 0, enemySerial = 0;
+        // 保存済みの戦歴スキルは兵士の初回復元時にも能力計算から参照する。
+        let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
         const aliveEnemies = () => enemies.filter((e) => !e.gone && e.hp > 0);
         const heroHas = (h, id) => h && h.id === id;
         const favorite = (h, q) => !!(h && q && WARLORDS[h.id].favorite === q.type);
@@ -6661,6 +6663,7 @@ OFF</button>
           saveRoster();
           persistHeroes();
           if (commitGameSaveBatch()) {
+            s.hp = soldierStats(s).maxHp; // 正式な召喚・復活だけは確定後の最大HPまで回復する。
             zukanSync();
             return s;
           }
@@ -6724,6 +6727,7 @@ OFF</button>
                 named: rec.named || null,
                 battles: rec.battles,
                 kills: rec.kills,
+                wavesSurvived: intIn(v.wavesSurvived,0,1e6,0),
               });
               chronicleAdd(x.chronicle,"revivals");
               x.chronicle.revivalCharge=true;
@@ -7685,7 +7689,7 @@ OFF</button>
         // 回避術：かわしたら2秒は発動しない（連続でかわし続けない）
         function evadeHit(s, now) {
           const id = battle ? battle.groups.find(g => g.list.includes(s))?.hero : heroOnSquad(squadById(s.squadId))?.id;
-          const p = chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
+          const p = chronicleWarBonus(s).evade + chronicleFinesse(s).evade + skillSum(s, "evade") * procMul(s) + (id ? warlordGrowth(id).evade || 0 : 0);
           if (!p || coolLeft(s.evadeUntil || 0, now, 2) || Math.random() >= Math.min(0.4, p)) return false;
           s.evadeUntil = now + 2;
           return true;
@@ -9233,6 +9237,7 @@ OFF</button>
         }
         const soldierSave = loadSoldierSave();
         let soldierSaveOk = true;
+        chronicleSyncCommitted(); // 初回復元のHP計算にも保存済み戦歴を反映する。
         function writeSoldierSave() {
           soldierSave.insightFound=[...new Set([...(soldierSave.insightFound||[]),...soldierSave.soldiers.flatMap(s=>s.insight?.known||[])])];
           soldierSave.honorFound=[...new Set([...(soldierSave.honorFound||[]),...soldierSave.soldiers.flatMap(s=>s.chronicle?.honors||[])])];
@@ -9320,6 +9325,7 @@ OFF</button>
                   legend: s.legend || null,
                   fruit: s.fruit || null,
                   bestLevel: s.bestLevel,
+                  wavesSurvived:s.wavesSurvived,
                   insight: s.insight,
                   chronicle: chronicleOf(s),
                 }),
@@ -15004,7 +15010,7 @@ OFF</button>
             skillTags(s.skills) +
             (itemsOf(s).length ? "<br><small>🎒 " + slotLine(s) + "</small>" : "") +
             "</p>" +
-            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleEquipmentBlock(s) + chronicleHonorBlock(s) + chronicleSurvivalBlock(s) + chronicleGoals(s) + chronicleBlock(s) +
+            legendBlock(s) + chronicleAptitudeBlock(s) + chronicleWarBonusBlock(s) + chronicleEquipmentBlock(s) + chronicleHonorBlock(s) + chronicleSurvivalBlock(s) + chronicleGoals(s) + chronicleBlock(s) +
             "<p><small>出陣 " +
             s.battles +
             "・討伐 " +
@@ -17224,7 +17230,6 @@ OFF</button>
           const p = PROVINCE_ORDER.find(canAttackProvince);
           return p ? PROVINCES[p].castle : CASTLE_ORDER[0];
         }
-        let battle = null; // 攻城戦の状態（防衛戦の状態とは別。戦闘中だけ存在する）
         const MERGE_D = pathLength(upper.slice(0, 5)); // 上下の道が合流する地点（道に沿った距離）
         const samePath = (a, b, d) => d >= MERGE_D || a === b;
         // 出陣できるか（防衛のウェーブ中は不可）。各部隊の出撃できる兵士（保存済みの生存兵）を返す
@@ -17954,6 +17959,8 @@ OFF</button>
         function battleStats(g, s) {
           const st = Object.assign({}, soldierStats(s, true));
           if (g.hero) {
+            const fixed=chronicleWarBonus(s);
+            st.atk-=fixed.atk;st.def-=fixed.def;st.maxHp-=fixed.hp;
             const c = WARLORDS[g.hero];
             st.atk *= (c.siegePassive.damageMul || 1) * starMul(g.hero);
             st.def *= c.siegePassive.defMul || 1;
@@ -17962,8 +17969,9 @@ OFF</button>
             st.maxHp *= 1 + (grow.hp || 0); st.range *= 1 + (grow.range || 0); st.rate /= 1 + (grow.speed || 0);
             // 固有追撃などの成長は攻城戦の既存の攻撃補正に加算して反映する。
             st.atk *= 1 + (grow.special || 0) * 0.2;
+            st.atk+=fixed.atk;st.def+=fixed.def;st.maxHp+=fixed.hp;
           }
-          if (g.rally > 0) st.atk *= SIEGE_SKILL.rally.atk;
+          if (g.rally > 0) {const fixed=chronicleWarBonus(s).atk;st.atk=(st.atk-fixed)*SIEGE_SKILL.rally.atk+fixed;}
           return st;
         }
         // ===== 攻城戦の必殺技 =====
@@ -20378,7 +20386,7 @@ OFF</button>
               openForge,
               openGear,
             },
-            chronicleApi: {GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {WAR_RULES:CHRONICLE_WAR_BONUS_RULES,warBonus:chronicleWarBonus,warBlock:chronicleWarBonusBlock,GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },
