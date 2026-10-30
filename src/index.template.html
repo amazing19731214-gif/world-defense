@@ -2620,7 +2620,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.5（部隊内の並べ替え）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v106試作（修練場で新しい戦い）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -5995,6 +5995,7 @@ OFF</button>
           if (s) ignore = Math.max(ignore, skillSum(s, "armorPierce")); // 貫通射撃
           const focus = ownedHeroes().some((v) => activeKind(v, "focus") && v.skillTarget === e);
           const vulnerability = Math.min(WARLORD_RULES.maxVulnerability, (e.weakLeft > 0 ? e.weakness : 0) + (focus ? 0.2 : 0));
+          if (e.leader) damage *= enemyCoverMul(e, options); // 試作：盾兵に守られた後衛
           const armor = evolutionArmor(e,e.armor ?? WARLORD_RULES.enemyArmor[e.kind] ?? 0,combatClock);
           damage *= (1 + vulnerability) * 30 / (30 + armor * (1 - Math.min(1, ignore)));
           if (e.rare) damage = Math.min(damage, RARE.hitDamage); // 特別な敵はとても硬い（1回で 1 だけ）
@@ -7099,7 +7100,182 @@ OFF</button>
           );
           return s ? null : "保存できなかったので復活しませんでした（書は残っています）。";
         }
+        // ===== 戦闘の共通基盤（v106試作） =====
+        // 既存の敵・兵士・スキルの動きは変えない。新しい敵（e.behavior）と攻撃の型は、修練場の「新しい戦い（試作）」でだけ使う。
+        //
+        // 攻撃の型：撃つ方向（扇・全方位）と当たる範囲（直線の太さ・長さ・1本で当たる数）をデータで書く。
+        // その瞬間に当たる方式（今の兵士・塔と同じ）なので、戦闘の処理は軽く、試験で結果を確かめやすい。
+        // 将来：職業スキル・閃き・武将の必殺技・奥義は、ここの型を名前で指して倍率だけ変える。
+        //       ホーミング・分裂・回転護衛弾は、飛んで当たる弾（kind: "bullet"）を足して同じ表から使う。
+        //   rays：本数 / spread：扇の1本ごとの角度（ring：全方位に等間隔） / len：長さ（rangeMul：射程の何倍か）
+        //   width：直線の太さ / perRay：1本で当たる数 / mul：威力（攻撃1回の何倍か） / cover：盾の守りを抜ける / fx：演出
+        const ATTACK_PATTERNS = {
+          threeWay: { name: "三方撃ち", rays: 3, spread: 0.38, rangeMul: 1.05, width: 14, perRay: 1, mul: 0.6, fx: "arrow" },
+          pierce: { name: "貫通弾", rays: 1, spread: 0, len: 320, width: 16, perRay: 6, mul: 0.7, cover: true, fx: "bullet" },
+          eightSlash: { name: "八方斬撃", rays: 8, ring: true, len: 120, width: 20, perRay: 3, mul: 0.6, cover: true, fx: "slash" },
+          // 奥義：同じ型を大きく・強くしたもの（技名を大きく出し、画面を揺らす）
+          threeWayOugi: { name: "奥義・千本桜", rays: 9, spread: 0.17, rangeMul: 1.8, width: 18, perRay: 3, mul: 1.2, fx: "arrow", ougi: true },
+          pierceOugi: { name: "奥義・雷轟貫き", rays: 1, spread: 0, len: 980, width: 34, perRay: 99, mul: 2.4, cover: true, fx: "bullet", ougi: true },
+          eightSlashOugi: { name: "奥義・八方天翔斬", rays: 8, ring: true, len: 680, width: 44, perRay: 99, mul: 2.0, cover: true, fx: "slash", ougi: true },
+        };
+        // 型の当たる範囲：origin から各方向へ直線を引き、近い順に perRay 体まで（同じ敵は1回だけ）
+        function resolvePattern(origin, dir, P, list, range = 0) {
+          const L = P.len || Math.max(80, range * (P.rangeMul || 1)),
+            done = new Set(),
+            rays = [];
+          for (let i = 0; i < P.rays; i++) {
+            const a = P.ring ? dir + (i * Math.PI * 2) / P.rays : dir + (i - (P.rays - 1) / 2) * P.spread,
+              ux = Math.cos(a),
+              uy = Math.sin(a),
+              cand = [];
+            for (const e of list) {
+              if (done.has(e) || e.gone || e.hp <= 0) continue;
+              const px = e.x - origin.x,
+                py = e.y - origin.y,
+                along = px * ux + py * uy;
+              if (along > 0 && along <= L && Math.abs(px * uy - py * ux) <= P.width + (e.r || 12)) cand.push([along, e]);
+            }
+            cand.sort((p, q) => p[0] - q[0]);
+            const hits = cand.slice(0, P.perRay).map((c) => c[1]);
+            for (const e of hits) done.add(e);
+            rays.push({ a, len: L, hits });
+          }
+          return rays;
+        }
+        // 型を当てる：ダメージは dealEnemyDamage（防御・武将・経験値などは通常の攻撃と同じ扱い。normal:false で武将の追加効果は付けない）
+        function applyPattern(id, from, target, dmg, source) {
+          const P = ATTACK_PATTERNS[id],
+            list = aliveEnemies(),
+            origin = { x: from.x, y: from.y - 18 },
+            dir = Math.atan2(target.y - origin.y, target.x - origin.x),
+            range = source.s ? soldierStats(source.s).range : 0,
+            rays = resolvePattern(origin, dir, P, list, range),
+            killed = [];
+          for (const r of rays)
+            for (const e of r.hits) {
+              const alive = e.hp > 0;
+              dealEnemyDamage(e, dmg * P.mul, source, { normal: false, pierceCover: !!P.cover });
+              if (alive && e.hp <= 0) killed.push(e);
+            }
+          combatFx.pattern(P, origin, rays);
+          if (killed.length >= 2) combatFx.multiKill(killed, P.ougi);
+          protoStats.patterns[id] = (protoStats.patterns[id] || 0) + 1;
+          return { rays, killed };
+        }
+        // 敵の行動（e.behavior）：既存の敵の種類（kind）を土台に、能力と動きを足す。kind の処理（足止め・図鑑・絵）はそのまま使える
+        //   stopRange：部隊・塔がこの距離に入ると止まって撃つ / cover：後ろの味方を守る（半径と、受けるダメージの倍率）
+        //   hold・advance：止まって撃つ秒数と、そのあと前へ出る秒数
+        //   follow：盾兵の後ろを、この間隔を空けてついて行く（盾兵が倒れると前へ出る）
+        const ENEMY_BEHAVIORS = {
+          teppo: { name: "鉄砲足軽", base: "dragon", sprite: "gunner", mark: "鉄", hp: 0.75, speed: 0.9, stopRange: 150, hold: 3.5, advance: 1.2, attack: { ranged: 150, rate: 2.0, damage: 20, tower: { damage: 8, reach: 150 } } },
+          tate: { name: "盾兵", base: "knight", sprite: "spearman", mark: "盾", hp: 1.7, armor: 14, speed: 0.75, cover: { radius: 80, mul: 0.4 } },
+        };
+        const protoStats = { patterns: {}, holds: 0, covered: 0, ougi: 0, multiKill: 0 };
+        // 敵の攻撃の設定：行動のある敵だけ、土台の設定に上書きする（ほかの敵はこれまでと同じ物を返す）
+        function enemyAttackOf(e) {
+          const base = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin,
+            B = e.behavior && ENEMY_BEHAVIORS[e.behavior];
+          if (!B || !B.attack) return base;
+          return e.attackConf || (e.attackConf = { ...base, ...B.attack });
+        }
+        // その場に止まるか：射程に部隊・塔が入った鉄砲足軽、盾兵に追いついた後衛
+        // 鉄砲足軽は hold 秒撃ったら advance 秒だけ前へ出る（撃ちながら少しずつ迫る。射程の外で止まり続けて波が終わらない、を防ぐ）
+        function enemyHolds(e, dt) {
+          const B = ENEMY_BEHAVIORS[e.behavior];
+          if (!B) return false;
+          if (e.leader && !e.leader.gone && e.leader.hp > 0 && e.leader.path === e.path && e.d >= e.leader.d - e.followGap) return true;
+          if (B.stopRange) {
+            if (e.advanceLeft > 0) {
+              e.advanceLeft -= dt;
+              return false;
+            }
+            const near = fieldSquads().some((q) => members(q).length && dist(q, e) <= B.stopRange) || towers.some((t) => !t.destroyed && dist(t, e) <= B.stopRange);
+            if (near) {
+              protoStats.holds++;
+              if ((e.holdTime = (e.holdTime || 0) + dt) >= B.hold) {
+                e.holdTime = 0;
+                e.advanceLeft = B.advance;
+              }
+              return true;
+            }
+          }
+          return false;
+        }
+        // 盾の守り：盾兵が生きていて近くにいれば、後衛が受けるダメージを減らす（貫通・斬撃波の型は抜ける）
+        function enemyCoverMul(e, options) {
+          const L = e.leader;
+          if (!L || options.pierceCover || L.gone || L.hp <= 0) return 1;
+          const C = ENEMY_BEHAVIORS[L.behavior] && ENEMY_BEHAVIORS[L.behavior].cover;
+          if (!C || dist(L, e) > C.radius) return 1;
+          protoStats.covered++;
+          return C.mul;
+        }
+        // 修練場の試作：盾兵1＋鉄砲足軽2の連携部隊（修練場の敵をもとに、能力を行動に合わせて変える）
+        function protoFormation(T, i, total) {
+          const lead = protoEnemy(trainingEnemy(T, i, total), "tate"),
+            list = [lead];
+          for (let k = 1; k <= 2; k++) {
+            const f = protoEnemy(trainingEnemy(T, i, total), "teppo");
+            f.path = lead.path;
+            f.leader = lead;
+            f.followGap = 34 * k;
+            f.d = -34 * k;
+            Object.assign(f, pathAt(f.path, Math.max(0, f.d)));
+            list.push(f);
+          }
+          return list;
+        }
+        function protoEnemy(e, behavior) {
+          const B = ENEMY_BEHAVIORS[behavior],
+            c = TRAINING.base[B.base];
+          if (e.role) return e; // 中ボス・大将はそのまま
+          const L = e.lv,
+            max = c[0] * TRAINING.hp(L) * B.hp * (training.D.hpMul || 1);
+          return Object.assign(e, {
+            kind: B.base,
+            behavior,
+            hp: max,
+            max,
+            armor: (WARLORD_RULES.enemyArmor[B.base] || 0) + TRAINING.armor(L) + (B.armor || 0),
+            speed: c[1] * TRAINING.speed(L) * B.speed,
+            reward: c[2],
+            color: c[3],
+            r: c[4],
+            xpWorth: trainUnit(training, L) * TRAINING.kindXp[B.base],
+          });
+        }
+        // 兵士の試作の技：兵種の戦い方で型を選ぶ。通常の攻撃3回ごとに技、ゲージがたまると奥義（修練場の試作だけ）
+        const PROTO_SKILL = { every: 3, gauge: 100, perHit: 7, perKill: 14, ougiGap: 2.5 };
+        let protoOugiAt = -99;
+        function protoPatternOf(s) {
+          const c = unitOf(s);
+          if (c.heal) return null;
+          if (c.range <= 60) return "eightSlash";
+          return c.shot === "musket" ? "pierce" : "threeWay";
+        }
+        function protoSkillTick(s, q, target, dmg) {
+          const id = protoPatternOf(s);
+          if (!id || !target) return;
+          s.protoHits = (s.protoHits || 0) + 1;
+          s.protoGauge = Math.min(PROTO_SKILL.gauge, (s.protoGauge || 0) + PROTO_SKILL.perHit + (target.hp <= 0 ? PROTO_SKILL.perKill : 0));
+          if (s.protoGauge >= PROTO_SKILL.gauge && combatClock - protoOugiAt >= PROTO_SKILL.ougiGap) {
+            s.protoGauge = 0;
+            protoOugiAt = combatClock;
+            protoStats.ougi++;
+            const P = ATTACK_PATTERNS[id + "Ougi"];
+            combatFx.ougi(P.name, soldierName(s));
+            applyPattern(id + "Ougi", q, target, dmg, { s, q, h: heroOnSquad(q) });
+          } else if (s.protoHits % PROTO_SKILL.every === 0) applyPattern(id, q, target, dmg, { s, q, h: heroOnSquad(q) });
+        }
+        const protoCombatOn = () => !!(training && training.proto && !battle);
         function createEnemy() {
+          if (training && training.proto && spawned % 6 === 3 && spawned + 2 < spawnTotal) {
+            // 試作：6体ごとに、盾兵が前・鉄砲足軽が後ろの連携部隊（3体で3体分を数える）
+            enemies.push(...protoFormation(training, spawned, spawnTotal));
+            spawned += 2;
+            return;
+          }
+          if (training && training.proto && spawned % 6 === 5) return enemies.push(protoEnemy(trainingEnemy(training, spawned, spawnTotal), "teppo"));
           if (training) return enemies.push(trainingEnemy(training, spawned, spawnTotal));
           const branch = Math.random() < 0.3 + (0.4 * (wave % 3)) / 2 ? upper : lower;
           let kind = "goblin";
@@ -7278,6 +7454,7 @@ OFF</button>
           persistTrainingSave();
           training = {
             key,
+            proto: protoCombatPick, // 新しい戦い（試作）：新しい敵と技・演出（修練場だけ）
             jobDropRunId: newJobDropRunId(),
             D,
             waves,
@@ -7386,6 +7563,9 @@ OFF</button>
         }
         // 修練場の画面：難易度を選んで始める（挑戦中は状況と撤退）
         let trainPick = "advanced"; // いちばん選ばれる上級を最初から選んでおく
+        // 新しい戦い（試作・v106）：修練場だけで、新しい敵（鉄砲足軽・盾兵の連携）と技（三方撃ち・貫通弾・八方斬撃と奥義）を試す。
+        // 選んだかどうかは表示の記録（worldDefense.ui.v1 の combatProto）に残す。?proto=combat で既定をオンにする（試験・確認用）
+        let protoCombatPick = /[?&]proto=combat\b/.test(location.search) || !!(UI_STORED && UI_STORED.combatProto === true);
         function renderTrainingSheet() {
           const T = training;
           if (T) {
@@ -7431,6 +7611,8 @@ OFF</button>
               })
               .join("") +
             "</div>" +
+            '<label class="tr-proto"><input type="checkbox" id="trProto"' + (protoCombatPick ? " checked" : "") + '> 🧪 新しい戦い（試作）</label>' +
+            '<p class="muted tr-proto-note">鉄砲足軽（射程で止まって撃つ）と、盾兵が前・鉄砲足軽が後ろの連携部隊が出ます。兵士は3回の攻撃ごとに技（弓：三方撃ち・鉄砲：貫通弾・近接：八方斬撃）、ゲージがたまると奥義。盾兵に守られた敵には、貫通弾と八方斬撃が効きます。通常の防衛戦・攻城戦には出ません。</p>' +
             '<button id="trStart" class="tr-start">⚔️ ' +
             TRAINING.diffs[trainPick].name +
             (TRAINING.diffs[trainPick].endless ? "で挑戦する</button>" : "・" + trainingSave.waves + "ウェーブに挑戦する</button>");
@@ -7451,6 +7633,12 @@ OFF</button>
         $("trClose").onclick = closeTraining;
         $("trainRetreat").onclick = retreatTraining;
         $("trainingSheet").addEventListener("change", ev => {
+          if (ev.target.id === "trProto" && !training) {
+            protoCombatPick = ev.target.checked;
+            uiSave.combatProto = protoCombatPick || undefined;
+            persistUi();
+            return renderTrainingSheet();
+          }
           if (ev.target.id !== "trainingWaves" || training) return;
           const n = +ev.target.value;
           if (TRAINING.waveGoals.includes(n)) { trainingSave.waves = n; persistTrainingSave(); }
@@ -9019,6 +9207,7 @@ OFF</button>
               }
               // 伝説の特殊能力（解放後に習得・終盤の装備）
               legendStrike(s, q, target, hitDmg, alive, (e, d) => dealEnemyDamage(e, d, { s, q, h: heroOnSquad(q) }, { normal: false }));
+              if (protoCombatOn()) protoSkillTick(s, q, target, hitDmg); // 修練場の試作：三方撃ち・貫通弾・八方斬撃と奥義
               // 流鏑馬：続けて矢を放つ
               for (let k = yabusameExtra(s); k > 0 && target.hp > 0; k--) {
                 dealEnemyDamage(target, hitDmg, { s, q, h: heroOnSquad(q) });
@@ -9055,7 +9244,7 @@ OFF</button>
           // 敵の攻撃：足止めしている部隊 → 届く範囲の部隊 → 届く範囲の塔（道の上から。道を外れて塔へは向かわない）
           for (const e of enemies) {
             if (e.gone || e.hp <= 0 || e.stun > 0 || e.silence > 0 || e.rare) continue; // 特別な敵は攻撃しない
-            const a = ENEMY_VS_UNIT[e.kind] || ENEMY_VS_UNIT.goblin;
+            const a = enemyAttackOf(e); // 試作の敵（e.behavior）だけ射程・威力が変わる。ほかはこれまでと同じ
             e.unitCd = (e.unitCd || 0) - dt;
             if (e.unitCd > 0) continue;
             const reach = a.ranged || SQUAD_RULES.enemyReach;
@@ -9947,6 +10136,7 @@ OFF</button>
               e.siege = null;
               e.siegeDone = true;
             }
+            if (e.behavior && enemyHolds(e, dt)) continue; // 試作の敵：射程で止まって撃つ・盾兵の後ろで待つ
             e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1, e.evolutionSlow?.until>combatClock?1-e.evolutionSlow.value:1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
@@ -10768,7 +10958,7 @@ OFF</button>
         }
         // 敵兵の内部ID → 兵種（大将は v105.2 から新ドット絵。裏ボス・特別な敵などは従来の絵）
         const PIX_ENEMY = { goblin: "ashigaru", slime: "ashigaru", knight: "spearman", wolf: "cavalry", dragon: "archer", boss: "general" };
-        const pixEnemyKind = (e) => (pixelOn() && !e.boss && !e.intruder && !e.rare && PIX_ENEMY[e.kind]) || null;
+        const pixEnemyKind = (e) => (pixelOn() && !e.boss && !e.intruder && !e.rare && ((e.behavior && ENEMY_BEHAVIORS[e.behavior].sprite) || PIX_ENEMY[e.kind])) || null; // 試作の敵は専用の絵（鉄砲足軽・盾兵）
         function drawPixelEnemy(e, kind) {
           const pose = e.atkAnim > 0 ? "attack0" : e.blockedBy || e.siege ? "idle" + (Math.floor((reduced ? 0 : visualTime) * 1.6 + (e.id || 0) * 0.37) % 2) : "walk" + (Math.floor((e.d || 0) / 9) % 2);
           ellipse(e.x + 2, e.y + 10, e.r + 2, 4, "#2e523855");
@@ -10824,6 +11014,29 @@ OFF</button>
           ctx.fillRect(e.x - e.r, e.y - e.r - 21, e.r * 2 * Math.max(0, e.hp / e.max), 5);
           enemyTag(e, e.y - e.r - 23);
         }
+        // 試作の盾兵の盾（絵の上に重ねる。新ドット絵・従来版どちらも）。後ろの鉄砲足軽を守っている間は盾が光る
+        function drawTateShield(e) {
+          const f = e.face || 1,
+            x = e.x + 9 * f,
+            y = e.y - 22,
+            guarding = enemies.some((o) => o.leader === e && o.hp > 0);
+          ctx.save();
+          if (guarding && !reduced) {
+            ctx.globalAlpha = 0.25 + 0.15 * Math.sin(visualTime * 5);
+            ellipse(x, y + 12, 18, 24, "#9fd8ff");
+            ctx.globalAlpha = 1;
+          }
+          ctx.fillStyle = "#3a2412";
+          ctx.fillRect(x - 7, y - 4, 14, 32);
+          ctx.fillStyle = "#9a6a3a";
+          ctx.fillRect(x - 5.5, y - 2.5, 11, 29);
+          ctx.fillStyle = "#6e4622";
+          ctx.fillRect(x - 5.5, y + 6, 11, 2);
+          ctx.fillRect(x - 5.5, y + 16, 11, 2);
+          ctx.fillStyle = "#c9a14a";
+          ctx.fillRect(x - 1.5, y + 9, 3, 6);
+          ctx.restore();
+        }
         // 修練場の敵：体力バーの上に敵レベル、中ボス・大将は赤い札
         function enemyTag(e, y) {
           if (e.intruder) {
@@ -10858,9 +11071,10 @@ OFF</button>
           ctx.textAlign = "center";
           ctx.font = "bold 12px system-ui";
           const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole),
-            label = (R ? R.mark + " " : e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : "") + "Lv" + e.lv,
+            BH = e.behavior && ENEMY_BEHAVIORS[e.behavior], // 試作の敵：「鉄」「盾」の印
+            label = (R ? R.mark + " " : e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : BH ? BH.mark + " " : "") + "Lv" + e.lv,
             w = ctx.measureText(label).width + 8;
-          ctx.fillStyle = e.role ? "#b8322bee" : "#1f2a22cc";
+          ctx.fillStyle = e.role ? "#b8322bee" : BH ? "#2c3f6aee" : "#1f2a22cc";
           ctx.fillRect(e.x - w / 2, y - 14, w, 14);
           ctx.fillStyle = R ? R.color : e.role ? "#fff1d0" : "#ffe3a0";
           ctx.fillText(label, e.x, y - 3);
@@ -11483,6 +11697,7 @@ OFF</button>
           if (paused || document.hidden) return;
           dt = gameStep(dt);
           visualTime += dt;
+          combatFx.tick(dt);
           if (cutin && (cutin.age += dt) >= cutin.duration) cutin = null;
           for (const t of towers) t.recoil = Math.max(0, (t.recoil || 0) - dt);
           for (const t of towers) t.hitFlash = Math.max(0, (t.hitFlash || 0) - dt);
@@ -11498,7 +11713,7 @@ OFF</button>
           for (const e of enemies) e.hit = Math.max(0, (e.hit || 0) - dt);
           for (const s of shots) {
             s.age += dt;
-            if (s.age >= s.duration) burst(s.tx, s.ty, s.col, s.type);
+            if (s.age >= s.duration && !s.quiet) burst(s.tx, s.ty, s.col, s.type); // quiet：試作の技は自前の火花を出す
           }
           shots = shots.filter((s) => s.age < s.duration);
           if (battle) for (const e of battle.garrison) if (e.boss) bossAnimate(e, dt);
@@ -11571,6 +11786,259 @@ OFF</button>
           ctx.fillText(VERTICAL ? "← 北の道" : "NORTH • 北の道", VERTICAL ? 340 : 310, VERTICAL ? 230 : 113);
           ctx.fillText(VERTICAL ? "南の道 →" : "SOUTH • 南の道", VERTICAL ? 340 : 310, VERTICAL ? 375 : 505);
         }
+        // ===== 戦闘の演出（v106試作） =====
+        // 見た目だけ（当たり判定・戦闘の時間は変えない）。演出の数は effects の上限（80）の中で、多いときは細かい火花を省く。
+        // 通常の技：細い光の軌跡・小さな斬撃波・火花。奥義：太い軌跡と残像・画面いっぱいの斬撃波・衝撃波・技名の帯・白い閃光・軽い画面振動。
+        // 端末の「視差効果を減らす」設定（reduced）では、振動と閃光を出さない。
+        const combatFx = {
+          banner: null, // 奥義の技名 { name, who, age, duration }
+          flash: 0, // 画面の白い閃光（秒）
+          shake: 0, // 画面の振動（秒）
+          shakeAmp: 0,
+          push(e) {
+            if (effects.length >= 80) effects.shift();
+            effects.push(e);
+          },
+          roomy: () => effects.length < 60, // 細かい火花を出す余裕があるか
+          spark(x, y, ougi, delay = 0) {
+            if (!this.roomy()) return;
+            this.push({ kind: "cspark", x, y, ougi, seed: Math.random() * 6.28, age: -delay, duration: ougi ? 0.5 : 0.32 });
+          },
+          pattern(P, o, rays) {
+            const ougi = !!P.ougi;
+            if (P.fx === "slash") this.push({ kind: "cwave", x: o.x, y: o.y + 8, rays: rays.map((r) => r.a), len: rays[0].len, width: P.width, ougi, age: 0, duration: ougi ? 0.95 : 0.42 });
+            else
+              for (const r of rays) {
+                // 矢・弾：外れた方向も直線の先まで飛ばし、光の軌跡を残す
+                const far = r.hits.length ? Math.hypot(r.hits[r.hits.length - 1].x - o.x, r.hits[r.hits.length - 1].y - o.y) + (P.perRay > 1 ? 40 : 0) : r.len;
+                if (shots.length >= 160) shots.shift();
+                shots.push({
+                  x: o.x,
+                  y: o.y,
+                  tx: o.x + Math.cos(r.a) * far,
+                  ty: o.y + Math.sin(r.a) * far,
+                  type: P.fx === "bullet" ? "magic" : "arrow",
+                  age: 0,
+                  duration: (ougi ? 0.32 : 0.2) * Math.min(1.6, far / 250 + 0.4),
+                  col: "#a56b35",
+                  trail: ougi ? 2 : 1,
+                  glow: P.fx === "bullet" ? "#ffd27a" : "#9fe6ff",
+                  quiet: true,
+                });
+              }
+            let n = 0;
+            for (const r of rays)
+              for (const e of r.hits) if (n++ < (ougi ? 10 : 4)) this.spark(e.x, e.y - 12, ougi, P.fx === "slash" ? (Math.hypot(e.x - o.x, e.y - o.y) / r.len) * (ougi ? 0.5 : 0.25) : 0.05);
+            if (ougi) this.push({ kind: "cshock", x: o.x, y: o.y + 6, ougi, age: 0, duration: 0.7 });
+          },
+          // 複数を倒したとき：倒れた所で順に爆発し、「N体撃破！」
+          multiKill(list, ougi) {
+            protoStats.multiKill++;
+            list.slice(0, 8).forEach((e, i) => this.push({ kind: "cboom", x: e.x, y: e.y - 10, ougi, age: -i * 0.09, duration: 0.55 }));
+            const cx = list.reduce((a, e) => a + e.x, 0) / list.length,
+              cy = list.reduce((a, e) => a + e.y, 0) / list.length;
+            this.push({ kind: "ctext", x: cx, y: cy - 40, text: list.length + "体撃破！", ougi, age: -0.1, duration: 1.1 });
+          },
+          ougi(name, who) {
+            this.banner = { name, who, age: 0, duration: 1.7 };
+            if (!reduced) {
+              this.flash = 0.22;
+              this.shake = 0.35;
+              this.shakeAmp = 5;
+            }
+          },
+          tick(dt) {
+            if (this.banner && (this.banner.age += dt) >= this.banner.duration) this.banner = null;
+            this.flash = Math.max(0, this.flash - dt);
+            const was = this.shake > 0;
+            this.shake = Math.max(0, this.shake - dt);
+            // 画面の振動はキャンバスをずらすだけ（描画・タップの座標は変えない）
+            if (this.shake > 0) {
+              const a = this.shakeAmp * (this.shake / 0.35);
+              C.style.transform = "translate(" + ((Math.random() - 0.5) * 2 * a).toFixed(1) + "px," + ((Math.random() - 0.5) * 2 * a).toFixed(1) + "px)";
+            } else if (was) C.style.transform = "";
+          },
+        };
+        // 新しい演出の描き方（effect から呼ぶ。描いたら true）
+        function drawCombatFx(e) {
+          const p = e.age / e.duration;
+          if (e.kind === "cwave") {
+            // 斬撃波：8方向へ三日月の刃が広がる。奥義は画面いっぱい・残像つき
+            const ease = 1 - Math.pow(1 - p, 3),
+              fade = 1 - p;
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            ctx.lineCap = "round";
+            for (const k of e.ougi ? [0, 0.12, 0.24] : [0]) {
+              const r = Math.max(4, e.len * Math.max(0, ease - k)),
+                al = fade * (k ? 0.35 - k : 1);
+              if (al <= 0) continue;
+              for (const a of e.rays) {
+                const half = e.ougi ? 0.24 : 0.2; // 8本の刃に見える幅（広げすぎると1つの輪になる）
+                ctx.globalAlpha = al * 0.55;
+                ctx.strokeStyle = e.ougi ? "#5fb8ff" : "#7fd0ff";
+                ctx.lineWidth = (e.ougi ? e.width * 0.9 : e.width * 0.6) * (1 - p * 0.5);
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, r, a - half, a + half);
+                ctx.stroke();
+                ctx.globalAlpha = al;
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = Math.max(1.5, (e.ougi ? 7 : 3.5) * (1 - p * 0.6));
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, r, a - half * 0.8, a + half * 0.8);
+                ctx.stroke();
+              }
+            }
+            // 中心から放たれる光の筋（奥義だけ）
+            if (e.ougi && p < 0.6) {
+              ctx.globalAlpha = (0.6 - p) * 0.9;
+              ctx.strokeStyle = "#cfefff";
+              ctx.lineWidth = 2;
+              for (const a of e.rays) {
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y);
+                ctx.lineTo(e.x + Math.cos(a) * e.len * ease, e.y + Math.sin(a) * e.len * ease);
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+            return true;
+          }
+          if (e.kind === "cspark") {
+            // 命中の火花：光の線が飛び散り、小さな輪が広がる
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            ctx.globalAlpha = 1 - p;
+            ctx.strokeStyle = e.ougi ? "#fff1a8" : "#ffe6a0";
+            ctx.lineWidth = e.ougi ? 2.5 : 2;
+            const n = e.ougi ? 8 : 6,
+              len = (e.ougi ? 26 : 16) * (0.4 + p);
+            for (let i = 0; i < n; i++) {
+              const a = e.seed + (i * Math.PI * 2) / n,
+                r0 = len * 0.35;
+              ctx.beginPath();
+              ctx.moveTo(e.x + Math.cos(a) * r0, e.y + Math.sin(a) * r0);
+              ctx.lineTo(e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
+              ctx.stroke();
+            }
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, (e.ougi ? 22 : 12) * p + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            return true;
+          }
+          if (e.kind === "cshock") {
+            // 奥義の衝撃波：足元から大きな輪が2重に広がる
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            for (const k of [0, 0.18]) {
+              const q = Math.max(0, p - k);
+              ctx.globalAlpha = Math.max(0, 0.8 * (1 - q * 1.2));
+              ctx.strokeStyle = k ? "#7fd0ff" : "#ffffff";
+              ctx.lineWidth = 6 * (1 - q);
+              ctx.beginPath();
+              ctx.ellipse(e.x, e.y, 30 + 260 * q, 12 + 100 * q, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.restore();
+            return true;
+          }
+          if (e.kind === "cboom") {
+            // 連続撃破の爆発
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            const r = (e.ougi ? 30 : 22) * (0.3 + p);
+            ctx.globalAlpha = (1 - p) * 0.85;
+            ellipse(e.x, e.y, r, r * 0.85, "#ff9b42");
+            ctx.globalAlpha = (1 - p) * 0.9;
+            ellipse(e.x, e.y, r * 0.55, r * 0.5, "#fff3c4");
+            ctx.globalAlpha = 1 - p;
+            ctx.strokeStyle = "#ffd27a";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, r * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            return true;
+          }
+          if (e.kind === "ctext") {
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, (1 - p) * 2);
+            ctx.font = "bold " + (e.ougi ? 26 : 20) + "px system-ui";
+            ctx.textAlign = "center";
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = "#3a1608";
+            ctx.fillStyle = "#ffe27a";
+            const y = e.y - p * 26;
+            ctx.strokeText(e.text, e.x, y);
+            ctx.fillText(e.text, e.x, y);
+            ctx.restore();
+            return true;
+          }
+          return false;
+        }
+        // 光の軌跡（試作の矢・弾）：今の位置から少し前の位置まで、光る線を引く
+        function shotTrail(s, x, y) {
+          const p = Math.min(1, s.age / s.duration),
+            q = Math.max(0, p - (s.trail > 1 ? 0.5 : 0.32)),
+            x0 = s.x + (s.tx - s.x) * q,
+            y0 = s.y + (s.ty - s.y) * q;
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.lineCap = "round";
+          ctx.globalAlpha = 0.55;
+          ctx.strokeStyle = s.glow || "#9fe6ff";
+          ctx.lineWidth = s.trail > 1 ? 9 : 4.5;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+          ctx.globalAlpha = 0.9;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = s.trail > 1 ? 3 : 1.6;
+          ctx.stroke();
+          ctx.restore();
+        }
+        // 画面に重ねる：奥義の技名の帯と白い閃光（画面の座標）
+        function drawCombatOverlay(SW, SH) {
+          if (combatFx.flash > 0) {
+            ctx.fillStyle = "rgba(255,255,255," + (combatFx.flash / 0.22) * 0.45 + ")";
+            ctx.fillRect(0, 0, SW, SH);
+          }
+          const b = combatFx.banner;
+          if (!b) return;
+          const p = b.age / b.duration,
+            slide = reduced ? 0 : Math.max(0, 1 - b.age / 0.18),
+            al = Math.min(1, (1 - p) * 4),
+            cy = SH * 0.3,
+            h = Math.min(96, SH * 0.16);
+          ctx.save();
+          ctx.globalAlpha = al;
+          const g = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+          g.addColorStop(0, "#1a0d06e6");
+          g.addColorStop(0.5, "#5a1e0ef2");
+          g.addColorStop(1, "#1a0d06e6");
+          ctx.fillStyle = g;
+          ctx.fillRect(-SW * slide, cy - h / 2, SW, h);
+          ctx.fillStyle = "#ffd34d";
+          ctx.fillRect(-SW * slide, cy - h / 2, SW, 3);
+          ctx.fillRect(-SW * slide, cy + h / 2 - 3, SW, 3);
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = "900 " + Math.round(h * 0.46) + "px system-ui";
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = "#2a0c04";
+          ctx.fillStyle = "#fff1b0";
+          const x = SW / 2 + SW * slide;
+          ctx.strokeText(b.name, x, cy - h * 0.08);
+          ctx.fillText(b.name, x, cy - h * 0.08);
+          ctx.font = "bold " + Math.round(h * 0.2) + "px system-ui";
+          ctx.fillStyle = "#ffd9a0";
+          ctx.fillText(b.who, x, cy + h * 0.3);
+          ctx.restore();
+        }
         function projectile(s) {
           const p = Math.min(1, s.age / s.duration),
             arc =
@@ -11581,6 +12049,7 @@ OFF</button>
                   : 0,
             x = s.x + (s.tx - s.x) * p - (VERTICAL ? arc : 0), // 山なりは画面の上へ（縦向きの戦場では画面の上＝ゲームの横の手前）
             y = s.y + (s.ty - s.y) * p - (VERTICAL ? 0 : arc);
+          if (s.trail) shotTrail(s, x, y); // 試作の技の矢・弾：光の軌跡
           ctx.save();
           if (s.type === "arrow") {
             ctx.translate(x, y);
@@ -11659,6 +12128,8 @@ OFF</button>
           ctx.restore();
         }
         function effect(e) {
+          if (e.age < 0) return; // 順に出す演出（連続撃破）の待ち時間
+          if (e.kind && e.kind[0] === "c" && drawCombatFx(e)) return;
           if(e.kind==="evolution")return drawEvolutionFx(e,Math.min(1,e.age/e.duration),reduced);
           if (e.boss) return drawBossFx(e);
           const p = e.age / e.duration;
@@ -12015,6 +12486,7 @@ OFF</button>
                   soldierFallback(e);
                 }
                 ctx.shadowBlur = 0;
+                if (e.behavior === "tate") drawTateShield(e); // 試作の盾兵：前に大きな木の盾
                 if (e.poisonLeft > 0) ellipse(e.x, e.y + 10, e.r + 3, 4, "#b989c499");
                 if (e.stun > 0 || e.silence > 0) { ctx.fillStyle = "#fff1a3"; ctx.font = "bold 14px system-ui"; ctx.fillText(e.stun > 0 ? "停止" : "封", e.x - 10, e.y - 25); }
                 if (ownedHeroes().some((h) => activeKind(h, "focus") && h.skillTarget === e)) { ctx.strokeStyle = "#ffcf72"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke(); }
@@ -12059,6 +12531,7 @@ OFF</button>
           for (const s of shots) projectile(s);
           for (const e of effects) effect(e);
           drawDrag();
+          screenSpace(drawCombatOverlay); // 試作：奥義の技名・閃光
           screenSpace(drawCutin);
         }
         const mapPoint = (ev) => {
@@ -18219,6 +18692,7 @@ OFF</button>
           return {
             layout: ok && ["classic", "compact", "vertical"].includes(d.layout) ? d.layout : undefined, // 表示の種類（v103）・攻めは縦（v104）
             art: ok && (d.art === "classic" || d.art === "pixel") ? d.art : ok && d.gfx === "pixel" ? "pixel" : undefined, // 絵：自分で選んだときだけ（v105.3）
+            combatProto: ok && d.combatProto === true ? true : undefined, // 修練場の「新しい戦い（試作）」（v106試作）
             all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
             maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
             seen,
@@ -21677,6 +22151,21 @@ OFF</button>
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             reorderSoldier: (id, target) => reorderSoldier(id, target),
+            // 試作の戦闘（v106試作）：修練場だけ
+            combat: {
+              patterns: ATTACK_PATTERNS,
+              behaviors: ENEMY_BEHAVIORS,
+              skill: PROTO_SKILL,
+              stats: () => JSON.parse(JSON.stringify(protoStats)),
+              on: () => protoCombatOn(),
+              pick: (v) => (v === undefined ? protoCombatPick : (protoCombatPick = !!v)),
+              resolve: (origin, dir, id, list, range) => resolvePattern(origin, dir, ATTACK_PATTERNS[id], list || enemies, range),
+              apply: (id, from, target, dmg) => applyPattern(id, from, target, dmg, from),
+              fx: () => ({ banner: combatFx.banner && { ...combatFx.banner }, flash: combatFx.flash, shake: combatFx.shake, kinds: effects.map((e) => e.kind), trails: shots.filter((s) => s.trail).length }),
+              ougiFx: (name, who) => combatFx.ougi(name, who),
+              damage: (e, raw, options) => dealEnemyDamage(e, raw, {}, options || {}),
+              holds: (e, dt) => enemyHolds(e, dt),
+            },
             events: {
               push: (kind, line) => eventNotice(kind, line),
               animate: (dt) => animateEventWin(dt),
