@@ -2577,7 +2577,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.2試作（下の列に編成ボタン）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.3試作（攻めは縦・守りは横）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2864,7 +2864,9 @@ OFF</button>
         // ===== 縦向きの戦場（試作・v104） =====
         // ゲームの座標（横960×縦600）と処理はそのまま。描くときだけ入口を上・城を下にする（画面の x = ゲームの y、画面の y = ゲームの x）。
         // 地面・道・地形・弾は座標ごと入れ替え、兵士・塔・敵・文字は位置だけ入れ替えて立ったまま描く。
-        let VERTICAL = UI_LAYOUT === "vertical";
+        // 設定「攻めは縦」（layout: "vertical"）：攻城戦・裏ボスの討伐戦は縦向き、防衛戦・修練場は横向き（v104.3）
+        let fieldPref = UI_LAYOUT === "vertical";
+        let VERTICAL = false; // いま縦向きで描いているか（攻める戦いが始まると切り替わる）
         let worldMode = false; // 地面・道などを入れ替えて描いている最中か
         function applyFieldShape() {
           C.width = VERTICAL ? H : W;
@@ -11469,7 +11471,18 @@ OFF</button>
           }
           ctx.restore();
         }
+        // 攻める戦いの始まり・終わりで戦場の向きを切り替える（描くたびに確認）
+        function syncFieldShape() {
+          const want = fieldPref && !!battle;
+          if (want === VERTICAL) return;
+          VERTICAL = want;
+          applyFieldShape();
+          scenery = null; // 背景を新しい向きで描き直す
+          syncViewport();
+          setTimeout(syncViewport, 0); // 戦闘バーの中身が入ってからもう一度
+        }
         function draw() {
+          syncFieldShape();
           worldSpace();
           if (!scenery) {
             scenery = document.createElement("canvas");
@@ -17752,7 +17765,7 @@ OFF</button>
             if (ok && d.fresh?.[F.id] === true) fresh[F.id] = true;
           }
           return {
-            layout: ok && (d.layout === "classic" || d.layout === "compact") ? d.layout : undefined, // 表示の種類（v103）
+            layout: ok && ["classic", "compact", "vertical"].includes(d.layout) ? d.layout : undefined, // 表示の種類（v103）・攻めは縦（v104）
             all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
             maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
             seen,
@@ -17918,10 +17931,9 @@ OFF</button>
         function setLayout(layout) {
           uiSave.layout = layout;
           persistUi();
-          VERTICAL = layout === "vertical";
+          fieldPref = layout === "vertical";
           document.body.classList.toggle("compact-ui", layout !== "classic");
-          applyFieldShape();
-          scenery = null; // 背景を新しい向きで描き直す
+          syncFieldShape();
           setDrawer(null);
           syncViewport(); // 戦場の大きさの上限を新しい並びで計算し直す
           draw();
@@ -17931,8 +17943,8 @@ OFF</button>
           toast(uiSave.layout === "compact" ? "📱 コンパクト表示にしました" : "🖥 従来の表示にしました");
         };
         $("fieldToggle").onclick = () => {
-          setLayout(VERTICAL ? "compact" : "vertical");
-          toast(VERTICAL ? "🧪 縦向きの戦場（試作）にしました。入口が上、城が下です" : "横向きの戦場に戻しました");
+          setLayout(fieldPref ? "compact" : "vertical");
+          toast(fieldPref ? "🧪 攻めるとき（攻城戦・討伐戦）は縦向き、守るときは横向きにしました" : "戦場をいつも横向きにしました");
         };
         // 防衛戦の必殺技：塔・部隊に配属した武将を一覧にし、従来の「必殺技」ボタンと同じ処理で使う
         function skillDockRows() {
@@ -17948,7 +17960,7 @@ OFF</button>
         function renderDock() {
           if (!dockReady) return;
           $("layoutToggle").textContent = compactUi() ? "📱 表示：コンパクト" : "🖥 表示：従来";
-          $("fieldToggle").textContent = VERTICAL ? "🧪 戦場：縦（試作）" : "🧪 戦場：横";
+          $("fieldToggle").textContent = fieldPref ? "🧪 戦場：攻めは縦" : "🧪 戦場：横";
           if (!compactUi()) return;
           if (drawerOpen && (selectedTower || selectedSquad)) {
             drawerOpen = null; // 部隊・塔を選んだら、その操作パネルを優先する
@@ -21699,7 +21711,9 @@ OFF</button>
           root.setProperty("--header-h", Math.ceil(document.querySelector("header").getBoundingClientRect().height) + "px");
           // 縦向きの戦場：ヘッダー・ウェーブ操作・部隊の列が必ず見えるよう、戦場の高さに使えない分を渡す
           const h = (sel) => Math.ceil(document.querySelector(sel)?.getBoundingClientRect().height || 0);
-          root.setProperty("--field-reserve", h("header") + h(".play-tools") + h("#dockBar") + 36 + "px");
+          // 攻める戦いの間は、戦闘の状況と必殺技の1段目が見えるようにする（撤退ボタンなどはスクロールで）
+          const inBattle = typeof battle !== "undefined" && battle && !$("battleBar").hidden;
+          root.setProperty("--field-reserve", (inBattle ? h("header") + h("#battleInfo") + Math.min(h("#battleSkills"), 80) + 40 : h("header") + h(".play-tools") + h("#dockBar") + 36) + "px");
           const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
           root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
         }
