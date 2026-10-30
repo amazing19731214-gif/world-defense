@@ -161,6 +161,16 @@ try {
   ({ c, p } = await open("?debug&layout=compact"));
   check(await p.evaluate(() => document.getElementById("game").width === 960), "縦向きは試作のため、選ばない限り横向きのまま");
   await c.close();
+  // iPhone Safari：アドレスバー・下のツールバーで見える高さが減っても、ウェーブ開始と部隊の列が見える
+  for (const [w, h] of [[375, 553], [390, 664], [390, 740], [430, 780]]) {
+    ({ c, p } = await open("?debug&layout=vertical", w, h));
+    r = await p.evaluate(() => {
+      const g = document.getElementById("game").getBoundingClientRect();
+      return { ratio: g.width / g.height, start: document.getElementById("start").getBoundingClientRect().bottom, dock: document.getElementById("dockBar").getBoundingClientRect().bottom, vh: innerHeight, over: document.documentElement.scrollWidth - innerWidth };
+    });
+    check(r.dock <= r.vh && r.start <= r.vh && Math.abs(r.ratio - 0.625) < 0.01 && r.over <= 0, w + "×" + h + "：戦場を縦横比のまま縮め、ウェーブ開始と部隊の列まで画面内", r);
+    await c.close();
+  }
   // PC
   ({ c, p } = await open("?debug&layout=vertical", 1280, 900));
   r = await p.evaluate(() => {
