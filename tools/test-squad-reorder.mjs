@@ -1,4 +1,4 @@
-// 部隊内の並べ替え（v105.4）：編成画面の ☰ と部隊の兵士の札をドラッグで並べ替え。先頭が敵の攻撃を最初に受ける。ウェーブ中はできない
+// 部隊内の並べ替え（v105.5）：編成画面の ☰ と部隊の兵士の札をドラッグで並べ替え。先頭が敵の攻撃を最初に受ける。ウェーブ中はできない
 //   node tools/test-squad-reorder.mjs
 import assert from "node:assert/strict";
 import fs from "node:fs";
