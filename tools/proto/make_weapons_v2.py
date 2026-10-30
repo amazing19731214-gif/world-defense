@@ -254,22 +254,28 @@ def naginata(p, team, atk, ry):
         p.set(27, ry - 4, TASSEL[2])
 
 
-def soldier_w(kind, team="ally", pose="idle", frame=0):
+def soldier_w(kind, team="ally", pose="idle", frame=0, style=None):
+    """style：上級職・大将の描き分け（make_proto_set_v2.soldier_v2 の style に加えて "weapon": f(pen, team, atk, oy または ry)）"""
     atk = pose == "attack"
     oy = 1 if (pose == "idle" and frame == 1) else 0
+    weapon = (style or {}).get("weapon")
     if kind == "cavalry":
         ox, oyy = 2, 6
         s = Sprite2(46, 36)
-        paste(s, soldier_v2("cavalry", team, pose, frame, bare=True), ox, oyy)
+        paste(s, soldier_v2("cavalry", team, pose, frame, bare=True, style=style), ox, oyy)
         by = 18 - (1 if (pose == "walk" and frame == 0) or (pose == "idle" and frame == 1) else 0)
         pen = Pen(s, ox, oyy)
-        naginata(pen, team, atk, by - 13)
+        if (style or {}).get("top"):
+            style["top"](pen, by - 13)  # 乗り手の兜の飾りなど（枠の上へはみ出せる）
+        (weapon or naginata)(pen, team, atk, by - 13)
     else:
         ox, oyy = 2, 6
         s = Sprite2(32, 32)
-        paste(s, soldier_v2(kind, team, pose, frame, bare=True), ox, oyy)
+        paste(s, soldier_v2(kind, team, pose, frame, bare=True, style=style), ox, oyy)
         pen = Pen(s, ox, oyy)
-        WEAPON[kind](pen, team, atk, oy)
+        if (style or {}).get("top"):
+            style["top"](pen, oy)  # 兜の大きな飾りなど（体の枠の上へはみ出せる）
+        (weapon or WEAPON[kind])(pen, team, atk, oy)
     s.outline()
     for x, y, c in pen.fx:
         s.set(x, y, c)

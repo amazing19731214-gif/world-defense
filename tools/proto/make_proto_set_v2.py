@@ -79,18 +79,22 @@ def jingasa(s, oy, H, mon=None):
         s.set(13, 5 + oy, mon)
 
 
-def soldier_v2(kind, team="ally", pose="idle", frame=0, bare=False):
-    """bare=True：武器と腕を描かず、輪郭線も付けない（武器を描き直すための体だけ）"""
+def soldier_v2(kind, team="ally", pose="idle", frame=0, bare=False, style=None):
+    """bare=True：武器と腕を描かず、輪郭線も付けない（武器を描き直すための体だけ）
+    style：上級職・大将の描き分け {"hat": f(s, oy)（かぶりもの）, "back": f(s, oy)（背旗の代わり）}"""
+    st = style or {}
     if kind == "cavalry":
-        return cavalry_v2(team, pose, frame, bare)
+        return cavalry_v2(team, pose, frame, bare, style)
     s = Sprite2(22, 26)
     A, F = AI[team], FLAG[team]
     oy = 1 if (pose == "idle" and frame == 1) else 0
     step = (1 if frame == 0 else -1) if pose == "walk" else 0
     atk = pose == "attack"
     medic = kind == "medic"
-    # 背旗（衛生兵は持たない）
-    if not medic:
+    # 背旗（衛生兵は持たない）。大将などは母衣（ほろ）など
+    if st.get("back"):
+        st["back"](s, oy)
+    elif not medic:
         s.line(3, 1 + oy, 3, 17 + oy, WOOD[1])
         s.line(4, 1 + oy, 4, 17 + oy, WOOD[2])
         s.rect(0, 2 + oy, 2, 10 + oy, F[2])
@@ -142,7 +146,9 @@ def soldier_v2(kind, team="ally", pose="idle", frame=0, bare=False):
     s.set(11, 11 + oy, (255, 172, 150))
     s.rect(8, 8 + oy, 8, 12 + oy, (70, 46, 40))
     # かぶりもの
-    if kind == "spearman":
+    if st.get("hat"):
+        st["hat"](s, oy)
+    elif kind == "spearman":
         kabuto(s, oy)
     elif medic:
         s.rect(8, 3 + oy, 16, 7 + oy, WHITE[2])  # 白い頭巾
@@ -247,12 +253,16 @@ def soldier_v2(kind, team="ally", pose="idle", frame=0, bare=False):
     return s
 
 
-HORSE = [(84, 46, 26), (124, 70, 38), (168, 100, 56), (204, 140, 86), (232, 186, 130)]
-MANE = (54, 34, 28)
+HORSE_BASE = [(84, 46, 26), (124, 70, 38), (168, 100, 56), (204, 140, 86), (232, 186, 130)]
+MANE_BASE = (54, 34, 28)
 
 
-def cavalry_v2(team="ally", pose="idle", frame=0, bare=False):
-    """騎兵（34×30）：横向きの馬と、赤い兜の乗り手"""
+def cavalry_v2(team="ally", pose="idle", frame=0, bare=False, style=None):
+    """騎兵（34×30）：横向きの馬と、赤い兜の乗り手
+    style：上級職の描き分け {"horse": 馬の色, "mane": たてがみの色, "hat": f(s, ry)（乗り手のかぶりもの）, "cloth": 鞍の布の色}"""
+    st = style or {}
+    HORSE = st.get("horse") or HORSE_BASE
+    MANE = st.get("mane") or MANE_BASE
     s = Sprite2(34, 30)
     A, F = AI[team], FLAG[team]
     run, atk = pose == "walk", pose == "attack"
@@ -280,9 +290,10 @@ def cavalry_v2(team="ally", pose="idle", frame=0, bare=False):
     s.set(24, by - 10, HORSE[2])
     s.rect(21, by - 8, 22, by - 2, MANE)
     s.line(24, by - 8, 28, by - 5, A[1])  # 手綱
-    # 鞍の布（チームの色）
-    s.rect(12, by - 4, 19, by - 2, A[2])
-    s.rect(12, by - 4, 19, by - 4, A[3])
+    # 鞍の布（チームの色。上級職は布の色を変えられる）
+    CL = st.get("cloth") or A
+    s.rect(12, by - 4, 19, by - 2, CL[2])
+    s.rect(12, by - 4, 19, by - 4, CL[3])
     s.rect(12, by - 1, 19, by - 1, GOLD[1])
     # 乗り手
     ry = by - 13
@@ -292,13 +303,16 @@ def cavalry_v2(team="ally", pose="idle", frame=0, bare=False):
     s.rect(14, ry + 1, 18, ry + 4, SKIN[2])
     s.set(17, ry + 2, EYE)
     s.rect(14, ry + 1, 14, ry + 3, (70, 46, 40))
-    s.rect(13, ry - 1, 18, ry, RED[2])  # 兜
-    s.rect(14, ry - 2, 17, ry - 2, RED[3])
-    s.rect(13, ry, 18, ry, RED[1])
-    s.rect(12, ry, 12, ry + 3, RED[1])
-    s.set(15, ry - 3, GOLD[2])
-    s.set(16, ry - 3, GOLD[3])
-    s.set(14, ry - 3, GOLD[1])
+    if st.get("hat"):
+        st["hat"](s, ry)
+    else:
+        s.rect(13, ry - 1, 18, ry, RED[2])  # 兜
+        s.rect(14, ry - 2, 17, ry - 2, RED[3])
+        s.rect(13, ry, 18, ry, RED[1])
+        s.rect(12, ry, 12, ry + 3, RED[1])
+        s.set(15, ry - 3, GOLD[2])
+        s.set(16, ry - 3, GOLD[3])
+        s.set(14, ry - 3, GOLD[1])
     s.line(11, ry - 4, 11, ry + 8, WOOD[1])  # 背旗
     s.rect(8, ry - 4, 10, ry + 2, F[2])
     s.rect(8, ry - 4, 8, ry + 2, F[3])
@@ -400,7 +414,41 @@ def head(s, x, y, team, H):
     s.rect(x, y + 8, x + 5, y + 8, AI[team][2])
 
 
-def tower_v2(kind, team="ally"):
+def tower_level(s, kind, team, level):
+    """強化Lv（1〜5）の見た目：Lv2 左にものぼり旗、Lv3 金の軒（屋根なしの塔は足場の縁）、Lv4 金の手すり、Lv5 金の飾り"""
+    F = FLAG[team]
+    roof = kind in ("arrow", "gun")
+    if level >= 2:  # 左にものぼり旗（家紋つき）
+        s.line(4, 6, 4, 45, WOOD[1])
+        s.rect(0, 7, 3, 24, F[2])
+        s.rect(0, 7, 0, 24, F[3])
+        s.rect(3, 7, 3, 24, F[1])
+        s.rect(1, 12, 2, 13, (245, 240, 225))
+    if level >= 3:
+        if roof:
+            s.rect(2, 5, 39, 5, GOLD[1])
+            s.rect(2, 5, 12, 5, GOLD[2])
+        else:
+            s.rect(3, 21, 38, 21, GOLD[1])
+            s.rect(3, 21, 12, 21, GOLD[2])
+    if level >= 4:
+        s.rect(3, 13, 38, 13, GOLD[2])
+        s.rect(3, 13, 10, 13, GOLD[3])
+    if level >= 5:  # 金の棟と鯱（屋根なしの塔は足場の角に金の飾り）
+        if roof:
+            s.rect(13, 0, 28, 0, GOLD[2])
+            s.rect(13, 0, 18, 0, GOLD[3])
+            for x in (12, 29):
+                s.rect(x, 0, x, 1, GOLD[2])
+        for x in ((1, 40) if roof else (3, 38)):
+            y = 3 if roof else 12
+            s.rect(x, y - 2, x, y, GOLD[2])
+            s.set(x, y - 3, GOLD[3])
+        s.rect(19, 46, 22, 47, GOLD[2])  # 石垣の金の紋
+        s.set(19, 46, GOLD[3])
+
+
+def tower_v2(kind, team="ally", level=1):
     s = Sprite2(42, 56)
     if kind == "arrow":
         tower_frame(s, team)
@@ -475,6 +523,7 @@ def tower_v2(kind, team="ally"):
                 s.set(33, y, WATER[4])
         for x, y in ((31, 45), (37, 45), (30, 44), (38, 44), (34, 43)):
             s.set(x, y, WATER[4])
+    tower_level(s, kind, team, level)
     s.outline()
     return s
 
