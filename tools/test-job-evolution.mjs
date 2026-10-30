@@ -83,7 +83,7 @@ async function setup(width = 390, debug = true) {
   }, jobs);
   const p = await c.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
-  await p.goto("http://127.0.0.1:" + server.address().port + "/" + (debug ? "?debug" : ""));
+  await p.goto("http://127.0.0.1:" + server.address().port + "/" + (debug ? "?debug" : "?layout=classic"));
   return { p, c };
 }
 try {

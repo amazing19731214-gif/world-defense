@@ -959,7 +959,7 @@ fs.writeFileSync(
   { [SKEY]: JSON.stringify(roster()) },
   375,
   667,
-  pathToFileURL(previewHtml).href,
+  pathToFileURL(previewHtml).href + "?layout=classic", // 従来表示のボタンを直接押す試験
 ));
 r = await ev(page, () => !document.getElementById("previewOpen").hidden);
 check("試作版だけ「🧪 試作：終盤」ボタンが出る", r);
@@ -980,7 +980,7 @@ check(
     /影分身/.test(r || ""),
   r,
 );
-await page.goto(pathToFileURL(previewHtml).href);
+await page.goto(pathToFileURL(previewHtml).href + "?layout=classic");
 r = await page.evaluate(
   () => document.getElementById("checkpointStatus") && !document.getElementById("previewOpen").hidden,
 );

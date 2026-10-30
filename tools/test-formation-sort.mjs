@@ -91,7 +91,7 @@ async function setup({ width = 390, debug = true, empty = false, formation } = {
   );
   const p = await c.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
-  await p.goto(url + (debug ? "?debug" : ""));
+  await p.goto(url + (debug ? "?debug" : "?layout=classic"));
   await p.locator("#organize").click();
   return { p, c };
 }

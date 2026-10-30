@@ -2391,6 +2391,55 @@
       .notice-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
       @media (prefers-reduced-motion: reduce) { .level-bubble { animation: none; } }
       .formation-growth { display:block; color:#d5deb6; font-size:.76rem; overflow-wrap:anywhere; line-height:1.45; margin-top:3px; }
+      /* ===== コンパクト表示（v103・UI改善の第1段階） =====
+         body.compact-ui のときだけ、部隊・建設・必殺技・メニューを1列のボタンにまとめ、押したものだけ下から開く。
+         ボタンのIDと処理は従来のまま（場所だけ変える）。従来表示では下の規則は効かない。 */
+      .dock-bar, .skill-dock, .menu-group, .compact-only, .drawer-head { display: none; }
+      .compact-ui .dock-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 6px 0 0; }
+      .compact-ui .dock-bar button { position: relative; min-height: 50px; font-size: 14px; line-height: 1.15; padding: 4px 2px; white-space: nowrap; }
+      .compact-ui .dock-bar button small { display: block; font-size: 11px; opacity: 0.85; }
+      .compact-ui .dock-bar button[aria-expanded="true"] { background: linear-gradient(#b98a3e, #8a5f22); border-color: #f2d58a; }
+      .dock-badge { position: absolute; top: 4px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: #f2c14e; box-shadow: 0 0 0 2px #21494e; }
+      .compact-ui .compact-only { display: block; }
+      .compact-ui .menu-group { display: block; grid-column: 1 / -1; margin: 8px 2px 0; font-size: 13px; color: #e6d39a; }
+      .compact-ui #unitTools, .compact-ui #towerTools, .compact-ui #skillDock, .compact-ui #menuTools { display: none; }
+      .compact-ui .drawer.open {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 8;
+        width: min(560px, 100%);
+        margin: 0 auto;
+        max-height: calc(var(--app-h) * 0.55);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: #143c45f2;
+        border: 1px solid #719b8f;
+        border-bottom: 0;
+        border-radius: 14px 14px 0 0;
+        padding: 0 10px calc(10px + env(safe-area-inset-bottom));
+        box-shadow: 0 -8px 24px #0610149a;
+      }
+      .compact-ui #towerTools.open, .compact-ui #menuTools.open { display: grid; }
+      .compact-ui #towerTools.open { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .compact-ui #towerTools.open > button { min-height: 56px; }
+      .compact-ui #unitTools.open, .compact-ui #skillDock.open { display: block; }
+      .compact-ui .drawer-head { display: flex; position: sticky; top: 0; z-index: 1; align-items: center; justify-content: space-between; gap: 8px; margin: 0 -10px 6px; padding: 8px 10px; background: #143c45; border-bottom: 1px solid #719b8f66; grid-column: 1 / -1; }
+      .compact-ui .drawer-head b { font-size: 15px; }
+      .compact-ui .drawer-head button { flex: none; width: auto; min-height: 44px; padding: 4px 12px; }
+      .skill-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+      .skill-row span { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+      .skill-row button { flex: none; min-height: 44px; min-width: 96px; }
+      @media (max-width: 600px) {
+        /* 戦場を画面の端まで使う（枠の分だけ広くなる） */
+        .compact-ui #gameView { width: 100vw; margin-left: calc(50% - 50vw); margin-right: 0; }
+        .compact-ui #gameView canvas { border-width: 2px 0; border-radius: 0; }
+      }
+      @media (min-width: 601px) {
+        /* PC・横向き：操作の列まで1画面に収まるよう、戦場は見えている高さに合わせる */
+        .compact-ui #gameView canvas { max-width: calc((var(--app-h) - 270px) * 1.6); margin-left: auto; margin-right: auto; }
+      }
       .chronicle-goals progress { display:block; width:min(100%,240px); height:8px; margin:4px 0 8px; accent-color:#d8b45a; }
     </style>
   </head>
@@ -2427,6 +2476,13 @@
         ><button id="recoverAll" aria-label="兵士と塔をまとめて回復" disabled>🩹 全回復</button
         ><button id="autoWave" aria-pressed="false" title="ウェーブが終わったら5秒後に次のウェーブを自動で始める（防衛戦・修練場）">AUTO
 OFF</button>
+      </div>
+      <!-- コンパクト表示（スマホ向け）：部隊・建設・必殺技・メニューを1列にまとめ、押すと下から開く -->
+      <div id="dockBar" class="tools dock-bar" aria-label="操作メニュー">
+        <button id="dockUnits" aria-expanded="false" aria-controls="unitTools">⚔️ 部隊<small id="dockUnitsSub"></small></button
+        ><button id="dockBuild" aria-expanded="false" aria-controls="towerTools">🏯 建設<small id="dockBuildSub"></small></button
+        ><button id="dockSkills" aria-expanded="false" aria-controls="skillDock">✨ 必殺技<small id="dockSkillsSub"></small></button
+        ><button id="dockMenu" aria-expanded="false" aria-controls="menuTools">☰ メニュー<i id="dockMenuBadge" class="dock-badge" hidden></i></button>
       </div>
       <p id="nextGoal" class="next-goal" role="status" hidden></p>
       <section id="towerPanel" class="panel dock" hidden aria-label="選択中の塔">
@@ -2480,7 +2536,8 @@ OFF</button>
           <div id="soldierInfo" class="soldier-info"></div>
         </div>
       </section>
-      <div class="tools tower-tools" aria-label="防衛塔">
+      <div id="skillDock" class="tools skill-dock" aria-label="武将の必殺技（防衛戦）"><div id="skillDockList"></div></div>
+      <div id="towerTools" class="tools tower-tools" aria-label="防衛塔">
         <button data-t="arrow">
           <img class="t-img" data-sprite="arrow" alt="" /><span class="t-text"
             >弓<small>100G</small></span
@@ -2497,19 +2554,23 @@ OFF</button>
           <img class="t-img" data-sprite="ice" alt="" /><span class="t-text">水攻め<small>150G</small></span>
         </button>
       </div>
-      <div class="tools menu-tools">
-        <button id="heroGrowth">👑 主人公</button><button id="trainingOpen">⚔️ 修練場</button
-        ><button id="gacha">🎴 ガチャ</button
-        ><button id="forgeOpen">🔥 秘伝錬成</button><button id="gearOpen">🎒 装備倉庫</button
-        ><button id="mapOpen">🌏 世界</button><button id="zukanOpen">📖 図鑑</button
-        ><button id="reset">↻ 最初から</button><button id="wipeData">🗑 データ消去</button><button id="checkpointSave">💾 途中保存</button
+      <div id="menuTools" class="tools menu-tools">
+        <h3 class="menu-group">戦い</h3
+        ><button id="mapOpen">🌏 世界</button><button id="menuOrganize" class="compact-only">📋 編成</button><button id="trainingOpen">⚔️ 修練場</button
+        ><h3 class="menu-group">武将・兵士の育成</h3
+        ><button id="gacha">🎴 ガチャ</button><button id="heroGrowth">👑 主人公</button><button id="menuInfo" class="compact-only">ℹ️ 育成情報</button
+        ><h3 class="menu-group">装備・アイテム</h3
+        ><button id="gearOpen">🎒 装備倉庫</button><button id="menuShop" class="compact-only">🏪 商店</button><button id="forgeOpen">🔥 秘伝錬成</button
+        ><h3 class="menu-group">記録・その他</h3
+        ><button id="zukanOpen">📖 図鑑</button><button id="checkpointSave">💾 途中保存</button><button id="reset">↻ 最初から</button
+        ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button
         ><button id="showAllFeatures" hidden>🔓 全機能を表示</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v102（修練場の極級・天級・神級）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v103（スマホ向けコンパクト表示）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2777,6 +2838,20 @@ OFF</button>
             return false;
           }
         })();
+        // 表示の種類：コンパクト（スマホ向けの既定）・従来。?layout= で指定、なければ保存した設定。
+        // 動作確認用（?debug）は、既存の試験が前提とする従来表示を既定にする（コンパクトは ?layout=compact で確認）
+        const UI_LAYOUT = (() => {
+          const q = new URLSearchParams(location.search).get("layout");
+          if (q === "classic" || q === "compact") return q;
+          try {
+            const d = JSON.parse(localStorage.getItem("worldDefense.ui.v1") || "null");
+            if (d && (d.layout === "classic" || d.layout === "compact")) return d.layout;
+          } catch (err) {
+            /* 読めなければ既定 */
+          }
+          return /[?&]debug\b/.test(location.search) ? "classic" : "compact";
+        })();
+        document.body.classList.toggle("compact-ui", UI_LAYOUT === "compact");
         const W = 960,
           H = 600;
         const types = {
@@ -8067,6 +8142,7 @@ function chronicleWarBonusBlock(s) {
           renderHearts();
           renderTowerGrowth();
           renderOnboarding();
+          renderDock();
         }
         function renderCounterNotice() {
           const c = territoryReady ? activeCounter() : null;
@@ -19801,6 +19877,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           shinano: { name: "信濃", castle: "fukashi", adj: ["mino", "mikawa", "totomi", "kai"] },
           kai: { name: "甲斐", castle: "tsutsujigasaki", adj: ["suruga", "shinano"] },
         };
+        var dockReady = false; // コンパクト表示の準備ができたか（var：起動の途中のupdateUIでも参照できる）
         var onboardReady = false; // 段階開放の準備ができたか（var：起動の途中のupdateUIでも参照できる）
         var territoryReady = false; // 領土のデータの準備ができたか（var：起動の途中でも参照できる）
         // 領土の効果（国の特産）。領土にした国の効果が防衛戦に効く（同じ種類は足し合わせる）
@@ -20768,6 +20845,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             if (ok && d.fresh?.[F.id] === true) fresh[F.id] = true;
           }
           return {
+            layout: ok && (d.layout === "classic" || d.layout === "compact") ? d.layout : undefined, // 表示の種類（v103）
             all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
             maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
             seen,
@@ -20879,6 +20957,118 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         });
         onboardReady = true;
         renderOnboarding();
+        // ===== コンパクト表示：部隊・建設・必殺技・メニューの引き出し（v103） =====
+        // 中のボタンは従来の要素そのもの（IDと処理は同じ）。開けるのは1つだけ。部隊・塔を選ぶと引き出しは閉じる。
+        const DRAWERS = {
+          dockUnits: ["unitTools", "⚔️ 部隊（タップで配置・選択）"],
+          dockBuild: ["towerTools", "🏯 建設（選んで草地をタップ）"],
+          dockSkills: ["skillDock", "✨ 武将の必殺技"],
+          dockMenu: ["menuTools", "☰ メニュー"],
+        };
+        let drawerOpen = null, skillDockKey = "";
+        const compactUi = () => document.body.classList.contains("compact-ui");
+        function setDrawer(key) {
+          drawerOpen = compactUi() ? key : null;
+          if (drawerOpen && (selectedTower || selectedSquad)) {
+            selectedTower = selectedSquad = null; // 下の選択パネルと重ならないように
+            placeSquadId = null;
+          }
+          for (const [btn, [id]] of Object.entries(DRAWERS)) {
+            $(id).classList.toggle("open", btn === drawerOpen);
+            $(btn).setAttribute("aria-expanded", String(btn === drawerOpen));
+          }
+          skillDockKey = "";
+          updateUI();
+        }
+        for (const [btn, [id, title]] of Object.entries(DRAWERS)) {
+          const el = $(id), head = document.createElement("div");
+          el.classList.add("drawer");
+          head.className = "drawer-head";
+          head.innerHTML = "<b>" + title + '</b><button type="button" data-drawer-close aria-label="閉じる">✕ 閉じる</button>';
+          el.prepend(head);
+          head.querySelector("button").onclick = () => setDrawer(null);
+          $(btn).onclick = () => setDrawer(drawerOpen === btn ? null : btn);
+        }
+        // 塔の種類を選んだら引き出しを閉じ、戦場をタップできるようにする
+        document.querySelectorAll("#towerTools [data-t]").forEach((b) => b.addEventListener("click", () => drawerOpen === "dockBuild" && setDrawer(null)));
+        // メニューの項目を押したら閉じる（開いた画面の操作を邪魔しない）
+        $("menuTools").addEventListener("click", (ev) => {
+          const b = ev.target.closest("button");
+          if (b && !b.dataset.drawerClose && b.id !== "layoutToggle") setDrawer(null);
+        });
+        $("menuOrganize").onclick = () => $("organize").click();
+        $("menuInfo").onclick = () => $("infoOpen").click();
+        $("menuShop").onclick = () => {
+          $("gearOpen").click();
+          document.querySelector('[data-gear-tab="shop"]')?.click();
+        };
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape" && drawerOpen && !document.querySelector(".sheet-back:not([hidden])")) setDrawer(null);
+        });
+        $("layoutToggle").onclick = () => {
+          uiSave.layout = compactUi() ? "classic" : "compact";
+          persistUi();
+          document.body.classList.toggle("compact-ui", uiSave.layout === "compact");
+          setDrawer(null);
+          toast(uiSave.layout === "compact" ? "📱 コンパクト表示にしました" : "🖥 従来の表示にしました");
+        };
+        // 防衛戦の必殺技：塔・部隊に配属した武将を一覧にし、従来の「必殺技」ボタンと同じ処理で使う
+        function skillDockRows() {
+          return ownedHeroes()
+            .filter((h) => heroPos(h))
+            .map((h) => {
+              const S = WARLORDS[h.id].skill,
+                ready = canUseSkill(h),
+                state = h.active > 0 ? "発動中" : h.cd > 0 ? "あと" + Math.ceil(h.cd) + "秒" : !playing ? "ウェーブ中に使えます" : ready ? "使える！" : "使えません";
+              return { h, name: WARLORDS[h.id].name, skill: S.name, where: h.tower ? "塔" : "部隊", ready, state };
+            });
+        }
+        function renderDock() {
+          if (!dockReady) return;
+          $("layoutToggle").textContent = compactUi() ? "📱 表示：コンパクト" : "🖥 表示：従来";
+          if (!compactUi()) return;
+          if (drawerOpen && (selectedTower || selectedSquad)) {
+            drawerOpen = null; // 部隊・塔を選んだら、その操作パネルを優先する
+            for (const [btn, [id]] of Object.entries(DRAWERS)) {
+              $(id).classList.remove("open");
+              $(btn).setAttribute("aria-expanded", "false");
+            }
+          }
+          const rows = skillDockRows(), ready = rows.filter((r) => r.ready).length;
+          $("dockUnitsSub").textContent = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
+          $("dockBuildSub").textContent = "塔 " + builtTowerCount() + "/" + TOWER_RULES.maxBuilt;
+          $("dockSkillsSub").textContent = rows.length ? (ready ? "使える " + ready : rows.length + "人") : "配属なし";
+          $("dockMenuBadge").hidden = !document.querySelector("#menuTools .feature-new");
+          for (const id of ["dockUnits", "dockBuild", "dockSkills"]) $(id).disabled = !!battle; // 攻城戦の操作は戦闘バーで行う
+          if (drawerOpen !== "dockSkills") return;
+          const key = JSON.stringify(rows.map((r) => [r.h.id, r.state, r.ready]));
+          if (key === skillDockKey) return;
+          skillDockKey = key;
+          const list = $("skillDockList");
+          if (!rows.length) {
+            list.innerHTML = '<p class="muted">塔か部隊に武将を配属すると、ここから必殺技を使えます（塔・部隊を選んで「👤 武将」）。</p>';
+            return;
+          }
+          list.replaceChildren(
+            ...rows.map((r) => {
+              const row = document.createElement("div"), label = document.createElement("span"), b = document.createElement("button");
+              row.className = "skill-row";
+              label.textContent = r.name + "（" + r.where + "）「" + r.skill + "」・" + r.state;
+              b.textContent = r.ready ? "✨ 発動" : "待機";
+              b.disabled = !r.ready;
+              b.dataset.skillHero = r.h.id;
+              b.onclick = () => {
+                useSkillFrom(r.h);
+                skillDockKey = "";
+                updateUI();
+              };
+              row.append(label, b);
+              return row;
+            }),
+          );
+        }
+        dockReady = true;
+        renderDock();
         const unseenSecrets = () => Object.keys(SECRETS).filter((id) => conquestMeta.secrets[id] && !conquestMeta.secretSeen[id]);
         function markSecretsSeen(ids) {
           for (const id of ids) conquestMeta.secretSeen[id] = true;
@@ -24028,6 +24218,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (sig !== squadSig) {
             squadSig = sig;
             renderSquadUI();
+            renderDock(); // 下の「部隊」ボタンの配置数も合わせる
           }
         }
         // 動作確認用（URLに ?debug を付けたときだけ公開。通常プレイには影響しない）
