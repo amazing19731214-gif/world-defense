@@ -2577,7 +2577,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.3試作（攻めは縦・守りは横）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v104.4（高精細の描画と縦向きの仕上げ）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2868,10 +2868,28 @@ OFF</button>
         let fieldPref = UI_LAYOUT === "vertical";
         let VERTICAL = false; // いま縦向きで描いているか（攻める戦いが始まると切り替わる）
         let worldMode = false; // 地面・道などを入れ替えて描いている最中か
+        // 描画の解像度（v104.4）：スマホの高精細な画面で拡大されてぼやけないよう、表示の大きさ×画素密度で描く（1〜2倍）。
+        // ゲームの座標は変えず、描くときの基準の倍率 RS を掛けるだけ。
+        let RS = 1;
+        const logicalW = () => (VERTICAL ? H : W),
+          logicalH = () => (VERTICAL ? W : H);
+        function renderScale() {
+          const css = C.getBoundingClientRect().width || logicalW();
+          return Math.max(1, Math.min(2, ((window.devicePixelRatio || 1) * css) / logicalW()));
+        }
         function applyFieldShape() {
-          C.width = VERTICAL ? H : W;
-          C.height = VERTICAL ? W : H;
           document.body.classList.toggle("vertical-field", VERTICAL);
+          const k = renderScale();
+          C.width = Math.round(logicalW() * k);
+          C.height = Math.round(logicalH() * k);
+          RS = C.width / logicalW();
+        }
+        // 画面の大きさ・向きが変わったら、解像度を合わせ直す（変わったときだけ）
+        function refreshRenderScale() {
+          if (Math.abs(renderScale() - RS) < 0.05) return false;
+          applyFieldShape();
+          if (typeof scenery !== "undefined") scenery = null;
+          return true;
         }
         applyFieldShape();
         const ctxRaw = {};
@@ -2880,7 +2898,7 @@ OFF</button>
         function uprightAt(cx, cy, fn) {
           const m = ctx.getTransform();
           ctx.save();
-          ctx.setTransform(1, 0, 0, 1, m.a * cx + m.c * cy + m.e, m.b * cx + m.d * cy + m.f);
+          ctx.setTransform(RS, 0, 0, RS, m.a * cx + m.c * cy + m.e, m.b * cx + m.d * cy + m.f);
           fn();
           ctx.restore();
         }
@@ -2901,13 +2919,13 @@ OFF</button>
         // 地面・道などを描くとき（入れ替え）と、人物・塔を描くとき（その位置で立てる）、画面に重ねる札（画面の座標）
         function worldSpace() {
           worldMode = VERTICAL;
-          ctx.setTransform(VERTICAL ? 0 : 1, VERTICAL ? 1 : 0, VERTICAL ? 1 : 0, VERTICAL ? 0 : 1, 0, 0);
+          ctx.setTransform(VERTICAL ? 0 : RS, VERTICAL ? RS : 0, VERTICAL ? RS : 0, VERTICAL ? 0 : RS, 0, 0);
         }
         function drawActor(a) {
           if (!VERTICAL || a.px == null) return a.draw();
           worldMode = false;
           ctx.save();
-          ctx.setTransform(1, 0, 0, 1, a.py - a.px, a.px - a.py);
+          ctx.setTransform(RS, 0, 0, RS, RS * (a.py - a.px), RS * (a.px - a.py));
           a.draw();
           ctx.restore();
           worldMode = true;
@@ -2917,8 +2935,8 @@ OFF</button>
           const was = worldMode;
           worldMode = false;
           ctx.save();
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          fn(C.width, C.height);
+          ctx.setTransform(RS, 0, 0, RS, 0, 0);
+          fn(logicalW(), logicalH());
           ctx.restore();
           worldMode = was;
         }
@@ -11132,8 +11150,9 @@ OFF</button>
           ctx.fillText("侵入口", VERTICAL ? 36 : 15, VERTICAL ? 300 : 249);
           ctx.font = "bold 13px system-ui";
           ctx.fillStyle = "#4a704c";
-          ctx.fillText("NORTH • 北の道", VERTICAL ? 470 : 310, VERTICAL ? 64 : 113);
-          ctx.fillText("SOUTH • 南の道", VERTICAL ? 470 : 310, VERTICAL ? 536 : 505);
+          // 縦向きの戦場では、左右の道に挟まれた草地の中（木と重ならない場所）に置く
+          ctx.fillText(VERTICAL ? "← 北の道" : "NORTH • 北の道", VERTICAL ? 340 : 310, VERTICAL ? 230 : 113);
+          ctx.fillText(VERTICAL ? "南の道 →" : "SOUTH • 南の道", VERTICAL ? 340 : 310, VERTICAL ? 375 : 505);
         }
         function projectile(s) {
           const p = Math.min(1, s.age / s.duration),
@@ -11143,8 +11162,8 @@ OFF</button>
                 : s.type === "ice"
                   ? Math.sin(p * Math.PI) * 45
                   : 0,
-            x = s.x + (s.tx - s.x) * p,
-            y = s.y + (s.ty - s.y) * p - arc;
+            x = s.x + (s.tx - s.x) * p - (VERTICAL ? arc : 0), // 山なりは画面の上へ（縦向きの戦場では画面の上＝ゲームの横の手前）
+            y = s.y + (s.ty - s.y) * p - (VERTICAL ? 0 : arc);
           ctx.save();
           if (s.type === "arrow") {
             ctx.translate(x, y);
@@ -11493,7 +11512,10 @@ OFF</button>
             scenery.getContext("2d").drawImage(C, 0, 0);
           }
           ctx.clearRect(0, 0, W, H);
-          screenSpace(() => ctx.drawImage(scenery, 0, 0));
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0); // 背景は描いたときと同じ画素のまま写す
+          ctxRaw.drawImage(scenery, 0, 0);
+          ctx.restore();
           if (battle) {
             drawBattle();
             return;
@@ -11619,8 +11641,8 @@ OFF</button>
         }
         const mapPoint = (ev) => {
           const r = C.getBoundingClientRect(),
-            sx = ((ev.clientX - r.left - C.clientLeft) * C.width) / C.clientWidth,
-            sy = ((ev.clientY - r.top - C.clientTop) * C.height) / C.clientHeight;
+            sx = ((ev.clientX - r.left - C.clientLeft) * logicalW()) / C.clientWidth,
+            sy = ((ev.clientY - r.top - C.clientTop) * logicalH()) / C.clientHeight;
           return VERTICAL ? { x: sy, y: sx } : { x: sx, y: sy }; // 縦向きの戦場は画面の縦がゲームの横
         };
         C.addEventListener("click", (ev) => {
@@ -20138,7 +20160,7 @@ OFF</button>
           ctx.fillRect(cx - 60, top + 2, 120 * r, 5);
         }
         // 登場の帯（最初の2秒）
-        function drawBossIntro(B) {
+        function drawBossIntro(B, W = 960) { // 画面に重ねる帯。W は画面の幅（縦向きの戦場では 600）
           if (B.t > 2) return;
           const D = BOSSES[B.boss],
             a = B.t < 1.6 ? 1 : (2 - B.t) / 0.4;
@@ -20255,19 +20277,21 @@ OFF</button>
             ctx.lineWidth = w * 0.4;
             ctx.stroke();
           } else if (f.kind === "bphase") {
-            // 形態の変化：画面がひと瞬き光り、文字が出る（視差効果を減らす設定では文字だけ）
-            if (!reduced) {
-              ctx.globalAlpha = (1 - p) * 0.35;
+            // 形態の変化：画面がひと瞬き光り、文字が出る（視差効果を減らす設定では文字だけ）。画面の座標で描く（縦向きでも中央）
+            screenSpace((W, H) => {
+              if (!reduced) {
+                ctx.globalAlpha = (1 - p) * 0.35;
+                ctx.fillStyle = f.col;
+                ctx.fillRect(0, 0, W, H);
+              }
+              ctx.globalAlpha = p < 0.8 ? 1 : (1 - p) / 0.2;
+              ctx.font = "bold 26px system-ui";
+              ctx.textAlign = "center";
+              ctx.fillStyle = "#0b0610cc";
+              ctx.fillRect(W / 2 - 170, 180, 340, 44);
               ctx.fillStyle = f.col;
-              ctx.fillRect(0, 0, W, 600);
-            }
-            ctx.globalAlpha = p < 0.8 ? 1 : (1 - p) / 0.2;
-            ctx.font = "bold 26px system-ui";
-            ctx.textAlign = "center";
-            ctx.fillStyle = "#0b0610cc";
-            ctx.fillRect(W / 2 - 170, 180, 340, 44);
-            ctx.fillStyle = f.col;
-            ctx.fillText(f.text, W / 2, 211);
+              ctx.fillText(f.text, W / 2, 211);
+            });
           } else if (f.kind === "bdeath") {
             // 討伐：ボスの姿が光の粒になって消える
             const ghost = f.e;
@@ -20454,7 +20478,7 @@ OFF</button>
           for (const e of effects) effect(e);
           if (B.boss) {
             drawBossWarnFx(B, bossOf(B)); // 予兆の間の光（落雷の光・炎の溜め・炉の充填）
-            drawBossIntro(B);
+            screenSpace((SW) => drawBossIntro(B, SW));
             // 予兆：狙われた部隊の足元に点滅する輪と文字
             const w = B.warn;
             if (w) {
@@ -21709,6 +21733,7 @@ OFF</button>
             root.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
           }
           root.setProperty("--header-h", Math.ceil(document.querySelector("header").getBoundingClientRect().height) + "px");
+          if (typeof C !== "undefined") requestAnimationFrame(refreshRenderScale); // 表示の大きさが決まってから解像度を合わせる
           // 縦向きの戦場：ヘッダー・ウェーブ操作・部隊の列が必ず見えるよう、戦場の高さに使えない分を渡す
           const h = (sel) => Math.ceil(document.querySelector(sel)?.getBoundingClientRect().height || 0);
           // 攻める戦いの間は、戦闘の状況と必殺技の1段目が見えるようにする（撤退ボタンなどはスクロールで）
