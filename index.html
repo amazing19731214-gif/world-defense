@@ -2509,7 +2509,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v100（真・八岐大蛇の停止を修正）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v101（部隊・塔のドラッグ移動）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -11259,7 +11259,7 @@ function chronicleWarBonusBlock(s) {
           }
           return best;
         }
-        function placeCheck(x, y) {
+        function placeCheck(x, y, except = null) {
           if (x < 0 || x > W || y < 0 || y > H) return { error: "マップの外には配置できません。" };
           const p = projectToRoad(x, y);
           if (!p || p.off > SQUAD_RULES.snapDistance)
@@ -11267,9 +11267,10 @@ function chronicleWarBonusBlock(s) {
           if (p.d < SQUAD_RULES.noDeployFromEntry) return { error: "入口の近くには配置できません。" };
           if (p.total - p.d < SQUAD_RULES.noDeployBeforeCastle)
             return { error: "城の直前には配置できません。" };
-          if (fieldSquads().some((q) => Math.hypot(q.x - p.x, q.y - p.y) < SQUAD_RULES.minSpacing))
+          const others = fieldSquads().filter((q) => q !== except); // 移動中の部隊自身は数えない
+          if (others.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < SQUAD_RULES.minSpacing))
             return { error: "ほかの部隊に近すぎます。少し離して配置してください。" };
-          if (fieldSquads().length >= SQUAD_RULES.maxDeployed)
+          if (others.length >= SQUAD_RULES.maxDeployed)
             return { error: "道に出せる部隊は " + SQUAD_RULES.maxDeployed + " 部隊までです。" };
           return { point: p };
         }
@@ -14407,12 +14408,19 @@ function chronicleWarBonusBlock(s) {
           for (const a of actors) a.draw();
           for (const s of shots) projectile(s);
           for (const e of effects) effect(e);
+          drawDrag();
           drawCutin();
         }
+        const mapPoint = (ev) => {
+          const r = C.getBoundingClientRect();
+          return { x: ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth, y: ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight };
+        };
         C.addEventListener("click", (ev) => {
-          const r = C.getBoundingClientRect(),
-            x = ((ev.clientX - r.left - C.clientLeft) * W) / C.clientWidth,
-            y = ((ev.clientY - r.top - C.clientTop) * H) / C.clientHeight;
+          if (dragSuppressClick) return void (dragSuppressClick = false); // ドラッグで動かした直後のクリックは無視
+          const { x, y } = mapPoint(ev);
+          mapTap(x, y);
+        });
+        function mapTap(x, y) {
           if (battle) return; // 攻城戦の最中は防衛の操作をしない
           // 優先順：部隊（隊形の範囲）→ 塔 → 選択解除 → 部隊の配置／雇用／建設
           const hitSquad = squadAt(x, y);
@@ -14423,7 +14431,7 @@ function chronicleWarBonusBlock(s) {
             const near = soldierNear(hitSquad, x, y);
             selectedSoldierId = near ? near.id : null;
             selectedTower = null;
-            msg(squadName(hitSquad) + "：武将・撤退・治療・補充ができます。");
+            msg(squadName(hitSquad) + "：武将・撤退・治療・補充ができます。" + (dragAllowed() ? "準備中はドラッグで移動できます。" : ""));
             updateUI();
             return;
           }
@@ -14433,7 +14441,7 @@ function chronicleWarBonusBlock(s) {
             selectedTower = old;
             selectedSquad = null;
             placeSquadId = null;
-            msg(towerLabel(old) + "：強化・売却・武将配属ができます。");
+            msg(towerLabel(old) + "：強化・売却・武将配属ができます。" + (dragAllowed() ? "準備中はドラッグで移動できます。" : ""));
             updateUI();
             return;
           }
@@ -14477,15 +14485,7 @@ function chronicleWarBonusBlock(s) {
           } else if (gold < p.cost) {
             msg("資金が足りません。");
             toast($("msg").textContent);
-          } else if (
-            x < 38 ||
-            x > 825 ||
-            y < 45 ||
-            y > 555 ||
-            roadDistance(x, y, upper) < 58 ||
-            roadDistance(x, y, lower) < 58 ||
-            towers.some((t) => Math.hypot(t.x - x, t.y - y) < 65)
-          ) {
+          } else if (!towerSiteOk(x, y)) {
             msg("そこには建設できません。草地の広い場所を選んでね。");
             toast($("msg").textContent);
           } else {
@@ -14496,7 +14496,118 @@ function chronicleWarBonusBlock(s) {
             msg(p.icon + " 塔を建設した！");
           }
           updateUI();
+        }
+        // 塔を置ける草地か（建設と移動で共通。except は移動中の塔自身）
+        const towerSiteOk = (x, y, except = null) =>
+          !(x < 38 || x > 825 || y < 45 || y > 555 ||
+            roadDistance(x, y, upper) < 58 || roadDistance(x, y, lower) < 58 ||
+            towers.some((t) => t !== except && Math.hypot(t.x - x, t.y - y) < 65));
+        // ===== ドラッグ＆ドロップで移動（準備中だけ） =====
+        // 道に出ている部隊・建てた塔を長押しせずにそのまま引きずって離すと移動。ウェーブ中・攻城戦・ゲームオーバー後はできない。
+        // 塔は無料、部隊は配置のルール（道の上・入口と城の前を避ける・部隊の間隔）を守る。強化・武将・兵士はそのまま。
+        const DRAG = { start: 12 }; // これ以上動かしたらドラッグ（それ以下はタップ）
+        let drag = null, dragSuppressClick = false;
+        const dragAllowed = () => !playing && !battle && !over && hp > 0;
+        function dragTargetAt(x, y) {
+          if (!dragAllowed()) return null;
+          const q = squadAt(x, y);
+          if (q) return { kind: "squad", obj: q };
+          const t = towers.find((o) => Math.hypot(o.x - x, o.y - y) < 38);
+          return t ? { kind: "tower", obj: t } : null;
+        }
+        // 離す場所の判定。部隊は道へ吸着した位置、塔は指の位置
+        function dragDrop(d, x, y) {
+          if (d.kind === "tower") return towerSiteOk(x, y, d.obj) ? { x, y } : { error: "そこには塔を置けません。草地の広い場所へ動かしてね。" };
+          const r = placeCheck(x, y, d.obj);
+          return r.error ? { error: r.error } : { x: r.point.x, y: r.point.y, point: r.point };
+        }
+        function finishDrag(d, x, y) {
+          if (!dragAllowed()) return msg("ウェーブ中は動かせません。準備中に動かしてね。");
+          const r = dragDrop(d, x, y);
+          if (r.error) return (msg(r.error), toast(r.error));
+          if (d.kind === "tower") {
+            d.obj.x = r.x;
+            d.obj.y = r.y;
+            selectedTower = d.obj;
+            selectedSquad = null;
+            msg(towerLabel(d.obj) + " を移動した。");
+          } else {
+            putOnRoad(d.obj, r.point);
+            selectedSquad = d.obj;
+            selectedTower = null;
+            msg(squadName(d.obj) + " を移動した。");
+          }
+          placeSquadId = null;
+          updateUI();
+        }
+        // スマホ：動かせるものの上で指を置いたら、ページのスクロールを止める（タップは自前で処理）
+        C.addEventListener(
+          "touchstart",
+          (ev) => {
+            const t = ev.touches[0];
+            if (ev.touches.length === 1 && dragTargetAt(mapPoint(t).x, mapPoint(t).y)) ev.preventDefault();
+          },
+          { passive: false },
+        );
+        C.addEventListener("pointerdown", (ev) => {
+          if (!ev.isPrimary || ev.button > 0) return;
+          const p = mapPoint(ev), target = dragTargetAt(p.x, p.y);
+          drag = target ? { ...target, sx: p.x, sy: p.y, x: p.x, y: p.y, moving: false, touch: ev.pointerType !== "mouse", id: ev.pointerId } : null;
+          if (drag) try { C.setPointerCapture(ev.pointerId); } catch (err) { /* 古いブラウザ */ }
         });
+        C.addEventListener("pointermove", (ev) => {
+          if (!drag || ev.pointerId !== drag.id) return;
+          const p = mapPoint(ev);
+          drag.x = p.x;
+          drag.y = p.y;
+          if (!drag.moving && Math.hypot(p.x - drag.sx, p.y - drag.sy) > DRAG.start) drag.moving = true;
+          if (drag.moving) draw();
+        });
+        C.addEventListener("pointerup", (ev) => {
+          if (!drag || ev.pointerId !== drag.id) return;
+          const d = drag, p = mapPoint(ev);
+          drag = null;
+          if (d.moving) {
+            dragSuppressClick = !d.touch; // マウスはこのあと click が来る
+            finishDrag(d, p.x, p.y);
+          } else if (d.touch) mapTap(p.x, p.y); // touchstart を止めたので click の代わりにタップとして扱う
+          draw();
+        });
+        C.addEventListener("pointercancel", () => {
+          drag = null;
+          draw();
+        });
+        // ドラッグ中の見た目：元の位置に薄い印、指の位置に置けるか（緑）置けないか（赤）
+        function drawDrag() {
+          if (!drag || !drag.moving) return;
+          const r = dragDrop(drag, drag.x, drag.y), ok = !r.error, px = ok ? r.x : drag.x, py = ok ? r.y : drag.y;
+          ctx.save();
+          ctx.setLineDash([6, 6]);
+          ctx.strokeStyle = "#ffffffaa";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(drag.obj.x, drag.obj.y);
+          ctx.lineTo(px, py);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          if (drag.kind === "tower") {
+            ctx.fillStyle = ok ? "#4fd16a33" : "#ff5a5a33";
+            ctx.strokeStyle = ok ? "#4fd16a" : "#ff5a5a";
+            ctx.beginPath();
+            ctx.arc(px, py, types[drag.obj.type].range, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.fillStyle = ok ? "#4fd16acc" : "#ff5a5acc";
+          ctx.beginPath();
+          ctx.arc(px, py - (drag.kind === "squad" ? 12 : 20), 36, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 32px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText(ok ? (drag.kind === "squad" ? "👣" : "🏯") : "✕", px, py - (drag.kind === "squad" ? 1 : 9));
+          ctx.restore();
+        }
         document.querySelectorAll("[data-t]").forEach(
           (b) =>
             (b.onclick = () => {
