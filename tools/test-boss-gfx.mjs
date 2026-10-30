@@ -154,7 +154,8 @@ r = await page.evaluate(() => {
     B = a.battle(),
     g = B.warn.target,
     hp0 = g.list.filter((s) => s.alive).map((s) => s.hp);
-  WD_DEBUG.step(3.1);
+  // 撮影中もゲームは進むので、予兆の残り時間から発動直後まで進める。
+  WD_DEBUG.step(B.warn.left + 0.05);
   return {
     fx: a.bossEffects(),
     warn: B.warn && B.warn.kind,
@@ -322,7 +323,7 @@ if (shots) await page.locator("#game").screenshot({ path: path.join(shots, "g5-t
 r = await page.evaluate(() => {
   const a = WD_DEBUG.squadApi,
     B = a.battle();
-  WD_DEBUG.step(4.05);
+  WD_DEBUG.step(B.warn.left + 0.05);
   return { fx: a.bossEffects(), warn: B.warn && B.warn.kind };
 });
 check(
