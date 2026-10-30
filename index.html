@@ -2388,6 +2388,29 @@
       }
       .map-notice[data-kind="counter"] { border-color: #ef9e73; background: #45271cf2; }
       .level-notices { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      /* イベントウィンドウ（v105.4）：戦闘は止めず、戦場の中央の手前に半透明で出す。上の通知と城は隠さない */
+      .event-win {
+        position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%);
+        display: flex; gap: 10px; align-items: center; width: min(360px, 88%);
+        padding: 10px 14px; border: 2px solid #e8c85a; border-radius: 14px;
+        background: #102c33c4; color: #fff3ce; box-shadow: 0 6px 18px #0008; z-index: 3; pointer-events: none;
+        animation: event-pop 0.28s ease-out;
+      }
+      .event-win[data-kind="boss"], .event-win[data-kind="revive"] { border-color: #ffd34d; background: #3a1d2ac4; }
+      .event-win[data-kind="namedFall"] { border-color: #c9a2a2; background: #2a1c22d0; }
+      .event-win[data-kind="namedFall"] .event-title { color: #f0c8c8; }
+      .event-icon { flex: none; font-size: 34px; line-height: 1; }
+      .event-body { flex: 1; min-width: 0; }
+      .event-title { display: block; font-size: 18px; color: #ffe27a; }
+      .event-lines { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+      .event-lines div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .event-hint { display: block; margin-top: 2px; font-size: 11px; opacity: 0.65; }
+      @media (min-width: 700px) { .event-win { width: min(480px, 56%); padding: 14px 18px; gap: 14px; } .event-icon { font-size: 44px; } .event-title { font-size: 22px; } .event-lines { font-size: 17px; } .event-hint { font-size: 13px; } }
+      @keyframes event-pop { from { opacity: 0; transform: translate(-50%, -42%) scale(0.92); } to { opacity: 1; transform: translate(-50%, -50%); } }
+      @media (prefers-reduced-motion: reduce) { .event-win { animation: none; } }
+      #eventLogList { list-style: none; margin: 0; padding: 0; }
+      #eventLogList li { padding: 8px 4px; border-bottom: 1px solid #ffffff22; line-height: 1.5; overflow-wrap: anywhere; }
+      #eventLogList li small { display: block; opacity: 0.7; }
       .level-bubble {
         position: absolute; transform: translate(-50%, -100%); max-width: min(230px, calc(100% - 16px));
         padding: 5px 8px; border: 1px solid #e8c85a; border-radius: 11px;
@@ -2479,6 +2502,7 @@
         <canvas id="game" width="960" height="600" aria-label="ゲームマップ"></canvas>
         <div id="mapNotice" class="map-notice" role="status" aria-live="polite" hidden></div>
         <div id="levelNotices" class="level-notices" aria-hidden="true"></div>
+        <div id="eventWin" class="event-win" role="status" aria-live="polite" hidden><div class="event-icon"></div><div class="event-body"><b class="event-title"></b><div class="event-lines"></div><small class="event-hint">タップで閉じる</small></div></div>
       </div>
       <span id="counterStatus" class="notice-sr"></span>
       <span id="levelNewsStatus" class="notice-sr" role="status" aria-live="polite"></span>
@@ -2583,15 +2607,22 @@ OFF</button>
         ><button id="gearOpen">🎒 装備倉庫</button><button id="menuShop" class="compact-only">🏪 商店</button><button id="forgeOpen">🔥 秘伝錬成</button
         ><h3 class="menu-group">記録・その他</h3
         ><button id="zukanOpen">📖 図鑑</button><button id="checkpointSave">💾 途中保存</button><button id="reset">↻ 最初から</button
-        ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button><button id="fieldToggle">🧪 縦向きの戦場</button><button id="gfxToggle" title="グラフィック：従来版／新ドット絵（試作）の切り替え">🎨 絵：従来版</button
+        ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button><button id="fieldToggle">🧪 縦向きの戦場</button><button id="gfxToggle" title="グラフィック：従来版／新ドット絵（試作）の切り替え">🎨 絵：従来版</button><button id="eventLogOpen">📜 出来事</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button
         ><button id="showAllFeatures" hidden>🔓 全機能を表示</button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.3（新ドット絵・攻めは縦を初期設定に）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.4（イベントウィンドウ）</small>
     </main>
+    <div id="eventLogSheet" class="sheet-back" hidden>
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
+        <div class="panel-head"><strong id="eventLogTitle">📜 出来事の記録</strong><button id="eventLogClose" class="icon-btn" aria-label="出来事の記録を閉じる">✕ 閉じる</button></div>
+        <p class="muted">裏ボスの初撃破・黄泉返り・ネームドの仕官など、大事な出来事を新しい順に残します（このページを開いている間）。</p>
+        <ul id="eventLogList"></ul>
+      </section>
+    </div>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
         <div class="panel-head"><strong id="infoTitle">ℹ️ 情報</strong><button id="infoClose" class="icon-btn" aria-label="情報を閉じてゲームに戻る">✕ 閉じる</button></div>
@@ -5094,11 +5125,7 @@ function flushInsights() {
         const q = squadById(x.s.squadId);
         if (q) evolutionFx({ pos: q }, "💡", "bulb", [], true);
       }
-    mapToast(
-      "💡 " +
-        notices.slice(0, 3).join("／") +
-        (notices.length > 3 ? " ほか" + (notices.length - 3) + "件" : ""),
-    );
+    for (const line of notices) eventNotice("insight", line); // イベントウィンドウ（同じ種類はまとめる）
   }
   zukanSync();
   return true;
@@ -6590,7 +6617,7 @@ function flushJobDrops() {
     }
     pendingJobDrops.delete(key);
     if (drop.owner) (drop.owner.jobBookDrops ||= []).push(drop.id);
-    mapToast("📕 " + JOBS[drop.id].name + "の書を入手！（" + drop.source + "）");
+    eventNotice("book", JOBS[drop.id].name + "の書（" + drop.source + "）");
   }
   return true;
 }
@@ -7078,7 +7105,7 @@ function scheduleChronicleNotices() {
         const key = s.chronicle.life + ":" + id;
         if (!chronicleAnnounced.has(key)) {
           chronicleAnnounced.add(key);
-          notes.push("💡 " + (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_SKILLS[id].name);
+          notes.push(["insight", (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_SKILLS[id].name]);
         }
       }
     for (const s of d.soldiers || [])
@@ -7086,12 +7113,11 @@ function scheduleChronicleNotices() {
         const key = s.chronicle.life + ":" + id;
         if (!chronicleAnnounced.has(key)) {
           chronicleAnnounced.add(key);
-          notes.push("🏅 " + (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_HONORS[id].name);
+          notes.push(["honor", (s.name || SOLDIER_TYPES[s.type].name) + "：" + CHRONICLE_HONORS[id].name]);
         }
       }
     zukanSync();
-    if (notes.length)
-      mapToast(notes.slice(0, 2).join("／") + (notes.length > 2 ? " ほか" + (notes.length - 2) + "件" : ""));
+    for (const [kind, line] of notes) eventNotice(kind, line); // イベントウィンドウ（同じ種類はまとめる）
   });
 }
 document.addEventListener("click", (ev) => {
@@ -7454,6 +7480,7 @@ function chronicleDeployMany(list) {
     state.chronicleRevivalUntil = evolutionClock() + 8;
     state.chronicleRevivalKey = chronicleKey();
     chroniclePulse(x.s, "黄泉返り", "rampart");
+    eventNotice("revive", soldierName(x.s) + "が黄泉返った");
   }
   return true;
 }
@@ -7562,7 +7589,7 @@ function chronicleLearnUnyielding(s) {
     return err;
   }
   zukanSync();
-  mapToast("💡 " + soldierName(s) + "：不屈を習得！");
+  eventNotice("insight", soldierName(s) + "：不屈を習得");
   return null;
 }
 document.addEventListener("click", (ev) => {
@@ -9384,9 +9411,9 @@ function chronicleWarBonusBlock(s) {
         function msg(s) {
           if (namedNews.length) {
             const t = "⭐ " + namedNews.join("・") + " が仕官した！";
+            for (const n of namedNews) eventNotice("named", n + "が仕官した"); // イベントウィンドウ（v105.4）
             namedNews = [];
             s = t + " " + s;
-            toast(t);
           }
           $("msg").textContent = s;
         }
@@ -9521,6 +9548,107 @@ function chronicleWarBonusBlock(s) {
             b.el.style.opacity = Math.min(1, (2.8 - b.age) / 0.4);
           }
         }
+        // ===== イベントウィンドウ（v105.4） =====
+        // 閃き・称号・不屈・黄泉返り・ネームドの仕官・職業の書・裏ボスの初撃破を、戦場の中央の手前に1枚ずつ出す。
+        // 戦闘は止めない（表示だけの時計）。同じ種類が続いたらまとめる。約3秒で閉じ、タップですぐ閉じる。大事なものは記録に残す。
+        const EVENT_KINDS = {
+          insight: { icon: "💡", title: "閃き！", many: (n) => n + "人が閃いた！" },
+          honor: { icon: "🏅", title: "称号を得た！", many: (n) => n + "件の称号を得た！" },
+          book: { icon: "📕", title: "職業の書を入手！", many: (n) => "職業の書を" + n + "冊入手！" },
+          named: { icon: "⭐", title: "ネームド兵士が仕官！", many: (n) => n + "人のネームド兵士が仕官！", important: true },
+          namedFall: { icon: "🕯", title: "ネームド兵士が戦死…", many: (n) => n + "人のネームド兵士が戦死…", important: true },
+          revive: { icon: "✨", title: "黄泉返り！", many: (n) => n + "人が黄泉返った！", important: true },
+          boss: { icon: "👹", title: "裏ボスを初めて討伐！", many: (n) => "裏ボスを討伐！", important: true },
+        };
+        const EVENT_RULES = { show: 3, important: 4.5, mergeWithin: 1.2, maxQueue: 6, maxLines: 3, history: 30 };
+        const eventQueue = [], eventHistory = [];
+        let eventCur = null;
+        function eventNotice(kind, line) {
+          const K = EVENT_KINDS[kind];
+          if (!K || !line) return;
+          if (K.important) {
+            eventHistory.unshift({ kind, line, at: new Date() });
+            eventHistory.length = Math.min(eventHistory.length, EVENT_RULES.history);
+            if (!$("eventLogSheet").hidden) renderEventLog();
+          }
+          // 表示中（出たばかり）か待ちの列に同じ種類があれば、1枚にまとめる
+          const same = (eventCur && eventCur.kind === kind && eventCur.age < EVENT_RULES.mergeWithin ? eventCur : null) || eventQueue.find((e) => e.kind === kind);
+          if (same) {
+            same.lines.push(line);
+            if (same === eventCur) renderEventWin();
+            return;
+          }
+          if (eventQueue.length >= EVENT_RULES.maxQueue) eventQueue.shift();
+          eventQueue.push({ kind, lines: [line], age: 0 });
+          if (!eventCur) nextEventWin();
+        }
+        // ネームド兵士の戦死（主人公は戦死しないので対象外）
+        function namedFallNotice(s, where) {
+          const p = s && s.named && NAMED_SOLDIERS[s.named];
+          if (p) eventNotice("namedFall", p.name + "（" + SOLDIER_TYPES[p.type].name + "）が" + where + "で戦死した");
+        }
+        function nextEventWin() {
+          eventCur = eventQueue.shift() || null;
+          renderEventWin();
+        }
+        function renderEventWin() {
+          const el = $("eventWin");
+          if (!eventCur || mapNewsBlocked()) return void (el.hidden = true);
+          const K = EVENT_KINDS[eventCur.kind],
+            n = eventCur.lines.length,
+            shown = eventCur.lines.slice(0, EVENT_RULES.maxLines);
+          el.dataset.kind = eventCur.kind;
+          el.querySelector(".event-icon").textContent = K.icon;
+          el.querySelector(".event-title").textContent = n > 1 ? K.many(n) : K.title;
+          el.querySelector(".event-lines").replaceChildren(
+            ...shown.map((t) => Object.assign(document.createElement("div"), { textContent: t })),
+            ...(n > shown.length ? [Object.assign(document.createElement("div"), { textContent: "ほか" + (n - shown.length) + "件" })] : []),
+          );
+          el.hidden = false;
+        }
+        function animateEventWin(dt) {
+          if (!eventCur) return;
+          if (mapNewsBlocked()) return void ($("eventWin").hidden = true); // メニューの裏では時間を進めず、読み逃さない
+          if ($("eventWin").hidden) renderEventWin();
+          eventCur.age += Math.max(0, Math.min(0.1, dt)); // 倍速・一時停止とは別の、表示だけの秒数
+          if (eventCur.age >= (EVENT_KINDS[eventCur.kind].important ? EVENT_RULES.important : EVENT_RULES.show)) nextEventWin();
+        }
+        function closeEventWin() {
+          if (eventCur) nextEventWin();
+        }
+        // ウィンドウは戦場の操作を邪魔しない（押した点は下の戦場にも届く）。ウィンドウの上を押したら閉じる
+        $("gameView").addEventListener(
+          "pointerdown",
+          (ev) => {
+            const el = $("eventWin");
+            if (!eventCur || el.hidden) return;
+            const r = el.getBoundingClientRect();
+            if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) closeEventWin();
+          },
+          true,
+        );
+        function renderEventLog() {
+          const list = $("eventLogList");
+          if (!eventHistory.length) return void (list.innerHTML = '<li class="muted">まだ記録はありません。</li>');
+          list.replaceChildren(
+            ...eventHistory.map((e) => {
+              const li = document.createElement("li");
+              li.textContent = EVENT_KINDS[e.kind].icon + " " + e.line;
+              const t = document.createElement("small");
+              t.textContent = EVENT_KINDS[e.kind].title + "　" + e.at.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+              li.append(t);
+              return li;
+            }),
+          );
+        }
+        $("eventLogOpen").onclick = () => {
+          renderEventLog();
+          $("eventLogSheet").hidden = false;
+        };
+        $("eventLogClose").onclick = () => ($("eventLogSheet").hidden = true);
+        $("eventLogSheet").addEventListener("click", (ev) => {
+          if (ev.target.id === "eventLogSheet") $("eventLogSheet").hidden = true;
+        });
         function pathAt(path, d) {
           for (let i = 1; i < path.length; i++) {
             const a = path[i - 1],
@@ -9877,6 +10005,7 @@ function chronicleWarBonusBlock(s) {
             logHistory(x, "召喚の書で仕官");
             return x;
           });
+          if (s) eventNotice("named", p.name + "（" + SOLDIER_TYPES[p.type].name + "）が仕官した（召喚の書）");
           return s ? null : "保存できなかったので召喚しませんでした（書は残っています）。";
         }
         // 復活できる英霊（同じネームド兵士が今いれば、その人物は復活できない）
@@ -11710,6 +11839,7 @@ function chronicleWarBonusBlock(s) {
           s.diedIn = squadName(q);
           logHistory(s, squadName(q) + " で戦死");
           recordDeath(s); // 保存データからすぐ外す（再読み込みしても復活しない）
+          namedFallNotice(s, squadName(q));
           q.fallen++;
           const off = formationOffset(q, 0);
           unitGhosts.push({
@@ -14222,6 +14352,7 @@ function chronicleWarBonusBlock(s) {
         }
         function animateVisuals(dt) {
           animateMapNews(dt);
+          animateEventWin(dt);
           if (paused || document.hidden) return;
           dt = gameStep(dt);
           visualTime += dt;
@@ -22085,6 +22216,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             gearMap = null;
             B.firstReward = D.reward;
           }
+          if (B.firstClear || B.firstReward) eventNotice("boss", D.name + "を初めて討伐した" + (B.firstReward ? "（専用装備「" + GEAR[B.firstReward].name + "」を入手）" : "")); // イベントウィンドウ
           F.shards = Math.min(99999, F.shards + D.shards);
           B.shards = D.shards;
           persistHeroes();
@@ -22462,6 +22594,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             s.diedIn = g.name + (battle.boss ? "（" + BOSSES[battle.boss].name + "討伐）" : "（攻城戦）");
             logHistory(s, s.diedIn + "で戦死");
             recordDeath(s);
+            namedFallNotice(s, s.diedIn);
             g.fallen++;
             unitGhosts.push({
               type: s.type,
@@ -24617,6 +24750,11 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
+            events: {
+              push: (kind, line) => eventNotice(kind, line),
+              animate: (dt) => animateEventWin(dt),
+              state: () => ({ cur: eventCur && { kind: eventCur.kind, lines: [...eventCur.lines], age: eventCur.age }, queue: eventQueue.map((e) => e.kind), history: eventHistory.map((e) => e.kind + ":" + e.line) }),
+            },
             pixel: { on: () => pixelOn(), ready: () => pixelReady(), stats: PIX.stats, gfx: () => GFX, defaults: (search, d) => ({ layout: layoutDefault(search, d), gfx: gfxDefault(search, d) }), set: (m) => setGfx(m), enemyKind: (e) => pixEnemyKind(e), frames: () => Object.keys(PIX.frames), spread: () => formationSpread() },
             state: () => ({
               gold,

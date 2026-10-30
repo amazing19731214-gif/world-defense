@@ -224,7 +224,7 @@ function flushJobDrops() {
     }
     pendingJobDrops.delete(key);
     if (drop.owner) (drop.owner.jobBookDrops ||= []).push(drop.id);
-    mapToast("📕 " + JOBS[drop.id].name + "の書を入手！（" + drop.source + "）");
+    eventNotice("book", JOBS[drop.id].name + "の書（" + drop.source + "）");
   }
   return true;
 }

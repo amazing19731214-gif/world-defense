@@ -241,11 +241,7 @@ function flushInsights() {
         const q = squadById(x.s.squadId);
         if (q) evolutionFx({ pos: q }, "💡", "bulb", [], true);
       }
-    mapToast(
-      "💡 " +
-        notices.slice(0, 3).join("／") +
-        (notices.length > 3 ? " ほか" + (notices.length - 3) + "件" : ""),
-    );
+    for (const line of notices) eventNotice("insight", line); // イベントウィンドウ（同じ種類はまとめる）
   }
   zukanSync();
   return true;
