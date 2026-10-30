@@ -14,7 +14,7 @@ const browser=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:pr
 const url=`http://127.0.0.1:${server.address().port}/?debug`,CKEY='worldDefense.conquest.v1',WKEY='worldDefense.warlords.v1',SKEY='worldDefense.soldiers.v1',TKEY='worldDefense.bookTransaction.v1';
 let passes=0,failures=0;const errors=[];
 function check(name,ok,detail){ok?passes++:failures++;console.log((ok?'✓ ':'✗ ')+name+(!ok&&detail!==undefined?' '+JSON.stringify(detail):''));}
-async function setup(width=390){const c=await browser.newContext({viewport:{width,height:844},isMobile:width<600,hasTouch:width<600});await c.addInitScript(()=>{requestAnimationFrame=()=>0;Math.random=()=>0.5;});const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());await p.goto(url);return {c,p};}
+async function setup(width=390){const c=await browser.newContext({viewport:{width,height:844},isMobile:width<600,hasTouch:width<600});await c.addInitScript(()=>{requestAnimationFrame=()=>0;Math.random=()=>0.5;if(location.protocol==='http:'&&!localStorage.getItem('worldDefense.ui.v1'))localStorage.setItem('worldDefense.ui.v1','{"all":true}');});const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());await p.goto(url);return {c,p};}
 async function seed(p,o={}){
  await p.evaluate(({o,CKEY,WKEY,SKEY})=>{
   const a=WD_DEBUG.squadApi;localStorage.clear();const castles={};

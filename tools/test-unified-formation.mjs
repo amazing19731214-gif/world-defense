@@ -14,6 +14,7 @@ async function setup(width=390,seed=true,debug=true){
  const c=await browser.newContext({viewport:{width,height:width===375?560:844},isMobile:width<700,hasTouch:width<700});
  await c.addInitScript(({seed,W,S,F})=>{
   window.requestAnimationFrame=()=>0;
+  if(location.protocol==='http:'&&!localStorage.getItem('worldDefense.ui.v1'))localStorage.setItem('worldDefense.ui.v1','{"all":true}');
   if(!seed||sessionStorage.getItem('seed'))return;sessionStorage.setItem('seed','1');
   localStorage.setItem(W,JSON.stringify({owned:{nobunaga:2,yukimura:1,kenshin:1},tickets:3,injured:{kenshin:2}}));
   localStorage.setItem(S,JSON.stringify({seq:8,squadSeq:8,squads:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',slot:i})),soldiers:Array.from({length:8},(_,i)=>({id:i+1,type:'spearman',squadId:i+1,level:30,name:'旧兵'+i})),fallen:[]}));
