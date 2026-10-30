@@ -260,5 +260,10 @@
       "attack": "units/frames/cavalry_attack.webp",
       "death": "units/frames/cavalry_death.webp"
     }
+  },
+  "pixel": {
+    "atlas": "pixel/atlas.png",
+    "frames": "pixel/atlas.json",
+    "ground": "pixel/ground.png"
   }
 }
