@@ -14835,7 +14835,7 @@ function chronicleWarBonusBlock(s) {
                 al = fade * (k ? 0.35 - k : 1);
               if (al <= 0) continue;
               for (const a of e.rays) {
-                const half = e.ougi ? 0.3 : 0.36;
+                const half = e.ougi ? 0.24 : 0.2; // 8本の刃に見える幅（広げすぎると1つの輪になる）
                 ctx.globalAlpha = al * 0.55;
                 ctx.strokeStyle = e.ougi ? "#5fb8ff" : "#7fd0ff";
                 ctx.lineWidth = (e.ougi ? e.width * 0.9 : e.width * 0.6) * (1 - p * 0.5);

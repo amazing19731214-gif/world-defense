@@ -49,3 +49,9 @@
 ## 試験
 
 - `node tools/test-combat-proto.mjs`（36件）
+
+## 確認用の画像
+
+- [combat-eight-slash.mp4](proto/combat-eight-slash.mp4)・[gif](proto/combat-eight-slash.gif)：八方斬撃（通常 → 奥義・八方天翔斬）。gif は 1.5倍ゆっくり
+- [combat-eight-slash.png](proto/combat-eight-slash.png)：同じ場面のコマ
+- [combat-phone.jpg](proto/combat-phone.jpg)：iPhone縦（修練場の切り替え・奥義の技名・奥義のあと）
