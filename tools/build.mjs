@@ -75,6 +75,16 @@ for (const [id, anims] of Object.entries(manifest.enemies || {})) {
   }
 }
 
+// 新ドット絵（v105試作）：1枚の画像（アトラス）とコマの表、地面。無ければ設定で選べない（従来版のまま）
+const pixelArt = {};
+if (manifest.pixel) {
+  const atlas = dataUri(manifest.pixel.atlas, "pixel atlas"),
+    ground = dataUri(manifest.pixel.ground, "pixel ground"),
+    frames = path.join(assetsDir, manifest.pixel.frames);
+  if (atlas && ground && fs.existsSync(frames)) Object.assign(pixelArt, { atlas, ground, frames: JSON.parse(fs.readFileSync(frames, "utf8")).frames });
+  else warnings.push("新ドット絵の素材が見つかりません（従来版だけ表示）");
+}
+
 let html = fs.readFileSync(path.join(root, "src", "index.template.html"), "utf8");
 for (const name of ["job-evolution", "job-books", "soldier-chronicle", "formation-view"]) {
   const marker = `/*@@${name.toUpperCase().replaceAll("-", "_")}@@*/`;
@@ -87,6 +97,7 @@ for (const [marker, value] of [
   ["/*@@UNIT_ASSETS@@*/ {}", unitAssets],
   ["/*@@ENEMY_ASSETS@@*/ {}", enemyAssets],
   ["/*@@UNIT_FRAMES@@*/ {}", unitFrames],
+  ["/*@@PIXEL_ART@@*/ {}", pixelArt],
 ]) {
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => JSON.stringify(value));
