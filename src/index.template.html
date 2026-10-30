@@ -2581,7 +2581,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.1試作（新ドット絵・兵士の重なりの改善）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.2試作（新ドット絵：上級職・大将・塔の強化Lv）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -10013,7 +10013,9 @@ OFF</button>
           if (pixelOn() && PIX_TOWER[t.type]) {
             // 新ドット絵：味方の塔は藍の旗、攻城戦の敵の塔は赤の旗。強化Lvで少し大きく（従来と同じ割合）
             ellipse(t.x + 3, t.y + 19, 34 * k, 9 * k, "#2e4f3066");
-            pixDraw("tower_" + PIX_TOWER[t.type] + "_" + (battle ? "enemy" : "ally"), t.x, t.y + 20, PIX_SCALE.tower * k, { flash: t.hitFlash > 0 });
+            // 強化Lv1〜5で飾りが増える（Lv2 旗・Lv3 金の軒・Lv4 金の手すり・Lv5 金の飾り）
+            const lv = Math.max(1, Math.min(5, t.level || 1));
+            pixDraw("tower_" + PIX_TOWER[t.type] + "_" + (battle ? "enemy" : "ally") + "_lv" + lv, t.x, t.y + 20, PIX_SCALE.tower * k, { flash: t.hitFlash > 0 });
             PIX.stats.tower++;
           } else if (!sprite(t.type, t.x, t.y + 20, 82 * k, 105 * k)) {
             legacyTower(t);
@@ -10486,10 +10488,10 @@ OFF</button>
           return true;
         }
         // ===== 新ドット絵（v105試作）=====
-        // 設定で「新ドット絵」を選んだときだけ使う。兵士6種（基本職）・敵兵4種・塔4種・城・背景を、1枚の画像（アトラス）のコマで描く。
-        // 上級職の兵士・大将・ボス・裏ボス・特別な敵、武将・演出は従来の絵のまま。ゲームの座標・当たり判定・射程は変えない（見た目だけ）。
+        // 設定で「新ドット絵」を選んだときだけ使う。兵士6種と上級職・敵兵と大将・塔4種・城・背景を、1枚の画像（アトラス）のコマで描く。
+        // 上級職は職業の絵（v105.2）、新しい絵がない職業・裏ボス・特別な敵、武将・演出は従来の絵のまま。ゲームの座標・当たり判定・射程は変えない（見た目だけ）。
         const PIXEL_ART = /*@@PIXEL_ART@@*/ {};
-        const PIX = { atlas: null, ground: null, frames: PIXEL_ART.frames || {}, stats: { unit: 0, enemy: 0, tower: 0, castle: 0, ground: 0, classicUnit: 0 } };
+        const PIX = { atlas: null, ground: null, frames: PIXEL_ART.frames || {}, stats: { unit: 0, enemy: 0, tower: 0, castle: 0, ground: 0, classicUnit: 0, job: 0, death: 0, general: 0, ford: 0 } };
         const PIX_UNIT = new Set(["ashigaru", "spearman", "archer", "gunner", "medic", "cavalry"]);
         const PIX_TOWER = { arrow: "arrow", cannon: "cannon", magic: "gun", ice: "ice" };
         const PIX_SCALE = { unit: 1.5, tower: 2, castle: 1.5, tree: 2 }; // ドットの大きさ（ゲームの座標で）
@@ -10525,13 +10527,14 @@ OFF</button>
         }
         // 兵士のコマ：攻撃・歩き（行軍・撤退）・待機（2コマを交互に）
         function pixUnitPose(o) {
+          if (o.pose === "death") return "death"; // 戦死：倒れたコマ（呼び出し側が薄くして消す）
           if (o.pose === "attack") return "attack0";
           const t = (reduced ? 0 : visualTime) + (o.seed || 0) * 0.37;
           if (o.walk) return "walk" + (Math.floor(t * 6) % 2);
           return "idle" + (Math.floor(t * 1.6) % 2);
         }
-        // 敵兵の内部ID → 兵種（大将・ボスなどは従来の絵）
-        const PIX_ENEMY = { goblin: "ashigaru", slime: "ashigaru", knight: "spearman", wolf: "cavalry", dragon: "archer" };
+        // 敵兵の内部ID → 兵種（大将は v105.2 から新ドット絵。裏ボス・特別な敵などは従来の絵）
+        const PIX_ENEMY = { goblin: "ashigaru", slime: "ashigaru", knight: "spearman", wolf: "cavalry", dragon: "archer", boss: "general" };
         const pixEnemyKind = (e) => (pixelOn() && !e.boss && !e.intruder && !e.rare && PIX_ENEMY[e.kind]) || null;
         function drawPixelEnemy(e, kind) {
           const pose = e.atkAnim > 0 ? "attack0" : e.blockedBy || e.siege ? "idle" + (Math.floor((reduced ? 0 : visualTime) * 1.6 + (e.id || 0) * 0.37) % 2) : "walk" + (Math.floor((e.d || 0) / 9) % 2);
@@ -10539,9 +10542,10 @@ OFF</button>
           ctx.save();
           const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole);
           if (R) ctx.filter = R.tint;
-          const d = pixDraw(kind + "_enemy_" + pose, e.x, e.y + 10, PIX_SCALE.unit, { face: e.face || 1 });
+          const d = pixDraw(kind + "_enemy_" + pose, e.x, e.y + 10, PIX_SCALE.unit * (kind === "general" ? 1.35 : 1), { face: e.face || 1 }); // 大将はひと回り大きく
           ctx.restore();
           PIX.stats.enemy++;
+          if (kind === "general") PIX.stats.general++;
           return d ? d.h : 40;
         }
         // 背景：地面（道の形はゲームと同じ）と木・岩・灯籠。家の位置には灯籠と柵
@@ -10891,8 +10895,10 @@ OFF</button>
         }
         function unitFigure(type, x, ground, o = {}) {
           if (pixelOn() && PIX_UNIT.has(type)) {
-            if (!o.job) return pixelUnitFigure(type, x, ground, o);
-            PIX.stats.classicUnit++; // 上級職は新しい絵がないので従来の絵
+            // 上級職は職業の絵（v105.2）。新しい絵がない職業だけ従来の絵
+            const id = o.job || type;
+            if (PIX.frames[id + "_" + (o.team || "ally") + "_idle0"]) return pixelUnitFigure(id, x, ground, o);
+            PIX.stats.classicUnit++;
           }
           const c = SOLDIER_TYPES[type],
             k0 = o.scale || 1,
@@ -10943,7 +10949,6 @@ OFF</button>
         }
         // 新ドット絵の兵士。大きさは従来の部隊の倍率（SQUAD_SCALE）を基準に、o.scale に合わせる
         function pixelUnitFigure(type, x, ground, o) {
-          if (o.pose === "death") return false; // 戦死のコマは無い：呼び出し側が倒れて消える演出で描く
           const k = PIX_SCALE.unit * (o.scale || SQUAD_SCALE) / SQUAD_SCALE,
             face = o.face || -1;
           ctx.save();
@@ -10953,9 +10958,11 @@ OFF</button>
           pixDraw(type + "_" + (o.team || "ally") + "_" + pixUnitPose(o), 0, 0, k, { face, flash: o.flash });
           ctx.restore();
           PIX.stats.unit++;
+          if (o.job) PIX.stats.job++;
+          if (o.pose === "death") PIX.stats.death++;
           return true;
         }
-        const upperJob = (s) => !!(s && s.job && s.job !== s.type); // 上級職・最上級職（新ドット絵の素材がない）
+        const upperJob = (s) => (s && s.job && s.job !== s.type ? s.job : ""); // 上級職・最上級職のID（基本職は ""）
         // 主人公の頭上の金色の印（小さな王冠）
         function heroMark(x, y) {
           const b = reduced ? 0 : Math.sin(visualTime * 4) * 1.5;
@@ -18162,7 +18169,7 @@ OFF</button>
         $("gfxToggle").onclick = () => {
           if (GFX !== "pixel" && !pixelReady()) return toast("新ドット絵の素材を読み込み中です。少し待ってからもう一度押してね。");
           setGfx(GFX === "pixel" ? "classic" : "pixel");
-          toast(GFX === "pixel" ? "🎨 新ドット絵（試作）にしました。上級職・ボスなどは従来の絵です" : "🎨 従来版のグラフィックにしました");
+          toast(GFX === "pixel" ? "🎨 新ドット絵（試作）にしました。裏ボスなど一部は従来の絵です" : "🎨 従来版のグラフィックにしました");
         };
         // 防衛戦の必殺技：塔・部隊に配属した武将を一覧にし、従来の「必殺技」ボタンと同じ処理で使う
         function skillDockRows() {
@@ -20551,6 +20558,20 @@ OFF</button>
           ctx.fillText("🌪️ 砂嵐 弓・鉄砲の射程60%", W / 2, 48);
           ctx.restore();
         }
+        // 渡河の川：道の向きに合わせて回し、道を横切るように置く（地面と同じく、縦向きの戦場では向きごと入れ替える）
+        function pixelFord(path, at) {
+          const p = pathAt(path, at),
+            q = pathAt(path, at + 4),
+            [sx, sy, w, h] = PIX.frames.ford,
+            k = 2;
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          ctx.translate(p.x, p.y);
+          ctx.rotate(Math.atan2(q.y - p.y, q.x - p.x));
+          ctxRaw.drawImage(PIX.atlas, sx, sy, w, h, (-w * k) / 2, (-h * k) / 2, w * k, h * k);
+          ctx.restore();
+          PIX.stats.ford++;
+        }
         function drawSiegeTerrain(B) {
           if (!B.terrain?.length) return;
           ctx.save();
@@ -20558,6 +20579,9 @@ OFF</button>
             const t = SIEGE_TERRAIN[id];
             for (const path of [upper, lower]) {
               const from = t.speed ? t.from : t.at - 18, to = t.speed ? t.to : t.at + 18;
+              if (id === "river" && pixelOn() && PIX.frames.ford) {
+                pixelFord(path, t.at); // 新ドット絵：道を横切る浅瀬の川
+              } else {
               ctx.beginPath();
               for (let d = from; d <= to; d += 4) {
                 const p = pathAt(path, d);
@@ -20566,6 +20590,7 @@ OFF</button>
               ctx.strokeStyle = t.color || (t.speed ? "#276b3870" : "#69c9eeaa");
               ctx.lineWidth = t.speed ? 36 : 40;
               ctx.stroke();
+              }
               const p = pathAt(path, (from + to) / 2);
               ctx.fillStyle = "#153e36ee";
               ctx.fillRect(p.x - 50, p.y - 54, 100, 21);

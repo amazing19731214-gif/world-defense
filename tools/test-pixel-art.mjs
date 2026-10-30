@@ -61,6 +61,7 @@ const play = (p, steps = 100) =>
       A = WD_DEBUG.squadApi;
     WD_DEBUG.setGold(99999);
     S().soldiers[0].job = "samurai"; // 上級職（見た目の判定だけに使う）
+    S().soldiers[1].job = "unknown_job"; // 新しい絵がない職業（従来の絵になる）
     let tid = 900;
     for (const [t, x, y] of [["arrow", 330, 90], ["cannon", 640, 200], ["magic", 660, 420], ["ice", 330, 530]])
       S().towers.push({ id: ++tid, x, y, type: t, level: 2, cd: 0, spent: 100, hp: 400 });
@@ -113,10 +114,11 @@ try {
   d = await play(p, 160);
   check(await p.evaluate(() => WD_DEBUG.pixel.on()), "保存した設定（新ドット絵）で起動する");
   check(d.stats.unit > 0 && d.stats.tower >= 4 && d.stats.castle >= 0 && d.stats.enemy > 0, "兵士・敵兵・塔を新ドット絵で描く", d.stats);
-  check(d.stats.classicUnit > 0, "上級職（侍）の兵士は従来の絵で描く", d.stats);
+  check(d.stats.job > 0, "上級職（侍）の兵士は職業の新ドット絵で描く", d.stats);
+  check(d.stats.classicUnit > 0, "新しい絵がない職業は従来の絵で描く", d.stats);
   r = await p.evaluate(() => WD_DEBUG.pixel.spread());
   check(r.x > 1.2 && r.y > 1.2, "新ドット絵では隊形を表示だけ広げる（兵士の重なりを減らす）", r);
-  check(JSON.stringify(d.sim) === JSON.stringify(classicSim), "新ドット絵でも隊形を広げても、戦闘の処理（位置・体力・資金・塔）は従来版と同じ", { classicSim, pixel: d.sim });
+  check(JSON.stringify(d.sim) === JSON.stringify(classicSim), "新ドット絵で隊形を広げても、戦闘の処理（位置・体力・資金・塔）は従来版と同じ", { classicSim, pixel: d.sim });
   r = await p.evaluate(() => {
     WD_DEBUG.heroApi.draw();
     const g = document.getElementById("game"),
@@ -126,17 +128,21 @@ try {
   });
   const need = ["ashigaru", "spearman", "archer", "gunner", "medic", "cavalry"].flatMap((k) => ["ally", "enemy"].flatMap((t) => ["idle0", "idle1", "walk0", "walk1", "attack0"].map((f) => k + "_" + t + "_" + f)));
   check(need.every((f) => r.frames.includes(f)), "兵士6種×味方/敵×5コマの素材がある");
-  check(["arrow", "cannon", "gun", "ice"].every((t) => r.frames.includes("tower_" + t + "_ally") && r.frames.includes("tower_" + t + "_enemy")) && ["castle1_ally", "castle2_ally", "castle1_enemy"].every((f) => r.frames.includes(f)), "塔4種（味方・敵）と城（通常・強化）の素材がある");
+  check(["arrow", "cannon", "gun", "ice"].every((t) => [1, 2, 3, 4, 5].every((lv) => r.frames.includes("tower_" + t + "_ally_lv" + lv) && r.frames.includes("tower_" + t + "_enemy_lv" + lv))) && ["castle1_ally", "castle2_ally", "castle1_enemy"].every((f) => r.frames.includes(f)), "塔4種（味方・敵）×強化Lv1〜5と城（通常・強化）の素材がある");
+  const JOBS = ["samurai", "kensei", "sword_saint", "sohei", "spear_commander", "bow_saint", "gun_commander", "healing_master", "ninja", "shinobi_head", "kibateppo", "yarikiba", "yumikiba", "akazonae", "iron_cavalry"];
+  check(JOBS.every((j) => ["idle0", "idle1", "walk0", "walk1", "attack0", "death"].every((f) => r.frames.includes(j + "_ally_" + f))), "上級職・最上級職15種の素材（5コマと戦死）がある");
+  check(["idle0", "walk0", "attack0", "death"].every((f) => r.frames.includes("general_enemy_" + f)) && need.every((f) => r.frames.includes(f.replace(/_(idle|walk|attack)\d$/, "_death"))) && r.frames.includes("ford"), "大将・戦死のコマ・渡河の川の素材がある");
   check(r.stats.ground >= 1 && r.stats.castle >= 1, "背景と城を新ドット絵で描く", r.stats);
   check(r.road[0] > 180 && r.road[1] > 150 && r.grass[1] > r.grass[0], "道は砂色、草地は緑（地面の画像がゲームの道の形に合う）", r);
   r = await p.evaluate(() => [
     WD_DEBUG.pixel.enemyKind({ kind: "goblin" }),
     WD_DEBUG.pixel.enemyKind({ kind: "wolf" }),
     WD_DEBUG.pixel.enemyKind({ kind: "boss" }),
+    WD_DEBUG.pixel.enemyKind({ kind: "boss", boss: true }),
     WD_DEBUG.pixel.enemyKind({ kind: "knight", rare: "gold" }),
     WD_DEBUG.pixel.enemyKind({ kind: "dragon", intruder: true }),
   ]);
-  check(r[0] === "ashigaru" && r[1] === "cavalry" && r[2] === null && r[3] === null && r[4] === null, "大将・特別な敵・裏ボスは従来の絵、ふつうの敵兵は新ドット絵", r);
+  check(r[0] === "ashigaru" && r[1] === "cavalry" && r[2] === "general" && r[3] === null && r[4] === null && r[5] === null, "ふつうの敵兵と大将は新ドット絵、特別な敵・裏ボスは従来の絵", r);
   await c.close();
   // 4. 攻城戦（縦向き・iPhone）と討伐戦：新ドット絵で例外なく描ける。敵の塔は赤い旗、ボスは従来の絵
   ({ c, p } = await open({ query: "?debug&layout=vertical&gfx=pixel", width: 390, height: 844, dpr: 3 }));
@@ -145,11 +151,13 @@ try {
     for (const k of Object.keys(WD_DEBUG.pixel.stats)) WD_DEBUG.pixel.stats[k] = 0;
     A.setTarget(A.PROVINCES.owari.castle);
     A.startBattle();
+    A.battle().terrain = ["river"]; // 渡河の川（見た目の確認だけ）
     for (let i = 0; i < 120; i++) WD_DEBUG.step(0.05);
     WD_DEBUG.heroApi.draw();
     return { stats: { ...WD_DEBUG.pixel.stats }, vertical: document.body.classList.contains("vertical-field") };
   });
   check(r.vertical && r.stats.tower > 0 && r.stats.enemy > 0 && r.stats.unit > 0 && r.stats.castle > 0, "攻城戦（縦向き）でも兵士・敵兵・敵の塔・城を新ドット絵で描く", r);
+  check(r.stats.ford >= 2, "渡河の場所に新ドット絵の川（上下の道に1つずつ）", r.stats);
   await c.close();
   ({ c, p } = await open({ query: "?debug&layout=vertical&gfx=pixel" }));
   r = await p.evaluate(() => {

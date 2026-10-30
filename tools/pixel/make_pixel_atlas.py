@@ -4,7 +4,8 @@
   python3 tools/pixel/make_pixel_atlas.py
 
 出力（assets/pixel/）：
-- atlas.png：兵士6種×味方/敵×5コマ（武器の改良版）、塔4種×味方/敵、城（通常・強化）×味方/敵、木・岩・灯籠・柵
+- atlas.png：兵士6種×味方/敵×5コマ（武器の改良版）と戦死のコマ、上級職15種（味方）、大将（敵）、
+  塔4種×味方/敵×強化Lv1〜5、城（通常・強化）×味方/敵、木・岩・灯籠・柵・渡河の川
 - atlas.json：コマの位置と足元の基準点 {名前: [x, y, 幅, 高さ, 基準x, 基準y]}
 - ground.png：防衛戦の地面（ゲームの道の形・ゲームの座標の半分の 480×300）
 
@@ -25,6 +26,9 @@ from make_proto_set_v2 import (  # noqa: E402
     KINDS, POSES, soldier_v2, tower_v2, castle_set_v2, tree_set_v2, rock_v2, fence_v2, lantern_v2, paint_ground,
 )
 from make_weapons_v2 import soldier_w  # noqa: E402
+
+sys.path.insert(0, os.path.join(ROOT, "tools", "pixel"))
+from pixel_jobs import JOBS, GENERAL, job_sprite, general_sprite, fallen, ford  # noqa: E402
 
 OUT = os.path.join(ROOT, "assets", "pixel")
 
@@ -62,10 +66,29 @@ def frames():
                 body = soldier_v2(kind, team, pose, f, bare=True)
                 # 体は (2, 6) にずらして置いてある：体の中心と足の下端を基準にする
                 out[f"{kind}_{team}_{pose}{f}"] = (sp, 2 + body.w // 2, 6 + bbox_bottom(body))
+            idle = out[f"{kind}_{team}_idle0"][0]
+            d = fallen(idle)
+            out[f"{kind}_{team}_death"] = (d, d.w // 2, bbox_bottom(d))
+    # 上級職（味方だけ）・大将（敵だけ）：基本職と同じ基準点
+    for job, (base, style) in JOBS.items():
+        for pose, f in POSES:
+            sp = job_sprite(job, "ally", pose, f)
+            body = soldier_v2(base, "ally", pose, f, bare=True, style=style)
+            out[f"{job}_ally_{pose}{f}"] = (sp, 2 + body.w // 2, 6 + bbox_bottom(body))
+        d = fallen(out[f"{job}_ally_idle0"][0])
+        out[f"{job}_ally_death"] = (d, d.w // 2, bbox_bottom(d))
+    for pose, f in POSES:
+        sp = general_sprite(pose, f)
+        body = soldier_v2(GENERAL[0], "enemy", pose, f, bare=True, style=GENERAL[1])
+        out[f"general_enemy_{pose}{f}"] = (sp, 2 + body.w // 2, 6 + bbox_bottom(body))
+    d = fallen(out["general_enemy_idle0"][0])
+    out["general_enemy_death"] = (d, d.w // 2, bbox_bottom(d))
+    # 塔：強化Lv1〜5の見た目
     for kind in ("arrow", "cannon", "gun", "ice"):
         for team in ("ally", "enemy"):
-            sp = tower_v2(kind, team)
-            out[f"tower_{kind}_{team}"] = (sp, sp.w // 2, bbox_bottom(sp))
+            for lv in range(1, 6):
+                sp = tower_v2(kind, team, lv)
+                out[f"tower_{kind}_{team}_lv{lv}"] = (sp, sp.w // 2, bbox_bottom(sp))
     for lv in (1, 2):
         for team in ("ally", "enemy"):
             sp = castle_set_v2(lv, team)
@@ -74,7 +97,7 @@ def frames():
         for v in range(2):
             sp = tree_set_v2(k, 2 + v * 5 + i)
             out[f"tree_{k}{v}"] = (sp, sp.w // 2, bbox_bottom(sp))
-    for name, sp in (("rock", rock_v2()), ("lantern", lantern_v2()), ("fence", fence_v2())):
+    for name, sp in (("rock", rock_v2()), ("lantern", lantern_v2()), ("fence", fence_v2()), ("ford", ford())):
         out[name] = (sp, sp.w // 2, bbox_bottom(sp))
     return out
 
