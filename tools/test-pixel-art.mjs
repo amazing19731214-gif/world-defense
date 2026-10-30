@@ -88,9 +88,27 @@ try {
   // 1. 既定は従来版（新しいプレイヤー・既存の表示の記録に gfx がない場合）
   let { c, p } = await open({ ui: { layout: "classic", all: true, maxWave: 12, seen: { gacha: true }, fresh: {} } });
   let r = await p.evaluate(() => ({ gfx: WD_DEBUG.pixel.gfx(), on: WD_DEBUG.pixel.on(), btn: document.getElementById("gfxToggle").textContent, ui: JSON.parse(localStorage.getItem("worldDefense.ui.v1")) }));
-  check(r.gfx === "classic" && !r.on, "初期設定は従来版", r);
+  check(r.gfx === "classic" && !r.on, "動作確認用（?debug）の既定は従来版（既存の試験の前提）", r);
+
   check(r.btn.includes("従来版"), "設定（メニュー）にグラフィックの切り替え「絵：従来版」のボタン", r.btn);
-  check(r.ui.layout === "classic" && r.ui.maxWave === 12 && r.ui.seen.gacha === true && r.ui.gfx === "classic", "以前の表示の記録はそのまま読め、gfx は従来版で補われる", r.ui);
+  check(r.ui.layout === "classic" && r.ui.maxWave === 12 && r.ui.seen.gacha === true && r.ui.art === undefined, "以前の表示の記録はそのまま読め、絵は選ぶまで保存しない", r.ui);
+  const df = await p.evaluate(() => {
+    const D = WD_DEBUG.pixel.defaults;
+    return {
+      fresh: D("", null),
+      debug: D("?debug", null),
+      autoSaved: D("", { gfx: "classic", layout: "compact" }), // v105〜v105.2 が起動時に自動で保存した gfx
+      chosenClassic: D("", { art: "classic" }),
+      oldPixel: D("", { gfx: "pixel" }),
+      query: D("?gfx=classic&layout=classic", { art: "pixel", layout: "vertical" }),
+    };
+  });
+  check(df.fresh.gfx === "pixel" && df.fresh.layout === "vertical", "初期設定は新ドット絵・コンパクト表示で攻めは縦（v105.3）", df.fresh);
+  check(df.debug.gfx === "classic" && df.debug.layout === "classic", "?debug では従来版・従来表示", df.debug);
+  check(df.autoSaved.gfx === "pixel" && df.autoSaved.layout === "compact", "起動しただけで保存された従来版は新ドット絵に。自分で選んだ表示はそのまま", df.autoSaved);
+  check(df.chosenClassic.gfx === "classic" && df.oldPixel.gfx === "pixel", "自分で選んだ絵（従来版・新ドット絵）はそのまま", df);
+  check(df.query.gfx === "classic" && df.query.layout === "classic", "?gfx= / ?layout= で一時的に指定できる", df.query);
+
   let d = await play(p, 60);
   check(d.stats.unit + d.stats.tower + d.stats.castle + d.stats.ground === 0, "従来版では新ドット絵を一切描かない", d.stats);
   r = await p.evaluate(() => WD_DEBUG.pixel.spread());
@@ -106,7 +124,7 @@ try {
     document.getElementById("gfxToggle").click();
     return { gfx: WD_DEBUG.pixel.gfx(), btn: document.getElementById("gfxToggle").textContent, ui: JSON.parse(localStorage.getItem("worldDefense.ui.v1")) };
   });
-  check(r.gfx === "pixel" && r.btn.includes("新ドット絵") && r.ui.gfx === "pixel", "ボタンで新ドット絵に切り替わり、表示の記録に保存される", r);
+  check(r.gfx === "pixel" && r.btn.includes("新ドット絵") && r.ui.art === "pixel", "ボタンで新ドット絵に切り替わり、選んだ絵として保存される", r);
   check((await p.evaluate((k) => localStorage.getItem(k), SKEY)) === before, "切り替えても兵士の保存データは変わらない");
   await c.close();
   // 3. 再読み込みしても新ドット絵。兵士6種・塔・城・背景を新しい絵で描き、上級職は従来の絵
@@ -186,7 +204,7 @@ try {
     document.getElementById("gfxToggle").click();
     for (const k of Object.keys(WD_DEBUG.pixel.stats)) WD_DEBUG.pixel.stats[k] = 0;
     WD_DEBUG.heroApi.draw();
-    return { gfx: WD_DEBUG.pixel.gfx(), stats: { ...WD_DEBUG.pixel.stats }, ui: JSON.parse(localStorage.getItem("worldDefense.ui.v1")).gfx };
+    return { gfx: WD_DEBUG.pixel.gfx(), stats: { ...WD_DEBUG.pixel.stats }, ui: JSON.parse(localStorage.getItem("worldDefense.ui.v1")).art };
   });
   check(r.gfx === "classic" && r.ui === "classic" && r.stats.unit + r.stats.ground + r.stats.tower === 0, "従来版へ戻すと、背景も含めて従来の絵に戻る", r);
   await c.close();

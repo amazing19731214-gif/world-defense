@@ -1856,6 +1856,15 @@
       .tools.menu-tools #gfxToggle {
         grid-column: span 2;
       }
+      /* 表示・戦場・絵の切り替えは文字が長いので、狭い画面や大きな文字の設定では折り返す */
+      .tools.menu-tools #layoutToggle,
+      .tools.menu-tools #fieldToggle,
+      .tools.menu-tools #gfxToggle,
+      .tools.menu-tools #showAllFeatures {
+        white-space: normal;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+      }
       /* 目標ウェーブ */
       #wave, #hp {
         cursor: pointer;
@@ -2581,7 +2590,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.2試作（新ドット絵：上級職・大将・塔の強化Lv）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v105.3（新ドット絵・攻めは縦を初期設定に）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -2849,32 +2858,34 @@ OFF</button>
             return false;
           }
         })();
-        // 表示の種類：コンパクト（スマホ向けの既定）・従来。?layout= で指定、なければ保存した設定。
-        // 動作確認用（?debug）は、既存の試験が前提とする従来表示を既定にする（コンパクトは ?layout=compact で確認）
-        const UI_LAYOUT = (() => {
-          const q = new URLSearchParams(location.search).get("layout");
+        // 初期設定（v105.3）：表示はコンパクト・戦場は「攻めは縦」・絵は新ドット絵。?layout= / ?gfx= で指定、なければ保存した設定。
+        // 動作確認用（?debug）は、既存の試験が前提とする従来表示・従来の絵を既定にする（?layout= / ?gfx= で確認）
+        const UI_STORED = (() => {
+          try {
+            const d = JSON.parse(localStorage.getItem("worldDefense.ui.v1") || "null");
+            return d && typeof d === "object" ? d : null;
+          } catch (err) {
+            return null; // 読めなければ既定
+          }
+        })();
+        function layoutDefault(search, d) {
+          const q = new URLSearchParams(search).get("layout");
           if (q === "classic" || q === "compact" || q === "vertical") return q;
-          try {
-            const d = JSON.parse(localStorage.getItem("worldDefense.ui.v1") || "null");
-            if (d && (d.layout === "classic" || d.layout === "compact" || d.layout === "vertical")) return d.layout;
-          } catch (err) {
-            /* 読めなければ既定 */
-          }
-          return /[?&]debug\b/.test(location.search) ? "classic" : "compact";
-        })();
-        document.body.classList.toggle("compact-ui", UI_LAYOUT !== "classic");
-        // グラフィック（v105試作）：従来版（既定）・新ドット絵。?gfx= で一時的に指定、なければ保存した設定
-        let GFX = (() => {
-          const q = new URLSearchParams(location.search).get("gfx");
+          if (d && (d.layout === "classic" || d.layout === "compact" || d.layout === "vertical")) return d.layout;
+          return /[?&]debug\b/.test(search) ? "classic" : "vertical";
+        }
+        // 絵：自分で選んだ設定は art に保存する。v105〜v105.2 は起動しただけで gfx:"classic" を保存していたので、
+        // gfx は新ドット絵を選んだ記録（"pixel"）だけを引き継ぐ
+        function gfxDefault(search, d) {
+          const q = new URLSearchParams(search).get("gfx");
           if (q === "classic" || q === "pixel") return q;
-          try {
-            const d = JSON.parse(localStorage.getItem("worldDefense.ui.v1") || "null");
-            if (d && d.gfx === "pixel") return "pixel";
-          } catch (err) {
-            /* 読めなければ従来版 */
-          }
-          return "classic";
-        })();
+          if (d && (d.art === "classic" || d.art === "pixel")) return d.art;
+          if (d && d.gfx === "pixel") return "pixel";
+          return /[?&]debug\b/.test(search) ? "classic" : "pixel";
+        }
+        const UI_LAYOUT = layoutDefault(location.search, UI_STORED);
+        document.body.classList.toggle("compact-ui", UI_LAYOUT !== "classic");
+        let GFX = gfxDefault(location.search, UI_STORED);
         const W = 960,
           H = 600;
         // ===== 縦向きの戦場（試作・v104） =====
@@ -21150,7 +21161,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           }
           return {
             layout: ok && ["classic", "compact", "vertical"].includes(d.layout) ? d.layout : undefined, // 表示の種類（v103）・攻めは縦（v104）
-            gfx: ok && d.gfx === "pixel" ? "pixel" : "classic", // グラフィック：従来版・新ドット絵（v105試作）
+            art: ok && (d.art === "classic" || d.art === "pixel") ? d.art : ok && d.gfx === "pixel" ? "pixel" : undefined, // 絵：自分で選んだときだけ（v105.3）
             all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
             maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
             seen,
@@ -21334,7 +21345,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         // グラフィックの切り替え（見た目だけ。ゲームの処理・保存データは変わらない）
         function setGfx(mode) {
           GFX = mode === "pixel" && pixelReady() ? "pixel" : "classic";
-          uiSave.gfx = GFX;
+          uiSave.art = GFX; // 自分で選んだ設定として保存
           persistUi();
           scenery = null;
           renderDock();
@@ -24606,7 +24617,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           intrudeRng = () => 1; // 確認用では裏ボスを乱入させない（intruderApi.setRng で出せる）
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
-            pixel: { on: () => pixelOn(), ready: () => pixelReady(), stats: PIX.stats, gfx: () => GFX, set: (m) => setGfx(m), enemyKind: (e) => pixEnemyKind(e), frames: () => Object.keys(PIX.frames), spread: () => formationSpread() },
+            pixel: { on: () => pixelOn(), ready: () => pixelReady(), stats: PIX.stats, gfx: () => GFX, defaults: (search, d) => ({ layout: layoutDefault(search, d), gfx: gfxDefault(search, d) }), set: (m) => setGfx(m), enemyKind: (e) => pixEnemyKind(e), frames: () => Object.keys(PIX.frames), spread: () => formationSpread() },
             state: () => ({
               gold,
               hp,
