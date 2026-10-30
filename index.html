@@ -1914,8 +1914,12 @@
         background: linear-gradient(90deg, #5cc46b, #ffd34d);
       }
       .zk-tabs {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 4px;
+      }
+      /* スマホ幅では7つのタブを4＋3の2段にして、名前を途中で折らない */
+      @media (max-width: 560px) {
+        .zk-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       }
       .zk-tabs button {
         min-height: 52px;
@@ -2505,7 +2509,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v98（砂嵐・援軍・寒さ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v99（名将の専用行動と強敵図鑑）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -8354,7 +8358,7 @@ function chronicleWarBonusBlock(s) {
         // 記録は増えるだけで、錬成・売却・戦死・「最初から」でも消えない。
         // 記録するのは実際に持っている・持っていた記録があるものだけ（所持・ガチャ履歴・錬成履歴・英霊名鑑・転職履歴）。推測では登録しない
         const ZUKAN_KEY = "worldDefense.zukan.v1";
-        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs", "named", "honors"];
+        const ZUKAN_CATS = ["warlords", "skills", "items", "jobs", "named", "honors", "foes"];
         function loadZukan() {
           let d = null;
           try {
@@ -8377,7 +8381,7 @@ function chronicleWarBonusBlock(s) {
           try {
             localStorage.setItem(
               ZUKAN_KEY,
-              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs, named: zukan.named, honors: zukan.honors }),
+              JSON.stringify({ version: 1, warlords: zukan.warlords, skills: zukan.skills, items: zukan.items, jobs: zukan.jobs, named: zukan.named, honors: zukan.honors, foes: zukan.foes }),
             );
           } catch (err) {
             // 保存できない環境でも遊べる
@@ -8404,6 +8408,14 @@ function chronicleWarBonusBlock(s) {
           for (const h of F.history) if (h && GEAR[h.got]) add("items", h.got);
           for (const g of Object.keys(GEAR)) if (GEAR[g].boss && (F.bossRewards || {})[GEAR[g].boss]) add("items", g); // 裏ボスの初回報酬
           for(const id of chronicleDurableHonors())add("honors",id);
+          // 強敵：攻城戦で戦った城（勝敗・撤退を問わず）の特別な敵、攻め落とした城の名将（v99）
+          if (territoryReady)
+            for (const [id, rec] of Object.entries(conquest)) {
+              const C = NPC_CASTLES[id], pid = provinceOf(id);
+              if (!C || !pid || !(rec.attempts > 0 || rec.wins > 0 || rec.captured)) continue;
+              for (const g of C.garrison) if (siegeRoleOf(g.kind, g.role)) add("foes", "role:" + g.role);
+              if (SIEGE_GENERALS[pid] && (rec.wins > 0 || rec.captured)) add("foes", "gen:" + pid);
+            }
           const person = (s) => {
             for (const k of s.learned || s.skills || []) skill(k);
             for (const j of s.jobs || []) job(j);
@@ -17195,6 +17207,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             honors: Object.keys(CHRONICLE_HONORS).map(id=>({key:id})),
             jobs: Object.keys(JOBS).map((id) => ({ key: id })),
             named: Object.keys(NAMED_SOLDIERS).map((id) => ({ key: id })),
+            foes: Object.keys(SIEGE_ENEMY_ROLES).map((id) => ({ key: "role:" + id, role: id })).concat(Object.keys(SIEGE_GENERALS).map((id) => ({ key: "gen:" + id, gen: id }))),
           };
           return zukanLists;
         }
@@ -17204,8 +17217,18 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           const list = zukanEntries()[cat];
           return { found: list.filter((e) => zukanFound(cat, e)).length, total: list.length };
         }
-        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業", named: "⭐ ネームド", honors: "🏅 称号" };
-        const ZUKAN_TITLES = { warlords: "武将", skills: "スキル", items: "アイテム", jobs: "職業", named: "ネームド兵士", honors: "称号" };
+        const ZUKAN_TABS = { warlords: "⚔️ 武将", skills: "📜 スキル", items: "🎒 アイテム", jobs: "🔄 職業", named: "⭐ ネームド", honors: "🏅 称号", foes: "👹 強敵" };
+        const ZUKAN_TITLES = { warlords: "武将", skills: "スキル", items: "アイテム", jobs: "職業", named: "ネームド兵士", honors: "称号", foes: "強敵" };
+        // 強敵：攻城戦の特別な敵と、後半3章の名将
+        const foeChapter = (e) => CHAPTERS[e.gen ? PROVINCES[e.gen].chapter : SIEGE_ENEMY_ROLES[e.role].chapter || (e.role === "crossbow" || e.role === "heavyCavalry" ? "china" : "japan")].name;
+        function foeDetail(e) {
+          if (e.gen) {
+            const G = SIEGE_GENERALS[e.gen], P = PROVINCES[e.gen];
+            return "<p>👑 <b>" + esc(G.name) + "</b><br><small>" + esc(foeChapter(e)) + "・" + esc(P.name) + "の" + esc(P.castleName) + "の名将</small></p><p>専用行動「" + esc(G.act) + "」：" + esc(G.text) + "</p>";
+          }
+          const R = SIEGE_ENEMY_ROLES[e.role];
+          return "<p>" + esc(R.mark) + " <b>" + esc(R.name) + "</b><br><small>" + esc(foeChapter(e)) + "から登場する攻城戦の特別な敵</small></p><p>" + esc(roleNote(R)) + "</p><p><small>HP×" + R.hp + "・攻撃×" + R.damage + "・攻撃間隔" + R.rate + "秒" + (R.range ? "・射程" + R.range : "") + (R.armor ? "・装甲+" + R.armor + "（上限" + R.armorCap + "）" : "") + "</small></p>";
+        }
         const namedIcon = (id) =>
           '<span class="zk-icon zk-famed" style="--c:' + NAMED_SOLDIERS[id].color + '">' + SOLDIER_TYPES[NAMED_SOLDIERS[id].type].icon + "</span>";
         const WEAPON_ICON = { katana: "🗡️", yari: "🔱", yumi: "🏹", teppo: "🔫" };
@@ -17219,6 +17242,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           ((f / t) * 100).toFixed(1) +
           '%"></i></span>';
         function zukanDetail(cat, e) {
+          if (cat === "foes") return foeDetail(e);
           if(cat==="honors"){const h=CHRONICLE_HONORS[e.key];return "<p>🏅 <b>"+esc(h.name)+"</b><br>戦歴の条件："+CHRONICLE_COUNTER_LABELS[h.counter]+" "+h.need+"。称号は表示のみで能力補正はありません。"+(h.reward?"<br>記念報酬："+esc(GEAR[h.reward].name):"")+"</p>";}
           if (cat === "warlords") {
             const c = WARLORDS[e.key],
@@ -17484,6 +17508,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               icon = '<span class="zk-icon">' + (e.insight ? "💡" : e.action ? "⚔️" : e.wid ? "✨" : e.group === "job" ? "🔄" : e.group === "book" ? "📜" : "⭐") + "</span>";
               name = k.name;
             } else if (zukanTab === "honors") { icon='<span class="zk-icon">🏅</span>'; name=CHRONICLE_HONORS[e.key].name;
+            } else if (zukanTab === "foes") {
+              icon = '<span class="zk-icon">' + (e.gen ? "👑" : esc(SIEGE_ENEMY_ROLES[e.role].mark)) + "</span>";
+              name = e.gen ? SIEGE_GENERALS[e.gen].name : SIEGE_ENEMY_ROLES[e.role].name;
             } else if (zukanTab === "items") {
               const g = GEAR[e.key];
               icon = '<span class="zk-icon g' + g.grade + '">' + gearIcon(g) + "</span>";
@@ -19426,6 +19453,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         const SIEGE_ENEMY_ROLES = {
           crossbow: { kind: "dragon", name: "弩兵", mark: "弩", hp: 1, damage: 1.45, range: 210, rate: 2.2, armor: 0, armorCap: 30, color: "#92e0e8", tint: "hue-rotate(135deg)" },
           heavyCavalry: { kind: "wolf", name: "重装騎兵", mark: "重", hp: 1.55, damage: 1.1, range: 46, rate: 1.1, armor: 12, armorCap: 42, color: "#d5bbff", tint: "hue-rotate(250deg) saturate(0.65)" },
+          // v99：章ごとの特別な敵（ヨーロッパ・ロシアの城だけに配置）
+          heavyKnight: { kind: "knight", name: "重装騎士", mark: "騎", hp: 1.3, damage: 1.05, rate: 1.2, armor: 10, armorCap: 44, color: "#dfe6f0", tint: "saturate(0.35) brightness(1.2)", chapter: "europe", text: "高HP・装甲（上限44）の重い槍。貫通や装甲無視が有効" },
+          cossack: { kind: "wolf", name: "コサック騎兵", mark: "コ", hp: 1.2, damage: 0.95, range: 46, rate: 0.7, armor: 6, armorCap: 36, color: "#ffc27a", tint: "hue-rotate(20deg) saturate(1.5)", chapter: "russia", text: "攻撃間隔0.7秒の連撃。前衛の防御と回復で受け止めよう" },
         };
         const siegeRoleOf = (kind, role) => SIEGE_ENEMY_ROLES[role]?.kind === kind ? SIEGE_ENEMY_ROLES[role] : null;
         function siegeEnemyStats(kind, lv, role, guardPower) {
@@ -19443,8 +19473,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           return { range: stormActive(battle) && range > 60 ? range * SIEGE_HAZARD.storm.range : range, rate: R?.rate || base.rate, ranged: !!base.ranged };
         };
         const siegeRoleText = (C) => [...new Set(C.garrison.map((g) => siegeRoleOf(g.kind, g.role)).filter(Boolean))].map((R) =>
-          R.name + (R.kind === "dragon" ? "：射程210・高威力だが装填2.2秒。騎兵で接近しよう" : "：高HP・装甲（上限42）。貫通や装甲無視が有効")
+          R.name + "：" + roleNote(R)
         ).join("／");
+        const roleNote = (R) => R.text || (R.kind === "dragon" ? "射程210・高威力だが装填2.2秒。騎兵で接近しよう" : "高HP・装甲（上限42）。貫通や装甲無視が有効");
         // 地形は設定された攻城戦だけで有効。待機中も部隊は通常の攻撃・回復・被弾を続ける。
         const SIEGE_TERRAIN = {
           forest: { name: "密林", from: 260, to: 430, speed: 0.75, text: "密林では味方の進軍速度75%" },
@@ -19477,7 +19508,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           const h = siegeHazardsOf(id);
           return Object.keys(SIEGE_HAZARD).filter((k) => h[k]).map((k) => SIEGE_HAZARD[k].text).join("／");
         };
-        const stormActive = (B) => !!(B && B.hazards?.storm && B.t % SIEGE_HAZARD.storm.every >= SIEGE_HAZARD.storm.every - SIEGE_HAZARD.storm.last);
+        const stormActive = (B) => !!(B && ((B.hazards?.storm && B.t % SIEGE_HAZARD.storm.every >= SIEGE_HAZARD.storm.every - SIEGE_HAZARD.storm.last) || B.t < (B.stormUntil || 0)));
         const reinforceLeft = (B) => (B?.hazards?.reinforce ? SIEGE_HAZARD.reinforce.waves - (B.reinforced || 0) : 0);
         // 援軍：決まった時刻に城の前へ守備兵を足す。能力は城の守備兵と同じ計算（敵Lv・成長曲線）
         function reinforceTick(B) {
@@ -19508,6 +19539,46 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               });
               burst(p.x, p.y - 10, "#d5bbff", "slash");
             }
+        }
+        // 名将の専用行動（後半3章の最終拠点）。部隊が名将に近づいて（engage）から first秒後に始め、名将が生きている間 every秒ごとに使う
+        const SIEGE_GENERALS = {
+          me_nile: { name: "砂海の覇王", act: "砂塵の号令", every: 20, storm: 5, text: "部隊が近づくと5秒後から20秒ごとに、その場で5秒間の砂嵐を起こす（弓・鉄砲の射程60%）。名将を倒すと止まる" },
+          eu_britannia: { name: "霧島の騎士王", act: "騎士王の突撃", every: 20, hit: 0.06, reach: 320, text: "部隊が近づくと5秒後から20秒ごとに、近くの部隊の兵士全員へ最大HPの6%の一撃（この攻撃だけでは戦死しない）" },
+          ru_moskva: { name: "雪冠の大公", act: "吹雪の号令", every: 25, freeze: 2, text: "部隊が近づくと5秒後から25秒ごとに、全部隊の攻撃を2秒間遅くする（攻撃間隔2倍）" },
+        };
+        const GENERAL_RULES = { engage: 200, first: 5 };
+        const generalOf = (B) => (B && !B.boss ? SIEGE_GENERALS[provinceOf(B.castleId)] : null);
+        const generalAlive = (B) => B.garrison.find((e) => e.kind === "boss" && e.hp > 0);
+        function generalTick(B, dt) {
+          const G = generalOf(B);
+          if (!G) return;
+          if (B.generalNotice > 0) B.generalNotice = Math.max(0, B.generalNotice - dt);
+          for (const g of B.groups) if (g.frozen > 0) g.frozen = Math.max(0, g.frozen - dt); // 吹雪の凍えが解ける
+          const boss = generalAlive(B);
+          if (!boss) return;
+          if (B.generalCd == null) {
+            if (!B.groups.some((g) => groupActive(g) && Math.hypot(g.x - boss.x, g.y - boss.y) <= GENERAL_RULES.engage)) return;
+            B.generalCd = GENERAL_RULES.first; // 名将が戦いに加わった
+          }
+          B.generalCd -= dt;
+          if (B.generalCd > 0) return;
+          B.generalCd += G.every;
+          B.generalUses = (B.generalUses || 0) + 1;
+          if (G.storm) B.stormUntil = B.t + G.storm;
+          if (G.hit) {
+            let tg = null, best = G.reach;
+            for (const g of B.groups) {
+              if (!groupActive(g)) continue;
+              const dd = Math.hypot(g.x - boss.x, g.y - boss.y);
+              if (dd <= best) (best = dd), (tg = g);
+            }
+            if (tg) {
+              for (const s of groupAlive(tg)) s.hp = Math.max(1, s.hp - battleStats(tg, s).maxHp * G.hit);
+              burst(tg.x, tg.y - 20, "#ffd36a", "cannon");
+            }
+          }
+          if (G.freeze) for (const g of B.groups) if (groupActive(g)) g.frozen = G.freeze;
+          B.generalNotice = 2.5;
         }
         function inSnow(B, g) {
           const t = SIEGE_TERRAIN.snow;
@@ -19842,6 +19913,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           fortress: { name: "堅城", hp: 1.25, towerLevel: 1, towers: [{ type: "cannon", x: 880, y: 190, damage: 24 }] },
           crossbow: { name: "弩兵陣", garrison: [{ path: "upper", d: 620, kind: "dragon", role: "crossbow", n: 2 }, { path: "lower", d: 600, kind: "dragon", role: "crossbow", n: 2 }] },
           heavyCavalry: { name: "重装騎兵", garrison: [{ path: "upper", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }, { path: "lower", d: 540, kind: "wolf", role: "heavyCavalry", n: 2 }] },
+          knights: { name: "重装騎士団", garrison: [{ path: "upper", d: 560, kind: "knight", role: "heavyKnight", n: 2 }, { path: "lower", d: 560, kind: "knight", role: "heavyKnight", n: 2 }] },
+          cossack: { name: "コサック騎兵", garrison: [{ path: "upper", d: 520, kind: "wolf", role: "cossack", n: 2 }, { path: "lower", d: 520, kind: "wolf", role: "cossack", n: 2 }] },
           artillery: { name: "砲兵陣地", towers: [{ type: "cannon", x: 640, y: 170, damage: 26 }, { type: "cannon", x: 640, y: 430, damage: 26 }] },
           warlord: { name: "名将", power: 1.08, garrison: [{ path: "upper", d: 900, kind: "boss", n: 1 }] },
         };
@@ -20151,10 +20224,10 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               ["eu_balkan", "バルカン", "eu_south", "eu_fort_balkan", "鉄門の砦", "西方騎士団・バルカン", ["spear", "cavalry"]],
               ["eu_hellas", "ヘラス", "eu_south", "eu_fort_hellas", "白柱の都城", "西方騎士団・ヘラス", ["sea", "archer"]],
               ["eu_italia", "イタリア", "eu_south", "eu_fort_italia", "七丘の都城", "西方騎士団・イタリア", ["fortress", "crossbow"]],
-              ["eu_pannonia", "パンノニア", "eu_central", "eu_fort_pannonia", "草海の関", "西方騎士団・パンノニア", ["heavyCavalry", "cavalry"]],
+              ["eu_pannonia", "パンノニア", "eu_central", "eu_fort_pannonia", "草海の関", "西方騎士団・パンノニア", ["knights", "cavalry"]],
               ["eu_bohemia", "ボヘミア", "eu_central", "eu_fort_bohemia", "銀嶺の城", "西方騎士団・ボヘミア", ["artillery", "spear"]],
               ["eu_alps", "アルプス", "eu_central", "eu_fort_alps", "氷峰の関", "西方騎士団・アルプス", ["crossbow", "archer"]],
-              ["eu_gallia", "ガリア", "eu_west", "eu_fort_gallia", "百合紋の城", "西方騎士団・ガリア", ["heavyCavalry", "spear"]],
+              ["eu_gallia", "ガリア", "eu_west", "eu_fort_gallia", "百合紋の城", "西方騎士団・ガリア", ["knights", "spear"]],
               ["eu_iberia", "イベリア", "eu_west", "eu_fort_iberia", "陽門の城", "西方騎士団・イベリア", ["sea", "gun"]],
               ["eu_flanders", "フランドル", "eu_west", "eu_fort_flanders", "風車の城塞", "西方騎士団・フランドル", ["artillery", "crossbow"]],
               ["eu_germania", "ゲルマニア", "eu_north", "eu_fort_germania", "黒森の砦", "西方騎士団・ゲルマニア", ["heavyCavalry", "archer"]],
@@ -20179,7 +20252,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             roads: { eu_south: "南欧の半島", eu_central: "中欧と山脈", eu_west: "西欧の平野", eu_north: "北の海" },
             levels: EUROPE_LEVELS,
             // 密林と援軍が重なるゲルマニアは、推奨Lvの40人編成での実戦結果から5%補正。
-            power: (dist, styles, id) => lateChapterPower(EUROPE_LEVELS)(dist, styles, id) * (id === "eu_germania" ? 0.95 : 1),
+            // ブリタニアは騎士王の突撃（v99）を考慮して5%補正。
+            power: (dist, styles, id) => lateChapterPower(EUROPE_LEVELS)(dist, styles, id) * (id === "eu_germania" || id === "eu_britannia" ? 0.95 : 1),
             scaleGuards: true,
             hp: lateChapterHp,
             terrain: {
@@ -20196,9 +20270,9 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               ["ru_novgorod", "ノヴゴロド", "ru_west", "ru_fort_novgorod", "白樺の城", "雪原守護隊・ノヴゴロド", ["spear", "archer"]],
               ["ru_smolensk", "スモレンスク", "ru_west", "ru_fort_smolensk", "双塔の砦", "雪原守護隊・スモレンスク", ["artillery", "heavyCavalry"]],
               ["ru_arkhangelsk", "アルハンゲリスク", "ru_north", "ru_fort_arkhangelsk", "北光の港城", "雪原守護隊・アルハンゲリスク", ["sea", "crossbow"]],
-              ["ru_vologda", "ヴォログダ", "ru_north", "ru_fort_vologda", "氷湖の砦", "雪原守護隊・ヴォログダ", ["heavyCavalry", "spear"]],
+              ["ru_vologda", "ヴォログダ", "ru_north", "ru_fort_vologda", "氷湖の砦", "雪原守護隊・ヴォログダ", ["cossack", "spear"]],
               ["ru_ural", "ウラル", "ru_east", "ru_fort_ural", "鉄嶺の関", "雪原守護隊・ウラル", ["fortress", "crossbow"]],
-              ["ru_siberia", "シベリア", "ru_east", "ru_fort_siberia", "凍土の砦", "雪原守護隊・シベリア", ["heavyCavalry", "cavalry"]],
+              ["ru_siberia", "シベリア", "ru_east", "ru_fort_siberia", "凍土の砦", "雪原守護隊・シベリア", ["cossack", "cavalry"]],
               ["ru_volga", "ヴォルガ", "ru_heart", "ru_fort_volga", "大河の城", "雪原守護隊・ヴォルガ", ["artillery", "archer"]],
               ["ru_moskva", "モスクワ", "ru_heart", "ru_fort_moskva", "雪冠の王城", "雪原守護隊・モスクワ", ["fortress", "heavyCavalry", "warlord"]],
             ],
@@ -20215,8 +20289,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             sea: [],
             roads: { ru_west: "西部の森", ru_north: "白海の凍土", ru_east: "東の山脈", ru_heart: "雪の都" },
             levels: RUSSIA_LEVELS,
-            // 寒さと名将が重なるモスクワは、推奨Lvの40人編成での実戦結果から3%補正。
-            power: (dist, styles, id) => lateChapterPower(RUSSIA_LEVELS)(dist, styles, id) * (id === "ru_moskva" ? 0.97 : 1),
+            // 寒さと吹雪の号令（v99）が重なるモスクワは、推奨Lvの40人編成での実戦結果から6%補正。
+            power: (dist, styles, id) => lateChapterPower(RUSSIA_LEVELS)(dist, styles, id) * (id === "ru_moskva" ? 0.94 : 1),
             scaleGuards: true,
             hp: lateChapterHp,
             terrain: {
@@ -21818,6 +21892,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             }
           }
           reinforceTick(B);
+          generalTick(B, dt);
           // 寒さ：雪原の区間にいる兵士のHPが減る（最大HPの一定割合で止まり、戦死はしない）
           if (B.hazards?.cold)
             for (const g of B.groups) {
@@ -22979,13 +23054,26 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         // 描画：NPCの塔・守備隊・味方の部隊・城の耐久
         function hazardStatus(B) {
           const h = B.hazards || {}, out = [], S = SIEGE_HAZARD.storm;
-          if (h.storm) out.push(stormActive(B) ? "🌪️ 砂嵐 射程60%（あと" + Math.ceil(S.every - (B.t % S.every)) + "秒）" : "砂嵐まで" + Math.ceil(S.every - S.last - (B.t % S.every)) + "秒");
+          if (h.storm) out.push(stormActive(B) ? "🌪️ 砂嵐 射程60%（あと" + Math.ceil(Math.max(S.every - (B.t % S.every) > S.last ? 0 : S.every - (B.t % S.every), (B.stormUntil || 0) - B.t)) + "秒）" : "砂嵐まで" + Math.ceil(S.every - S.last - (B.t % S.every)) + "秒");
           if (h.reinforce) out.push(reinforceLeft(B) ? "🛡️ 援軍まで" + Math.ceil(SIEGE_HAZARD.reinforce.every * ((B.reinforced || 0) + 1) - B.t) + "秒（残り" + reinforceLeft(B) + "回）" : "援軍は打ち止め");
-          if (h.cold) out.push("❄️ 寒さ（雪原でHP減少・回復半分）");
+          if (h.cold) out.push("❄️ 寒さ（雪原でHP減少・回復80%）");
+          const G = generalOf(B);
+          if (G) out.push(!generalAlive(B) ? "👑 " + G.name + "を討ち取った" : B.generalCd == null ? "👑 " + G.name + "（近づくと「" + G.act + "」）" : "👑 " + G.name + "「" + G.act + "」まで" + Math.ceil(B.generalCd) + "秒");
           return out.length ? "<br>" + out.join("・") : "";
         }
         // 砂嵐の間は画面全体を砂色に霞ませる
         function drawSiegeWeather(B) {
+          const G = generalOf(B);
+          if (G && B.generalNotice > 0) {
+            ctx.save();
+            ctx.fillStyle = "#2a1410dd";
+            ctx.fillRect(W / 2 - 230, H - 70, 460, 50);
+            ctx.fillStyle = "#ffd36a";
+            ctx.font = "bold 30px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillText("👑 " + G.name + "「" + G.act + "」", W / 2, H - 34);
+            ctx.restore();
+          }
           if (!stormActive(B)) return;
           ctx.save();
           ctx.fillStyle = "#d2a05a80";
@@ -24033,6 +24121,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               SIEGE_ENEMY_ROLES,
               siegeGuardAttack,
               siegeHazardsOf,
+              stormActive,
               SIEGE_TERRAIN,
               advanceSiegeMarch,
               siegeMarchFactor,
