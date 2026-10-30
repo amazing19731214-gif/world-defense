@@ -51,8 +51,8 @@ let r = await page.evaluate((api) => {
   };
 }, api);
 check(
-  "日本68＋朝鮮8＋中国20＋東南アジア12＋中東12・全120拠点",
-  r.order.join() === "japan,korea,china,southeast,middleeast" && r.japan === 68 && r.all === 120 && r.chapters.join() === "japan,korea,china,southeast,middleeast",
+  "日本68＋朝鮮8＋中国20＋東南アジア12＋中東12＋ヨーロッパ12＋ロシア8・全140拠点",
+  r.order.join() === "japan,korea,china,southeast,middleeast,europe,russia" && r.japan === 68 && r.all === 140 && r.chapters.join() === "japan,korea,china,southeast,middleeast,europe,russia",
   JSON.stringify(r),
 );
 

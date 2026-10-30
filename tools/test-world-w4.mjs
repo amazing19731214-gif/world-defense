@@ -44,7 +44,7 @@ try{
  check('v69の既存96拠点の国・城・難易度・守備隊・報酬を維持',r.changes.length===0&&r.castles.length===0,r);
  check('通常防衛戦・修練場の敵設定を維持',r.defense,r);
  await p.locator('#mapOpen').tap();
- check('世界に5章、東南アジアは？？？と中国制覇の条件',await p.locator('[data-map-chapter]').count()===5&&await p.locator('[data-map-chapter="southeast"]').isDisabled()&&/？？？.*中国を制覇/s.test(await p.locator('[data-map-chapter="southeast"]').innerText()));
+ check('世界に7章、東南アジアは？？？と中国制覇の条件',await p.locator('[data-map-chapter]').count()===7&&await p.locator('[data-map-chapter="southeast"]').isDisabled()&&/？？？.*中国を制覇/s.test(await p.locator('[data-map-chapter="southeast"]').innerText()));
  check('未解放の章はAPIからも出陣不可',/中国.*解放/.test(await p.evaluate(()=>WD_DEBUG.squadApi.setTarget('se_fort_redriver'))));
  await seed(p,{japan:true,korea:true});check('朝鮮半島制覇だけでは東南アジアを解放しない',await p.evaluate(()=>!WD_DEBUG.squadApi.chapterUnlocked('southeast')));
  await seed(p,{japan:true,korea:true,china:true,lost:['cn_nanhai']});
@@ -69,7 +69,7 @@ try{
  await p.locator('[data-map-road="se_north"]').tap();await p.locator('[data-map-prov="se_redriver"]').tap();
  check('入口の詳細に敵Lv1150・地形・渡河待ちを表示',/敵Lv1150/.test(await p.locator('#mapBody').innerText())&&/地形：.*渡河待ち1.5秒/.test(await p.locator('#mapBody').innerText()));
  r=await p.evaluate(route=>{const a=WD_DEBUG.squadApi;return {count:a.PROVINCE_ORDER.length,regions:Object.keys(a.CHAPTERS.southeast.roads).map(k=>a.chapterProvinces('southeast').filter(p=>a.PROVINCES[p].road===k).length),levels:route.map(id=>a.NPC_CASTLES[a.PROVINCES[id].castle].enemyLevel),seen:a.chapterProvinces('southeast').filter(a.provinceDiscovered),terrain:route.every(id=>a.NPC_CASTLES[a.PROVINCES[id].castle].terrain.every(t=>a.SIEGE_TERRAIN[t]))};},route);
- check('全120拠点、東南アジアは各3拠点の4地域',r.count===120&&r.regions.every(n=>n===3),r);
+ check('全140拠点、東南アジアは各3拠点の4地域',r.count===140&&r.regions.every(n=>n===3),r);
  check('敵Lvは1150から50刻み、すべての地形IDが有効',r.levels.every((lv,i)=>lv===1150+i*50)&&r.terrain,r);
  check('入口だけを発見し、内陸や島は未発見',r.seen.join()==='se_redriver',r.seen);
  for(const result of ['lose','retreat','timeup']){r=await fight(p,'se_redriver',result);check(result+'では占領・報酬なし',!r.err&&!r.owned&&r.tickets===0,r);}

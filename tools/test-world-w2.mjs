@@ -32,10 +32,10 @@ async function fight(p,id,result='win'){
 try{
  const {c,p}=await setup();
  await p.locator('#mapOpen').tap();
- check('メニューから世界の5章カードが開く',/世界/.test(await p.locator('#mapTitle').innerText())&&await p.locator('[data-map-chapter]').count()===5);
+ check('メニューから世界の7章カードが開く',/世界/.test(await p.locator('#mapTitle').innerText())&&await p.locator('[data-map-chapter]').count()===7);
  check('最初の海外章は？？？・解放条件付きで無効',await p.locator('[data-map-chapter="korea"]').isDisabled()&&/？？？/.test(await p.locator('[data-map-chapter="korea"]').innerText()));
  let r=await p.evaluate(()=>{const a=WD_DEBUG.squadApi;return {n:a.PROVINCE_ORDER.length,japan:a.JAPAN.length,korea:a.chapterProvinces('korea').length,error:a.setTarget('kr_busan')};});
- check('既存108＋中東12＝120拠点、未解放の章はAPIからも出陣不可',r.n===120&&r.japan===68&&r.korea===8&&/解放/.test(r.error),r);
+ check('既存120＋ヨーロッパ12＋ロシア8＝140拠点、未解放の章はAPIからも出陣不可',r.n===140&&r.japan===68&&r.korea===8&&/解放/.test(r.error),r);
  await p.locator('[data-map-chapter="japan"]').tap();
  check('日本の全国画面と秘境への導線を維持',/全国 1\/68/.test(await p.locator('#mapTitle').innerText())&&await p.locator('[data-map-tab="secret"]').isVisible());
  await seed(p,{japan:true,tenka:true});
