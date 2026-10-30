@@ -2505,7 +2505,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v97（初心者向けの段階開放と次の目標）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v98（砂嵐・援軍・寒さ）</small>
     </main>
     <div id="infoSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-describedby="infoHint">
@@ -19439,7 +19439,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         }
         const siegeGuardAttack = (e) => {
           const base = ENEMY_VS_UNIT[e.kind], R = siegeRoleOf(e.kind, e.siegeRole);
-          return { range: R?.range || base.ranged || SIEGE_BATTLE.enemyReach, rate: R?.rate || base.rate, ranged: !!base.ranged };
+          const range = R?.range || base.ranged || SIEGE_BATTLE.enemyReach;
+          return { range: stormActive(battle) && range > 60 ? range * SIEGE_HAZARD.storm.range : range, rate: R?.rate || base.rate, ranged: !!base.ranged };
         };
         const siegeRoleText = (C) => [...new Set(C.garrison.map((g) => siegeRoleOf(g.kind, g.role)).filter(Boolean))].map((R) =>
           R.name + (R.kind === "dragon" ? "：射程210・高威力だが装填2.2秒。騎兵で接近しよう" : "：高HP・装甲（上限42）。貫通や装甲無視が有効")
@@ -19452,7 +19453,66 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           mountain: { name: "山岳", from: 300, to: 470, speed: 0.8, color: "#8a857488", labelColor: "#ece4cc", label: "山岳 速度80%", text: "山岳では味方の進軍速度80%（攻撃・回復間隔は変化なし）" },
           snow: { name: "雪原", from: 220, to: 500, speed: 0.7, color: "#eef6ffd0", labelColor: "#ffffff", label: "雪原 速度70%", text: "雪原では味方の進軍速度70%（攻撃・回復間隔は変化なし）" },
         };
-        const siegeTerrainText = (C) => (C.terrain || []).map((id) => SIEGE_TERRAIN[id].text).join("／");
+        const siegeTerrainText = (C) => (C.terrain || []).map((id) => SIEGE_TERRAIN[id].text).concat(siegeHazardText(C) || []).join("／");
+        // 後半の章の戦い方の違い（攻城戦だけ。城の数値・報酬・保存データは変えない）
+        //   砂嵐：砂漠の拠点。every秒ごとにlast秒間、弓・鉄砲（敵味方とも）の射程が60%。近接部隊の出番
+        //   援軍：ヨーロッパの全拠点。30秒ごとに城から兵が上下の道へ2人ずつ出る（最大3回）。早く攻め落とそう
+        //   寒さ：雪原の区間にいる兵士は毎秒最大HPの0.4%を失い（30%で止まり戦死しない）、受ける回復が80%
+        const SIEGE_HAZARD = {
+          storm: { every: 20, last: 5, range: 0.6, text: "砂嵐：20秒ごとに5秒間、弓・鉄砲の射程が60%（敵も同じ）" },
+          reinforce: { every: 30, waves: 3, n: 2, d: 860, kind: "goblin", text: "騎士団の援軍：30秒ごとに城から兵が上下の道へ2人ずつ出る（最大3回）。早く攻め落とそう" },
+          cold: { drain: 0.004, floor: 0.3, heal: 0.8, text: "寒さ：雪原にいる兵士はHPが少しずつ減り（30%で止まる）、受ける回復が80%" },
+        };
+        function siegeHazardsOf(castleId) {
+          const C = NPC_CASTLES[castleId], P = PROVINCES[provinceOf(castleId)], t = C?.terrain || [];
+          return {
+            storm: t.includes("desert"),
+            reinforce: P?.chapter === "europe",
+            cold: t.includes("snow"),
+          };
+        }
+        const siegeHazardText = (C) => {
+          const id = Object.keys(NPC_CASTLES).find((k) => NPC_CASTLES[k] === C);
+          if (!id || !provinceOf(id)) return "";
+          const h = siegeHazardsOf(id);
+          return Object.keys(SIEGE_HAZARD).filter((k) => h[k]).map((k) => SIEGE_HAZARD[k].text).join("／");
+        };
+        const stormActive = (B) => !!(B && B.hazards?.storm && B.t % SIEGE_HAZARD.storm.every >= SIEGE_HAZARD.storm.every - SIEGE_HAZARD.storm.last);
+        const reinforceLeft = (B) => (B?.hazards?.reinforce ? SIEGE_HAZARD.reinforce.waves - (B.reinforced || 0) : 0);
+        // 援軍：決まった時刻に城の前へ守備兵を足す。能力は城の守備兵と同じ計算（敵Lv・成長曲線）
+        function reinforceTick(B) {
+          const R = SIEGE_HAZARD.reinforce;
+          if (!reinforceLeft(B) || B.t < R.every * ((B.reinforced || 0) + 1)) return;
+          B.reinforced = (B.reinforced || 0) + 1;
+          const C = NPC_CASTLES[B.castleId];
+          for (const path of [upper, lower])
+            for (let i = 0; i < R.n; i++) {
+              const d = R.d + i * 12, p = pathAt(path, d), stats = siegeEnemyStats(R.kind, B.enemyLevel, null, C.guardPower);
+              B.garrison.push({
+                jobDropOrdinal: 1000 + B.reinforced * 10 + B.garrison.length,
+                ...stats,
+                kind: R.kind,
+                siegeRole: null,
+                path,
+                d,
+                x: p.x,
+                y: p.y + (i % 2 ? 9 : -9),
+                hp: stats.max,
+                r: 13,
+                face: -1,
+                blockedBy: true,
+                cd: 1 + i * 0.2,
+                atkAnim: 0,
+                reward: SIEGE_BATTLE.garrisonReward[R.kind],
+                reinforcement: true,
+              });
+              burst(p.x, p.y - 10, "#d5bbff", "slash");
+            }
+        }
+        function inSnow(B, g) {
+          const t = SIEGE_TERRAIN.snow;
+          return !!(B && B.hazards?.cold && g.d >= t.from && g.d < t.to);
+        }
         const siegeMarchFactor = (B, d) => (B.terrain || []).reduce((n, id) => {
           const t = SIEGE_TERRAIN[id];
           return t.speed && d >= t.from && d < t.to ? Math.min(n, t.speed) : n;
@@ -20118,7 +20178,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             sea: [["eu_flanders", "eu_britannia", "ドーバー航路"]],
             roads: { eu_south: "南欧の半島", eu_central: "中欧と山脈", eu_west: "西欧の平野", eu_north: "北の海" },
             levels: EUROPE_LEVELS,
-            power: lateChapterPower(EUROPE_LEVELS),
+            // 密林と援軍が重なるゲルマニアは、推奨Lvの40人編成での実戦結果から5%補正。
+            power: (dist, styles, id) => lateChapterPower(EUROPE_LEVELS)(dist, styles, id) * (id === "eu_germania" ? 0.95 : 1),
             scaleGuards: true,
             hp: lateChapterHp,
             terrain: {
@@ -20154,7 +20215,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             sea: [],
             roads: { ru_west: "西部の森", ru_north: "白海の凍土", ru_east: "東の山脈", ru_heart: "雪の都" },
             levels: RUSSIA_LEVELS,
-            power: lateChapterPower(RUSSIA_LEVELS),
+            // 寒さと名将が重なるモスクワは、推奨Lvの40人編成での実戦結果から3%補正。
+            power: (dist, styles, id) => lateChapterPower(RUSSIA_LEVELS)(dist, styles, id) * (id === "ru_moskva" ? 0.97 : 1),
             scaleGuards: true,
             hp: lateChapterHp,
             terrain: {
@@ -21402,6 +21464,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               crossedTerrain: {},
             })),
             terrain: boss ? [] : (C.terrain || []).slice(),
+            hazards: boss ? {} : siegeHazardsOf(castleId),
             towers: towersNpc,
             garrison,
             castleId,
@@ -21466,6 +21529,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             st.atk+=fixed.atk;st.def+=fixed.def;st.maxHp+=fixed.hp;
           }
           if (g.rally > 0) {const fixed=chronicleWarBonus(s).atk;st.atk=(st.atk-fixed)*SIEGE_SKILL.rally.atk+fixed;}
+          if (stormActive(battle) && !unitOf(s).heal && st.range > 60) st.range = Math.max(60, st.range * SIEGE_HAZARD.storm.range);
           return st;
         }
         // ===== 攻城戦の必殺技 =====
@@ -21753,6 +21817,16 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               Object.assign(g, pathAt(g.path, g.d));
             }
           }
+          reinforceTick(B);
+          // 寒さ：雪原の区間にいる兵士のHPが減る（最大HPの一定割合で止まり、戦死はしない）
+          if (B.hazards?.cold)
+            for (const g of B.groups) {
+              if (!groupActive(g) || !inSnow(B, g)) continue;
+              for (const s of groupAlive(g)) {
+                const max = battleStats(g, s).maxHp, floor = max * SIEGE_HAZARD.cold.floor;
+                if (s.hp > floor) s.hp = Math.max(floor, s.hp - max * SIEGE_HAZARD.cold.drain * dt);
+              }
+            }
           // 味方の攻撃・回復（兵士1人ずつ。間隔は防衛戦と同じく余りを持ち越す）
           for (const g of B.groups) {
             if (!groupActive(g)) continue;
@@ -21798,7 +21872,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                 s.atk = 0.18;
                 const chronicleBefore = best.m.hp, chronicleMax = battleStats(best.o,best.m).maxHp;
                 const beforeRatio=best.m.hp/chronicleMax;
-                if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
+                if (!B.soulEat) best.m.hp += Math.min(st.heal * healTakenMul(best.m) * (inSnow(B, best.o) ? SIEGE_HAZARD.cold.heal : 1), battleStats(best.o, best.m).maxHp - best.m.hp); // 魂喰いの間は回復が効かない
                 chronicleHeal(s,best.m,chronicleBefore,chronicleMax);
                 s.heals = (s.heals || 0) + 1;
                 gainXp(s, SQUAD_RULES.xpPerHeal);
@@ -22360,6 +22434,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               "/" +
               B.castleMax +
               (B.terrain.length ? "<br>地形：" + B.terrain.map((id) => SIEGE_TERRAIN[id].name).join("・") : "") +
+              hazardStatus(B) +
               "<br>" +
               B.groups
                 .filter((g) => g.list.length)
@@ -22902,6 +22977,27 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (e.heads) for (const h of e.heads) if (h.anim > 0) h.anim = Math.max(0, h.anim - dt);
         }
         // 描画：NPCの塔・守備隊・味方の部隊・城の耐久
+        function hazardStatus(B) {
+          const h = B.hazards || {}, out = [], S = SIEGE_HAZARD.storm;
+          if (h.storm) out.push(stormActive(B) ? "🌪️ 砂嵐 射程60%（あと" + Math.ceil(S.every - (B.t % S.every)) + "秒）" : "砂嵐まで" + Math.ceil(S.every - S.last - (B.t % S.every)) + "秒");
+          if (h.reinforce) out.push(reinforceLeft(B) ? "🛡️ 援軍まで" + Math.ceil(SIEGE_HAZARD.reinforce.every * ((B.reinforced || 0) + 1) - B.t) + "秒（残り" + reinforceLeft(B) + "回）" : "援軍は打ち止め");
+          if (h.cold) out.push("❄️ 寒さ（雪原でHP減少・回復半分）");
+          return out.length ? "<br>" + out.join("・") : "";
+        }
+        // 砂嵐の間は画面全体を砂色に霞ませる
+        function drawSiegeWeather(B) {
+          if (!stormActive(B)) return;
+          ctx.save();
+          ctx.fillStyle = "#d2a05a80";
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = "#3a2a14cc";
+          ctx.fillRect(W / 2 - 210, 12, 420, 50);
+          ctx.fillStyle = "#ffe1a0";
+          ctx.font = "bold 32px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText("🌪️ 砂嵐 弓・鉄砲の射程60%", W / 2, 48);
+          ctx.restore();
+        }
         function drawSiegeTerrain(B) {
           if (!B.terrain?.length) return;
           ctx.save();
@@ -23056,6 +23152,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           ctx.textAlign = "center";
           ctx.fillStyle = "#fff1d0";
           ctx.fillText(B.castleName + " " + Math.ceil(Math.max(0, B.castleHp)), c.x, c.y - 146);
+          drawSiegeWeather(B);
           drawCutin();
         }
         // ===== 塔パネル・武将配属画面 =====
@@ -23935,6 +24032,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               siegeEnemyStats,
               SIEGE_ENEMY_ROLES,
               siegeGuardAttack,
+              siegeHazardsOf,
               SIEGE_TERRAIN,
               advanceSiegeMarch,
               siegeMarchFactor,
