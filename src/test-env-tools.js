@@ -34,6 +34,8 @@
         name,
         ...(job ? { job, jobs: [...new Set([type, ...profJobs])] } : {}),
         prof: Object.fromEntries(profJobs.map((j) => [j, MAX])),
+        // v108.4 ステータスポイント「速さ」：Lv の分だけ（最大100。攻撃の速さと、戦場試練・攻城戦の歩く速さに効く）
+        pts: { atk: 0, def: 0, spd: Math.min(100, level), rng: 0 },
         ...(ins ? { insight: { known: [ins], equipped: [ins] } } : {}),
       };
     });
