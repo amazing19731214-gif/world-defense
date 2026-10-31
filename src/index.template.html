@@ -3167,7 +3167,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109試作（戦場試練：縦長の画面・磁石・敵の群れ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109.1試作（戦場試練：補助スキル「吸着」）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23424,7 +23424,7 @@ OFF</button>
                   magnets: trial.magnets ? trial.magnets.length : 0,
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,
-                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? TRIAL_SURVIVAL.magnet * (h.magnetMul || 1) : null; })(),
+                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? trialMagnetR(trial, h) : null; })(),
                   merges: trial.merges || 0,
                   sfx: trial.sfx || 0,
                   gauge: trial.gauge ? { ...trial.gauge } : null,

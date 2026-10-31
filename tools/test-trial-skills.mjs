@@ -165,10 +165,10 @@ try {
     const o6 = T.skillOptions();
     for (const k of Object.keys(L.skills)) while (L.skills[k] < 5) T.learn(k);
     const oAll = T.skillOptions();
-    return { lv, up5: o5.up.map((x) => x.key), learn5: o5.learn.length, kinds: Object.keys(L.skills).length, learn6: o6.learn.length, up6: o6.up.length, all: oAll.up.length + oAll.learn.length };
+    return { lv, up5: o5.up.map((x) => x.key), learn5: o5.learn.length, kinds: Object.keys(L.skills).length, learn6: o6.learn.map((x) => x.key), up6: o6.up.length, all: oAll.up.map((x) => x.key).concat(oAll.learn.map((x) => x.key)) };
   }, KEYS);
-  check(r.lv.join() === "2,3,4,5,5,5" && !r.up5.includes("thunder") && r.learn5 === 7, "同じスキルを選ぶと Lv1→2→3→4→5。Lv5 になると候補から消える", r);
-  check(r.kinds === 6 && r.learn6 === 0 && r.up6 === 5 && r.all === 0, "攻撃スキルは6種類まで。6種類そろうと新しい習得は出ず、強化だけが出る", r);
+  check(r.lv.join() === "2,3,4,5,5,5" && !r.up5.includes("thunder") && r.learn5 === 8, "同じスキルを選ぶと Lv1→2→3→4→5。Lv5 になると候補から消える", r);
+  check(r.kinds === 6 && r.learn6.join() === "magnet" && r.up6 === 5 && r.all.join() === "magnet", "攻撃スキルは6種類まで。6種類そろうと新しい攻撃スキルは出ず、強化と補助スキル（吸着）だけが出る", r);
   // 4. 3択：仲間の加入・スキルの強化・新しい習得。重複しない。全部 Lv5 なら能力の強化で埋まる
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
@@ -192,7 +192,7 @@ try {
         if (c.kind !== "skill") continue;
         const cur = L.skills[c.key] || 0;
         if (c.from !== cur || c.to !== cur + 1 || c.to > 5) bad.push("Lv " + c.key);
-        if (!cur && Object.keys(L.skills).length >= 6) bad.push("枠 " + c.key);
+        if (!cur && c.key !== "magnet" && Object.keys(L.skills).filter((k) => k !== "magnet").length >= 6) bad.push("枠 " + c.key);
       }
       seen.push(ch.map((c) => c.kind).join("/"));
       // 仲間は最初の4回だけ加入、あとはスキルを選ぶ
@@ -203,7 +203,45 @@ try {
   });
   console.log("   3択の例：" + r.first.join(" ｜ ") + " … " + r.last.join(" ｜ "));
   check(r.bad.length === 0 && r.first.every((s) => s.includes("recruit") && s.includes("skill")), "3択は「仲間の加入」と攻撃スキル（強化・新しい習得）。重複や取れない候補は出ない", r);
-  check(r.last.every((s) => s === "boon/boon/boon") && Object.values(r.skills).every((v) => v === 5) && Object.keys(r.skills).length === 6 && r.units === 5, "6種類が全部 Lv5 になると、3択は能力の強化だけになる", r);
+  check(r.last.every((s) => s === "boon/boon/boon") && Object.values(r.skills).every((v) => v === 5) && Object.keys(r.skills).filter((k) => k !== "magnet").length === 6 && r.units === 5, "攻撃スキル6種類（と吸着）が全部 Lv5 になると、3択は能力の強化だけになる", r);
+  // 4b. v109.1 補助スキル「🧲 吸着」：攻撃スキルの枠を使わない。Lv が上がると、コインを吸い寄せる距離が広がる（190 → ×1.3〜×2.6）
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial;
+    T.retreat();
+    document.getElementById("trialSheet").hidden = true;
+    T.start([1, 2, 3, 4, 5], { mode: "survival", hero: 1 });
+    const L = T.live(),
+      h = L.units[0];
+    L.next = 1e9;
+    L.skills = { thunder: 1, fireRing: 1, shuriken: 1, vacuum: 1, spear: 1, musket: 1 };
+    L.skillCd = {};
+    const offered = T.skillOptions().learn.map((x) => x.key),
+      R = [T.state().magnetR];
+    for (let i = 0; i < 5; i++) T.learn("magnet"), R.push(Math.round(T.state().magnetR));
+    // 吸着 Lv5（494）なら、450 先のコインも吸い寄せて拾う
+    L.coins = [];
+    T.drop(h.x + 450, h.y - 10);
+    for (let i = 0; i < 30 && T.state().coins; i++) WD_DEBUG.step(0.1);
+    // 攻撃スキル6種類が Lv5・仲間の控えなし → レベルアップの3択に「新しい補助スキル 🧲 吸着」が出る
+    const card = (() => {
+      L.skills = { thunder: 5, fireRing: 5, shuriken: 5, vacuum: 5, spear: 5, musket: 5 };
+      L.reserve = [];
+      L.lvUps = 1;
+      L.lvAt = null;
+      for (let i = 0; i < 10 && !L.choice; i++) WD_DEBUG.step(0.05);
+      return document.getElementById("trialLevelUp").textContent;
+    })();
+    const out = { offered, R, left: T.state().coins, xp: T.state().xpTotal, card, kinds: Object.keys(L.skills).length };
+    // 次の試験（6つのスキルが同時に動く）のために、攻撃スキル6種類（Lv5）に戻す
+    L.choice = null;
+    L.lvUps = 0;
+    L.skills = { thunder: 5, shuriken: 5, vacuum: 5, spear: 5, musket: 5, whirl: 5 };
+    L.skillCd = {};
+    return out;
+  });
+  check(r.offered.join() === "magnet", "攻撃スキルが6種類でも、補助スキル「🧲 吸着」は習得の候補に出る（枠を使わない）", r.offered);
+  check(/新しい補助スキル/.test(r.card) && /吸着/.test(r.card), "3択のカードは「新しい補助スキル 🧲 吸着」", r.card.slice(0, 80));
+  check(r.R.join() === "190,247,304,361,418,494" && r.left === 0 && r.xp >= 1, "吸着 Lv1〜5：吸い寄せる距離 190 → 247 → 304 → 361 → 418 → 494。Lv5 なら 450 先のコインも拾う", r);
   // 5. 通常攻撃と攻撃スキルが同時に動く。6つのスキルが同時に動く
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
@@ -226,7 +264,7 @@ try {
     }
     return { use: { ...L.skillUse }, normal, kinds: Object.keys(L.skills), orbs: !!(L.orbs && L.orbs.fireRing) };
   });
-  check(r.normal > 0 && r.orbs && r.kinds.every((k) => k === "fireRing" || r.use[k] > 0), "通常攻撃（" + r.normal + "回）と、6つの攻撃スキルが同時に動く", r);
+  check(r.normal > 0 && r.orbs && r.kinds.every((k) => k === "fireRing" || k === "magnet" || r.use[k] > 0), "通常攻撃（" + r.normal + "回）と、6つの攻撃スキルが同時に動く", r);
   await c.close();
 
   // 6. 進化：雷撃Lv5＋真空斬Lv5 → 雷神剣、火炎輪Lv5＋旋風斬Lv5 → 紅蓮旋風（大将の宝箱）。元の2つは1つにまとまり、枠が空く
