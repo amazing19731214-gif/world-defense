@@ -375,6 +375,12 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     choice: null, // レベルアップの選択肢（表示している間は戦闘が止まる）
     boons: {}, // 取った強化 { atk: 回数 }
     coins: [], // v108.5 経験値コイン { x, y, xp, pull }（この戦闘だけ）
+    floor: 1, // v108.7 いまの面（trial.stage はマップの名前なので別の名前）
+    st: 0, // その面の経過時間（秒。大将・敵の出方はこれで決まる）
+    bosses: 0, // 倒した大将の数
+    rewards: [], // 宝箱の報酬
+    cleared: null, // 大将を倒した直後（宝箱・次の面へ）
+    chest: null,
     level: D.level,
     power: D,
     size: D.size,
@@ -393,8 +399,213 @@ function startSurvival(list, units, M, D, stageId, heroId) {
   effects.length = 0;
   trialStick = { x: 0, y: 0 };
   trialSyncUI();
-  msg("🔥 サバイバル開始！ 主人公「" + hero.name + "」がたった1人で戦場へ。敵を倒して経験値を集め、レベルアップで強化するか仲間を呼ぼう。" + Math.round((S.bossAt / 60) * 10) / 10 + "分後に大将が来る。");
+  msg("🔥 サバイバル開始！ 主人公「" + hero.name + "」がたった1人で戦場へ。敵を倒して経験値を集め、レベルアップで強化するか仲間を呼ぼう。" + Math.round((S.bossAt / 60) * 10) / 10 + "分後に大将が来る。倒すと宝箱が出て、次の面へ進める。");
   return null;
+}
+// ===== v108.7 無限の面：大将を倒すと宝箱 → 次の面へ。全滅（主人公が倒れる）まで続く =====
+//   面ごとに敵が少しずつ強くなる（体力・攻撃・種類）。5面ごとに「鬼大将」。敵の数の上限（36体）は変えない
+const TRIAL_STAGES = {
+  hpStep: 0.22, // 面ごとに敵の体力 +22%（第1面が1倍）
+  atkStep: 0.1, // 面ごとに敵の攻撃 +10%
+  poolShift: 20, // 面ごとに、強い種類の敵が20秒ずつ早く混ざる（最大90秒）
+  greatEvery: 5, // この面ごとに鬼大将
+  great: { hp: 2.6, atk: 1.35, r: 1.3, name: "鬼大将" },
+  bossName: "大将",
+  grace: 3, // 面の始まりの、攻撃を受けない秒数（理不尽な即死を防ぐ）
+  minHp: 0.35, // 面の始まりに、生きている兵士の HP がこれより少なければここまで戻す（全回復はしない）
+  bestKey: "worldDefense.trialBest.v1", // 最高到達面（テスト版の保存の領域にだけ保存）
+};
+// 宝箱の報酬（その挑戦の間だけ）。weight は出やすさ。special は低い確率（鬼大将の宝箱は高い）
+const TRIAL_REWARDS = {
+  specialChance: 0.08,
+  specialChanceGreat: 0.5,
+  common: {
+    atk: { icon: "⚔️", name: "攻撃力アップ", text: "与えるダメージ・回復 +25%", weight: 1 },
+    rate: { icon: "⚡", name: "攻撃速度アップ", text: "攻撃の間隔 −15%", weight: 1 },
+    hp: { icon: "❤️", name: "最大HPアップ", text: "最大HP +25%（増えた分を回復）", weight: 1 },
+    heal: { icon: "💚", name: "HP回復", text: "主人公と仲間の HP を最大の60%回復", weight: 1.2, amount: 0.6 },
+    move: { icon: "👟", name: "移動速度アップ", text: "歩く速さ +15%", weight: 0.8 },
+    range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", weight: 0.8 },
+  },
+  special: {
+    raijin: { icon: "⚡", name: "雷神の勾玉", text: "4秒ごとに、主人公のまわりの敵3体へ雷（攻撃力×1.2）", weight: 1, every: 4, n: 3, radius: 260, mul: 1.2 },
+    phoenix: { icon: "🔥", name: "不死鳥の羽", text: "主人公が倒れるとき、一度だけ HP 半分で立ち上がる", weight: 1, revive: 0.5 },
+    hiden: { icon: "📜", name: "奥義の秘伝書", text: "この挑戦の間、奥義の威力 ×1.5（奥義継承者の主人公だけ）", weight: 1, mul: 1.5, needOugi: true },
+  },
+};
+// 報酬を引く（戦闘の乱数）。奥義の秘伝書は、主人公が奥義を使えるときだけ
+function trialRollReward(T, great) {
+  const R = TRIAL_REWARDS,
+    hasOugi = !!(trialOugiInfo(T) || {}).key,
+    special = T.rng() < (great ? R.specialChanceGreat : R.specialChance),
+    table = special ? R.special : R.common,
+    keys = Object.keys(table).filter((k) => !table[k].needOugi || hasOugi),
+    total = keys.reduce((n, k) => n + table[k].weight, 0);
+  let x = T.rng() * total;
+  for (const k of keys) if ((x -= table[k].weight) <= 0) return { key: k, special };
+  return { key: keys[keys.length - 1], special };
+}
+const trialRewardDef = (r) => (r.special ? TRIAL_REWARDS.special : TRIAL_REWARDS.common)[r.key];
+// 強化を主人公に足す（レベルアップの強化と宝箱の報酬で同じ処理）
+function trialApplyBoon(T, hero, key, step) {
+  if (key === "atk") hero.atkMul += step;
+  else if (key === "rate") hero.rateMul *= 1 - step;
+  else if (key === "move") hero.speed *= 1 + step;
+  else if (key === "def") hero.defMul *= 1 - step;
+  else if (key === "range") (hero.range *= 1 + step), (hero.reachMul *= 1 + step);
+  else if (key === "hp") {
+    const add = hero.max * step;
+    hero.max += add;
+    hero.hp = Math.min(hero.max, hero.hp + add);
+  }
+}
+function trialApplyReward(T, r) {
+  const hero = T.units.find((u) => u.id === T.hero),
+    D = trialRewardDef(r);
+  T.rewards.push({ key: r.key, special: r.special, name: D.name, icon: D.icon, stage: T.floor });
+  if (!r.special) {
+    if (r.key === "heal") {
+      for (const u of T.units) if (!u.dead) (u.hp = Math.min(u.max, u.hp + u.max * D.amount)), trialHealFx(u);
+    } else trialApplyBoon(T, hero, r.key, TRIAL_SURVIVAL.boons[r.key].step);
+  } else if (r.key === "raijin") T.raijin = T.raijin ? { ...T.raijin, n: T.raijin.n + 2 } : { wait: D.every, n: D.n };
+  else if (r.key === "phoenix") T.phoenix = (T.phoenix || 0) + 1;
+  else if (r.key === "hiden") T.ougiMul = (T.ougiMul || 1) * D.mul;
+  if (effects.length < 64) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 100, text: D.icon + D.name, ougi: !!r.special, age: 0, duration: 1.4 });
+}
+// 雷神の勾玉：一定の間隔で、主人公のまわりの近い敵へ雷
+function trialRaijinTick(T, dt) {
+  const R = T.raijin,
+    D = TRIAL_REWARDS.special.raijin,
+    h = T.units.find((u) => u.id === T.hero);
+  if (!R || !h || h.dead || (R.wait -= dt) > 0) return;
+  R.wait = D.every;
+  const atk = soldierStats(h.sh, true).atk,
+    list = T.enemies.filter((e) => !e.gone && trialDist(e, h) <= D.radius).sort((a, b) => trialDist(a, h) - trialDist(b, h)).slice(0, R.n);
+  if (!list.length) return (R.wait = 0.5);
+  for (const e of list) {
+    trialHitEnemy(h, e, atk * D.mul, 0.3, true);
+    if (effects.length < 64) effects.push({ kind: "cline", x: e.x, y: e.y - 20, a: -Math.PI / 2 + 0.15, ougi: true, age: 0, duration: 0.35 });
+    if (effects.length < 64) effects.push({ kind: "cspark", x: e.x, y: e.y - 12, ougi: true, seed: e.x, age: 0, duration: 0.3 });
+  }
+  T.raijinHits = (T.raijinHits || 0) + list.length;
+  trialSfx("thunder");
+}
+// 大将を倒した：敵と時間を止め、残りのコインは全部経験値に。宝箱を出す
+function trialStageClear(T) {
+  const great = !!T.boss.great,
+    h = T.units.find((u) => u.id === T.hero);
+  T.bosses++;
+  T.cleared = { stage: T.floor, great, at: T.t };
+  let n = 0;
+  for (const e of T.enemies)
+    if (!e.gone) {
+      e.gone = true;
+      if (n++ < 12 && effects.length < 64) effects.push({ kind: "cboom", x: e.x, y: e.y - 8, ougi: false, age: -n * 0.04, duration: 0.5 });
+    }
+  T.enemies = [];
+  const left = T.coins.reduce((a, c) => a + c.xp, 0);
+  T.picked = (T.picked || 0) + T.coins.length;
+  T.coins = [];
+  if (left) trialGainXp(T, left);
+  T.flurry = null;
+  trialStick = { x: 0, y: 0 };
+  trialKeys.clear();
+  T.chest = { state: "closed", reward: trialRollReward(T, great), great };
+  combatFx.flash = reduced ? 0 : 0.3;
+  if (effects.length < 64) effects.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.8 });
+  if (effects.length < 64) effects.push({ kind: "ctext", x: h.x, y: h.y - 110, text: "第" + T.floor + "面 クリア！", ougi: true, age: 0, duration: 1.8 });
+  trialSfx("victory");
+  msg("🏆 第" + T.floor + "面クリア！ " + (great ? TRIAL_STAGES.great.name : TRIAL_STAGES.bossName) + "を倒した。宝箱が現れた！");
+  trialBest(T);
+  trialLevelSync();
+  trialSyncUI();
+}
+// 宝箱を開ける → ドラムロール → 報酬（珍しいものは特別な光と音）→ 受け取る → レベルアップの選択（あれば）→ 次の面へ
+function trialChestOpen() {
+  const T = trial;
+  if (!T || !T.chest || T.chest.state !== "closed") return "いまは開けられません。";
+  T.chest.state = "opening";
+  trialSfx("roll");
+  trialLevelSync();
+  setTimeout(() => {
+    if (trial !== T || !T.chest || T.chest.state !== "opening") return;
+    T.chest.state = "open";
+    trialSfx(T.chest.reward.special ? "rare" : "chest");
+    trialLevelSync();
+  }, reduced ? 0 : 500);
+  return null;
+}
+function trialChestTake() {
+  const T = trial;
+  if (!T || !T.chest || T.chest.state !== "open") return "いまは受け取れません。";
+  trialApplyReward(T, T.chest.reward);
+  trialSfx("pick");
+  T.chest = null;
+  trialAfterChest(T);
+  return null;
+}
+function trialAfterChest(T) {
+  if (T.lvUps) {
+    T.choiceReadyAt = 0;
+    trialOpenChoice(T);
+  } else T.chest = { state: "next" };
+  trialLevelSync();
+  trialSyncUI();
+}
+// 次の面：敵・コイン・大将を新しくする。主人公・仲間・サバイバルLv・強化・報酬・残りの HP はそのまま（少ない HP だけ少し戻す）
+function trialNextStage() {
+  const T = trial;
+  if (!T || !T.cleared || (T.chest && T.chest.state !== "next") || T.choice) return "いまは進めません。";
+  const S = TRIAL_STAGES,
+    h = T.units.find((u) => u.id === T.hero),
+    Z = T.map.size;
+  T.floor++;
+  T.st = 0;
+  T.boss = null;
+  T.bossAt = null;
+  T.enemies = [];
+  T.coins = [];
+  T.next = 1.5;
+  T.farCheck = 2;
+  T.cleared = null;
+  T.chest = null;
+  T.flurry = null;
+  for (const u of T.units)
+    if (!u.dead) {
+      if (u.hp < u.max * S.minHp) u.hp = u.max * S.minHp;
+      if (u !== h && u.slot) Object.assign(u, { x: Math.max(20, Math.min(Z.w - 20, h.x + u.slot[0])), y: Math.max(40, Math.min(Z.h - 20, h.y + u.slot[1])), target: null });
+      u.danger = false;
+    }
+  const great = T.floor % S.greatEvery === 0;
+  if (effects.length < 64) effects.push({ kind: "ctext", x: h.x, y: h.y - 110, text: "第" + T.floor + "面" + (great ? " ⚠ 鬼大将" : ""), ougi: true, age: 0, duration: 1.8 });
+  trialSfx("levelup");
+  msg("⚔️ 第" + T.floor + "面 開始！" + (great ? "この面の終わりには鬼大将が待つ。" : "") + "（敵が少し強くなった）");
+  trialLevelSync();
+  trialSyncUI();
+  return null;
+}
+// 最高到達面：テスト版の保存の領域にだけ保存（本番の版では保存しない）
+function trialBestRead() {
+  if (!window.WD_TEST_STORAGE) return trialBestMem;
+  try {
+    const v = JSON.parse(localStorage.getItem(TRIAL_STAGES.bestKey) || "null");
+    return v && Number.isInteger(v.stage) ? v.stage : 0;
+  } catch (err) {
+    return 0;
+  }
+}
+let trialBestMem = 0;
+function trialBest(T) {
+  const reached = T.cleared ? T.floor : T.floor - 1, // 倒した面（クリアした一番先の面）
+    best = Math.max(trialBestRead(), reached);
+  trialBestMem = best;
+  if (window.WD_TEST_STORAGE && best > 0)
+    try {
+      localStorage.setItem(TRIAL_STAGES.bestKey, JSON.stringify({ stage: best }));
+    } catch (err) {
+      /* 保存できなくても続ける */
+    }
+  return best;
 }
 // ===== v108.2 この戦闘だけの成長（サバイバルLv・強化・仲間の加入）。本番の兵士・保存データには書かない =====
 function trialBoonInit(u) {
@@ -505,6 +716,12 @@ const TRIAL_SFX = {
     roll: { gap: 0.3, vol: 0.3 },
     card: { gap: 0.05, vol: 0.2 },
     pick: { gap: 0.2, vol: 0.45 },
+    boss: { gap: 1, vol: 0.55 },
+    bossGreat: { gap: 1, vol: 0.7 },
+    victory: { gap: 1, vol: 0.55 },
+    chest: { gap: 0.3, vol: 0.45 },
+    rare: { gap: 0.3, vol: 0.6 },
+    thunder: { gap: 0.3, vol: 0.35 },
   },
 };
 // 音の雑音は、音だけの乱数で作る（Math.random を使うと、戦闘の乱数（職業技の発動など）の順番が変わってしまうため）
@@ -657,6 +874,25 @@ const TRIAL_SFX_BUILD = {
   // カードが出る：小さなシュッ
   card: (A, o, t) => trialHiss(A, o, t, 0.06, "highpass", 3000, 6000, 0.6),
   // 決定：明るい和音ときらめき
+  // v108.7 大将の出現：低い2つの角笛のような音。鬼大将は太鼓を足して重く
+  boss: (A, o, t) => Math.max(trialTone(A, o, t, "sawtooth", 147, 140, 0.35, 0.45, 0.04), trialTone(A, o, t + 0.38, "sawtooth", 131, 123, 0.5, 0.45, 0.04)),
+  bossGreat: (A, o, t) =>
+    Math.max(
+      trialTone(A, o, t, "sawtooth", 110, 104, 0.4, 0.5, 0.04),
+      trialTone(A, o, t + 0.42, "sawtooth", 98, 92, 0.6, 0.5, 0.04),
+      ...[0, 0.21, 0.42, 0.63].map((d) => trialTone(A, o, t + d, "sine", 70, 40, 0.18, 1)),
+    ),
+  // 勝利：明るく上がる短いファンファーレ
+  victory: (A, o, t) => [523, 659, 784, 1046, 1318].reduce((e, f, i) => Math.max(e, trialTone(A, o, t + i * 0.09, "triangle", f, f, i === 4 ? 0.45 : 0.14, 0.5, 0.005)), 0),
+  // 宝箱の報酬：きらっと2音。珍しい報酬は高く長い和音ときらめき
+  chest: (A, o, t) => Math.max(trialTone(A, o, t, "triangle", 988, 988, 0.12, 0.5), trialTone(A, o, t + 0.09, "triangle", 1318, 1318, 0.2, 0.5)),
+  rare: (A, o, t) =>
+    Math.max(
+      ...[784, 988, 1175, 1568].map((f, i) => trialTone(A, o, t + i * 0.06, "triangle", f, f, 0.5, 0.35, 0.005)),
+      ...[2093, 2637, 3136].map((f, i) => trialTone(A, o, t + 0.3 + i * 0.05, "sine", f, f, 0.2, 0.25)),
+    ),
+  // 雷：鋭い雑音と低い響き
+  thunder: (A, o, t) => Math.max(trialHiss(A, o, t, 0.18, "highpass", 2000, 600, 1), trialTone(A, o, t + 0.02, "sine", 90, 40, 0.25, 0.6)),
   pick: (A, o, t) => Math.max(...[784, 988, 1175].map((f) => trialTone(A, o, t, "triangle", f, f, 0.3, 0.45, 0.005)), trialTone(A, o, t + 0.08, "sine", 2349, 2349, 0.2, 0.3)),
 };
 // コインの音：0.6秒の間に続けて拾うと、半音ずつ上がる（12段まで）
@@ -774,16 +1010,7 @@ function trialChoose(i, force) {
   else {
     const B = S.boons[c.key];
     T.boons[c.key] = (T.boons[c.key] || 0) + 1;
-    if (c.key === "atk") hero.atkMul += B.step;
-    else if (c.key === "rate") hero.rateMul *= 1 - B.step;
-    else if (c.key === "move") hero.speed *= 1 + B.step;
-    else if (c.key === "def") hero.defMul *= 1 - B.step;
-    else if (c.key === "range") (hero.range *= 1 + B.step), (hero.reachMul *= 1 + B.step);
-    else if (c.key === "hp") {
-      const add = hero.max * B.step;
-      hero.max += add;
-      hero.hp = Math.min(hero.max, hero.hp + add);
-    }
+    trialApplyBoon(T, hero, c.key, B.step);
     if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 96, text: B.icon + B.name, ougi: false, age: 0, duration: 1.1 });
   }
   T.lvUps--;
@@ -793,6 +1020,7 @@ function trialChoose(i, force) {
   if (effects.length < 64) effects.push({ kind: "cshock", x: hero.x, y: hero.y + 6, ougi: true, age: 0, duration: 0.5 });
   burst(hero.x, hero.y - 20, "#fff4b0", "heal");
   if (T.lvUps) trialOpenChoice(T);
+  else if (T.cleared) T.chest = { state: "next" }; // v108.7 面のクリアのあとの選択が終わったら「次の面へ」
   trialLevelSync();
   trialSyncUI();
   return null;
@@ -820,6 +1048,7 @@ function trialLevelSync() {
   const T = trial,
     box = $("trialLevelUp");
   if (!box) return;
+  if (T && !T.choice && T.chest) return trialChestRender(T, box); // v108.7 宝箱・次の面へ
   const key = T && T.choice ? T.slv + "|" + T.choice.map((c) => c.kind + (c.key || c.unit.id)).join(",") : "";
   if (key === trialLevelKey) return;
   trialLevelKey = key;
@@ -851,6 +1080,35 @@ function trialLevelSync() {
       for (const b of card.querySelectorAll("[data-trial-choose]")) b.disabled = false;
     }, wait);
 }
+// v108.7 宝箱の画面：光りながら出る → 開ける → ドラムロール → 報酬（珍しいものは金の光）→ 受け取る。最後に「次の面へ進む」
+function trialChestRender(T, box) {
+  const C = T.chest,
+    key = "chest|" + T.floor + "|" + C.state + "|" + (C.reward ? C.reward.key : "");
+  if (key === trialLevelKey) return;
+  trialLevelKey = key;
+  box.hidden = false;
+  const head = '<p class="trial-levelup-title">🏆 第' + T.floor + "面 クリア！<small>" + (T.cleared && T.cleared.great ? TRIAL_STAGES.great.name : TRIAL_STAGES.bossName) + "を倒した（戦闘は止まっています）</small></p>";
+  if (C.state === "next") {
+    const nextGreat = (T.floor + 1) % TRIAL_STAGES.greatEvery === 0;
+    box.innerHTML =
+      '<div class="trial-levelup-card ready trial-chest" role="dialog" aria-label="次の面へ">' + head +
+      "<p class=\"trial-chest-note\">サバイバル Lv" + T.slv + "・仲間 " + (T.units.length - 1) + "人・報酬 " + T.rewards.length + "個<br><small>次の面は敵が少し強くなります。HP はそのまま（少ない兵士だけ少し戻ります）。" + (nextGreat ? "<b>次は鬼大将の面！</b>" : "") + "</small></p>" +
+      '<button type="button" data-trial-chest="next" class="trial-next">⚔️ <b>第' + (T.floor + 1) + "面へ進む</b></button>" +
+      '<button type="button" data-trial-chest="end" class="trial-end">↩ ここで終える（結果へ）</button></div>';
+    return;
+  }
+  if (C.state === "closed" || C.state === "opening") {
+    box.innerHTML =
+      '<div class="trial-levelup-card ready trial-chest" role="dialog" aria-label="宝箱">' + head +
+      '<button type="button" data-trial-chest="open" class="trial-chest-box' + (C.great ? " great" : "") + (C.state === "opening" ? " opening" : "") + '"' + (C.state === "opening" ? " disabled" : "") + '><span class="chest-icon">🎁</span><b>' + (C.state === "opening" ? "開けています…" : "宝箱を開ける") + "</b><small>この挑戦の間だけ使える報酬</small></button></div>";
+    return;
+  }
+  const D = trialRewardDef(C.reward);
+  box.innerHTML =
+    '<div class="trial-levelup-card ready trial-chest" role="dialog" aria-label="報酬">' + head +
+    '<div class="trial-reward' + (C.reward.special ? " special" : "") + '"><span class="reward-icon">' + D.icon + "</span><b>" + (C.reward.special ? "✨ 珍しい報酬 ✨<br>" : "") + esc(D.name) + "</b><small>" + esc(D.text) + "・この挑戦の間だけ</small></div>" +
+    '<button type="button" data-trial-chest="take" class="trial-take">✅ <b>受け取る</b></button></div>';
+}
 // サバイバルの敵の出る所：主人公から見て画面の外（少し先）。戦場の中・川と木や岩の外。見つからなければ null（次の機会に）
 function trialSpawnPoint(T, hero) {
   const S = TRIAL_SURVIVAL,
@@ -881,9 +1139,14 @@ function trialSurvivalTick(T, dt) {
   const S = TRIAL_SURVIVAL,
     hero = T.units.find((u) => u.id === T.hero);
   if (!hero || hero.dead) return;
-  const alive = T.enemies.filter((e) => !e.gone),
-    f = Math.min(1, T.t / S.bossAt),
-    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: boss ? S.bossHp : S.hp * (1 + S.hpGrow * f), atkMul: (boss ? S.bossAtk : S.atk) * (1 + S.atkGrow * f), speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
+  if (T.enemies.length > 120) T.enemies = T.enemies.filter((e) => !e.gone); // 倒した敵は溜めない（長く遊んでも軽い）
+  const G = TRIAL_STAGES,
+    alive = T.enemies.filter((e) => !e.gone),
+    f = Math.min(1, T.st / S.bossAt),
+    great = T.floor % G.greatEvery === 0,
+    sh = 1 + G.hpStep * (T.floor - 1), // 面が進むほど強い
+    sa = 1 + G.atkStep * (T.floor - 1),
+    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: (boss ? S.bossHp * (great ? G.great.hp : 1) : S.hp * (1 + S.hpGrow * f)) * sh, atkMul: (boss ? S.bossAtk * (great ? G.great.atk : 1) : S.atk) * (1 + S.atkGrow * f) * sa, speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
   const add = (q) => {
     const e = trialEnemy(q, T, T.spawned);
     e.surv = true;
@@ -899,13 +1162,18 @@ function trialSurvivalTick(T, dt) {
         if (p) Object.assign(e, { x: p.x, y: p.y, px: p.x, py: p.y, lastX: p.x, lastY: p.y, target: null, moved: (e.moved || 0) + 1 });
       }
   }
-  if (!T.boss && T.t >= S.bossAt) {
+  if (!T.boss && T.st >= S.bossAt) {
     const p = trialSpawnPoint(T, hero);
     if (p) {
       T.boss = add(spec("boss", p, true));
-      T.bossAt = T.t;
-      msg("⚠️ 大将が現れた！ 倒せば勝利！（画面の端の赤い矢印の方向）");
-      if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 110, text: "⚠ 大将 出現！", ougi: true, age: 0, duration: 1.6 });
+      T.bossAt = T.st;
+      const name = great ? G.great.name : G.bossName;
+      if (great) Object.assign(T.boss, { great: true, r: T.boss.r * G.great.r });
+      T.boss.name = name;
+      msg("⚠️ 第" + T.floor + "面の" + name + "が現れた！ 倒せば面クリア！（画面の端の赤い矢印の方向）");
+      if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 110, text: "⚠ " + name + " 出現！", ougi: true, age: 0, duration: 1.6 });
+      combatFx.banner = { name: "⚠ " + name + " 出現", who: "第" + T.floor + "面" + (great ? "・5面ごとの強敵" : ""), age: 0, duration: 1.4 };
+      trialSfx(great ? "bossGreat" : "boss");
     }
   }
   if ((T.next -= dt) > 0) return;
@@ -914,8 +1182,9 @@ function trialSurvivalTick(T, dt) {
   //   v108.2：主人公1人から始まるので、いま戦場にいる人数で決める（仲間が増えると敵も増える）
   const keep = Math.min(1, TRIAL_RULES.countBase + TRIAL_RULES.countStep * T.units.length);
   T.next = (T.boss ? S.afterBoss : S.interval0 + (S.intervalEnd - S.interval0) * f) / keep;
-  const pool = S.pools.filter((p) => p[0] <= T.t).pop()[1],
-    n = Math.min(S.maxAlive - alive.length, T.boss ? 1 : 1 + Math.floor(T.t / S.batchEvery)),
+  const pt = T.st + Math.min(90, G.poolShift * (T.floor - 1)), // 面が進むほど、強い種類が早く混ざる
+    pool = S.pools.filter((p) => p[0] <= pt).pop()[1],
+    n = Math.min(S.maxAlive - alive.length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery)),
     p = n > 0 && trialSpawnPoint(T, hero);
   if (!p) return;
   for (let k = 0; k < n; k++) {
@@ -964,10 +1233,13 @@ function tickTrial(dt) {
   const T = trial;
   if (!T || T.phase !== "fight" || T.result) return;
   if (T.choice) return; // レベルアップの選択中は止まる
+  if (T.cleared) return; // v108.7 大将を倒したあと（宝箱・次の面へ）は止まる
   T.t += dt;
   const surv = T.mode === "survival";
   if (surv) {
+    T.st += dt;
     trialSurvivalTick(T, dt);
+    if (T.raijin) trialRaijinTick(T, dt);
     if (T.flurry) trialFlurryTick(T, dt);
     trialCoinTick(T, dt);
     // 仲間の持ち場：主人公のまわり（主人公が動くと持ち場も動く）
@@ -1005,8 +1277,8 @@ function tickTrial(dt) {
   if (surv) {
     // サバイバル：主人公が倒れたら敗北（仲間が倒れても続く）。強敵を倒したら勝利
     if (T.units.find((u) => u.id === T.hero).dead) return endTrial("lose");
-    if (T.boss && T.boss.gone) return endTrial("win");
-    if (T.t >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
+    if (T.boss && T.boss.gone) return trialStageClear(T); // v108.7 勝利で終わらず、宝箱 → 次の面へ
+    if (T.st >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
     // 奥義の直後は、演出を見せてから選択画面を出す（1.5秒。天剣乱舞の連続斬撃の間も待つ）
     if (T.lvUps && !T.flurry && !(T.ougiUsed && T.t - T.ougiUsed.at < 1.5) && !(T.lvAt != null && T.t - T.lvAt < 0.5)) trialOpenChoice(T);
     return;
@@ -1208,7 +1480,7 @@ function trialUseOugi() {
   if (I.why) return I.why;
   const O = I.O,
     h = T.units.find((u) => u.id === T.hero),
-    atk = soldierStats(h.sh, true).atk,
+    atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1), // v108.7 奥義の秘伝書（この挑戦の間だけ）
     list = T.enemies.filter((e) => !e.gone),
     origin = { x: h.x, y: h.y - 18 };
   let target = null,
@@ -1263,7 +1535,7 @@ function trialFlurryTick(T, dt) {
   if (!h || h.dead || F.left <= 0) return (T.flurry = null);
   F.wait += O.gap;
   F.left--;
-  const atk = soldierStats(h.sh, true).atk,
+  const atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1),
     killed = [];
   T.enemies
     .filter((e) => !e.gone && trialDist(e, h) <= O.radius)
@@ -1546,6 +1818,7 @@ function trialUnstick(e, dt) {
 }
 // 敵の攻撃のダメージ：兵士の防御・受けるダメージ軽減のスキル・職業技の盾（防衛戦と同じ式）。一撃は最大HPの6割まで
 function trialHitUnit(u, raw, ranged, e) {
+  if (trial.mode === "survival" && trial.st < TRIAL_STAGES.grace) return; // v108.7 面の始まりは攻撃を受けない
   const s = u.sh,
     st = soldierStats(s, true),
     weak = unitOf(s).spearWeak,
@@ -1562,6 +1835,16 @@ function trialHitUnit(u, raw, ranged, e) {
     u.warnAt = trial.t;
     trialSfx("warn");
     if (effects.length < 60) effects.push({ kind: "ctext", x: u.x, y: u.y - 96, text: "⚠ " + u.name.replace(/^🎖/, "").slice(0, 5) + " 危険", ougi: false, age: 0, duration: 1.2 });
+  }
+  if (u.hp <= 0 && !u.dead && trial.phoenix && u.id === trial.hero) {
+    // v108.7 不死鳥の羽：主人公が倒れるとき、一度だけ HP 半分で立ち上がる
+    trial.phoenix--;
+    trial.phoenixUsed = (trial.phoenixUsed || 0) + 1;
+    u.hp = u.max * TRIAL_REWARDS.special.phoenix.revive;
+    burst(u.x, u.y - 20, "#ffb347", "heal");
+    if (effects.length < 64) effects.push({ kind: "ctext", x: u.x, y: u.y - 100, text: "🔥 不死鳥の羽！", ougi: true, age: 0, duration: 1.5 });
+    if (effects.length < 64) effects.push({ kind: "cshock", x: u.x, y: u.y + 6, ougi: true, age: 0, duration: 0.7 });
+    trialSfx("rare");
   }
   if (u.hp <= 0 && !u.dead) {
     // 試作：仮の戦死（本番の兵士・英霊名鑑には反映しない）
@@ -1650,7 +1933,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -1834,10 +2117,12 @@ function trialView() {
   return { z: v.z, ox, oy, u };
 }
 // サバイバルの残り時間（強敵が出たあと、時間を過ぎたら「強敵を倒せ」）
+// v108.7 面の時計：大将が出るまでの残り時間。大将が出たら「⚠大将」
 function trialClock(T) {
-  const left = Math.max(0, Math.ceil(TRIAL_SURVIVAL.duration - T.t));
-  if (T.boss && !T.boss.gone && !left) return "⚠ 大将を倒せ！";
-  return "残り " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0") + (T.boss && !T.boss.gone ? " ⚠大将" : "");
+  if (T.cleared) return "🏆 クリア";
+  if (T.boss && !T.boss.gone) return "⚠ " + (T.boss.name || "大将") + "を倒せ！";
+  const left = Math.max(0, Math.ceil(TRIAL_SURVIVAL.bossAt - T.st));
+  return (T.floor % TRIAL_STAGES.greatEvery === 0 ? "鬼大将まで " : "大将まで ") + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0");
 }
 function drawTrial() {
   const T = trial;
@@ -1939,7 +2224,7 @@ function drawTrial() {
       alive = T.units.filter((u) => !u.dead).length,
       text =
         T.mode === "survival"
-          ? "Lv" + T.slv + "　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
+          ? "第" + T.floor + "面　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
           : "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中");
     ctx.font = "bold " + (T.mode === "survival" ? 25 : 22) + "px system-ui";
     const w = ctx.measureText(text).width + 24;
@@ -2003,6 +2288,27 @@ function drawTrial() {
       ctx.strokeText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
       ctx.fillStyle = "#fff";
       ctx.fillText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
+      // v108.7 大将の HP（画面の下・横長。鬼大将は紫）
+      const B = T.boss;
+      if (B && !B.gone) {
+        const bw = SW - 40,
+          y = SH - 44,
+          br = Math.max(0, B.hp / B.max);
+        ctx.fillStyle = "#14080acc";
+        ctx.fillRect(14, y - 6, bw + 12, 38);
+        ctx.fillStyle = "#3a1416";
+        ctx.fillRect(20, y, bw, 26);
+        ctx.fillStyle = B.great ? "#b04dff" : "#ff4a3a";
+        ctx.fillRect(20, y, bw * br, 26);
+        ctx.textAlign = "left";
+        ctx.font = "bold 20px system-ui";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#10060a";
+        const t = (B.great ? "👹 " : "⚔ ") + (B.name || "大将") + "  " + Math.ceil(B.hp) + "/" + Math.round(B.max);
+        ctx.strokeText(t, 28, y + 20);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(t, 28, y + 20);
+      }
     }
   });
   screenSpace(drawCombatOverlay);
@@ -2103,6 +2409,25 @@ function trialDrawUnit(u) {
   ctx.fillText(label, u.x, top - 6);
 }
 function trialDrawEnemy(e) {
+  if (e.role === "boss" && trial && trial.mode === "survival") {
+    // v108.7 大将は金、鬼大将は紫の炎のような輪（ふつうの敵と見分ける）
+    ctx.save();
+    const p = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(visualTime * (e.great ? 7 : 4));
+    ctx.globalAlpha = 0.35 + 0.35 * p;
+    ctx.strokeStyle = e.great ? "#c06bff" : "#ffd24a";
+    ctx.lineWidth = e.great ? 6 : 4;
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + 4, e.r + 16 + p * 4, (e.r + 16) * 0.42, 0, 0, 7);
+    ctx.stroke();
+    if (e.great) {
+      ctx.globalAlpha = 0.25 + 0.2 * p;
+      ctx.fillStyle = "#8a2be2";
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y - e.r * 0.6, e.r + 10, e.r + 18, 0, 0, 7);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
   ctx.save();
   if (!drawEnemySprite(e)) soldierFallback(e);
   ctx.restore();
@@ -2141,9 +2466,10 @@ function renderTrialSheet() {
     const sv = R.mode === "survival";
     $("trialTitle").textContent = sv ? "🔥 サバイバル（" + R.stage + "）" : "⚔️ 戦場試練「" + R.stage + "」";
     $("trialBody").innerHTML =
-      '<p class="trial-result"><b>' + (sv ? { win: "🏆 勝利！ 大将を倒した", lose: "敗北…（主人公が倒れた）", retreat: "↩ 撤退", timeout: "⌛ 時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
+      '<p class="trial-result"><b>' + (sv ? { win: "🏆 勝利！ 大将を倒した", lose: "第" + R.floor + "面で力尽きた（主人公が倒れた）", retreat: "↩ 第" + R.floor + "面で撤退", timeout: "⌛ 第" + R.floor + "面で時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
       (sv
-        ? "<p>撃破 <b>" + R.kills + "</b>・大将 " + R.boss + "・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
+        ? '<p class="trial-stage-sum">🏯 到達 <b>第' + R.floor + "面</b>・👑 大将を倒した数 <b>" + R.bosses + "</b>" + (R.best ? "・🏅 最高 第" + Math.max(R.best, 1) + "面クリア" : "") + "<br>撃破 <b>" + R.kills + "</b>・獲得 EXP <b>" + ((R.coins && R.coins.xp) || 0) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
+          (R.rewardList.length ? "<p><small>🎁 報酬：" + R.rewardList.map((x) => (x.special ? "<b>" : "") + x.icon + esc(x.name) + (x.special ? "</b>" : "")).join("・") + "</small></p>" : "") +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
           (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）</small>" : "") +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
@@ -2184,7 +2510,7 @@ function renderTrialSheet() {
     '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>' +
     '<button type="button" data-trial-mode="survival" aria-pressed="' + sv + '">🔥 サバイバル<small>主人公を操作</small></button></div>' +
     (sv
-      ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒せば勝利。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
+      ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
         '<p class="muted"><small>育てた兵士を最大' + TRIAL_RULES.maxUnits + "人まで選び、1人ずつ配置します。戦闘が始まると、兵士はそれぞれ自分で敵を探して戦い、職業技・閃きも使います（衛生兵は味方を回復）。敵の強さは、出撃する兵士のLv・職業・装備から決まります。<br>") +
     "<b>試作のため、戦死は仮です（本番の兵士は失われません）。報酬・経験値もありません。</b>修練場はこれまでどおり育成の場所です。</small></p>" +
@@ -2226,7 +2552,7 @@ function trialHudSync() {
     const h = T.units.find((u) => u.id === T.hero),
       mates = T.units.filter((u) => u.id !== T.hero),
       html2 =
-        "<b>🔥 サバイバル</b>　👑 <b>" + esc(h.name) + "</b>　👥 仲間 <b>" + mates.filter((u) => !u.dead).length + "/" + (mates.length + T.reserve.length) + "</b><br><small>スティックで移動（攻撃と技は自動）。レベルアップで強化か仲間を選ぶ</small>";
+        "<b>🔥 第" + T.floor + "面</b>　👑 <b>" + esc(h.name) + "</b>　👥 仲間 <b>" + mates.filter((u) => !u.dead).length + "/" + (mates.length + T.reserve.length) + "</b><br><small>スティックで移動（攻撃と技は自動）。レベルアップで強化か仲間を選ぶ</small>";
     if (html2 !== trialHud) (trialHud = html2), ($("trialInfo").innerHTML = html2);
     trialOugiSync(false);
     return;
@@ -2338,6 +2664,13 @@ $("trialAction").addEventListener("click", (ev) => {
 });
 // v108.2 レベルアップの選択（画面のボタン・PC は 1〜3 のキー）
 $("trialLevelUp").addEventListener("click", (ev) => {
+  const c = ev.target.closest("[data-trial-chest]");
+  if (c && !c.disabled) {
+    const a = c.dataset.trialChest,
+      err = a === "open" ? trialChestOpen() : a === "take" ? trialChestTake() : a === "next" ? trialNextStage() : (trialBest(trial), endTrial("retreat"), null);
+    if (err) toast(err);
+    return;
+  }
   const b = ev.target.closest("[data-trial-choose]");
   if (!b) return;
   const err = trialChoose(+b.dataset.trialChoose);

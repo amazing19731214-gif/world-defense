@@ -74,7 +74,7 @@ const gather = (p, n = 6, boss = false) =>
         WD_DEBUG.step(0.1);
       }
       if (boss && !L.boss) {
-        L.t = Math.max(L.t, 149.95);
+        L.st = Math.max(L.st, 149.95); // v108.7：大将はその面の時間で出る
         for (let i = 0; i < 30 && !L.boss; i++) {
           if (L.choice) T.choose(0);
           WD_DEBUG.step(0.1);
@@ -230,7 +230,7 @@ try {
       names = [];
     let maxFx = 0,
       lv = 0;
-    for (let i = 0; i < 2400 && T.on(); i++) {
+    for (let i = 0; i < 2400 && T.on() && !L.cleared; i++) {
       if (L.choice) {
         lv++;
         const k = L.choice.findIndex((x) => x.kind === "recruit");
@@ -245,6 +245,8 @@ try {
       if (live)
         for (const u of live.units) if (u.nameUntil && !names.some((x) => x[0] === u.id && x[1] === u.nameUntil)) names.push([u.id, u.nameUntil]);
     }
+    const cleared = !!L.cleared; // v108.7：大将を倒すと面のクリア。ここで終えて結果を見る
+    T.retreat();
     const res = T.result();
     // 同じ兵士の技名の間隔
     const gaps = [];
@@ -252,12 +254,12 @@ try {
       const t = names.filter((x) => x[0] === id).map((x) => x[1]);
       for (let i = 1; i < t.length; i++) gaps.push(t[i] - t[i - 1]);
     }
-    return { kinds: [...kinds], maxFx, minGap: gaps.length ? Math.min(...gaps) : null, lv, result: res.result, slv: res.slv, time: Math.round(res.time), units: res.units.length, skills: res.units.map((u) => Object.keys(u.skills).length) };
+    return { kinds: [...kinds], maxFx, minGap: gaps.length ? Math.min(...gaps) : null, lv, result: cleared ? "win" : res.result, slv: res.slv, time: Math.round(res.time), units: res.units.length, skills: res.units.map((u) => Object.keys(u.skills).length) };
   });
   check(["cslash", "cspark", "cshock"].every((k) => r.kinds.includes(k)), "職業技・閃きが出ると、斬撃の軌跡・命中の火花・範囲の輪が出る", r.kinds);
   check(r.maxFx <= 80 && (r.minGap == null || r.minGap >= 2.49), "演出の数には上限（最大 " + r.maxFx + "）。技名は同じ兵士で2.5秒に1回まで（文字だらけにならない）", { maxFx: r.maxFx, minGap: r.minGap });
   check(r.lv >= 5 && r.lv <= 7 && r.units === 5, "3分の戦闘でレベルアップは " + r.lv + " 回（5〜7回）。仲間は4人とも加入できる", r);
-  check(r.result === "win" && r.skills.filter((n) => n > 0).length >= 4, "5人で戦い、大将を倒して勝利（" + r.time + "秒・サバイバルLv" + r.slv + "）。仲間も職業技・閃きを使う", r);
+  check(r.result === "win" && r.skills.filter((n) => n > 0).length >= 4, "5人で戦い、大将を倒して第1面クリア（" + r.time + "秒・サバイバルLv" + r.slv + "）。仲間も職業技・閃きを使う", r);
   check((await storage(p)) === save0, "保存データは変わらない");
   await c.close();
 

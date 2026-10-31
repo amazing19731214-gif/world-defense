@@ -203,7 +203,7 @@ try {
       out = { early: 0, late: 0 };
     let last = T.state().t,
       bossAt = null;
-    for (let i = 0; i < 2400 && T.on(); i++) {
+    for (let i = 0; i < 2400 && T.on() && !T.live().cleared; i++) {
       {
         const L = T.live(),
           h = L.units.find((u) => u.id === L.hero),
@@ -225,14 +225,18 @@ try {
       if (L.t < 120) out.early += 0;
       if (L.boss && bossAt == null) bossAt = L.bossAt;
     }
-    return { bossAt, res: T.result() };
+    // v108.7：大将を倒すと面のクリア（宝箱）。ここで終えて結果を見る
+    const cleared = T.state().cleared,
+      st = T.state();
+    T.retreat();
+    return { bossAt, cleared, time: st.t, kills: st.kills, res: T.result() };
   });
   check(r.bossAt != null && Math.abs(r.bossAt - 150) < 1, "約2分30秒で強敵（大将）が出る", r.bossAt);
-  check(r.res.result === "win" && r.res.mode === "survival" && r.res.boss === "撃破" && r.res.time > 150 && r.res.time < 240, "強敵を倒すと勝利（" + Math.floor(r.res.time) + "秒・撃破 " + r.res.kills + "）", { result: r.res.result, time: r.res.time, kills: r.res.kills });
+  check(r.cleared && r.cleared.stage === 1 && r.res.bosses === 1 && r.res.mode === "survival" && r.time > 150 && r.time < 240, "強敵を倒すと第1面クリア（" + Math.floor(r.time) + "秒・撃破 " + r.kills + "）", { cleared: r.cleared, bosses: r.res.bosses, time: r.time });
   const hero = r.res.units.find((u) => u.hero);
   check(hero && hero.id === 3 && r.res.kills >= 60, "結果の画面に主人公（👑）と撃破数が出る", { hero: hero && hero.name, kills: r.res.kills });
   r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialBody").textContent }));
-  check(r.open && r.text.includes("勝利") && r.text.includes("👑"), "勝利の結果の画面", r.text.slice(0, 50));
+  check(r.open && /大将を倒した数 1/.test(r.text) && r.text.includes("👑"), "結果の画面（大将を倒した数・主人公の👑）", r.text.slice(0, 80));
   check((await storage(p)) === save0, "サバイバルの前後で保存データは変わらない（経験値・熟練度・閃き・装備・戦死）");
   await c.close();
 

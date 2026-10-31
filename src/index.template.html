@@ -2037,6 +2037,98 @@
           animation: none;
         }
       }
+      /* v108.7 宝箱・報酬・次の面へ */
+      .trial-chest-box {
+        min-height: 150px !important;
+        place-items: center;
+        text-align: center !important;
+        font-size: 20px !important;
+        border-color: #ffd24a !important;
+        background: radial-gradient(circle at 50% 35%, #7a5a1e, #3a2a10) !important;
+        animation: trialChestIn 0.4s ease-out both, trialChestGlow 1s ease-in-out 0.4s infinite alternate !important;
+      }
+      .trial-chest-box.great {
+        border-color: #c06bff !important;
+        background: radial-gradient(circle at 50% 35%, #5a2a7a, #24102e) !important;
+      }
+      .trial-chest-box .chest-icon {
+        font-size: 54px;
+        line-height: 1;
+      }
+      .trial-chest-box.opening .chest-icon {
+        animation: trialChestShake 0.12s linear infinite;
+      }
+      .trial-reward {
+        display: grid;
+        place-items: center;
+        gap: 4px;
+        padding: 14px 10px;
+        border-radius: 12px;
+        border: 2px solid #9fd8ff;
+        background: #173e4a;
+        text-align: center;
+        font-size: 20px;
+        animation: trialCardIn 0.3s ease-out both;
+      }
+      .trial-reward small {
+        font-size: 14px;
+        color: #cfe3e8;
+      }
+      .trial-reward .reward-icon {
+        font-size: 44px;
+        line-height: 1;
+      }
+      .trial-reward.special {
+        border-color: #ffd24a;
+        background: radial-gradient(circle at 50% 30%, #8a6a1e, #3a2a10);
+        box-shadow: 0 0 22px #ffd24aaa;
+        animation: trialCardIn 0.3s ease-out both, trialChestGlow 0.8s ease-in-out infinite alternate;
+      }
+      .trial-chest-note {
+        margin: 2px 0;
+        text-align: center;
+      }
+      .trial-levelup-card .trial-next,
+      .trial-levelup-card .trial-take {
+        text-align: center;
+        place-items: center;
+        border-color: #ffe27a;
+        background: #5a4a1e;
+      }
+      .trial-levelup-card .trial-end {
+        min-height: 48px;
+        text-align: center;
+        place-items: center;
+        font-size: 15px;
+      }
+      @keyframes trialChestIn {
+        from {
+          opacity: 0;
+          transform: scale(0.6) translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes trialChestGlow {
+        to {
+          box-shadow: 0 0 26px #ffd24acc;
+        }
+      }
+      @keyframes trialChestShake {
+        50% {
+          transform: rotate(8deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .trial-chest-box,
+        .trial-reward,
+        .trial-reward.special,
+        .trial-chest-box.opening .chest-icon {
+          animation: none !important;
+        }
+      }
       .trial-levelup-card button.recruit {
         border-color: #ffe27a;
         background: #5a4a1e;
@@ -3005,7 +3097,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.6試作（戦場試練：効果音とレベルアップの演出）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.7試作（戦場試練：サバイバルの無限の面・宝箱）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23185,6 +23277,13 @@ OFF</button>
               start: (ids, opts) => startTrial(ids, "sanpou", opts),
               survival: TRIAL_SURVIVAL,
               choose: (i) => trialChoose(i, true),
+              stages: TRIAL_STAGES,
+              rewards: TRIAL_REWARDS,
+              chestOpen: () => trialChestOpen(),
+              chestTake: () => trialChestTake(),
+              nextStage: () => trialNextStage(),
+              best: () => trialBestRead(),
+              roll: (great) => trial && trialRollReward(trial, !!great),
               sfx: { stats: () => JSON.parse(JSON.stringify(trialSfxStats)), unlock: () => trialAudioUnlock(), level: (v) => (v === undefined ? trialSfxLevel : trialSfxSetLevel(v)), play: (k, o) => trialSfx(k, o), voices: () => trialVoices.length, reset: () => ((trialSfxLast = {}), (trialSfxStats.played = {}), (trialSfxStats.skipped = 0)) },
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
@@ -23247,7 +23346,16 @@ OFF</button>
                   gauge: trial.gauge ? { ...trial.gauge } : null,
                   flurry: trial.flurry ? trial.flurry.left : null,
                   bossAt: trial.bossAt || null,
-                  boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
+                  stage: trial.floor || null, // サバイバルの面（trial.stage はマップの名前）
+                  st: trial.st || 0,
+                  bosses: trial.bosses || 0,
+                  cleared: trial.cleared ? { ...trial.cleared } : null,
+                  chest: trial.chest ? { state: trial.chest.state, reward: trial.chest.reward ? { ...trial.chest.reward } : null, great: !!trial.chest.great } : null,
+                  rewardList: trial.rewards ? trial.rewards.map((x) => x.key) : null,
+                  raijin: trial.raijin ? { ...trial.raijin } : null,
+                  phoenix: trial.phoenix || 0,
+                  ougiMul: trial.ougiMul || 1,
+                  boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y, great: !!trial.boss.great, name: trial.boss.name || null, atkMul: trial.boss.atkMul } : null,
                 },
             },
             // 試作の戦闘（v106試作）：修練場だけ
