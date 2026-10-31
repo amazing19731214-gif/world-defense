@@ -193,15 +193,17 @@ try {
   // 6. 最後まで（選択は加入を優先）：大将を倒して勝利。結果の画面にサバイバルLv・加入・強化
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
-    for (let i = 0; i < 2500 && T.on(); i++) {
+    for (let i = 0; i < 2500 && T.on() && !T.live().cleared; i++) {
       const s = T.state();
       if (s.choice) T.choose(0);
       WD_DEBUG.step(0.1);
     }
+    const cleared = !!(T.live() && T.live().cleared); // v108.7：大将を倒すと面のクリア。ここで終えて結果を見る
+    T.retreat();
     const res = T.result();
-    return { result: res.result, slv: res.slv, units: res.units.length, boons: res.boons, time: Math.round(res.time), kills: res.kills, text: document.getElementById("trialBody").textContent };
+    return { result: cleared ? "win" : res.result, slv: res.slv, units: res.units.length, boons: res.boons, time: Math.round(res.time), kills: res.kills, text: document.getElementById("trialBody").textContent };
   });
-  check(r.result === "win" && r.units === 5 && r.slv >= 5, "大将を倒すと勝利（サバイバルLv" + r.slv + "・" + r.time + "秒・撃破 " + r.kills + "）", { result: r.result, slv: r.slv, time: r.time });
+  check(r.result === "win" && r.units === 5 && r.slv >= 5, "大将を倒すと面のクリア（サバイバルLv" + r.slv + "・" + r.time + "秒・撃破 " + r.kills + "）", { result: r.result, slv: r.slv, time: r.time });
   check(/サバイバル Lv\d+/.test(r.text) && /4\/4人が加入/.test(r.text) && /強化：/.test(r.text) && /この戦闘だけ/.test(r.text), "結果の画面：サバイバルLv・加入した仲間の数・取った強化（この戦闘だけと明記）", r.text.slice(0, 120));
   check((await storage(p)) === save0, "サバイバルLv・強化・加入は保存データに入らない（経験値・Lv・熟練度も変わらない）");
   // 7. 次の戦闘では、強化もサバイバルLv も元に戻る（その戦闘だけ）
@@ -246,7 +248,7 @@ try {
     document.getElementById("trialSheet").hidden = true;
     T.start([1, 2, 3, 4, 5], { mode: "survival", hero: 1 });
     const L = T.live();
-    L.t = 149.9;
+    L.st = 149.9; // v108.7：大将はその面の時間で出る
     for (let i = 0; i < 20 && !L.boss; i++) {
       if (L.choice) T.choose(0);
       WD_DEBUG.step(0.1);

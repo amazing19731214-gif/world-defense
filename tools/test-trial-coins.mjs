@@ -261,7 +261,7 @@ try {
     let bad = 0,
       maxC = 0,
       lv = 0;
-    for (let i = 0; i < 2400 && T.on(); i++) {
+    for (let i = 0; i < 2400 && T.on() && !L.cleared; i++) {
       if (L.choice) {
         lv++;
         const k = L.choice.findIndex((x) => x.kind === "recruit");
@@ -272,11 +272,13 @@ try {
       maxC = Math.max(maxC, L.coins.length);
       for (const c of L.coins) if (!c.pull && (inRiver(c.x, c.y) || M.obstacles.some((b) => Math.hypot(b.x - c.x, b.y - c.y) < b.r))) bad++; // 落ちて止まっているコイン（吸い寄せ中は空中を飛ぶ）
     }
+    const cleared = !!L.cleared; // v108.7：大将を倒すと面のクリア。ここで終えて結果を見る
+    T.retreat();
     const res = T.result();
-    return { bad, maxC, lv, result: res.result, slv: res.slv, coins: res.coins, time: Math.round(res.time) };
+    return { bad, maxC, lv, result: cleared ? "win" : res.result, slv: res.slv, coins: res.coins, time: Math.round(res.time) };
   });
   check(r.bad === 0 && r.maxC <= 50, "コインは川・木・岩に埋まらず、50枚を超えない（最大 " + r.maxC + "枚）", r);
-  check(r.lv >= 5 && r.lv <= 7 && r.result === "win", "3分の戦闘でレベルアップは " + r.lv + " 回（5〜7回）。大将を倒して勝利（" + r.time + "秒）", r);
+  check(r.lv >= 5 && r.lv <= 7 && r.result === "win", "3分の戦闘でレベルアップは " + r.lv + " 回（5〜7回）。大将を倒して第1面クリア（" + r.time + "秒）", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
     document.getElementById("trialSheet").hidden = true;
@@ -292,7 +294,7 @@ try {
     // 敵36体・コイン50枚を画面の中に
     for (let i = 0; i < 36; i++) L.enemies.push(Object.assign({}, L.enemies[0] || {}));
     L.enemies.length = 0;
-    L.t = 100;
+    L.st = 100; // v108.7：敵の出方はその面の時間で決まる
     L.next = 0;
     for (let i = 0; i < 600 && L.enemies.filter((e) => !e.gone).length < 36; i++) {
       L.next = 0;

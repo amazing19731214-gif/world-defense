@@ -166,7 +166,7 @@ try {
   await tap("[data-trial-go]");
   await p.waitForTimeout(4000);
   r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, overflow: document.documentElement.scrollWidth - innerWidth }));
-  check(/サバイバル/.test(r.info) && /試・弓聖/.test(r.info) && /仲間 \d\/4/.test(r.info) && r.units && r.overflow <= 0, "サバイバル：主人公（試・弓聖）1人で始められ、主人公の名前と仲間の人数が出る（HP・経験値・残り時間は戦場の上）", r);
+  check(/第1面/.test(r.info) && /試・弓聖/.test(r.info) && /仲間 \d\/4/.test(r.info) && r.units && r.overflow <= 0, "サバイバル：主人公（試・弓聖）1人で始められ、主人公の名前と仲間の人数が出る（HP・経験値・残り時間は戦場の上）", r);
   // レベルアップの選択画面が出ていたら、1つ目（仲間の加入）を指で押す
   if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
   const pad2 = await p.locator("#trialPad").boundingBox();
@@ -271,6 +271,25 @@ try {
     return { win: out.win.result, skills: out.win.units.map((u) => Object.keys(u.skills).length), lose: out.lose.result, alive: out.alive, fallen: out.fallen };
   });
   check(r.win === "win" && r.skills.every((k) => k > 0) && r.lose === "lose" && r.alive === 10 && r.fallen === 0, "テスト用兵士で勝利・敗北を確かめられる（職業技・閃きも使う。仮の戦死で兵士は減らない）", r);
+
+  // v108.7 サバイバルの最高到達面：テスト版の保存の領域（wdtest:）にだけ保存する
+  r = await q.evaluate(() => {
+    const T = WD_DEBUG.trial;
+    document.getElementById("trialSheet").hidden = true;
+    T.start([10, 9, 6, 7, 8], { mode: "survival", hero: 10 });
+    const L = T.live();
+    for (let i = 0; i < 3000 && T.on() && !L.cleared; i++) {
+      if (L.choice) T.choose(0);
+      const h = L.units[0];
+      if (h.hp < h.max * 0.3) h.hp = h.max * 0.3;
+      WD_DEBUG.step(0.1);
+    }
+    const cleared = !!L.cleared;
+    T.retreat();
+    const get = (k) => window.WD_TEST_STORAGE.raw.get.call(localStorage, k);
+    return { cleared, best: T.best(), raw: get("wdtest:worldDefense.trialBest.v1"), plain: get("worldDefense.trialBest.v1"), text: document.getElementById("trialBody").textContent };
+  });
+  check(r.cleared && r.best === 1 && r.raw && JSON.parse(r.raw).stage === 1 && r.plain === null && /最高 第1面クリア/.test(r.text), "サバイバルの最高到達面は、テスト版の保存の領域にだけ保存（本番の領域には書かない）", { best: r.best, raw: r.raw, plain: r.plain });
   await c2.close();
 
   check(errors.length === 0, "ページのエラーなし", errors);
