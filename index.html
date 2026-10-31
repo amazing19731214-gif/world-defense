@@ -3003,7 +3003,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.4試作（戦場試練：歩く速さ・攻撃の見え方）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.5試作（戦場試練：サバイバルの経験値コイン）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17612,6 +17612,12 @@ const TRIAL_SURVIVAL = {
   xp: { goblin: 1, wolf: 1, knight: 2, dragon: 2, boss: 0 }, // 敵1体の経験値
   need: (lv) => 4 + 5 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（4・9・14・19…。v108.3：3分で5〜7回）
   recruitMax: 4, // 加入できる仲間（出撃の前に選んだ候補）の数
+  // v108.5 経験値コイン：敵を倒すとその場に落ちる。主人公が近づくと吸い寄せられて、拾ったときに経験値が入る（仲間は拾わない）
+  magnet: 190, // 主人公からこの距離に入ったコインは吸い寄せられる
+  pick: 18, // この距離まで来たら拾う
+  pull0: 240, // 吸い寄せの速さ（px/秒）：はじめ
+  pullAcc: 900, // 吸い寄せの加速（px/秒²。主人公より必ず速くなる）
+  coinMax: 50, // 戦場に置くコインの上限。超えたら、落ちた所に一番近いコインへ合体（経験値の合計はそのまま）
   // レベルアップの強化（この戦闘の主人公だけ。終わったら消える）。step は1回の上がり幅
   boons: {
     atk: { icon: "⚔️", name: "攻撃力アップ", text: "与えるダメージ・回復 +25%", step: 0.25 },
@@ -17910,6 +17916,7 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     lvUps: 0, // まだ選んでいないレベルアップの数
     choice: null, // レベルアップの選択肢（表示している間は戦闘が止まる）
     boons: {}, // 取った強化 { atk: 回数 }
+    coins: [], // v108.5 経験値コイン { x, y, xp, pull }（この戦闘だけ）
     level: D.level,
     power: D,
     size: D.size,
@@ -17936,14 +17943,162 @@ function trialBoonInit(u) {
   Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1 });
 }
 // 経験値：だれが倒しても入る（部隊の経験値）。必要な量に届いたらレベルアップ（選ぶまで戦闘を止める）
-function trialGainXp(T, e) {
+function trialGainXp(T, amount) {
   const S = TRIAL_SURVIVAL;
-  T.xp += S.xp[e.kind] || 1;
+  T.xp += amount;
+  T.xpTotal = (T.xpTotal || 0) + amount;
   while (T.xp >= S.need(T.slv)) {
     T.xp -= S.need(T.slv);
     T.slv++;
     T.lvUps++;
+    T.lvAt = T.t; // v108.5 ゲージが満タンで光るのを見せてから選択画面（0.5秒）
   }
+}
+// ===== v108.5 経験値コイン（この戦闘だけ。保存しない） =====
+// 落とす：倒した敵の所（川・木・岩の上なら、倒した敵が少し前にいた所＝必ず歩ける所）。上限を超えたら一番近いコインに足す
+function trialDropCoin(T, e) {
+  const S = TRIAL_SURVIVAL,
+    v = S.xp[e.kind] || 1;
+  if (!v) return;
+  const M = T.map,
+    ok = (x, y) => !trialInRiver(M, x, y) && !M.obstacles.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 8),
+    jx = e.x + (T.rng() - 0.5) * 16,
+    jy = e.y + (T.rng() - 0.5) * 16,
+    [x, y] = ok(jx, jy) ? [jx, jy] : ok(e.x, e.y) ? [e.x, e.y] : [e.px != null ? e.px : e.x, e.py != null ? e.py : e.y];
+  T.dropped = (T.dropped || 0) + v;
+  if (T.coins.length >= S.coinMax) {
+    let best = T.coins[0];
+    for (const c of T.coins) if (Math.hypot(c.x - x, c.y - y) < Math.hypot(best.x - x, best.y - y)) best = c;
+    best.xp += v;
+    best.merged = (best.merged || 1) + 1;
+    T.merges = (T.merges || 0) + 1;
+    return;
+  }
+  T.coins.push({ x, y, xp: v, pull: false, pt: 0, seed: T.rng() * 6.28 });
+}
+// 吸い寄せと回収：主人公だけ。近づいたコインは加速して主人公へ。拾った分をまとめて経験値に（何枚でも合計がそのまま入る）
+function trialCoinTick(T, dt) {
+  const S = TRIAL_SURVIVAL,
+    h = T.units.find((u) => u.id === T.hero);
+  if (!h || h.dead || !T.coins.length) return;
+  let got = 0,
+    n = 0;
+  for (let i = T.coins.length - 1; i >= 0; i--) {
+    const c = T.coins[i],
+      dx = h.x - c.x,
+      dy = h.y - 10 - c.y,
+      d = Math.hypot(dx, dy);
+    if (!c.pull) {
+      if (d > S.magnet) continue; // 遠いコインは動かさない（数が増えても軽い）
+      c.pull = true;
+    }
+    c.pt += dt;
+    const step = Math.min(d, (S.pull0 + S.pullAcc * c.pt) * dt);
+    c.x += (dx / (d || 1)) * step;
+    c.y += (dy / (d || 1)) * step;
+    if (d - step <= S.pick) {
+      got += c.xp;
+      n++;
+      T.coins.splice(i, 1);
+    }
+  }
+  if (!got) return;
+  T.picked = (T.picked || 0) + n;
+  trialGainXp(T, got);
+  // 拾った光（まとめて1つ）と、たくさん拾ったときは「+N」の文字。音は短く小さく（間をあける）
+  if (effects.length < 60) effects.push({ kind: "cspark", x: h.x, y: h.y - 22, ougi: false, seed: T.t, age: 0, duration: 0.25 });
+  T.burst = (T.burst || 0) + got;
+  if (!(T.burstAt > T.t)) {
+    T.burstAt = T.t + 0.6;
+    if (T.burst >= 6 && effects.length < 60) effects.push({ kind: "ctext", x: h.x, y: h.y - 96, text: "+" + T.burst + " EXP", ougi: false, age: 0, duration: 0.9 });
+    T.burst = 0;
+  }
+  trialCoinSound(n);
+}
+// 効果音（コインを拾った音）：Web Audio の短い音。iPhone は画面に触れたあとでないと鳴らせないので、触れたときに準備する
+let trialAudio = null,
+  trialSoundAt = 0;
+function trialAudioUnlock() {
+  if (trialAudio || typeof window.AudioContext !== "function" && typeof window.webkitAudioContext !== "function") return;
+  try {
+    trialAudio = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (err) {
+    trialAudio = null;
+  }
+}
+function trialCoinSound(n) {
+  if (trial) trial.sfx = (trial.sfx || 0) + 1;
+  const A = trialAudio,
+    now = performance.now();
+  if (!A || now - trialSoundAt < 70) return;
+  trialSoundAt = now;
+  try {
+    if (A.state === "suspended") A.resume();
+    const o = A.createOscillator(),
+      g = A.createGain(),
+      t = A.currentTime,
+      f = Math.min(1600, 880 + n * 60);
+    o.type = "triangle";
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.07);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g).connect(A.destination);
+    o.start(t);
+    o.stop(t + 0.13);
+  } catch (err) {
+    /* 鳴らなくても続ける */
+  }
+}
+for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () => trial && trial.mode === "survival" && trialAudioUnlock(), { passive: true });
+// コインの絵：青く光る丸（見えている所だけ描く）。合体したコインは少し大きい
+function trialDrawCoins(T, V) {
+  if (!T.coins || !T.coins.length) return;
+  const x0 = V.ox - 20,
+    y0 = V.oy - 20,
+    x1 = V.ox + W / V.z + 20,
+    y1 = V.oy + H / V.z + 20;
+  ctx.save();
+  for (const c of T.coins) {
+    if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue;
+    const r = Math.min(17, 8 + Math.sqrt(c.xp) * 2.4), // iPhone の縦でも見える大きさ
+      bob = reduced || c.pull ? 0 : Math.sin(visualTime * 4 + c.seed) * 2;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#4fb8ff";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y + bob, r + 7, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#2f8fe0";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y + bob, r, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = "#dff6ff";
+    ctx.beginPath();
+    ctx.arc(c.x - r * 0.3, c.y + bob - r * 0.3, r * 0.4, 0, 7);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+// 経験値ゲージ（画面の上・横長）：拾った分へ滑らかに伸びる。Lv が上がったら満タンまで伸びて光り、次の Lv の 0 から
+function trialGaugeStep(T) {
+  const S = TRIAL_SURVIVAL,
+    now = performance.now(),
+    dt = Math.min(0.1, Math.max(0, ((T.gaugeAt ? now - T.gaugeAt : 0) || 0) / 1000)),
+    G = T.gauge || (T.gauge = { lv: T.slv, v: T.xp, flash: 0 });
+  T.gaugeAt = now;
+  G.flash = Math.max(0, G.flash - dt);
+  const need = S.need(G.lv),
+    target = G.lv < T.slv ? need : T.xp,
+    speed = Math.max(need * 1.2, Math.abs(target - G.v) * 6);
+  G.v = G.v < target ? Math.min(target, G.v + speed * dt) : target;
+  if (G.lv < T.slv && G.v >= need) {
+    G.lv++;
+    G.v = 0;
+    G.flash = 0.6;
+  }
+  return G;
 }
 // レベルアップの選択肢：仲間候補が残っていれば「👥 仲間を1人加入」＋強化2つ。いなければ強化3つ
 function trialChoices(T) {
@@ -18086,6 +18241,7 @@ function trialSurvivalTick(T, dt) {
     const p = trialSpawnPoint(T, hero);
     if (p) {
       T.boss = add(spec("boss", p, true));
+      T.bossAt = T.t;
       msg("⚠️ 大将が現れた！ 倒せば勝利！（画面の端の赤い矢印の方向）");
       if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 110, text: "⚠ 大将 出現！", ougi: true, age: 0, duration: 1.6 });
     }
@@ -18151,6 +18307,7 @@ function tickTrial(dt) {
   if (surv) {
     trialSurvivalTick(T, dt);
     if (T.flurry) trialFlurryTick(T, dt);
+    trialCoinTick(T, dt);
     // 仲間の持ち場：主人公のまわり（主人公が動くと持ち場も動く）
     const hero = T.units.find((u) => u.id === T.hero),
       Z = T.map.size;
@@ -18188,7 +18345,7 @@ function tickTrial(dt) {
     if (T.boss && T.boss.gone) return endTrial("win");
     if (T.t >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
     // 奥義の直後は、演出を見せてから選択画面を出す（1.5秒。天剣乱舞の連続斬撃の間も待つ）
-    if (T.lvUps && !T.flurry && !(T.ougiUsed && T.t - T.ougiUsed.at < 1.5)) trialOpenChoice(T);
+    if (T.lvUps && !T.flurry && !(T.ougiUsed && T.t - T.ougiUsed.at < 1.5) && !(T.lvAt != null && T.t - T.lvAt < 0.5)) trialOpenChoice(T);
     return;
   }
   if (!T.units.some((u) => !u.dead)) return endTrial("lose");
@@ -18629,7 +18786,7 @@ function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
     e.gone = true;
     u.kills++;
     trial.kills++;
-    if (trial.mode === "survival") trialGainXp(trial, e);
+    if (trial.mode === "survival") trialDropCoin(trial, e);
     trialKillFx(e);
   }
   return dmg;
@@ -18814,7 +18971,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -19045,6 +19202,7 @@ function drawTrial() {
     ctx.restore();
   }
   const actors = [];
+  if (T.mode === "survival") trialDrawCoins(T, V);
   for (const u of T.units) if (u.placed) actors.push({ y: u.y, draw: () => trialDrawUnit(u) });
   for (const e of T.enemies) if (!e.gone) actors.push({ y: e.y, draw: () => trialDrawEnemy(e) });
   actors.sort((a, b) => a.y - b.y);
@@ -19112,33 +19270,60 @@ function drawTrial() {
     ctx.textAlign = "center";
     ctx.fillText(text, Math.max(4 + w / 2, (SW - 170) / 2), 30);
     if (T.mode === "survival") {
-      // 主人公のHP と経験値（左上・iPhone の縦でも読める大きさ。HP はここ1か所だけ）
+      // v108.5 経験値ゲージ（上の帯の下・横長）と主人公のHP（その下・左）。HP・残り時間・撃破・人数（上の帯）を隠さない
       const h = T.units.find((u) => u.id === T.hero),
         r = Math.max(0, h.hp / h.max),
-        bw = 300,
-        need = TRIAL_SURVIVAL.need(T.slv),
-        xr = Math.min(1, T.xp / need);
-      ctx.fillStyle = "#1a120ccc";
-      ctx.fillRect(6, 44, bw + 12, 66);
-      ctx.fillStyle = "#3a2a22";
-      ctx.fillRect(12, 50, bw, 30);
-      ctx.fillStyle = r > 0.5 ? "#5fd36b" : r > 0.25 ? "#ffc14d" : "#ff5a4a";
-      ctx.fillRect(12, 50, bw * r, 30);
-      ctx.fillStyle = "#2a2440";
-      ctx.fillRect(12, 84, bw, 20);
-      ctx.fillStyle = "#7fc8ff";
-      ctx.fillRect(12, 84, bw * xr, 20);
+        G = trialGaugeStep(T),
+        need = TRIAL_SURVIVAL.need(G.lv),
+        xr = Math.min(1, G.v / need),
+        gw = SW - 186, // 右上の全体図の手前まで
+        full = xr >= 0.999 || G.flash > 0;
+      ctx.fillStyle = "#10182acc";
+      ctx.fillRect(6, 42, gw + 12, 34);
+      ctx.fillStyle = "#23304a";
+      ctx.fillRect(12, 47, gw, 24);
+      const grad = ctx.createLinearGradient(12, 0, 12 + gw, 0);
+      grad.addColorStop(0, "#3a8dff");
+      grad.addColorStop(1, "#7fe3ff");
+      ctx.fillStyle = grad;
+      ctx.fillRect(12, 47, gw * xr, 24);
+      if (full) {
+        // 満タン・レベルアップの光
+        ctx.save();
+        ctx.globalAlpha = 0.45 + 0.35 * Math.sin(visualTime * 18);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(10, 45, gw + 4, 28);
+        ctx.fillStyle = "#ffffff55";
+        ctx.fillRect(12, 47, gw, 24);
+        ctx.restore();
+      }
       ctx.textAlign = "left";
       ctx.lineWidth = 4;
-      ctx.strokeStyle = "#10202a";
-      ctx.font = "bold 24px system-ui";
-      ctx.strokeText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 74);
-      ctx.fillStyle = "#fff";
-      ctx.fillText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 74);
+      ctx.strokeStyle = "#0a1020";
+      ctx.font = "bold 22px system-ui";
+      const lvText = "Lv" + G.lv + (G.flash > 0 ? " UP!" : "");
+      ctx.strokeText(lvText, 18, 67);
+      ctx.fillStyle = G.flash > 0 ? "#fff6a8" : "#ffffff";
+      ctx.fillText(lvText, 18, 67);
+      ctx.textAlign = "right";
       ctx.font = "bold 18px system-ui";
-      ctx.strokeText("Lv" + T.slv + "  EXP " + T.xp + "/" + need, 18, 101);
+      const xpText = "EXP " + Math.floor(G.v) + "/" + need;
+      ctx.strokeText(xpText, 6 + gw, 66);
       ctx.fillStyle = "#e8f3ff";
-      ctx.fillText("Lv" + T.slv + "  EXP " + T.xp + "/" + need, 18, 101);
+      ctx.fillText(xpText, 6 + gw, 66);
+      // 主人公のHP（ここ1か所）
+      ctx.fillStyle = "#1a120ccc";
+      ctx.fillRect(6, 80, 252, 32);
+      ctx.fillStyle = "#3a2a22";
+      ctx.fillRect(12, 85, 240, 22);
+      ctx.fillStyle = r > 0.5 ? "#5fd36b" : r > 0.25 ? "#ffc14d" : "#ff5a4a";
+      ctx.fillRect(12, 85, 240 * r, 22);
+      ctx.textAlign = "left";
+      ctx.font = "bold 20px system-ui";
+      ctx.strokeText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
+      ctx.fillStyle = "#fff";
+      ctx.fillText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
     }
   });
   screenSpace(drawCombatOverlay);
@@ -19270,6 +19455,7 @@ function renderTrialSheet() {
       (sv
         ? "<p>撃破 <b>" + R.kills + "</b>・大将 " + R.boss + "・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
+          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）</small>" : "") +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
@@ -28399,6 +28585,9 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               choose: (i) => trialChoose(i),
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
+              // 経験値コインを置く（試験用。倒した敵の代わり）
+              drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
+              coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
                 const s = soldierById(id);
@@ -28445,7 +28634,16 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                   reserve: trial.reserve ? trial.reserve.map((u) => u.id) : null,
                   boons: trial.boons ? { ...trial.boons } : null,
                   ougiUsed: trial.ougiUsed ? { ...trial.ougiUsed } : null,
+                  coins: trial.coins ? trial.coins.length : null,
+                  coinXp: trial.coins ? trial.coins.reduce((n, c) => n + c.xp, 0) : null,
+                  xpTotal: trial.xpTotal || 0,
+                  dropped: trial.dropped || 0,
+                  picked: trial.picked || 0,
+                  merges: trial.merges || 0,
+                  sfx: trial.sfx || 0,
+                  gauge: trial.gauge ? { ...trial.gauge } : null,
                   flurry: trial.flurry ? trial.flurry.left : null,
+                  bossAt: trial.bossAt || null,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
                 },
             },

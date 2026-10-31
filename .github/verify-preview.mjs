@@ -141,6 +141,9 @@ try {
   await p.waitForTimeout(800);
   const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 600) }));
   step("13 サバイバル：撤退すると結果の画面（主人公に👑）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑"));
+  // v108.5 経験値コイン：拾った枚数と経験値が結果の画面に出る（レベルアップしていれば、コインを拾って経験値が入っている）
+  const coin = (svr.text.match(/経験値コイン：(\d+)枚・EXP (\d+)/) || []).slice(1).map(Number);
+  step("13a サバイバル：経験値コインを拾って経験値が入る（結果：" + (coin[0] ?? "?") + "枚・EXP " + (coin[1] ?? "?") + "）", coin, coin.length === 2 && coin[0] > 0 && coin[1] >= 4);
   // v108.3 奥義：テスト用兵士の準備で「試・剣神」が奥義継承者（八方天翔斬）。主人公にして右下のボタンを押す
   await p.locator("[data-trial-again]").tap();
   await p.locator("[data-trial-hero]", { hasText: "試・剣神" }).tap();
