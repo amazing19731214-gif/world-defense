@@ -108,7 +108,7 @@ try {
   await p.locator("[data-trial-go]").tap();
   await p.waitForTimeout(6000);
   const sv = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, pad: document.getElementById("trialPad").offsetParent !== null }));
-  step("11 サバイバルが始まり、主人公のHP・残り時間・撃破・仲間が出る", sv, /サバイバル/.test(sv.info) && /試・弓聖/.test(sv.info) && /HP/.test(sv.info) && /残り/.test(sv.info) && /撃破/.test(sv.info) && /仲間/.test(sv.info) && sv.units && sv.pad);
+  step("11 サバイバルが主人公1人で始まる（仲間 0/4・スティック）", sv, /サバイバル/.test(sv.info) && /試・弓聖/.test(sv.info) && /仲間 [01]\/4/.test(sv.info) && sv.units && sv.pad);
   const pad2 = await p.locator("#trialPad").boundingBox();
   const knob2 = await p.evaluate(
     async ([cx, cy]) => {
@@ -124,11 +124,22 @@ try {
     [pad2.x + pad2.width / 2, pad2.y + pad2.height / 2],
   );
   step("12 サバイバル：主人公をスティックで動かせる", knob2, knob2 !== "none");
-  await p.waitForTimeout(4000);
-  const kills = await p.evaluate(() => document.getElementById("trialInfo").textContent);
+  // v108.2 敵を倒して経験値がたまると、戦闘が止まり選択画面 →「👥 仲間を1人加入」を指で押す
+  let lvUp = false;
+  for (let i = 0; i < 60 && !lvUp; i++) {
+    await p.waitForTimeout(1000);
+    lvUp = await p.evaluate(() => !document.getElementById("trialLevelUp").hidden);
+  }
+  const choice = await p.evaluate(() => [...document.querySelectorAll("[data-trial-choose]")].map((b) => b.textContent.slice(0, 40)));
+  step("12b レベルアップで選択画面が出る（仲間の加入＋強化）", { lvUp, choice }, lvUp && choice.length === 3 && choice[0].includes("仲間を1人加入"));
+  if (lvUp) await p.locator('[data-trial-choose="0"]').tap();
+  await p.waitForTimeout(800);
+  const kills = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, box: document.getElementById("trialLevelUp").hidden }));
+  step("12c 「仲間を1人加入」で仲間が1人増え、戦闘が再開する", kills, /仲間 1\/4/.test(kills.info) && kills.box);
+  if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
   await p.locator("#trialRetreat").tap();
   await p.waitForTimeout(800);
-  const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 120) }));
+  const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 600) }));
   step("13 サバイバル：撤退すると結果の画面（主人公に👑）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑"));
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   step("14 横にはみ出さない", overflow, overflow <= 0);
