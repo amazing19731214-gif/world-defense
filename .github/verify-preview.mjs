@@ -141,6 +141,34 @@ try {
   await p.waitForTimeout(800);
   const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 600) }));
   step("13 サバイバル：撤退すると結果の画面（主人公に👑）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑"));
+  // v108.3 奥義：テスト用兵士の準備で「試・剣神」が奥義継承者（八方天翔斬）。主人公にして右下のボタンを押す
+  await p.locator("[data-trial-again]").tap();
+  await p.locator("[data-trial-hero]", { hasText: "試・剣神" }).tap();
+  await p.locator("[data-trial-go]").tap();
+  await p.waitForTimeout(800);
+  const ob = await p.evaluate(() => {
+    const b = document.getElementById("trialOugiBtn"),
+      a = document.getElementById("trialPad").getBoundingClientRect(),
+      c = b && b.getBoundingClientRect();
+    return b && { text: b.textContent, disabled: b.disabled, overlap: !(a.right <= c.left || c.right <= a.left || a.bottom <= c.top || c.bottom <= a.top) };
+  });
+  step("13b 奥義継承者（試・剣神）を主人公にすると、右下に「奥義 八方天翔斬」（スティックと重ならない）", ob, ob && !ob.disabled && /八方天翔斬/.test(ob.text) && !ob.overlap);
+  let used = null;
+  for (let i = 0; i < 45 && !used; i++) {
+    await p.waitForTimeout(1000);
+    if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
+    if (await p.evaluate(() => { const b = document.getElementById("trialOugiBtn"); return b && !b.disabled; })) await p.locator("#trialOugiBtn").tap();
+    used = await p.evaluate(() => {
+      const b = document.getElementById("trialOugiBtn");
+      return b && b.disabled && /もう使いました/.test(b.textContent) ? b.textContent : null;
+    });
+  }
+  step("13c 指で奥義のボタンを押すと発動（この戦闘ではもう使えない）", used, !!used);
+  if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
+  await p.locator("#trialRetreat").tap();
+  await p.waitForTimeout(800);
+  const ores = await p.evaluate(() => document.getElementById("trialBody").textContent.slice(0, 400));
+  step("13d 結果の画面に使った奥義が出る", ores, /奥義「八方天翔斬」/.test(ores));
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   step("14 横にはみ出さない", overflow, overflow <= 0);
   step("15 JavaScript のエラーなし", errors, errors.length === 0);
