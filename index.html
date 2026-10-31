@@ -27877,7 +27877,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
     </script>
       <script>
 // テストプレイ版（node tools/build.mjs --test）だけに入る道具。本番の index.html には入らない（ボタンも出ない）。
-//   ・画面の左上に「🧪 テスト環境」の札
+//   ・画面の左下に「🧪 テスト環境」の札
 //   ・メニューに「🧪 テスト用兵士を準備」「🧪 テストデータを初期化」
 //   保存はすべて test-env-head.js の分離された領域（wdtest:）にだけ書く。本番のデータには触らない
 (() => {
@@ -27948,7 +27948,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
   badge.id = "testBadge";
   badge.textContent = "🧪 テスト環境";
   badge.setAttribute("aria-label", "テストプレイ用の環境です（本番のデータとは別）");
-  badge.style.cssText = "position:fixed;left:4px;top:4px;z-index:30;padding:2px 8px;border-radius:8px;font:bold 12px system-ui;background:#7a1fa2e6;color:#fff;pointer-events:none;max-width:40vw";
+  badge.style.cssText = "position:fixed;left:4px;bottom:4px;z-index:30;opacity:.9;padding:2px 8px;border-radius:8px;font:bold 12px system-ui;background:#7a1fa2e6;color:#fff;pointer-events:none;max-width:40vw";
   document.body.appendChild(badge);
   const menu = $("menuTools");
   if (menu) {
