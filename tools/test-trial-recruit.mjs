@@ -94,7 +94,7 @@ try {
     const s = T.state();
     return { xpSeen: xp, kills: s.kills, slv: s.slv, choice: s.choice, t: s.t };
   });
-  check(r.xpSeen.length >= 1 && r.xpSeen[0] > 0, "敵を倒すと経験値が入る（" + r.xpSeen.join("→") + "）", r);
+  check(r.xpSeen.length >= 1 && Math.max(...r.xpSeen) > 0, "敵を倒してコインを拾うと経験値が入る（" + r.xpSeen.join("→") + "）", r);
   check(r.slv === 2 && r.choice && r.choice.length === 3 && r.choice[0] === "recruit:2", "経験値がたまるとサバイバルLv2 になり、3つの選択肢（仲間の加入＋強化2つ）が出る", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
