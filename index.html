@@ -19900,8 +19900,13 @@ function trialUnstick(e, dt) {
     e.unstuck = (e.unstuck || 0) + 1;
     e.wp = Math.min(e.lanePath.length, e.wp + 1);
     e.joined = true;
-    e.x += (Math.random() - 0.5) * 16;
-    e.y += (Math.random() - 0.5) * 16;
+    // 引っかかりを外すずらし。Math.random だと同じ戦闘でも勝ち負けが変わることがあるので、決まった値にする（戦闘の乱数 T.rng も使わない）
+    const j = (k) => {
+      const v = Math.sin(e.unstuck * 12.9898 + Math.round(e.lastX) * 78.233 + k * 37.719) * 43758.5453;
+      return v - Math.floor(v) - 0.5;
+    };
+    e.x += j(1) * 16;
+    e.y += j(2) * 16;
   }
 }
 // 敵の攻撃のダメージ：兵士の防御・受けるダメージ軽減のスキル・職業技の盾（防衛戦と同じ式）。一撃は最大HPの6割まで
