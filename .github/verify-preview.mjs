@@ -8,7 +8,10 @@ const browser = await engine.launch();
 const ctx = await browser.newContext({ ...devices["iPhone 13"] });
 const p = await ctx.newPage();
 p.setDefaultTimeout(30000);
-p.on("pageerror", (e) => errors.push(e.message));
+p.on("pageerror", (e) => {
+  if (/carbonads|githack\.com\/(?!amazing)/.test(e.message)) return console.log("IGNORED_3RD_PARTY " + e.message.slice(0, 120)); // 配信サービスの広告のエラー（ゲームとは無関係）
+  errors.push(e.message);
+});
 p.on("dialog", (d) => d.accept());
 let ok = true;
 const step = (name, value, pass) => {
@@ -36,6 +39,8 @@ try {
       console.log("AFTER_NOTICE " + JSON.stringify({ url: p.url(), title: await p.title() }));
     }
   }
+  // raw.githack.com の注意の画面（広告など、ゲームの外のスクリプト）で出たエラーは数えない。ゲームのページが開いてからのエラーだけを見る
+  errors.length = 0;
   step("1 ページが表示される", { status: res.status(), type: res.headers()["content-type"], title: await p.title() }, res.status() === 200 && (await p.title()).includes("【テスト】"));
   const badge = await p.evaluate(() => {
     const b = document.getElementById("testBadge");
