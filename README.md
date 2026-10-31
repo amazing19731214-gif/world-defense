@@ -4,6 +4,8 @@
 
 - 中身：`index.html` 1つ。Draft PR #127〜#131 と Phase 3.2 の機能を含むテスト用ビルドです（`node tools/build.mjs --test` で作成）。
 - 開くURL：<https://raw.githack.com/amazing19731214-gif/world-defense/trial-test-preview/index.html>
+  - 最初に raw.githack.com の注意の画面「External Content Notice」が出たら、「Open the page」を押してください。
+  - このブランチに push するたびに、GitHub Actions「テスト配信の確認」が、このURLを iPhone 13 相当の WebKit と Chromium で開いて操作し、確かめます。
   - raw.githack.com（無料・登録不要）が、このブランチの `index.html` をそのまま配信します。
   - 本番の公開サイト（amazing19731214-gif.github.io）とは別のオリジンです。
 - 保存：このページは、すべてのキーの頭に `wdtest:` を付けた別の保存領域だけを使います。本番の保存データは読まない・書かない・消さない。
