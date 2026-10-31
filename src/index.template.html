@@ -1774,8 +1774,68 @@
       /* 終盤（試作）：伝説の能力・指導員・特殊装備 */
       #retireSheet,
       #ougiSheet,
+      #trialSheet,
       #previewSheet {
         z-index: 13;
+      }
+      /* 戦場試練（試作）：出撃する兵士の選択・結果・戦闘中の帯 */
+      .trial-pick {
+        display: grid;
+        gap: 6px;
+      }
+      .trial-pick button {
+        text-align: left;
+        min-height: 44px;
+        overflow-wrap: anywhere;
+      }
+      .trial-pick button[aria-pressed="true"] {
+        border-color: #ffd36a;
+        background: linear-gradient(#5a4316, #3a2a10);
+      }
+      .trial-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .trial-actions button {
+        min-height: 46px;
+      }
+      .trial-actions button[hidden] {
+        display: none;
+      }
+      .trial-go:not([disabled]) {
+        background: linear-gradient(#d9542f, #a8331b);
+        border-color: #ffd28a;
+      }
+      .trial-result {
+        font-size: 22px;
+        margin: 4px 0;
+      }
+      .trial-units {
+        display: grid;
+        gap: 6px;
+      }
+      .trial-unit {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #5fd8ff55;
+        overflow-wrap: anywhere;
+      }
+      .trial-unit.dead {
+        opacity: 0.7;
+        border-color: #ff7b6b88;
+      }
+      /* 戦場試練の間は、防衛戦のウェーブ・建設・部隊の操作を出さない */
+      body.trial-on .play-tools,
+      body.trial-on #trainBar,
+      body.trial-on #dockUnits,
+      body.trial-on #dockBuild,
+      body.trial-on #dockOrganize,
+      body.trial-on #unitTools,
+      body.trial-on #towerTools,
+      body.trial-on #skillDock {
+        display: none !important;
       }
       /* 伝説の奥義（試作）：奥義書の一覧 */
       .ougi-card {
@@ -2575,6 +2635,11 @@
         <button id="ougiBtn" class="ougi-btn" hidden><b id="ougiName">⚔ 奥義</b><small id="ougiWhy"></small></button>
         <button id="trainRetreat" class="retreat">↩ 修練場から撤退</button>
       </section>
+      <section id="trialBar" class="panel train-bar trial-bar" hidden aria-label="戦場試練">
+        <div id="trialInfo" class="battle-info"></div>
+        <div class="trial-actions"><button id="trialAuto">🧭 自動で並べる</button><button id="trialGo" class="trial-go">⚔ 戦闘開始</button></div>
+        <button id="trialRetreat" class="retreat">↩ 撤退</button>
+      </section>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
         <div id="battleSkills" class="battle-skills" aria-label="武将の必殺技"></div>
@@ -2665,7 +2730,7 @@ OFF</button>
       </div>
       <div id="menuTools" class="tools menu-tools">
         <h3 class="menu-group">戦い</h3
-        ><button id="mapOpen">🌏 世界</button><button id="menuSkills" class="compact-only" aria-expanded="false" aria-controls="skillDock">✨ 必殺技</button><button id="trainingOpen">⚔️ 修練場</button
+        ><button id="mapOpen">🌏 世界</button><button id="menuSkills" class="compact-only" aria-expanded="false" aria-controls="skillDock">✨ 必殺技</button><button id="trainingOpen">⚔️ 修練場</button><button id="trialOpen">⚔️ 戦場試練</button
         ><h3 class="menu-group">武将・兵士の育成</h3
         ><button id="gacha">🎴 ガチャ</button><button id="heroGrowth">👑 主人公</button><button id="menuInfo" class="compact-only">ℹ️ 育成情報</button
         ><h3 class="menu-group">装備・アイテム</h3
@@ -2679,7 +2744,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v106.3試作（修練場で新しい戦い・伝説の奥義と奥義書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v107試作（戦場試練・伝説の奥義と奥義書）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -2880,6 +2945,15 @@ OFF</button>
           ><button id="retireClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="retireBody"></div>
+      </div>
+    </div>
+    <div id="trialSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="trialTitle">
+        <div class="panel-head hg-head">
+          <strong id="trialTitle">⚔️ 戦場試練（試作）</strong
+          ><button id="trialClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="trialBody"></div>
       </div>
     </div>
     <div id="ougiSheet" class="sheet-back" hidden>
@@ -7871,6 +7945,7 @@ OFF</button>
         }
         function startTraining(key, waves = trainingSave.waves) {
           if (training) return "修練場で挑戦中です。";
+          if (trial) return "戦場試練の最中は始められません。";
           if (battle) return "攻城戦の最中は始められません。";
           if (playing) return "防衛のウェーブ中は始められません。ウェーブの合間に始めよう。";
           const D = TRAINING.diffs[key];
@@ -10569,6 +10644,10 @@ OFF</button>
         // 戦闘・演出・武将の時間は必ずこの関数で進める（速度切替を一か所で反映）
         const gameStep = (dt) => Math.min(dt, 0.05) * speed;
         function tick(dt) {
+          if (trial) {
+            if (!paused && !document.hidden) tickTrial(gameStep(dt)); // 戦場試練：専用の戦闘処理（防衛戦は進めない）
+            return;
+          }
           autoTick(dt);
           if (battle) {
             if (!paused && !document.hidden) tickBattle(gameStep(dt)); // 攻城戦中は防衛戦を進めない
@@ -12925,6 +13004,7 @@ OFF</button>
         function draw() {
           syncFieldShape();
           worldSpace();
+          if (trial) return drawTrial(); // 戦場試練：専用のマップと戦闘を描く
           const sk = pixSceneryKey(); // 新ドット絵：設定の切り替え・攻城戦の出入り・城の強化で背景を描き直す
           if (sk !== lastSceneryKey) {
             lastSceneryKey = sk;
@@ -13425,7 +13505,7 @@ OFF</button>
         };
         $("start").onclick = () => {
           autoLeft = null; // 数えている途中に押しても二重には始めない
-          if (playing || over || battle) return;
+          if (playing || over || battle || trial) return;
           if (training && training.done) return;
           if (!training) saveDefenseCheckpoint();
           towerWaveTypes.clear();
@@ -14025,6 +14105,7 @@ OFF</button>
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
         /*@@FORMATION_VIEW@@*/
+        /*@@TRIAL@@*/
         let squadRosterFilter = "all", formationRetireReturn = null, bulkSwapMode = false;
         const squadFilterValues = () => ["all", ...SQUAD_RULES.slotNames.map((_, i) => String(i)), "candidates"];
         function renderSquadRosterTabs() {
@@ -16456,6 +16537,7 @@ OFF</button>
           return out;
         }
         function legendBusyError() {
+          if (trial) return "戦場試練の最中はできません。";
           if (battle) return "攻城戦の最中はできません。";
           if (training) return "修練場で挑戦中はできません。";
           if (playing) return "ウェーブ中はできません（ウェーブの合間に）。";
@@ -20306,6 +20388,7 @@ OFF</button>
           B.tickets = B.firstClear ? OROCHI.clearTickets : B.firstReward ? BOSS_RULES.firstTickets : BOSS_RULES.repeatTickets;
         }
         function canStartBattle() {
+          if (trial) return "戦場試練の最中は出陣できません。";
           if (gameSaveBatch && !commitGameSaveBatch()) return "未保存の進行があります。先に途中保存を再試行してください。";
           if (training) return "修練場の挑戦中は出陣できません。";
           if (playing) return "防衛のウェーブ中は出陣できません。ウェーブの合間に出陣しよう。";
@@ -22834,6 +22917,31 @@ OFF</button>
           namedRng = () => 1; // 確認用では、ほかの試験が偶然に左右されないようネームド兵士を出さない（namedApi.setRng で出せる）
           window.WD_DEBUG = {
             reorderSoldier: (id, target) => reorderSoldier(id, target),
+            // 戦場試練（v107試作）
+            trial: {
+              rules: TRIAL_RULES,
+              maps: TRIAL_MAPS,
+              start: (ids) => startTrial(ids),
+              place: (x, y) => trialPlace(x, y),
+              auto: () => trialAutoPlace(),
+              begin: () => trialBegin(),
+              retreat: () => retreatTrial(),
+              open: (mode) => openTrialSheet(mode),
+              on: () => !!trial,
+              live: () => trial,
+              result: () => trialResultView && JSON.parse(JSON.stringify(trialResultView)),
+              state: () =>
+                trial && {
+                  phase: trial.phase,
+                  t: trial.t,
+                  level: trial.level,
+                  spawned: trial.spawned,
+                  total: trial.total,
+                  kills: trial.kills,
+                  units: trial.units.map((u) => ({ id: u.id, role: u.role, x: u.x, y: u.y, hp: u.hp, max: u.max, dead: u.dead, kills: u.kills, healed: u.healed, placed: u.placed, target: u.target ? u.target.id : null })),
+                  enemies: trial.enemies.map((e) => ({ id: e.id, kind: e.kind, lane: e.lane, role: e.role, x: e.x, y: e.y, hp: e.hp, gone: e.gone, target: e.target ? e.target.id : null })),
+                },
+            },
             // 試作の戦闘（v106試作）：修練場だけ
             combat: {
               patterns: ATTACK_PATTERNS,
