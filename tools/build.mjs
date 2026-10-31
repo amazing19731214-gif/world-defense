@@ -106,6 +106,33 @@ if (/sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|api[_-]?key\s*[:=]/i.test(html.replace
   throw new Error("秘密情報らしき文字列が含まれています。HTMLに埋め込まないでください。");
 }
 
+// テストプレイ用（--test）：本番とは別の保存領域（キーの頭に wdtest:）とテスト用の道具を足した版を test-build/index.html に作る。
+// 通常の index.html には何も足さない（テスト用の道具・ボタンは入らない）
+if (process.argv.includes("--test")) {
+  const head = fs.readFileSync(path.join(root, "src", "test-env-head.js"), "utf8"),
+    tools = fs.readFileSync(path.join(root, "src", "test-env-tools.js"), "utf8"),
+    mark = "<head>";
+  if (!html.includes(mark) || !html.includes("</body>")) throw new Error("テスト版の差し込み先（<head>・</body>）がありません");
+  const test = html
+    .replace(mark, () => mark + "\n    <script>\n" + head + "\n    </script>")
+    .replace(/<title>([^<]*)<\/title>/, (m, t) => "<title>【テスト】" + t + "</title>")
+    .replace("</body>", () => "    <script>\n" + tools + "\n    </script>\n  </body>");
+  const dir = path.join(root, "test-build");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "index.html");
+  if (process.argv.includes("--check")) {
+    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== test) {
+      console.error("test-build/index.html が最新ではありません。node tools/build.mjs --test を実行してください。");
+      process.exit(1);
+    }
+    console.log("test-build/index.html は最新です。");
+  } else {
+    fs.writeFileSync(file, test);
+    console.log(`test-build/index.html（テストプレイ用）を生成しました (${Math.round(test.length / 1024)}KB)`);
+  }
+  process.exit(0);
+}
+
 const out = path.join(root, "index.html");
 if (process.argv.includes("--check")) {
   const current = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
