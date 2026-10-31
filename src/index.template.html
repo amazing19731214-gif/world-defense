@@ -23368,6 +23368,7 @@ OFF</button>
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
               drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
+              dropMagnet: (x, y) => trial && (trial.magnets = trial.magnets || []).push({ x, y, pull: false, pt: 0 }),
               coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
@@ -23420,6 +23421,10 @@ OFF</button>
                   xpTotal: trial.xpTotal || 0,
                   dropped: trial.dropped || 0,
                   picked: trial.picked || 0,
+                  magnets: trial.magnets ? trial.magnets.length : 0,
+                  magnetPicked: trial.magnetPicked || 0,
+                  magnetDropped: trial.magnetDropped || 0,
+                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? TRIAL_SURVIVAL.magnet * (h.magnetMul || 1) : null; })(),
                   merges: trial.merges || 0,
                   sfx: trial.sfx || 0,
                   gauge: trial.gauge ? { ...trial.gauge } : null,

@@ -76,6 +76,9 @@ const TRIAL_SURVIVAL = {
   pull0: 240, // 吸い寄せの速さ（px/秒）：はじめ
   pullAcc: 900, // 吸い寄せの加速（px/秒²。主人公より必ず速くなる）
   coinMax: 50, // 戦場に置くコインの上限。超えたら、落ちた所に一番近いコインへ合体（経験値の合計はそのまま）
+  // v109 磁石：敵をこの数だけ倒すごとに1つ落ちる（乱数は使わない）。拾うと、戦場のコインを全部吸い寄せる
+  magnetEvery: 70,
+  magnetMax: 2, // 戦場に置いておく磁石の数の上限
   // レベルアップの強化（この戦闘の主人公だけ。終わったら消える）。step は1回の上がり幅
   boons: {
     atk: { icon: "⚔️", name: "攻撃力アップ", text: "与えるダメージ・回復 +25%", step: 0.25 },
@@ -84,6 +87,7 @@ const TRIAL_SURVIVAL = {
     hp: { icon: "❤️", name: "最大HPアップ", text: "最大HP +25%（増えた分を回復）", step: 0.25 },
     def: { icon: "🛡️", name: "防御力アップ", text: "受けるダメージ −15%", step: 0.15 },
     range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", step: 0.2 },
+    magnet: { icon: "🧲", name: "吸い寄せ範囲アップ", text: "経験値コインを吸い寄せる距離 +30%", step: 0.3 }, // v109
   },
   // 出てくる敵の種類（時刻ごと）
   pools: [
@@ -375,6 +379,7 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     choice: null, // レベルアップの選択肢（表示している間は戦闘が止まる）
     boons: {}, // 取った強化 { atk: 回数 }
     coins: [], // v108.5 経験値コイン { x, y, xp, pull }（この戦闘だけ）
+    magnets: [], // v109 磁石 { x, y, pull }（拾うとコインを全部吸い寄せる）
     floor: 1, // v108.7 いまの面（trial.stage はマップの名前なので別の名前）
     st: 0, // その面の経過時間（秒。大将・敵の出方はこれで決まる）
     bosses: 0, // 倒した大将の数
@@ -433,6 +438,7 @@ const TRIAL_REWARDS = {
     heal: { icon: "💚", name: "HP回復", text: "主人公と仲間の HP を最大の60%回復", weight: 1.2, amount: 0.6 },
     move: { icon: "👟", name: "移動速度アップ", text: "歩く速さ +15%", weight: 0.8 },
     range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", weight: 0.8 },
+    magnet: { icon: "🧲", name: "吸い寄せ範囲アップ", text: "経験値コインを吸い寄せる距離 +30%", weight: 0.8 }, // v109
     scroll: { icon: "📜", name: "技の巻物", text: "攻撃スキルを1つ強化（強化できるものがなければ、新しく習得）", weight: 1.5, needSkill: true },
   },
   special: {
@@ -466,6 +472,7 @@ function trialApplyBoon(T, hero, key, step) {
   else if (key === "move") hero.speed *= 1 + step;
   else if (key === "def") hero.defMul *= 1 - step;
   else if (key === "range") (hero.range *= 1 + step), (hero.reachMul *= 1 + step);
+  else if (key === "magnet") hero.magnetMul = (hero.magnetMul || 1) + step;
   else if (key === "hp") {
     const add = hero.max * step;
     hero.max += add;
@@ -525,6 +532,7 @@ function trialStageClear(T) {
   const left = T.coins.reduce((a, c) => a + c.xp, 0);
   T.picked = (T.picked || 0) + T.coins.length;
   T.coins = [];
+  T.magnets = []; // 磁石は面をまたがない（クリアでコインは全部入るので要らない）
   if (left) trialGainXp(T, left);
   T.flurry = null;
   trialStick = { x: 0, y: 0 };
@@ -1023,7 +1031,7 @@ function trialDrawSkillBar(T, SW) {
 }
 // ===== v108.2 この戦闘だけの成長（サバイバルLv・強化・仲間の加入）。本番の兵士・保存データには書かない =====
 function trialBoonInit(u) {
-  Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1 });
+  Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1, magnetMul: 1 });
 }
 // 経験値：だれが倒しても入る（部隊の経験値）。必要な量に届いたらレベルアップ（選ぶまで戦闘を止める）
 function trialGainXp(T, amount) {
@@ -1060,11 +1068,53 @@ function trialDropCoin(T, e) {
   }
   T.coins.push({ x, y, xp: v, pull: false, pt: 0, seed: T.rng() * 6.28 });
 }
+// v109 磁石：敵を magnetEvery 体倒すごとに、倒した所に1つ落とす（乱数は使わない）
+function trialMagnetDrop(T, e) {
+  const S = TRIAL_SURVIVAL;
+  T.magnetKills = (T.magnetKills || 0) + 1;
+  if (T.magnetKills < S.magnetEvery) return;
+  T.magnetKills = 0;
+  T.magnets = T.magnets || [];
+  if (T.magnets.length >= S.magnetMax) return;
+  const M = T.map,
+    ok = (x, y) => !trialInRiver(M, x, y) && !M.obstacles.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 10),
+    [x, y] = ok(e.x, e.y) ? [e.x, e.y] : [e.px != null ? e.px : e.x, e.py != null ? e.py : e.y];
+  T.magnets.push({ x, y, pull: false, pt: 0 });
+  T.magnetDropped = (T.magnetDropped || 0) + 1;
+}
+// 磁石もコインと同じく、吸い寄せの範囲に入ると主人公へ飛んでくる。拾うと、戦場のコインを全部吸い寄せる
+function trialMagnetTick(T, h, dt) {
+  if (!T.magnets || !T.magnets.length) return;
+  const S = TRIAL_SURVIVAL;
+  for (let i = T.magnets.length - 1; i >= 0; i--) {
+    const m = T.magnets[i],
+      dx = h.x - m.x,
+      dy = h.y - 10 - m.y,
+      d = Math.hypot(dx, dy);
+    if (!m.pull) {
+      if (d > S.magnet * (h.magnetMul || 1)) continue;
+      m.pull = true;
+    }
+    m.pt += dt;
+    const step = Math.min(d, (S.pull0 + S.pullAcc * m.pt) * dt);
+    m.x += (dx / (d || 1)) * step;
+    m.y += (dy / (d || 1)) * step;
+    if (d - step > S.pick) continue;
+    T.magnets.splice(i, 1);
+    T.magnetPicked = (T.magnetPicked || 0) + 1;
+    for (const c of T.coins) c.pull = true; // 戦場のコインを全部吸い寄せる（遠くても加速して必ず届く）
+    if (effects.length < 64) effects.push({ kind: "ctext", x: h.x, y: h.y - 110, text: "🧲 コインを全部吸い寄せ！", ougi: true, age: 0, duration: 1.4 });
+    if (effects.length < 64) effects.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.6 });
+    trialSfx("pick");
+  }
+}
 // 吸い寄せと回収：主人公だけ。近づいたコインは加速して主人公へ。拾った分をまとめて経験値に（何枚でも合計がそのまま入る）
 function trialCoinTick(T, dt) {
   const S = TRIAL_SURVIVAL,
     h = T.units.find((u) => u.id === T.hero);
-  if (!h || h.dead || !T.coins.length) return;
+  if (!h || h.dead) return;
+  trialMagnetTick(T, h, dt);
+  if (!T.coins.length) return;
   let got = 0,
     n = 0;
   for (let i = T.coins.length - 1; i >= 0; i--) {
@@ -1073,7 +1123,7 @@ function trialCoinTick(T, dt) {
       dy = h.y - 10 - c.y,
       d = Math.hypot(dx, dy);
     if (!c.pull) {
-      if (d > S.magnet) continue; // 遠いコインは動かさない（数が増えても軽い）
+      if (d > S.magnet * (h.magnetMul || 1)) continue; // 遠いコインは動かさない（数が増えても軽い）。吸い寄せ範囲アップで広がる
       c.pull = true;
     }
     c.pt += dt;
@@ -1346,6 +1396,7 @@ $("trialSound").addEventListener("click", () => {
 trialSfxButton();
 // コインの絵：青く光る丸（見えている所だけ描く）。合体したコインは少し大きい
 function trialDrawCoins(T, V) {
+  trialDrawMagnets(T);
   if (!T.coins || !T.coins.length) return;
   const x0 = V.ox - 20,
     y0 = V.oy - 20,
@@ -1370,6 +1421,27 @@ function trialDrawCoins(T, V) {
     ctx.beginPath();
     ctx.arc(c.x - r * 0.3, c.y + bob - r * 0.3, r * 0.4, 0, 7);
     ctx.fill();
+  }
+  ctx.restore();
+}
+// v109 磁石：赤いU字の磁石が金色に光って、上下にゆれる
+function trialDrawMagnets(T) {
+  if (!T.magnets || !T.magnets.length) return;
+  ctx.save();
+  for (const m of T.magnets) {
+    const bob = reduced || m.pull ? 0 : Math.sin(visualTime * 3 + m.x) * 4,
+      glow = reduced ? 0.45 : 0.35 + 0.25 * Math.sin(visualTime * 6),
+      y = m.y - 14 + bob;
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = "#ffe27a";
+    ctx.beginPath();
+    ctx.arc(m.x, y, 30, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = "34px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🧲", m.x, y);
   }
   ctx.restore();
 }
@@ -2158,7 +2230,7 @@ function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
     e.gone = true;
     u.kills++;
     trial.kills++;
-    if (trial.mode === "survival") trialDropCoin(trial, e);
+    if (trial.mode === "survival") trialDropCoin(trial, e), trialMagnetDrop(trial, e);
     trialKillFx(e);
   }
   return dmg;
@@ -2367,7 +2439,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0 } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -2781,6 +2853,10 @@ function trialMiniMap(T, V, SW) {
     ctx.fillRect(x0 + T.map.river.x0 * s, y0, (T.map.river.x1 - T.map.river.x0) * s, mh);
   }
   ctx.globalAlpha = 1;
+  for (const m of T.magnets || []) {
+    ctx.fillStyle = "#ffe27a"; // v109 磁石（金）
+    ctx.fillRect(x0 + m.x * s - 3, y0 + m.y * s - 3, 6, 6);
+  }
   for (const e of T.enemies)
     if (!e.gone) {
       ctx.fillStyle = "#ff4a3a";
@@ -2912,7 +2988,7 @@ function renderTrialSheet() {
           (R.skillList.length ? "<p><small>🗡 攻撃スキル：" + R.skillList.map((x) => x.icon + esc(x.name) + (x.evo ? "（進化）" : x.lv >= 5 ? "★" : " Lv" + x.lv)).join("・") + "</small></p>" : "") +
           (R.rewardList.length ? "<p><small>🎁 報酬：" + R.rewardList.map((x) => (x.special ? "<b>" : "") + x.icon + esc(x.name) + (x.special ? "</b>" : "")).join("・") + "</small></p>" : "") +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
-          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）</small>" : "") +
+          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）" + (R.coins.magnets ? "・🧲 磁石 " + R.coins.magnets + "回" : "") + "</small>" : "") +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +

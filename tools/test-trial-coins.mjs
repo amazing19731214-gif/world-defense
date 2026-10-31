@@ -336,6 +336,71 @@ try {
   // 10. 保存データは変わらない
   check((await storage(p)) === save0, "コイン・サバイバルLv・強化は保存データに入らない（本番の兵士の経験値・Lv も変わらない）");
   await c.close();
+  // 11. v109 吸い寄せ範囲アップ（レベルアップ・宝箱）：コインを吸い寄せる距離が +30% ずつ広がる
+  ({ c, p } = await open());
+  await quiet(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0],
+      R = T.survival;
+    const r0 = T.state().magnetR;
+    T.drop(h.x + 235, h.y - 10); // 190 の外・247 の内
+    for (let i = 0; i < 10; i++) WD_DEBUG.step(0.1);
+    const before = T.coinList()[0] ? Math.round(T.coinList()[0].x - h.x) : null;
+    L.choice = [{ kind: "boon", key: "magnet" }];
+    L.lvUps = 1;
+    T.choose(0);
+    const r1 = T.state().magnetR;
+    for (let i = 0; i < 20; i++) WD_DEBUG.step(0.1);
+    const xp = T.state().xpTotal;
+    // 宝箱にも出る（ふつうの報酬）
+    let inChest = 0;
+    for (let i = 0; i < 400; i++) if (T.roll(false).key === "magnet") inChest++;
+    return { r0, r1, before, xp, inChest, boon: !!R.boons.magnet };
+  });
+  check(r.boon && r.r0 === 190 && Math.round(r.r1) === 247 && r.before === 235 && r.xp === 1, "🧲 吸い寄せ範囲アップ：吸い寄せる距離が 190 → 247（+30%）。届かなかったコインも吸い寄せて拾う", r);
+  check(r.inChest > 0 && r.inChest < 400, "吸い寄せ範囲アップは宝箱の報酬にも出る（400回で " + r.inChest + " 回）", r.inChest);
+  // 12. v109 磁石：敵を70体倒すごとに1つ落ちる（乱数なし）
+  await quiet(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0];
+    L.next = 0;
+    let first = null;
+    for (let i = 0; i < 4000 && T.state().magnetDropped < 2; i++) {
+      h.hp = h.max;
+      L.next = Math.min(L.next, 0.3);
+      if (L.choice) T.choose(0);
+      if (L.cleared) break;
+      WD_DEBUG.step(0.1);
+      if (first == null && T.state().magnetDropped) first = T.state().kills;
+    }
+    const s = T.state();
+    return { first, kills: s.kills, dropped: s.magnetDropped, every: T.survival.magnetEvery };
+  });
+  check(r.every === 70 && r.first === 70 && r.dropped >= 2, "🧲 磁石は敵を70体倒すごとに1つ落ちる（1つ目は撃破 " + r.first + " のとき）", r);
+  // 13. 磁石を拾うと、戦場のコインを全部吸い寄せる（遠くのコインも）
+  await quiet(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0];
+    L.coins = [];
+    const far = [[200, 200], [1800, 200], [200, 1100], [1800, 1100], [1500, 600], [300, 600]];
+    for (const [x, y] of far) T.drop(x, y);
+    T.dropMagnet(h.x + 150, h.y);
+    const n0 = T.state().coins;
+    for (let i = 0; i < 5; i++) WD_DEBUG.step(0.1);
+    const mid = T.state();
+    for (let i = 0; i < 50 && T.state().coins; i++) WD_DEBUG.step(0.1);
+    const s = T.state();
+    return { n0, pickedMagnet: mid.magnetPicked, magnetsLeft: s.magnets, coins: s.coins, xp: s.xpTotal, time: s.coins ? null : "ok" };
+  });
+  check(r.n0 === 6 && r.pickedMagnet === 1 && r.magnetsLeft === 0 && r.coins === 0 && r.xp === 6, "🧲 磁石を拾うと、戦場のコイン（遠くの6枚も）を全部吸い寄せて拾う", r);
+  check((await storage(p)) === save0, "吸い寄せ範囲アップ・磁石は保存データに入らない");
+  await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);
 } finally {
