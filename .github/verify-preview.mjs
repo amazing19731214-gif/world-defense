@@ -1,0 +1,64 @@
+// raw.githack.com のテスト版を、iPhone 13 相当で開いて操作する（テスト配信の確認用。ゲームの中身は変えない）
+import { webkit, chromium, devices } from "playwright";
+const URL = "https://raw.githack.com/amazing19731214-gif/world-defense/trial-test-preview/index.html";
+const engine = process.argv[2] === "chromium" ? chromium : webkit;
+const out = { engine: process.argv[2] || "webkit" };
+const errors = [];
+const browser = await engine.launch();
+const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+const p = await ctx.newPage();
+p.setDefaultTimeout(30000);
+p.on("pageerror", (e) => errors.push(e.message));
+p.on("dialog", (d) => d.accept());
+let ok = true;
+const step = (name, value, pass) => {
+  out[name] = value;
+  console.log((pass ? "OK  " : "NG  ") + name + " " + JSON.stringify(value));
+  if (!pass) ok = false;
+};
+try {
+  const res = await p.goto(URL, { waitUntil: "load" });
+  await p.waitForTimeout(2500);
+  step("1 ページが表示される", { status: res.status(), type: res.headers()["content-type"], title: await p.title() }, res.status() === 200 && (await p.title()).includes("【テスト】"));
+  const badge = await p.evaluate(() => {
+    const b = document.getElementById("testBadge");
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    return { text: b.textContent, left: Math.round(r.left), bottom: Math.round(r.bottom), h: innerHeight };
+  });
+  step("2 左下に「🧪 テスト環境」", badge, !!badge && badge.text.includes("テスト環境") && badge.left < 20 && badge.h - badge.bottom < 20);
+  await p.locator("#dockMenu").tap();
+  await p.waitForTimeout(400);
+  step("3 メニューが開く", await p.locator("#testPrepare").isVisible(), await p.locator("#testPrepare").isVisible());
+  await p.locator("#testPrepare").tap();
+  await p.waitForLoadState("load");
+  await p.waitForTimeout(2500);
+  const n = await p.evaluate(() => JSON.parse(localStorage.getItem("worldDefense.soldiers.v1") || "{}").soldiers?.length || 0);
+  const raw = await p.evaluate(() => Object.keys(localStorage).sort());
+  step("4 テスト用兵士を準備できる（10人・保存は wdtest: の領域だけ）", { n, raw }, n === 10 && raw.every((k) => k.startsWith("wdtest:")));
+  await p.locator("#dockMenu").tap();
+  await p.locator("#trialOpen").scrollIntoViewIfNeeded();
+  await p.locator("#trialOpen").tap();
+  await p.waitForTimeout(400);
+  for (const name of ["試・剣神", "試・槍将", "試・弓聖", "試・銃将", "試・医王"]) await p.locator("[data-trial-pick]", { hasText: name }).tap();
+  await p.locator("[data-trial-go]").tap();
+  await p.waitForTimeout(400);
+  const box = await p.locator("#game").boundingBox();
+  for (const [x, y] of [[700, 210], [700, 280], [700, 350], [760, 240], [770, 330]]) await p.touchscreen.tap(box.x + (x / 960) * box.width, box.y + (y / 600) * box.height);
+  await p.locator("#trialGo").tap();
+  await p.waitForTimeout(15000);
+  const info = await p.evaluate(() => document.getElementById("trialInfo").textContent);
+  step("5 戦場試練を開始できる（15秒たって戦闘が進む）", info, /味方 \d\/5/.test(info) && /\d+秒/.test(info));
+  await p.locator("#trialRetreat").tap();
+  await p.waitForTimeout(800);
+  const result = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, rows: document.querySelectorAll(".trial-unit").length, text: document.querySelector(".trial-result")?.textContent }));
+  step("6 撤退すると結果の画面", result, result.open && result.rows === 5);
+  const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  step("7 横にはみ出さない", overflow, overflow <= 0);
+  step("8 JavaScript のエラーなし", errors, errors.length === 0);
+} catch (e) {
+  step("例外", String(e && e.message), false);
+}
+await browser.close();
+console.log(JSON.stringify(out));
+process.exit(ok ? 0 : 1);

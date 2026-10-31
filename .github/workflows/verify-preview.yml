@@ -1,0 +1,38 @@
+# テスト配信の確認（配信専用ブランチ trial-test-preview だけ。main・本番の公開サイトには関係しない）
+# raw.githack.com から実際にテスト版を取り、iPhone 13 相当（WebKit＝Safari と同じ描画の仕組み）と Chromium で操作して確かめる
+name: テスト配信の確認
+on:
+  push:
+    branches: [trial-test-preview]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: raw.githack.com から取得して、ブランチのファイルと同じか確かめる
+        run: |
+          URL="https://raw.githack.com/amazing19731214-gif/world-defense/trial-test-preview/index.html"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -sS -L -D headers.txt -o served.html "$URL" || true
+            if cmp -s served.html index.html; then echo "SAME_AS_BRANCH (try $i)"; break; fi
+            echo "まだ古い・取得できない（try $i）。60秒待つ"; sleep 60
+          done
+          echo "--- headers"; cat headers.txt
+          ls -l served.html index.html
+          cmp served.html index.html
+      - name: Playwright（WebKit・Chromium）を入れる
+        run: |
+          npm init -y >/dev/null
+          npm install playwright@1.48.2 >/dev/null
+          npx playwright install --with-deps webkit chromium
+      - name: iPhone 13 相当で操作する（WebKit）
+        run: node .github/verify-preview.mjs webkit
+      - name: iPhone 13 相当で操作する（Chromium）
+        run: node .github/verify-preview.mjs chromium
