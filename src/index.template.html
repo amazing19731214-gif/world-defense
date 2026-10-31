@@ -1826,7 +1826,16 @@
         opacity: 0.7;
         border-color: #ff7b6b88;
       }
+      .trial-unit.mvp {
+        border-color: #ffd36a;
+        background: linear-gradient(90deg, #c8921f2a, transparent 85%);
+      }
+      .trial-mvp {
+        color: #ffd36a;
+        font-weight: bold;
+      }
       /* 戦場試練の間は、防衛戦のウェーブ・建設・部隊の操作を出さない */
+      body.trial-on header .stats,
       body.trial-on .play-tools,
       body.trial-on #trainBar,
       body.trial-on #dockUnits,
@@ -2744,7 +2753,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v107試作（戦場試練・伝説の奥義と奥義書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v107.1試作（戦場試練の戦闘進化・伝説の奥義と奥義書）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -7905,7 +7914,7 @@ OFF</button>
         // 経験値（通常の防衛戦・攻城戦・修練場で共通の入口）。kind：hit 攻撃1回・damage 減らしたHP・kill 撃破・heal 回復・block 防御・wave 生存
         // 通常の防衛戦はこれまでどおりの値（防御だけ新しく1）。修練場は敵レベルに応じ、実際の量（HP）に比例する
         function earnXp(s, kind, amount = 1, ref = null) {
-          if (!s || !s.alive) return;
+          if (!s || !s.alive || s.trialShadow) return; // 戦場試練の写し（試作）には経験値を入れない
           const T = training;
           if (!T) {
             if (kind === "hit") gainXp(s, SQUAD_RULES.xpPerHit);
@@ -22930,6 +22939,10 @@ OFF</button>
               on: () => !!trial,
               live: () => trial,
               result: () => trialResultView && JSON.parse(JSON.stringify(trialResultView)),
+              power: () => trial && { ...trial.power },
+              enemyLevel: (ids) => trialEnemyLevel(ids.map((id, i) => trialUnit(soldierById(id), i))),
+              tap: (x, y) => trialTap(x, y),
+              view: () => (trial ? trialView() : null),
               state: () =>
                 trial && {
                   phase: trial.phase,
@@ -22938,8 +22951,11 @@ OFF</button>
                   spawned: trial.spawned,
                   total: trial.total,
                   kills: trial.kills,
-                  units: trial.units.map((u) => ({ id: u.id, role: u.role, x: u.x, y: u.y, hp: u.hp, max: u.max, dead: u.dead, kills: u.kills, healed: u.healed, placed: u.placed, target: u.target ? u.target.id : null })),
-                  enemies: trial.enemies.map((e) => ({ id: e.id, kind: e.kind, lane: e.lane, role: e.role, x: e.x, y: e.y, hp: e.hp, gone: e.gone, target: e.target ? e.target.id : null })),
+                  units: trial.units.map((u) => ({ id: u.id, role: u.role, x: u.x, y: u.y, hp: u.hp, max: u.max, dead: u.dead, kills: u.kills, healed: u.healed, dealt: u.dealt, skills: { ...u.skills }, placed: u.placed, target: u.target ? u.target.id : null })),
+                  enemies: trial.enemies.map((e) => ({ id: e.id, kind: e.kind, behavior: e.behavior, lane: e.lane, role: e.role, x: e.x, y: e.y, hp: e.hp, gone: e.gone, unstuck: e.unstuck || 0, leader: e.leader ? e.leader.id : null, target: e.target ? e.target.id : null })),
+                  fx: effects.length,
+                  shots: shots.length,
+                  cam: trial.cam,
                 },
             },
             // 試作の戦闘（v106試作）：修練場だけ
