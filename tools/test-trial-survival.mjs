@@ -1,4 +1,4 @@
-// 戦場試練 v108.1：サバイバル（主人公1人＋仲間4人）。主人公の選び方・操作・仲間の AI・敵の出現・強敵・勝敗・撤退・地形・iPhone・保存データ
+// 戦場試練 v108.1〜v108.2：サバイバル（主人公1人から始まり、レベルアップで仲間を加入）。主人公の選び方・操作・仲間の AI・敵の出現・強敵・勝敗・撤退・地形・iPhone・保存データ
 //   node tools/test-trial-survival.mjs
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -53,6 +53,20 @@ async function open({ width = 390, height = 844, query = "?debug" } = {}) {
   p.on("dialog", (d) => d.accept());
   await p.goto(base + query);
   await p.waitForFunction(() => window.WD_DEBUG);
+  // v108.2：レベルアップの選択は、この試験では「仲間を加入」を優先して自動で選ぶ（選択そのものは test-trial-recruit で確かめる）
+  await p.evaluate(() => {
+    const step0 = WD_DEBUG.step;
+    WD_DEBUG.step = (sec) => {
+      for (let i = 0; i < Math.max(1, Math.round(sec / 0.1)); i++) {
+        const s = WD_DEBUG.trial.state();
+        if (s && s.choice) {
+          const k = s.choice.findIndex((c) => c.startsWith("recruit"));
+          WD_DEBUG.trial.choose(k >= 0 ? k : 0);
+        }
+        step0(Math.min(0.1, sec));
+      }
+    };
+  });
   return { c, p };
 }
 const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]))));
@@ -129,7 +143,7 @@ try {
     };
   });
   check(r.mode === "survival" && r.phase === "fight" && r.hero === 3 && r.control === 3, "サバイバルは配置なしですぐ始まり、主人公（弓聖）を操作する", r);
-  check(r.units && r.auto && r.pad && /主人公|👑/.test(r.info) && /HP/.test(r.info) && /残り/.test(r.info) && /撃破/.test(r.info) && /仲間 4\/4/.test(r.info), "画面：主人公のHP・仲間の人数・残り時間・撃破数とスティック（兵士の札・全員自動は出さない）", r);
+  check(r.units && r.auto && r.pad && /👑/.test(r.info) && /仲間 0\/4/.test(r.info), "画面：主人公の名前・仲間の人数とスティック（兵士の札・全員自動は出さない。HP・経験値・残り時間は戦場の上）", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       e1 = T.control(1);
@@ -148,10 +162,9 @@ try {
     const x1 = h.x;
     T.stick(0, 0);
     for (let i = 0; i < 20; i++) WD_DEBUG.step(0.1);
-    return { moved: x1 - x0, stopped: Math.abs(h.x - x1), mates: L.units.filter((u) => u !== h).map((u) => Math.round(Math.hypot(u.x - h.x, u.y - h.y))) };
+    return { moved: x1 - x0, stopped: Math.abs(h.x - x1) };
   });
   check(r.moved > 150 && r.stopped < 2, "主人公はスティックで動き、指を離すと止まる", r);
-  check(r.mates.every((d) => d < 200), "主人公が動くと、仲間4人もついてくる", r.mates);
   // 3. 戦う：敵は画面の外から出る。主人公が止まっていても自動で攻撃し、戦闘が続く。地形に埋まらない
   r = await runWatch(p, 60);
   const s60 = await p.evaluate(() => WD_DEBUG.trial.state());
@@ -159,6 +172,18 @@ try {
   const hero60 = s60.units.find((u) => u.id === 3);
   check(hero60.dealt > 0 && s60.kills >= 5, "主人公が止まっていても、攻撃は自動で続く（主人公の与ダメージ " + Math.round(hero60.dealt) + "・撃破 " + s60.kills + "）", hero60);
   check(r.nBad === 0, "兵士も敵も、川や木・岩に埋まらない", r.bad);
+  // 加入した仲間は主人公についてくる
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units.find((u) => u.id === 3);
+    T.stick(-1, 0.3);
+    for (let i = 0; i < 50; i++) WD_DEBUG.step(0.1);
+    T.stick(0, 0);
+    for (let i = 0; i < 40; i++) WD_DEBUG.step(0.1);
+    return { n: L.units.length, mates: L.units.filter((u) => u !== h && !u.dead).map((u) => Math.round(Math.hypot(u.x - h.x, u.y - h.y))) };
+  });
+  check(r.n >= 3 && r.mates.every((d) => d < 260), "加入した仲間は、主人公が動くとついてくる（" + (r.n - 1) + "人）", r);
   // 4. 仲間は職業に応じて戦う（遠距離は撃つ・近接は斬る・衛生兵は回復）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
@@ -236,13 +261,15 @@ try {
     document.getElementById("trialSheet").hidden = true;
     T.start([1, 2, 3, 4, 5], { mode: "survival", hero: 5 }); // 衛生兵（医王）でも主人公になれる
     let L = T.live();
+    for (let i = 0; i < 600; i++) WD_DEBUG.step(0.1);
     for (const u of L.units) if (u.id !== 5) u.hp *= 0.5;
-    for (let i = 0; i < 300; i++) WD_DEBUG.step(0.1);
+    for (let i = 0; i < 200; i++) WD_DEBUG.step(0.1);
     const healerHero = { control: T.state().control, healed: Math.round(L.units[0].healed) };
     T.retreat();
     document.getElementById("trialSheet").hidden = true;
     T.start([1, 2, 3, 4], { mode: "survival", hero: 1 });
     L = T.live();
+    for (let i = 0; i < 900 && !L.units.some((u) => u.id === 3); i++) WD_DEBUG.step(0.1);
     const mate = L.units.find((u) => u.id === 3);
     for (let i = 0; i < 100; i++) WD_DEBUG.step(0.1);
     // 仲間（弓聖）が倒れる：続く
