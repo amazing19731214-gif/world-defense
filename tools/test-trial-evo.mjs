@@ -168,7 +168,7 @@ try {
     await c.close();
   }
 
-  // 7. 画面：城HP・ゴールド・ウェーブの表示を隠し、ステージ・味方・敵・時間を出す。兵士のタップで拡大
+  // 7. 画面：城HP・ゴールド・ウェーブの表示を隠し、ステージ・味方・敵・時間を出す。兵士のタップで操作（v108）
   for (const width of [375, 390]) {
     const { c, p, ids } = await open("mid", { width, height: 844 });
     let r = await p.evaluate((ids) => {
@@ -191,22 +191,25 @@ try {
       };
     }, ids);
     check(r.before.hp && !r.during.hp && !r.during.gold && !r.during.wave, "戦場試練の間は城HP・ゴールド・ウェーブの表示を隠す（" + width + "px）", r);
-    check(r.info.includes("三方の関") && /味方 \d\/5/.test(r.info) && /敵 \d+/.test(r.info) && /\d+秒/.test(r.info) && r.retreat && r.buttons === 1, "ステージ名・生存兵士数・残り敵数・経過時間と、撤退ボタンだけ（" + width + "px）", r.info);
+    check(r.info.includes("三方の関") && /味方 \d\/5/.test(r.info) && /敵 \d+/.test(r.info) && /\d+秒/.test(r.info) && r.retreat && r.buttons <= 7, "ステージ名・生存兵士数・残り敵数・経過時間と、撤退ボタンだけ（" + width + "px）", r.info);
     check(r.overflow <= 0, "iPhone縦（" + width + "px）で戦闘中の画面がはみ出さない", r.overflow);
     r = await p.evaluate(() => {
       const T = WD_DEBUG.trial,
         u = T.live().units.find((x) => !x.dead);
-      T.tap(u.x, u.y - 20);
-      const a = { cam: T.state().cam, z: T.view().z, info: document.getElementById("trialInfo").textContent };
+      T.snap();
+      const q = T.toScreen(u.x, u.y - 20);
+      T.tap(q.x, q.y); // 戦場の兵士をタップ → その兵士を操作
+      const a = { control: T.state().control, info: document.getElementById("trialInfo").textContent };
       WD_DEBUG.step(2);
       WD_DEBUG.heroApi.draw();
+      T.snap();
       const v = T.view(),
-        uu = T.live().units.find((x) => x.id === a.cam);
+        uu = T.live().units.find((x) => x.id === a.control);
       const inView = uu.x >= v.ox && uu.x <= v.ox + 960 / v.z && uu.y >= v.oy && uu.y <= v.oy + 600 / v.z;
-      T.tap(uu.x, uu.y - 20);
-      return { a, inView, back: T.view().z, id: u.id };
+      T.control(null);
+      return { a, inView, back: T.state().control, z: T.view().z, id: u.id };
     });
-    check(r.a.cam === r.id && r.a.z > 1 && r.inView && r.back === 1 && r.a.info.includes("拡大"), "兵士をタップすると拡大して追いかけ、もう一度タップで全体に戻る", r);
+    check(r.a.control === r.id && r.inView && r.back === null && r.a.info.includes("操作中"), "戦場の兵士をタップすると、その兵士を操作してカメラが追う（全員自動で戻る）", r);
     await c.close();
   }
 

@@ -9,7 +9,7 @@
 const TRIAL_RULES = {
   maxUnits: 5, // 出撃できる人数
   real: false, // 本番モード（永久死亡・英霊名鑑）にするか。試作では false（変えない）
-  timeLimit: 300, // 時間切れ（秒）。衛生兵だけの出撃などで終わらなくならないように
+  timeLimit: 420, // 時間切れ（秒）。衛生兵だけの出撃などで終わらなくならないように（v108：戦場が広いので長め）
   march: 46, // 兵士の歩く速さ（px/秒）。兵種の march（騎兵など）を掛ける
   sep: 24, // 兵士・敵どうしが重なり続けない距離
   meleeReach: 34, // 近接の攻撃が届く距離（体の大きさを足す）
@@ -32,22 +32,58 @@ const TRIAL_RULES = {
   atkMul: 0.55, // 敵の攻撃の倍率（5人で囲まれても一瞬で倒れないように）
   bossHp: 1, // 中ボスの体力の倍率（大将の表はもともと硬い）
   bossAtk: 1, // 中ボスの攻撃の倍率
-  zoom: 1.9, // 兵士をタップしたときの拡大
+  // v108：広い戦場とカメラ・操作
+  camZoom: 1, // 操作している兵士を追うときの拡大（1 = ゲームの 960×600 の広さを映す）
+  camEase: 6, // カメラの追い方（大きいほど早く追いつく。急に飛ばないように少しずつ）
+  stickDead: 0.15, // 仮想スティックの遊び（これより小さい傾きは止まる）
+  leash: 380, // AI の兵士は、配置した所からこの距離までの敵を狙う（広い戦場でばらばらに追いかけて各個に倒されないように）
 };
-// マップ：道（敵の進む線）・合流点・味方の配置場所・砦・出現の順番。座標はゲームの 960×600
+// マップ：道（敵の進む線）・合流点・味方の配置場所・砦・地形・出現の順番。座標は戦場（world）の座標
+//   v108：三方の関を 1920×1200（以前の 960×600 の4倍の広さ）に広げ、カメラで動かして見る
+//   river：川（通れない帯）。bridges：橋（川を渡れる所。道が川を渡る所に1本ずつ）
+//   rocks・forests：木と岩（通れない丸）。避けて歩く（押し出される）だけの簡単なしくみ
+const trialForest = (cx, cy, n, spread, seed) => {
+  let r = seed;
+  const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2 + rnd(),
+      d = spread * Math.sqrt(rnd());
+    return { x: Math.round(cx + Math.cos(a) * d), y: Math.round(cy + Math.sin(a) * d * 0.8), r: 18, kind: ["pine0", "pine1", "round0", "round1", "sakura0"][i % 5] };
+  });
+};
 const TRIAL_MAPS = {
   sanpou: {
     name: "三方の関",
-    text: "上・中央・下の3つの道から敵が攻めてくる。道は関の手前で合流する",
+    text: "広い原野。北・中央・南の3つの道から敵が攻めてくる。川は橋でしか渡れない。道は関の手前で合流する",
+    size: { w: 1920, h: 1200 },
     lanes: {
-      top: [[-20, 92], [230, 92], [430, 230], [585, 300]],
-      mid: [[-20, 300], [585, 300]],
-      bot: [[-20, 508], [230, 508], [430, 370], [585, 300]],
+      top: [[-30, 170], [560, 170], [830, 170], [1080, 360], [1260, 600]],
+      mid: [[-30, 600], [1260, 600]],
+      bot: [[-30, 1030], [560, 1030], [830, 1030], [1080, 840], [1260, 600]],
     },
-    join: [585, 300], // 合流点：ここを過ぎた敵は、どこにいる兵士でも狙う
-    road: [[585, 300], [905, 300]], // 合流点から関（砦）までの道
-    fort: { x: 880, y: 300 },
-    deploy: { x: 640, y: 170, w: 210, h: 260 }, // 味方の配置場所
+    join: [1260, 600], // 合流点：ここを過ぎた敵は、どこにいる兵士でも狙う
+    road: [[1260, 600], [1860, 600]], // 合流点から関（砦）までの道
+    fort: { x: 1800, y: 600 },
+    gate: { x: 1300, y0: 360, y1: 840 }, // 関所の土塁（見た目だけ。道の所は門）
+    deploy: { x: 1340, y: 440, w: 300, h: 320 }, // 味方の配置場所
+    river: { x0: 680, x1: 750 },
+    bridges: [
+      { x0: 668, x1: 762, y0: 136, y1: 204 },
+      { x0: 668, x1: 762, y0: 566, y1: 634 },
+      { x0: 668, x1: 762, y0: 996, y1: 1064 },
+    ],
+    obstacles: [
+      ...trialForest(400, 390, 9, 120, 11),
+      ...trialForest(400, 810, 9, 120, 23),
+      ...trialForest(1080, 150, 6, 80, 37),
+      ...trialForest(1080, 1050, 6, 80, 41),
+      ...trialForest(1560, 230, 6, 90, 53),
+      ...trialForest(1560, 970, 6, 90, 59),
+      { x: 960, y: 520, r: 16, kind: "rock" },
+      { x: 990, y: 690, r: 16, kind: "rock" },
+      { x: 250, y: 600 - 110, r: 16, kind: "rock" },
+      { x: 1180, y: 470, r: 16, kind: "rock" },
+    ],
     labels: { top: "北の道", mid: "中央の道", bot: "南の道" },
     // 出現：t 秒に lane から kind を n 体（role mid は中ボス。formation tate は盾兵が前・鉄砲足軽2体が後ろ）
     waves: [
@@ -238,7 +274,8 @@ function startTrial(ids, stageId = "sanpou") {
     size: D.size,
     kills: 0,
     result: null,
-    cam: null, // 拡大して見る兵士（ID）。null は全体
+    control: null, // 操作している兵士の ID（null は全員自動）
+    view: null, // カメラ { x, y, z }
     fxMax: 0,
   };
   shots = [];
@@ -278,7 +315,7 @@ function trialBegin() {
   if (!T || T.phase !== "deploy") return "いまは始められません。";
   if (T.units.some((u) => !u.placed)) return "全員を配置してから始めます（「自動で並べる」も使えます）。";
   T.phase = "fight";
-  msg("⚔️ 戦場試練「" + T.map.name + "」開始！ 兵士はそれぞれ自分で戦います（兵士をタップすると拡大）。");
+  msg("⚔️ 戦場試練「" + T.map.name + "」開始！ 兵士はそれぞれ自分で戦います。下の名前か戦場の兵士を押すと、その兵士をスティックで動かせます。");
   trialSyncUI();
   return null;
 }
@@ -297,11 +334,13 @@ function tickTrial(dt) {
   }
   const live = T.units.filter((u) => !u.dead),
     foes = T.enemies.filter((e) => !e.gone);
+  for (const o of [...live, ...foes]) (o.px = o.x), (o.py = o.y);
   for (const u of live) if (!u.dead) trialUnitAct(u, foes, live, dt);
   for (const e of foes) if (!e.gone) trialEnemyAct(e, T.units.filter((u) => !u.dead), dt);
   trialSeparate(T.units.filter((u) => !u.dead), 1);
   trialSeparate(T.enemies.filter((e) => !e.gone), 0.8);
   trialSeparateBetween(T.units.filter((u) => !u.dead), T.enemies.filter((e) => !e.gone));
+  for (const o of [...T.units.filter((u) => !u.dead), ...T.enemies.filter((e) => !e.gone)]) trialCollide(o);
   for (const u of T.units) {
     u.atk = Math.max(0, u.atk - dt);
     u.hit = Math.max(0, u.hit - dt);
@@ -334,8 +373,55 @@ function trialMove(o, tx, ty, speed, dt) {
   o.y += (dy / d) * step;
   o.face = dx < 0 ? -1 : 1;
   o.walk = (o.walk || 0) + step;
-  o.x = Math.max(10, Math.min(950, o.x));
-  o.y = Math.max(40, Math.min(580, o.y));
+  const Z = trial ? trial.map.size : { w: W, h: H };
+  o.x = Math.max(10, Math.min(Z.w - 10, o.x));
+  o.y = Math.max(30, Math.min(Z.h - 10, o.y));
+}
+// 川：橋の上でなければ通れない
+const trialInRiver = (M, x, y) => !!M.river && x > M.river.x0 && x < M.river.x1 && !M.bridges.some((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
+// 行き先へ向かう（AI の移動）。川の向こうへ行くときは、近い橋を通る
+function trialGo(o, tx, ty, speed, dt) {
+  const M = trial.map,
+    R = M.river;
+  if (R) {
+    const side = (x) => (x < R.x0 ? -1 : x > R.x1 ? 1 : 0),
+      s0 = side(o.x),
+      s1 = side(tx);
+    if (s0 !== s1) {
+      // 橋の上（川の帯の中）にいる：そのまま行き先の側へ渡る。まだ岸にいる：一番近い橋のたもとへ
+      if (s0 === 0) {
+        const b = M.bridges.find((v) => o.y >= v.y0 - 2 && o.y <= v.y1 + 2) || M.bridges[0];
+        return trialMove(o, s1 < 0 ? R.x0 - 14 : R.x1 + 14, Math.max(b.y0 + 10, Math.min(b.y1 - 10, o.y)), speed, dt);
+      }
+      const cost = (b) => Math.hypot((b.x0 + b.x1) / 2 - o.x, (b.y0 + b.y1) / 2 - o.y) + Math.hypot((b.x0 + b.x1) / 2 - tx, (b.y0 + b.y1) / 2 - ty),
+        b = M.bridges.reduce((a, c) => (cost(c) < cost(a) ? c : a)),
+        by = (b.y0 + b.y1) / 2,
+        ex = s0 < 0 ? R.x0 - 6 : R.x1 + 6;
+      if (Math.abs(o.y - by) > 16 || Math.abs(o.x - ex) > 30) return trialMove(o, ex, by, speed, dt);
+      return trialMove(o, s0 < 0 ? R.x1 + 14 : R.x0 - 14, by, speed, dt);
+    }
+  }
+  trialMove(o, tx, ty, speed, dt);
+}
+// 地形に重ならないようにする：木・岩からは押し出し、川（橋の外）に入ったら元の位置へ戻す
+function trialCollide(o) {
+  const M = trial.map;
+  for (const b of M.obstacles) {
+    const dx = o.x - b.x,
+      dy = o.y - b.y,
+      d = Math.hypot(dx, dy) || 0.01,
+      R = b.r + 10;
+    if (d < R) {
+      o.x = b.x + (dx / d) * R;
+      o.y = b.y + (dy / d) * R;
+    }
+  }
+  if (trialInRiver(M, o.x, o.y) && o.px != null) {
+    // 横から入ったなら x を、縦から入ったなら y を戻す（岸に沿って滑る）
+    if (!trialInRiver(M, o.px, o.y)) o.x = o.px;
+    else if (!trialInRiver(M, o.x, o.py)) o.y = o.py;
+    else (o.x = o.px), (o.y = o.py);
+  }
 }
 // ===== 職業技・閃き：既存の evolutionAction を戦場試練でも使う（技の条件・待ち時間・効果は既存のまま） =====
 //   c.friends は出撃した全員（同じ隊として扱う）。blocked は「その敵が自分を狙って近くにいる」（足止めの代わり）
@@ -383,15 +469,41 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
       }
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
+// v108：操作している兵士（trial.control）は、スティックの向きにだけ動く（AI は動かさない）。攻撃・回復・職業技は自動のまま
+//   操作していない兵士は、これまでどおり AI で動く。操作を外すと（全員自動・切り替え）、次のコマから AI に戻る
+let trialStick = { x: 0, y: 0 }, // 仮想スティック・キーボードの向き（-1〜1）
+  trialKeys = new Set();
+function trialInput() {
+  let x = trialStick.x,
+    y = trialStick.y;
+  if (trialKeys.size) {
+    x = (trialKeys.has("right") ? 1 : 0) - (trialKeys.has("left") ? 1 : 0);
+    y = (trialKeys.has("down") ? 1 : 0) - (trialKeys.has("up") ? 1 : 0);
+  }
+  const m = Math.hypot(x, y);
+  if (m < TRIAL_RULES.stickDead) return { x: 0, y: 0, m: 0 };
+  return m > 1 ? { x: x / m, y: y / m, m: 1 } : { x, y, m };
+}
 function trialUnitAct(u, foes, live, dt) {
-  const s = u.sh;
+  const s = u.sh,
+    ctl = trial.control === u.id,
+    go = ctl ? () => {} : (tx, ty, sp) => trialGo(u, tx, ty, sp, dt);
   u.cd -= dt;
+  if (ctl) {
+    // スティックの向きへ歩く（指を離すと止まる）
+    const v = trialInput();
+    u.moving = v.m > 0;
+    if (u.moving) {
+      trialMove(u, u.x + v.x * 200, u.y + v.y * 200, u.speed * v.m, dt);
+      u.face = v.x < -0.05 ? -1 : v.x > 0.05 ? 1 : u.face;
+    }
+  }
   if (u.role === "heal") {
     let best = null,
       ratio = 0.97;
     for (const v of live) {
       const r = v.hp / v.max;
-      if (v !== u && !v.dead && r < ratio) (ratio = r), (best = v);
+      if (v !== u && !v.dead && r < ratio && (!ctl || trialDist(u, v) <= u.range)) (ratio = r), (best = v);
     }
     if (!best && u.hp < u.max * 0.97) best = u; // 自分しか傷ついていなければ自分
     if (!best) {
@@ -400,12 +512,12 @@ function trialUnitAct(u, foes, live, dt) {
       if (front) {
         const tx = front.x + 60,
           ty = front.y;
-        if (trialDist(u, { x: tx, y: ty }) > 20) trialMove(u, tx, ty, u.speed * 0.8, dt);
+        if (trialDist(u, { x: tx, y: ty }) > 20) go(tx, ty, u.speed * 0.8);
       }
       return;
     }
     const d = trialDist(u, best);
-    if (d > u.range * 0.8 && best !== u) return trialMove(u, best.x, best.y, u.speed, dt);
+    if (d > u.range * 0.8 && best !== u) return go(best.x, best.y, u.speed);
     if (u.cd > 0) return;
     const st = soldierStats(s, true),
       beforeRatio = best.hp / best.max,
@@ -421,11 +533,21 @@ function trialUnitAct(u, foes, live, dt) {
     return;
   }
   // 狙う敵：いまの相手が生きていれば続ける（少し遠くなっても）。いなければ一番近い敵
-  if (!u.target || u.target.gone || trialDist(u, u.target) > u.range + 260) u.target = trialNearest(u, foes.filter((e) => !e.gone));
+  if (ctl) {
+    const reach0 = (e) => (u.role === "melee" ? Math.max(u.range, TRIAL_RULES.meleeReach) + (e.r || 12) : u.range);
+    if (!u.target || u.target.gone || trialDist(u, u.target) > reach0(u.target)) u.target = trialNearest(u, foes.filter((e) => !e.gone && trialDist(u, e) <= reach0(e)));
+  } else if (!u.target || u.target.gone || trialDist(u, u.target) > u.range + 260 || (u.home && trialDist(u.home, u.target) > TRIAL_RULES.leash + 80 && trialDist(u, u.target) > u.range + 20)) {
+    // AI：配置した所の近く（leash）か、もう届く所の敵だけを狙う。操作から戻った兵士も、遠ければ持ち場へ戻る
+    const near = (e) => !e.gone && (!u.home || trialDist(u.home, e) <= TRIAL_RULES.leash || trialDist(u, e) <= u.range + 20);
+    u.target = trialNearest(u, foes.filter(near));
+    // 敵が出そろったあと、持ち場の近くに敵が来ないまま8秒たったら、残っている敵を探しに行く（止まったまま終わらない）
+    u.idle = u.target ? 0 : (u.idle || 0) + dt;
+    if (!u.target && u.idle > 8 && !trial.queue.length) u.target = trialNearest(u, foes.filter((e) => !e.gone));
+  }
   const e = u.target;
   if (!e) {
     // 敵がいない：配置した場所へ戻る
-    if (u.home && trialDist(u, u.home) > 6) trialMove(u, u.home.x, u.home.y, u.speed * 0.7, dt);
+    if (u.home && trialDist(u, u.home) > 6) go(u.home.x, u.home.y, u.speed * 0.7);
     return;
   }
   const d = trialDist(u, e),
@@ -434,8 +556,8 @@ function trialUnitAct(u, foes, live, dt) {
     // 近づかれたら少し下がる（関の方へ）
     const bx = u.x + ((u.x - e.x) / (d || 1)) * 40,
       by = u.y + ((u.y - e.y) / (d || 1)) * 40;
-    trialMove(u, bx, by, u.speed * 0.7, dt);
-  } else if (d > reach) return trialMove(u, e.x, e.y, u.speed, dt);
+    go(bx, by, u.speed * 0.7);
+  } else if (d > reach) return go(e.x, e.y, u.speed);
   u.face = e.x < u.x ? -1 : 1;
   if (u.cd > 0 || d > reach) return;
   const st = soldierStats(s, true),
@@ -507,7 +629,7 @@ function trialEnemyAct(e, live, dt) {
     // 道を進む（合流点を過ぎたら関へ）。進めなくなったら次の目印へ（引っかかって止まらない）
     const goal = covered ? { x: e.leader.x - 46, y: e.leader.y } : null,
       p = e.lanePath[e.wp] || trial.map.road[1];
-    trialMove(e, goal ? goal.x : p[0], goal ? goal.y : p[1], speed, dt);
+    trialGo(e, goal ? goal.x : p[0], goal ? goal.y : p[1], speed, dt);
     if (!goal && Math.hypot(p[0] - e.x, p[1] - e.y) < 10) {
       if (e.wp < e.lanePath.length) e.wp++;
       if (e.wp >= e.lanePath.length) e.joined = true;
@@ -523,13 +645,13 @@ function trialEnemyAct(e, live, dt) {
       dl = trialDist(L, u) || 1,
       bx = L.x - ((u.x - L.x) / dl) * 46,
       by = L.y - ((u.y - L.y) / dl) * 46 + (e.id.charCodeAt(e.id.length - 1) % 2 ? 22 : -22);
-    if (trialDist(e, { x: bx, y: by }) > 12) trialMove(e, bx, by, speed, dt);
+    if (trialDist(e, { x: bx, y: by }) > 12) trialGo(e, bx, by, speed, dt);
     if (d > reach) return;
   } else if (range && d < range * 0.45) {
     // 遠距離の敵：近づかれたら少し下がる
-    trialMove(e, e.x + ((e.x - u.x) / (d || 1)) * 30, e.y + ((e.y - u.y) / (d || 1)) * 30, speed * 0.6, dt);
+    trialGo(e, e.x + ((e.x - u.x) / (d || 1)) * 30, e.y + ((e.y - u.y) / (d || 1)) * 30, speed * 0.6, dt);
   } else if (d > reach) {
-    trialMove(e, u.x, u.y, speed, dt);
+    trialGo(e, u.x, u.y, speed, dt);
     trialUnstick(e, dt);
     return;
   }
@@ -578,7 +700,12 @@ function trialHitUnit(u, raw, ranged, e) {
     s.alive = false;
     u.diedAt = trial.t;
     u.killedBy = e.kind;
-    if (trial.cam === u.id) trial.cam = null;
+    if (trial.control === u.id) {
+      const next = trial.units.find((v) => !v.dead);
+      trial.control = next ? next.id : null;
+      if (next) msg("🎮 操作を " + next.name + " に切り替えた");
+      trialSyncUI();
+    }
     msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
   }
 }
@@ -650,6 +777,8 @@ function endTrial(result) {
   const score = (x) => x.dealt + x.healed * 1.2 + x.kills * T.level * 3;
   const best = units.reduce((b, x) => (!b || score(x) > score(b) ? x : b), null);
   if (best && score(best) > 0) best.mvp = true;
+  trialStick = { x: 0, y: 0 };
+  trialKeys.clear();
   trialResultView = { stage: T.map.name, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax };
   trial = null;
   shots = [];
@@ -669,22 +798,26 @@ function retreatTrial() {
 }
 // ===== 描画 =====
 function trialBackground(M) {
-  const key = (pixelOn() ? "p" : "c") + RS + M.name;
+  // 広い戦場の背景は1枚の画像にして使い回す（大きすぎないよう、細かさは最大1.5倍）
+  const Z = M.size,
+    k = Math.min(RS, 1.5),
+    key = (pixelOn() ? "p" : "c") + k + M.name;
   if (trialScenery && trialSceneryKey === key) return trialScenery;
   trialSceneryKey = key;
   const cv = document.createElement("canvas");
-  cv.width = C.width;
-  cv.height = C.height;
+  cv.width = Math.round(Z.w * k);
+  cv.height = Math.round(Z.h * k);
+  cv.k = k;
   const g = cv.getContext("2d");
-  g.setTransform(RS, 0, 0, RS, 0, 0);
+  g.setTransform(k, 0, 0, k, 0, 0);
   // 草地（少しまだら）
   g.fillStyle = "#5f9a4c";
-  g.fillRect(0, 0, W, H);
+  g.fillRect(0, 0, Z.w, Z.h);
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 260; i++) {
+  for (let i = 0; i < 1100; i++) {
     g.fillStyle = rnd() < 0.5 ? "#6aa756" : "#558c43";
-    g.fillRect(Math.floor(rnd() * W), Math.floor(rnd() * H), 6, 4);
+    g.fillRect(Math.floor(rnd() * Z.w), Math.floor(rnd() * Z.h), 6, 4);
   }
   // 道：縁の濃い色 → 土の色（3本は合流点で1本に）
   const road = (pts, w, col) => {
@@ -697,40 +830,74 @@ function trialBackground(M) {
     g.stroke();
   };
   const all = [...Object.values(M.lanes), M.road];
-  for (const p of all) road(p, 50, "#7a5a36");
-  for (const p of all) road(p, 40, "#d4b07a");
+  for (const p of all) road(p, 52, "#7a5a36");
+  for (const p of all) road(p, 42, "#d4b07a");
   for (const p of all) road(p, 3, "#c49c62");
+  // 川：岸の色 → 水 → 細い波。橋は板と欄干
+  if (M.river) {
+    const R = M.river;
+    g.fillStyle = "#7d6a44";
+    g.fillRect(R.x0 - 6, 0, R.x1 - R.x0 + 12, Z.h);
+    g.fillStyle = "#3f86b8";
+    g.fillRect(R.x0, 0, R.x1 - R.x0, Z.h);
+    g.strokeStyle = "#8fc7ea88";
+    g.lineWidth = 2;
+    for (let y = 20; y < Z.h; y += 46) {
+      g.beginPath();
+      g.moveTo(R.x0 + 12, y);
+      g.quadraticCurveTo((R.x0 + R.x1) / 2, y + 10, R.x1 - 12, y);
+      g.stroke();
+    }
+    for (const b of M.bridges) {
+      g.fillStyle = "#6b4a2a";
+      g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+      g.fillStyle = "#a87a48";
+      for (let x = b.x0 + 2; x < b.x1 - 2; x += 10) g.fillRect(x, b.y0 + 6, 7, b.y1 - b.y0 - 12);
+      g.fillStyle = "#4a3018";
+      g.fillRect(b.x0, b.y0, b.x1 - b.x0, 5);
+      g.fillRect(b.x0, b.y1 - 5, b.x1 - b.x0, 5);
+    }
+  }
   // 配置場所の地面（石畳の広場）
   const D = M.deploy;
   g.fillStyle = "#b9a27c";
   g.fillRect(D.x - 6, D.y - 6, D.w + 12, D.h + 12);
   g.fillStyle = "#cdb88f";
   for (let x = D.x; x < D.x + D.w; x += 30) for (let y = D.y; y < D.y + D.h; y += 26) g.fillRect(x + ((y / 26) % 2) * 15, y, 26, 22);
-  // 両側の土塁と柵（関）
-  g.fillStyle = "#6b5233";
-  g.fillRect(612, 60, 18, 90);
-  g.fillRect(612, 450, 18, 90);
-  // 木と岩（ドット絵のときは素材を使う）
-  const deco = [["pine0", 60, 210], ["pine1", 120, 400], ["round0", 330, 40], ["sakura0", 300, 560], ["pine0", 520, 120], ["round1", 520, 480], ["bamboo0", 700, 70], ["pine1", 780, 560], ["rock", 360, 300], ["bush0", 160, 300], ["rock", 680, 520], ["sakura1", 900, 90], ["round0", 930, 520]];
-  // 素材のコマ [sx, sy, w, h, 足元の x, 足元の y]（pixDraw と同じ）を、背景の画像へ描く
-  const pix = (name, x, bottom, k) => {
+  // 関所の土塁（道の所は門として空ける）
+  if (M.gate) {
+    g.fillStyle = "#6b5233";
+    g.fillRect(M.gate.x - 9, M.gate.y0, 18, 600 - 40 - M.gate.y0);
+    g.fillRect(M.gate.x - 9, 600 + 40, 18, M.gate.y1 - 640);
+    g.fillStyle = "#8a6a40";
+    g.fillRect(M.gate.x - 14, 600 - 52, 28, 12);
+    g.fillRect(M.gate.x - 14, 600 + 40, 28, 12);
+  }
+  // 木と岩（ドット絵のときは素材。木は tree_ の名前）。通れない所
+  const pix = (name, x, bottom, s) => {
     const f = PIX.frames[name];
     if (!f || !PIX.atlas) return false;
     const [sx, sy, w, h, ax, ay] = f;
     g.imageSmoothingEnabled = false;
-    g.drawImage(PIX.atlas, sx, sy, w, h, x - ax * k, bottom - ay * k, w * k, h * k);
+    g.drawImage(PIX.atlas, sx, sy, w, h, x - ax * s, bottom - ay * s, w * s, h * s);
     return true;
   };
-  if (pixelOn() && PIX.atlas) for (const [f, x, y] of [...deco].sort((a, b) => a[2] - b[2])) pix(PIX.frames[f] ? f : "tree_" + f, x, y, PIX_SCALE.tree); // 木は tree_ の名前
-  else
-    for (const [, x, y] of deco) {
+  for (const o of [...M.obstacles].sort((a, b) => a.y - b.y)) {
+    if (pixelOn() && PIX.atlas && pix(PIX.frames[o.kind] ? o.kind : "tree_" + o.kind, o.x, o.y + 10, PIX_SCALE.tree)) continue;
+    if (o.kind === "rock") {
+      g.fillStyle = "#8a8a8a";
+      g.beginPath();
+      g.ellipse(o.x, o.y, 16, 11, 0, 0, 7);
+      g.fill();
+    } else {
       g.fillStyle = "#2f6b33";
       g.beginPath();
-      g.arc(x, y - 18, 16, 0, 7);
+      g.arc(o.x, o.y - 14, 18, 0, 7);
       g.fill();
       g.fillStyle = "#6b4a2a";
-      g.fillRect(x - 3, y - 6, 6, 10);
+      g.fillRect(o.x - 3, o.y - 2, 6, 12);
     }
+  }
   // 関（砦）：ドット絵の城、なければ簡単な櫓
   const F = M.fort;
   if (!(pixelOn() && pix("castle1_ally", F.x, F.y + 50, PIX_SCALE.castle))) {
@@ -743,38 +910,67 @@ function trialBackground(M) {
     g.lineTo(F.x + 52, F.y - 68);
     g.fill();
   }
-  // 道の名前
-  g.font = "bold 15px system-ui";
+  // 道の名前と、敵が出てくる所の印
+  g.font = "bold 18px system-ui";
   g.fillStyle = "#fff4d0";
   g.strokeStyle = "#3a2a16";
   g.lineWidth = 4;
-  for (const [k, p] of Object.entries(M.lanes)) {
-    g.strokeText(M.labels[k], 14, p[0][1] - 30);
-    g.fillText(M.labels[k], 14, p[0][1] - 30);
+  for (const [k2, p] of Object.entries(M.lanes)) {
+    g.strokeText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
+    g.fillText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
   }
   trialScenery = cv;
   return cv;
 }
-// 拡大して見る兵士（タップで選ぶ）。拡大しても画面の外へ出ないよう、見える範囲をマップの中に収める
+// カメラ：操作している兵士を追う（少しずつ動いて急に飛ばない）。操作していないときは戦場の全体。配置の間は配置場所
+//   見える範囲はいつも戦場の中に収める。cam = { x, y, z }（見ている所の中心と拡大）
+function trialCamGoal(T) {
+  const Z = T.map.size,
+    fit = Math.max(W / Z.w, H / Z.h),
+    u = T.control != null ? T.units.find((v) => v.id === T.control && !v.dead) : null;
+  if (T.phase === "deploy") {
+    const D = T.map.deploy;
+    return { x: D.x + D.w / 2, y: D.y + D.h / 2, z: TRIAL_RULES.camZoom };
+  }
+  if (u) return { x: u.x, y: u.y - 20, z: TRIAL_RULES.camZoom };
+  return { x: Z.w / 2, y: Z.h / 2, z: fit };
+}
+function trialCamStep(T, snap) {
+  const goal = trialCamGoal(T),
+    now = performance.now(),
+    dt = Math.min(0.1, Math.max(0, ((T.camAt ? now - T.camAt : 1e9) || 0) / 1000));
+  T.camAt = now;
+  if (!T.view || snap) T.view = { ...goal };
+  else {
+    const a = 1 - Math.exp(-TRIAL_RULES.camEase * dt);
+    T.view.x += (goal.x - T.view.x) * a;
+    T.view.y += (goal.y - T.view.y) * a;
+    T.view.z += (goal.z - T.view.z) * a;
+  }
+}
 function trialView() {
-  const T = trial,
-    u = T && T.cam != null ? T.units.find((v) => v.id === T.cam && !v.dead) : null;
-  if (!u) return { z: 1, ox: 0, oy: 0 };
-  const z = TRIAL_RULES.zoom,
-    vw = W / z,
-    vh = H / z,
-    ox = Math.max(0, Math.min(W - vw, u.x - vw / 2)),
-    oy = Math.max(0, Math.min(H - vh, u.y - 20 - vh / 2));
-  return { z, ox, oy, u };
+  const T = trial;
+  if (!T) return { z: 1, ox: 0, oy: 0 };
+  if (!T.view) trialCamStep(T, true);
+  const Z = T.map.size,
+    v = T.view,
+    vw = W / v.z,
+    vh = H / v.z,
+    ox = Math.max(0, Math.min(Z.w - vw, v.x - vw / 2)),
+    oy = Math.max(0, Math.min(Z.h - vh, v.y - vh / 2)),
+    u = T.control != null ? T.units.find((x) => x.id === T.control && !x.dead) : null;
+  return { z: v.z, ox, oy, u };
 }
 function drawTrial() {
-  const T = trial,
-    V = trialView();
+  const T = trial;
+  trialCamStep(T, false);
+  const V = trialView(),
+    bg = trialBackground(T.map),
+    k = bg.k;
   ctx.clearRect(0, 0, W, H);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const bg = trialBackground(T.map);
-  ctxRaw.drawImage(bg, V.ox * RS, V.oy * RS, (W / V.z) * RS, (H / V.z) * RS, 0, 0, C.width, C.height);
+  ctxRaw.drawImage(bg, V.ox * k, V.oy * k, (W / V.z) * k, (H / V.z) * k, 0, 0, C.width, C.height);
   ctx.restore();
   ctx.save();
   ctx.setTransform(RS * V.z, 0, 0, RS * V.z, -V.ox * RS * V.z, -V.oy * RS * V.z);
@@ -790,13 +986,20 @@ function drawTrial() {
     ctx.restore();
   }
   if (V.u) {
-    // 拡大している兵士の足元に印
+    // 操作している兵士の足元に金の輪と、頭の上に ▼
     ctx.save();
     ctx.strokeStyle = "#ffe27a";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.ellipse(V.u.x, V.u.y + 12, 22, 7, 0, 0, 7);
+    ctx.ellipse(V.u.x, V.u.y + 12, 24, 8, 0, 0, 7);
     ctx.stroke();
+    ctx.fillStyle = "#ffe27a";
+    ctx.beginPath();
+    const ty = V.u.y - 92 + (reduced ? 0 : Math.sin(visualTime * 5) * 3);
+    ctx.moveTo(V.u.x - 9, ty);
+    ctx.lineTo(V.u.x + 9, ty);
+    ctx.lineTo(V.u.x, ty + 11);
+    ctx.fill();
     ctx.restore();
   }
   const actors = [];
@@ -808,32 +1011,74 @@ function drawTrial() {
   for (const e of effects) effect(e);
   ctx.restore();
   screenSpace((SW, SH) => {
-    // 拡大中：画面の外の敵の向きを、端に小さな印で出す（見失わない）
-    if (V.z > 1)
-      for (const e of T.enemies) {
-        if (e.gone) continue;
-        const sx = (e.x - V.ox) * V.z,
-          sy = (e.y - V.oy) * V.z;
-        if (sx >= 0 && sx <= SW && sy >= 0 && sy <= SH) continue;
-        ctx.fillStyle = "#ff5a4acc";
-        ctx.beginPath();
-        ctx.arc(Math.max(8, Math.min(SW - 8, sx)), Math.max(44, Math.min(SH - 8, sy)), 6, 0, 7);
-        ctx.fill();
-      }
+    // 画面の外の敵の向きを、端に赤い印で出す（見失わない）
+    for (const e of T.enemies) {
+      if (e.gone) continue;
+      const sx = (e.x - V.ox) * V.z,
+        sy = (e.y - V.oy) * V.z;
+      if (sx >= 0 && sx <= SW && sy >= 0 && sy <= SH) continue;
+      ctx.fillStyle = e.role ? "#ff2a1acc" : "#ff5a4acc";
+      ctx.beginPath();
+      ctx.arc(Math.max(9, Math.min(SW - 9, sx)), Math.max(48, Math.min(SH - 9, sy)), e.role ? 9 : 6, 0, 7);
+      ctx.fill();
+    }
+    trialMiniMap(T, V, SW);
     // 上の帯：ステージ・敵の残り・生き残り・時間
     const left = T.queue.length + T.enemies.filter((e) => !e.gone).length,
       alive = T.units.filter((u) => !u.dead).length,
-      text = "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中") + (V.z > 1 ? "　🔍" : "");
+      text = "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中");
     ctx.font = "bold 22px system-ui";
     const w = ctx.measureText(text).width + 24;
     ctx.fillStyle = "#1a120ccc";
-    ctx.fillRect(SW / 2 - w / 2, 6, w, 32);
+    ctx.fillRect(Math.max(4, (SW - 170) / 2 - w / 2), 6, w, 32);
     ctx.fillStyle = "#ffe9b0";
     ctx.textAlign = "center";
-    ctx.fillText(text, SW / 2, 30);
+    ctx.fillText(text, Math.max(4 + w / 2, (SW - 170) / 2), 30);
   });
   screenSpace(drawCombatOverlay);
   trialHudSync();
+  trialUnitsSync(false);
+}
+// 小さな全体マップ（右上）：道・川・配置場所・味方（青、操作中は金）・敵（赤）・いま見えている範囲
+function trialMiniMap(T, V, SW) {
+  const Z = T.map.size,
+    mw = 150,
+    s = mw / Z.w,
+    mh = Z.h * s,
+    x0 = SW - mw - 8,
+    y0 = 8;
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = "#1f3a22";
+  ctx.fillRect(x0 - 2, y0 - 2, mw + 4, mh + 4);
+  ctx.fillStyle = "#4f8a40";
+  ctx.fillRect(x0, y0, mw, mh);
+  ctx.strokeStyle = "#d4b07a";
+  ctx.lineWidth = 2;
+  for (const p of [...Object.values(T.map.lanes), T.map.road]) {
+    ctx.beginPath();
+    p.forEach(([x, y], i) => (i ? ctx.lineTo(x0 + x * s, y0 + y * s) : ctx.moveTo(x0 + Math.max(0, x) * s, y0 + y * s)));
+    ctx.stroke();
+  }
+  if (T.map.river) {
+    ctx.fillStyle = "#3f86b8";
+    ctx.fillRect(x0 + T.map.river.x0 * s, y0, (T.map.river.x1 - T.map.river.x0) * s, mh);
+  }
+  ctx.globalAlpha = 1;
+  for (const e of T.enemies)
+    if (!e.gone) {
+      ctx.fillStyle = "#ff4a3a";
+      ctx.fillRect(x0 + e.x * s - 1.5, y0 + e.y * s - 1.5, e.role ? 5 : 3, e.role ? 5 : 3);
+    }
+  for (const u of T.units)
+    if (u.placed && !u.dead) {
+      ctx.fillStyle = u.id === T.control ? "#ffe27a" : "#7fd0ff";
+      ctx.fillRect(x0 + u.x * s - 2, y0 + u.y * s - 2, 4, 4);
+    }
+  ctx.strokeStyle = "#ffffffcc";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0 + V.ox * s, y0 + V.oy * s, (W / V.z) * s, (H / V.z) * s);
+  ctx.restore();
 }
 function trialDrawUnit(u) {
   const alpha = u.dead ? 0.35 : 1;
@@ -975,9 +1220,9 @@ function trialHudSync() {
       ? rest
         ? "配置：あと <b>" + rest + "人</b>（光っている場所をタップ）次は " + esc(T.units.find((u) => !u.placed).name)
         : "全員を配置しました。「⚔ 戦闘開始」で始まります。"
-      : T.cam != null
-        ? "🔍 拡大中（もう一度タップで全体）"
-        : "兵士をタップすると拡大します。");
+      : T.control != null
+        ? "🎮 操作中：<b>" + esc((T.units.find((u) => u.id === T.control) || {}).name || "") + "</b>（スティックで移動・攻撃と技は自動）"
+        : "🤖 全員自動。下の名前（または戦場の兵士）を押すと、その兵士を操作できます。");
   if (html !== trialHud) {
     trialHud = html;
     $("trialInfo").innerHTML = html;
@@ -994,26 +1239,130 @@ function trialSyncUI() {
     return;
   }
   trialHudSync();
+  trialUnitsSync(true);
+  $("trialCtl").hidden = T.phase !== "fight";
   const rest = T.units.filter((u) => !u.placed).length;
   $("trialAuto").hidden = T.phase !== "deploy" || !rest;
   $("trialGo").hidden = T.phase !== "deploy";
   $("trialGo").disabled = !!rest;
   $("trialRetreat").textContent = T.phase === "deploy" ? "↩ 出撃をやめる" : "↩ 撤退";
 }
-// タップ：配置の段階は兵士を置く。戦闘中は兵士をタップで拡大（もう一度・ほかの所で全体に戻る）
+// 画面の点（ゲームの 960×600）→ 戦場の点（カメラの位置と拡大を戻す）
+function trialToWorld(x, y) {
+  const V = trialView();
+  return { x: V.ox + x / V.z, y: V.oy + y / V.z };
+}
+function trialToScreen(x, y) {
+  const V = trialView();
+  return { x: (x - V.ox) * V.z, y: (y - V.oy) * V.z };
+}
+// タップ：配置の段階は兵士を置く。戦闘中は兵士をタップすると、その兵士を操作する
 function trialTap(x, y) {
   const T = trial;
   if (!T) return null;
-  if (T.phase === "deploy") return trialPlace(x, y);
+  const p = trialToWorld(x, y);
+  if (T.phase === "deploy") return trialPlace(p.x, p.y);
   const V = trialView(),
-    mx = V.ox + x / V.z,
-    my = V.oy + y / V.z,
-    hit = T.units.filter((u) => !u.dead).sort((a, b) => Math.hypot(a.x - mx, a.y - 20 - my) - Math.hypot(b.x - mx, b.y - 20 - my))[0];
-  const near = hit && Math.hypot(hit.x - mx, hit.y - 20 - my) < 50 / V.z + 10;
-  T.cam = near && T.cam !== hit.id ? hit.id : null;
-  trialHudSync();
+    hit = T.units.filter((u) => !u.dead).sort((a, b) => Math.hypot(a.x - p.x, a.y - 20 - p.y) - Math.hypot(b.x - p.x, b.y - 20 - p.y))[0];
+  if (hit && Math.hypot(hit.x - p.x, hit.y - 20 - p.y) < 34 + 26 / V.z) trialControl(hit.id);
   return null;
 }
+// 操作する兵士を決める（null で全員自動）。技の待ち時間・狙いはそのまま（写しに残る）
+function trialControl(id) {
+  const T = trial;
+  if (!T || T.phase !== "fight") return "戦闘中に切り替えられます。";
+  const u = id == null ? null : T.units.find((v) => v.id === id && !v.dead);
+  if (id != null && !u) return "その兵士は操作できません。";
+  T.control = u ? u.id : null;
+  trialStick = { x: 0, y: 0 };
+  for (const v of T.units) v.moving = false;
+  trialHud = "";
+  trialHudSync();
+  trialUnitsSync(true);
+  return null;
+}
+// 兵士の切り替えの札（名前・HP）：変わったときだけ書き換える
+let trialUnitsKey = "";
+function trialUnitsSync(force) {
+  const T = trial,
+    box = $("trialUnits");
+  if (!T || T.phase !== "fight") return (box.innerHTML = ""), (trialUnitsKey = "");
+  const key = T.control + "|" + T.units.map((u) => (u.dead ? "x" : Math.ceil((u.hp / u.max) * 10))).join(",");
+  if (!force && key === trialUnitsKey) return;
+  trialUnitsKey = key;
+  box.innerHTML = T.units
+    .map(
+      (u) =>
+        '<button type="button" data-trial-ctl="' + u.id + '" aria-pressed="' + (T.control === u.id) + '"' + (u.dead ? " disabled" : "") + ">" +
+        "<b>" + esc(u.name.replace(/^🎖/, "").slice(0, 4)) + "</b><small>" + (JOBS[u.jobKey] ? JOBS[u.jobKey].icon : "") + (u.dead ? "☠" : "") + "</small>" +
+        '<i style="width:' + Math.max(0, Math.round((u.hp / u.max) * 100)) + '%"></i></button>',
+    )
+    .join("");
+}
+$("trialUnits").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-trial-ctl]");
+  if (!b || b.disabled || !trial) return;
+  const id = +b.dataset.trialCtl;
+  trialControl(trial.control === id ? null : id); // 操作中の兵士をもう一度押すと全員自動
+});
+$("trialAutoAll").onclick = () => trialControl(null);
+// 仮想スティック：押した所から指を動かした向きと大きさ。指を離すと止まる。画面はスクロールしない
+(() => {
+  const pad = $("trialPad"),
+    knob = pad.querySelector(".trial-knob");
+  let id = null;
+  const set = (ev) => {
+    const r = pad.getBoundingClientRect(),
+      R = r.width / 2,
+      dx = ev.clientX - (r.left + R),
+      dy = ev.clientY - (r.top + R),
+      m = Math.hypot(dx, dy),
+      k = m > R * 0.8 ? (R * 0.8) / m : 1;
+    trialStick = { x: (dx * k) / (R * 0.8), y: (dy * k) / (R * 0.8) };
+    knob.style.transform = "translate(" + Math.round(dx * k) + "px," + Math.round(dy * k) + "px)";
+  };
+  const end = () => {
+    id = null;
+    trialStick = { x: 0, y: 0 };
+    knob.style.transform = "";
+    pad.classList.remove("on");
+  };
+  pad.addEventListener("pointerdown", (ev) => {
+    if (!trial || trial.control == null) {
+      if (trial && trial.phase === "fight") toast("名前を押して、操作する兵士を選んでください。");
+      return;
+    }
+    ev.preventDefault();
+    id = ev.pointerId;
+    try {
+      pad.setPointerCapture(id);
+    } catch (err) {
+      /* 取れなくても動く */
+    }
+    pad.classList.add("on");
+    set(ev);
+  });
+  pad.addEventListener("pointermove", (ev) => {
+    if (ev.pointerId !== id) return;
+    ev.preventDefault();
+    set(ev);
+  });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(t, (ev) => ev.pointerId === id && end());
+  pad.addEventListener("touchmove", (ev) => ev.preventDefault(), { passive: false }); // スティック操作中に画面をスクロールさせない
+})();
+// PC：WASD・矢印キーで操作している兵士を動かす（戦場試練の戦闘中だけ）
+const TRIAL_KEYS = { w: "up", arrowup: "up", s: "down", arrowdown: "down", a: "left", arrowleft: "left", d: "right", arrowright: "right" };
+window.addEventListener("keydown", (ev) => {
+  const k = TRIAL_KEYS[ev.key.toLowerCase()];
+  if (!k || !trial || trial.phase !== "fight" || trial.control == null || /input|select|textarea/i.test(ev.target.tagName)) return;
+  trialKeys.add(k);
+  ev.preventDefault();
+});
+window.addEventListener("keyup", (ev) => {
+  const k = TRIAL_KEYS[ev.key.toLowerCase()];
+  if (k) trialKeys.delete(k);
+});
+window.addEventListener("blur", () => trialKeys.clear());
 $("trialOpen").onclick = () => openTrialSheet("pick");
 $("trialClose").onclick = closeTrialSheet;
 $("trialSheet").addEventListener("click", (ev) => {
