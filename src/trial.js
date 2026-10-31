@@ -630,7 +630,7 @@ function trialBest(T) {
 //   レベルアップ・宝箱で習得し、同じスキルを選ぶと Lv が上がる（Lv1〜5）。最大6種類。自動で発動し、通常攻撃・職業技・閃き・奥義とは別に動く
 //   威力（mul）は主人公の攻撃力の何倍か（サバイバルの攻撃力の強化も効く）。cd は発動の間隔（秒）。数値は表のまま調整できる
 //   既存の職業技・閃き・奥義・永久のスキルはこの6枠に入らない
-const TRIAL_SKILL_RULES = { maxKinds: 6, maxLv: 5, fx: 64 };
+const TRIAL_SKILL_RULES = { maxKinds: 6, maxLv: 5, fx: 64, aim: 230 };
 const TRIAL_SKILLS = {
   thunder: {
     icon: "⚡",
@@ -832,13 +832,13 @@ function trialChainBolt(T, h, first, n, dmg, foes, stun) {
 }
 const TRIAL_SKILL_CAST = {
   thunder: (T, h, D, i, atk, foes) => {
-    const t = trialNearestN(h, foes, 1, D.range)[0];
+    const t = trialNearestN(h, foes, 1, Math.min(D.range, TRIAL_SKILL_RULES.aim))[0];
     if (!t) return false;
     trialChainBolt(T, h, t, D.chain[i], atk * D.mul[i], foes, i >= 4);
     trialSfx("thunder", { vol: 0.7 });
   },
   shuriken: (T, h, D, i, atk, foes) => {
-    const list = trialNearestN(h, foes, D.n[i], D.range);
+    const list = trialNearestN(h, foes, D.n[i], Math.min(D.range, TRIAL_SKILL_RULES.aim));
     if (!list.length) return false;
     for (const e of list) {
       const a = Math.atan2(e.y - h.y, e.x - h.x),
@@ -850,7 +850,7 @@ const TRIAL_SKILL_CAST = {
     trialSfx("bow", { vol: 0.6 });
   },
   vacuum: (T, h, D, i, atk, foes) => {
-    const t = trialNearestN(h, foes, 1, D.len[i] + 60)[0];
+    const t = trialNearestN(h, foes, 1, Math.min(D.len[i] + 60, TRIAL_SKILL_RULES.aim))[0];
     if (!t) return false;
     const a0 = Math.atan2(t.y - h.y, t.x - h.x),
       dirs = D.lines[i] === 4 ? [0, 1, 2, 3].map((k) => a0 + (k * Math.PI) / 2) : D.lines[i] === 2 ? [a0 - 0.22, a0 + 0.22] : [a0],
@@ -879,12 +879,12 @@ const TRIAL_SKILL_CAST = {
     trialSfx("thrust", { vol: 0.8 });
   },
   musket: (T, h, D, i, atk, foes) => {
-    const t = trialNearestN(h, foes, 1, D.range)[0];
+    const t = trialNearestN(h, foes, 1, Math.min(D.range, TRIAL_SKILL_RULES.aim))[0];
     if (!t && i < 4) return false;
     const n = D.shots[i],
       a0 = t ? Math.atan2(t.y - h.y, t.x - h.x) : 0,
       dirs = n >= 8 ? Array.from({ length: 8 }, (_, k) => a0 + (k * Math.PI) / 4) : n === 2 ? [a0 - 0.08, a0 + 0.08] : [a0];
-    if (!t && !foes.some((e) => trialDist(e, h) < D.range)) return false;
+    if (!t && !foes.some((e) => trialDist(e, h) < Math.min(D.range, TRIAL_SKILL_RULES.aim))) return false;
     for (const a of dirs) {
       const hits = trialLineHits(h, a, D.range, 14, foes, D.pierce[i]),
         end = hits.length ? hits[hits.length - 1] : null,
@@ -913,7 +913,7 @@ const TRIAL_SKILL_CAST = {
   },
   // 進化：雷神剣（十字の斬撃＋当たった敵から雷の連鎖）
   raijinken: (T, h, D, i, atk, foes) => {
-    const t = trialNearestN(h, foes, 1, D.len + 60)[0];
+    const t = trialNearestN(h, foes, 1, Math.min(D.len + 60, TRIAL_SKILL_RULES.aim))[0];
     if (!t) return false;
     const a0 = Math.atan2(t.y - h.y, t.x - h.x),
       dirs = [0, 1, 2, 3].map((k) => a0 + (k * Math.PI) / 2),
@@ -1010,9 +1010,11 @@ function trialDrawSkillBar(T, SW) {
     ctx.strokeStyle = evo ? "#c06bff" : lv >= 5 ? "#ffe27a" : "#9fd8ff88";
     ctx.lineWidth = 2;
     ctx.strokeRect(x - 24, y - 20, 48, 46);
-    ctx.font = "22px system-ui";
+    // 絵文字はサロゲートペアがあるので、文字単位で数える（.slice(0,2) だと進化アイコンが文字化けする）
+    const ic = [...D.icon].reduce((a, c) => (c === "\uFE0F" && a.length ? (a[a.length - 1] += c) : a.push(c), a), []);
+    ctx.font = ic.length > 1 ? "16px system-ui" : "22px system-ui";
     ctx.fillStyle = "#fff";
-    ctx.fillText(D.icon.slice(0, 2), x, y + 4);
+    ctx.fillText(ic.slice(0, 2).join(""), x, y + 4);
     ctx.font = "bold 15px system-ui";
     ctx.fillStyle = evo ? "#f0d0ff" : lv >= 5 ? "#ffe27a" : "#e8f3ff";
     ctx.fillText(evo ? "進化" : lv >= 5 ? "★MAX" : "Lv" + lv, x, y + 22);

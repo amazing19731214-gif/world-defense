@@ -18669,9 +18669,11 @@ function trialDrawSkillBar(T, SW) {
     ctx.strokeStyle = evo ? "#c06bff" : lv >= 5 ? "#ffe27a" : "#9fd8ff88";
     ctx.lineWidth = 2;
     ctx.strokeRect(x - 24, y - 20, 48, 46);
-    ctx.font = "22px system-ui";
+    // 絵文字はサロゲートペアがあるので、文字単位で数える（.slice(0,2) だと進化アイコンが文字化けする）
+    const ic = [...D.icon].reduce((a, c) => (c === "\uFE0F" && a.length ? (a[a.length - 1] += c) : a.push(c), a), []);
+    ctx.font = ic.length > 1 ? "16px system-ui" : "22px system-ui";
     ctx.fillStyle = "#fff";
-    ctx.fillText(D.icon.slice(0, 2), x, y + 4);
+    ctx.fillText(ic.slice(0, 2).join(""), x, y + 4);
     ctx.font = "bold 15px system-ui";
     ctx.fillStyle = evo ? "#f0d0ff" : lv >= 5 ? "#ffe27a" : "#e8f3ff";
     ctx.fillText(evo ? "進化" : lv >= 5 ? "★MAX" : "Lv" + lv, x, y + 22);
