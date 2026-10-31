@@ -182,6 +182,32 @@ try {
   await p.waitForTimeout(300);
   r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialTitle").textContent + document.getElementById("trialBody").textContent }));
   check(r.open && r.text.includes("サバイバル") && r.text.includes("撤退") && r.text.includes("👑"), "サバイバル：撤退すると結果の画面（主人公に👑）", r.text.slice(0, 60));
+  // v108.3 奥義：テスト用兵士の準備で「試・剣神」が奥義継承者（八方天翔斬）。主人公にすると右下のボタンで使える
+  await tap("[data-trial-again]");
+  await p.locator("[data-trial-hero]", { hasText: "試・剣神" }).tap();
+  await tap("[data-trial-go]");
+  await p.waitForTimeout(500);
+  r = await p.evaluate(() => {
+    const b = document.getElementById("trialOugiBtn");
+    return b && { text: b.textContent, disabled: b.disabled };
+  });
+  check(r && !r.disabled && /八方天翔斬/.test(r.text), "サバイバル：奥義継承者（試・剣神）を主人公にすると、右下に「⚔️ 奥義 八方天翔斬」", r);
+  let used = null;
+  for (let i = 0; i < 40 && !used; i++) {
+    await p.waitForTimeout(1000);
+    if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
+    if (await p.locator("#trialOugiBtn:not([disabled])").count()) await tap("#trialOugiBtn");
+    used = await p.evaluate(() => {
+      const b = document.getElementById("trialOugiBtn");
+      return b && b.disabled && /もう使いました/.test(b.textContent) ? b.textContent : null;
+    });
+  }
+  check(used, "サバイバル：指で奥義のボタンを押すと発動し、この戦闘ではもう使えなくなる", used);
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
+  await tap("#trialRetreat");
+  await p.waitForTimeout(300);
+  r = await p.evaluate(() => document.getElementById("trialBody").textContent);
+  check(/奥義「八方天翔斬」/.test(r), "結果の画面に、使った奥義（命中・撃破の数）が出る", r.slice(0, 200));
   await tap("#trialClose");
   // 5. 再読み込みしても本番のデータは壊れない
   await p.reload();

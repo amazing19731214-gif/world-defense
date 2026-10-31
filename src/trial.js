@@ -60,14 +60,14 @@ const TRIAL_SURVIVAL = {
   margin: 70, // 画面の外のどれだけ先から出すか
   far: 1100, // 主人公からこれより遠い敵は、主人公の近くの画面の外へ移す（遠くに溜まらない）
   hp: 0.12, // 敵の体力（倍。群れで来るので1体は弱く、たくさん倒せる）
-  hpGrow: 0.8, // 強敵が出る頃に、体力が (1 + hpGrow) 倍になるまで少しずつ強くなる
+  hpGrow: 0.6, // 強敵が出る頃に、体力が (1 + hpGrow) 倍になるまで少しずつ強くなる（v108.3：レベルアップが減った分 0.8→0.6）
   atk: 0.6, // 敵の攻撃（倍）
   atkGrow: 0.6,
   bossHp: 0.6, // 強敵の体力（倍。大将の表に掛ける。5人で20〜30秒ほど）
   bossAtk: 1,
   // v108.2 主人公1人から始まる。敵を倒すと、この戦闘だけの経験値（本番の兵士の経験値・Lv には入らない）
   xp: { goblin: 1, wolf: 1, knight: 2, dragon: 2, boss: 0 }, // 敵1体の経験値
-  need: (lv) => 3 + 2 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（3・5・7・9…）
+  need: (lv) => 4 + 5 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（4・9・14・19…。v108.3：3分で5〜7回）
   recruitMax: 4, // 加入できる仲間（出撃の前に選んだ候補）の数
   // レベルアップの強化（この戦闘の主人公だけ。終わったら消える）。step は1回の上がり幅
   boons: {
@@ -606,6 +606,7 @@ function tickTrial(dt) {
   const surv = T.mode === "survival";
   if (surv) {
     trialSurvivalTick(T, dt);
+    if (T.flurry) trialFlurryTick(T, dt);
     // 仲間の持ち場：主人公のまわり（主人公が動くと持ち場も動く）
     const hero = T.units.find((u) => u.id === T.hero),
       Z = T.map.size;
@@ -642,7 +643,8 @@ function tickTrial(dt) {
     if (T.units.find((u) => u.id === T.hero).dead) return endTrial("lose");
     if (T.boss && T.boss.gone) return endTrial("win");
     if (T.t >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
-    if (T.lvUps) trialOpenChoice(T);
+    // 奥義の直後は、演出を見せてから選択画面を出す（1.5秒。天剣乱舞の連続斬撃の間も待つ）
+    if (T.lvUps && !T.flurry && !(T.ougiUsed && T.t - T.ougiUsed.at < 1.5)) trialOpenChoice(T);
     return;
   }
   if (!T.units.some((u) => !u.dead)) return endTrial("lose");
@@ -786,10 +788,144 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
         const job = key.startsWith("job:"),
           name = job ? JOB_ACTIONS[key.slice(4)].names[Math.max(0, jobActionStage(s))] : INSIGHT_SKILLS[key] ? INSIGHT_SKILLS[key].name : key === "chronicleRescue" ? "緊急救命" : key;
         u.skills[name] = (u.skills[name] || 0) + 1;
-        // 強い技（上位の職業技・閃き）だけ、兵士の上に技名を出す（ふつうの職業技は光だけ。数の上限つき）
-        if ((!job || jobActionStage(s) >= 1) && effects.length < 60)
+        trialSkillFx(u, target, job ? JOB_ACTIONS[key.slice(4)].fx : "insight", event);
+        // 強い技（上位の職業技・閃き）だけ、兵士の上に技名を出す（ふつうの職業技は光だけ）。同じ兵士は2.5秒に1回まで・数の上限つき
+        if ((!job || jobActionStage(s) >= 1) && effects.length < 60 && !(u.nameUntil > T.t)) {
+          u.nameUntil = T.t + 2.5;
           effects.push({ kind: "ctext", x: u.x, y: u.y - 78, text: (job ? "" : "💡") + name, ougi: false, age: 0, duration: 1.1 });
+        }
       }
+}
+// v108.3 職業技・閃きの演出（見た目だけ。技の効果・発動の条件は evolutionAction のまま）
+//   斬撃は軌跡、槍は突きの光、弓は光る矢、鉄砲は閃光と火花、回復は緑の光、範囲の技は広がる輪。数の上限つき（iPhone の重さ）
+const TRIAL_FX_AREA = new Set(["moon", "shell", "ring", "pulse", "fan", "caltrop", "net", "wall", "flag", "iron"]);
+function trialSkillFx(u, target, fx, event) {
+  if (effects.length >= 64) return;
+  const t = target && target.x != null ? target : null,
+    heal = event === "heal",
+    a = t ? Math.atan2(t.y - u.y, t.x - u.x) : 0;
+  if (heal) {
+    // 回復：相手（と自分）に緑の光
+    burst((t || u).x, (t || u).y - 16, "#7be08a", "heal");
+    if (TRIAL_FX_AREA.has(fx)) for (const v of trial.units) if (!v.dead && v !== t && trialDist(v, u) < 160) burst(v.x, v.y - 16, "#7be08a", "heal");
+  } else if (t && u.role === "melee") {
+    if (u.type === "spearman" || fx === "spear" || fx === "wall" || fx === "fan") {
+      // 槍：自分から相手へ突きの光
+      if (shots.length >= 160) shots.shift();
+      shots.push({ x: u.x, y: u.y - 18, tx: t.x + Math.cos(a) * 16, ty: t.y - 10 + Math.sin(a) * 16, type: "arrow", age: 0, duration: 0.14, col: "#fff6c8", trail: 2, glow: "#fff1a0", quiet: true });
+    }
+    effects.push({ kind: "cslash", x: t.x, y: t.y - 12, a: a + 0.4, ougi: false, age: 0, duration: 0.36 });
+  } else if (t) {
+    const gun = u.shot === "musket";
+    if (shots.length >= 160) shots.shift();
+    shots.push({ x: u.x, y: u.y - 22, tx: t.x, ty: t.y - 10, type: gun ? "magic" : "arrow", age: 0, duration: gun ? 0.12 : 0.24, col: "#a56b35", trail: 2, glow: gun ? "#ffd27a" : "#9fe6ff", quiet: true });
+    if (gun) burst(u.x + u.face * 16, u.y - 22, "#fff0b0", "gunsmoke");
+    effects.push({ kind: "cspark", x: t.x, y: t.y - 12, ougi: false, seed: u.seed, age: 0, duration: 0.32 });
+  }
+  // 範囲の技・閃き：効果の範囲が分かる輪
+  if (TRIAL_FX_AREA.has(fx) || fx === "insight") effects.push({ kind: "cshock", x: (t && !heal ? t : u).x, y: (t && !heal ? t : u).y + 6, ougi: fx === "insight", age: 0, duration: 0.5 });
+}
+// ===== v108.3 伝説の奥義（サバイバル）：既存の奥義（LEGEND_OUGI）・奥義継承者・1回の挑戦で1回の決まりをそのまま使う =====
+//   使えるのは、主人公が奥義継承者（兵士名簿の剣聖の「⚔ 奥義」で指定）のときだけ。サバイバル1回の戦闘を「1回の挑戦」として1回。
+//   使った記録は戦闘の中だけに持ち、本編の使用記録（ougiSave.run）・奥義書・閃きには書かない。対象がいなければ使った回数にしない
+function trialOugiInfo(T) {
+  if (!T || T.mode !== "survival") return null;
+  const H = typeof ougiHeirNow === "function" ? ougiHeirNow() : null;
+  if (!H || H.why || !H.s || H.s.id !== T.hero) return { key: null, why: H && !H.why ? "奥義継承者（" + soldierName(H.s) + "）が主人公ではありません" : "主人公は奥義を習得していません（奥義継承者だけ）" };
+  return { key: H.h.k, O: LEGEND_OUGI[H.h.k], why: T.ougiUsed ? "この戦闘ではもう使いました" : null };
+}
+function trialUseOugi() {
+  const T = trial;
+  if (!T || T.mode !== "survival" || T.phase !== "fight" || T.result) return "サバイバルの戦闘中に使えます。";
+  if (T.choice) return "レベルアップの選択のあとに使えます。";
+  const I = trialOugiInfo(T);
+  if (!I.key) return I.why;
+  if (I.why) return I.why;
+  const O = I.O,
+    h = T.units.find((u) => u.id === T.hero),
+    atk = soldierStats(h.sh, true).atk,
+    list = T.enemies.filter((e) => !e.gone),
+    origin = { x: h.x, y: h.y - 18 };
+  let target = null,
+    rays = null;
+  if (O.kind === "pattern") {
+    const near = trialNearest(h, list);
+    if (near) {
+      rays = resolvePattern(origin, Math.atan2(near.y - origin.y, near.x - origin.x), ATTACK_PATTERNS[O.pattern], list);
+      if (rays.some((r) => r.hits.length)) target = near;
+    }
+  } else if (O.kind === "single") {
+    // 強敵を優先：大将 → 中ボス → 体力の多い敵
+    const rank = (e) => (e.kind === "boss" || e.role === "boss" ? 2e9 : e.role === "mid" ? 1e9 : 0) + e.hp;
+    target = list.filter((e) => trialDist(e, h) <= O.reach).sort((a, b) => rank(b) - rank(a))[0] || null;
+  } else target = list.find((e) => trialDist(e, h) <= O.radius) || null;
+  if (!target) return "範囲内に敵がいません。奥義の使用回数は減っていません。";
+  T.ougiUsed = { key: I.key, at: T.t, hits: 0, kills: 0 };
+  combatFx.ougi("奥義・" + O.name, "👑 " + h.name);
+  const before = T.kills;
+  if (O.kind === "pattern") {
+    const P = ATTACK_PATTERNS[O.pattern],
+      killed = [];
+    for (const r of rays)
+      for (const e of r.hits) {
+        const alive = !e.gone;
+        trialHitEnemy(h, e, atk * P.mul, 0, !!P.cover);
+        T.ougiUsed.hits++;
+        if (alive && e.gone) killed.push(e);
+      }
+    combatFx.pattern(P, origin, rays);
+    if (killed.length >= 2) combatFx.multiKill(killed, true);
+  } else if (O.kind === "single") {
+    trialHitEnemy(h, target, atk * O.mul, 0, true);
+    T.ougiUsed.hits = 1;
+    combatFx.issen(origin, target);
+  } else {
+    combatFx.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.7 });
+    T.flurry = { left: O.hits, wait: 0 };
+  }
+  T.ougiUsed.kills = T.kills - before;
+  msg("⚔ 奥義「" + O.name + "」！ " + h.name + "（この戦闘で1回。本編の使用記録・奥義書は変わらない）");
+  trialOugiSync(true);
+  return null;
+}
+// 天剣乱舞：gap 秒ごとに1回、主人公のまわりの敵へ斬撃（主人公が倒れたら止める。レベルアップの選択中は止まる）
+function trialFlurryTick(T, dt) {
+  const F = T.flurry;
+  if (!F || (F.wait -= dt) > 0) return;
+  const h = T.units.find((u) => u.id === T.hero),
+    O = LEGEND_OUGI[T.ougiUsed.key];
+  if (!h || h.dead || F.left <= 0) return (T.flurry = null);
+  F.wait += O.gap;
+  F.left--;
+  const atk = soldierStats(h.sh, true).atk,
+    killed = [];
+  T.enemies
+    .filter((e) => !e.gone && trialDist(e, h) <= O.radius)
+    .sort((a, b) => trialDist(a, h) - trialDist(b, h))
+    .slice(0, O.perHit)
+    .forEach((e, i) => {
+      trialHitEnemy(h, e, atk * O.mul, 0, true);
+      T.ougiUsed.hits++;
+      if (e.gone) killed.push(e), T.ougiUsed.kills++;
+      combatFx.push({ kind: "cslash", x: e.x, y: e.y - 14, a: Math.random() * Math.PI, ougi: true, age: -i * 0.03, duration: 0.42 });
+    });
+  combatFx.push({ kind: "cwave", x: h.x, y: h.y - 10, rays: [0, 1, 2, 3].map((k) => (k * Math.PI) / 2 + F.left * 0.4), len: O.radius, width: 30, ougi: true, age: 0, duration: 0.5 });
+  if (killed.length >= 2) combatFx.multiKill(killed, true);
+}
+// 奥義のボタン（右下）：使える奥義の名前。使えないときは理由（未習得・使用済み）を小さく
+let trialOugiKey = "";
+function trialOugiSync(force) {
+  const T = trial,
+    box = $("trialAction");
+  if (!box) return;
+  const I = T && T.phase === "fight" ? trialOugiInfo(T) : null,
+    key = I ? (I.key || "") + "|" + (I.why || "") : "";
+  if (!force && key === trialOugiKey) return;
+  trialOugiKey = key;
+  box.hidden = !I;
+  if (!I) return (box.innerHTML = "");
+  box.innerHTML =
+    '<button type="button" id="trialOugiBtn" class="trial-ougi' + (I.key && !I.why ? " ready" : "") + '"' + (I.key && !I.why ? "" : " disabled") + ">⚔️ 奥義<b>" + (I.key ? esc(I.O.name) : "未習得") + "</b><small>" + esc(I.why || "1回だけ・押すと発動") + "</small></button>";
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
 // v108：操作している兵士（trial.control）は、スティックの向きにだけ動く（AI は動かさない）。攻撃・回復・職業技は自動のまま
@@ -927,13 +1063,13 @@ function trialUnitAct(u, foes, live, dt) {
   trialEvolution(u, e, "attack");
 }
 // 兵士の攻撃のダメージ：敵の防御で減る（防衛戦と同じ式。防御無視・職業技の防御低下も効く）。盾兵に守られた敵は減る（技の貫通は無視）
-function trialHitEnemy(u, e, raw, pierce = 0) {
+function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
   if (!e || e.gone || e.hp <= 0 || raw <= 0) return 0;
   raw *= u.atkMul || 1; // v108.2 サバイバルの強化（この戦闘だけ。職業技・閃きにも効く）
   const ignore = Math.min(0.8, skillSum(u.sh, "armorPierce") + pierce),
     armor = evolutionArmor(e, e.armor || 0, T_now());
   let dmg = (raw * 30) / (30 + armor * (1 - ignore));
-  if (e.leader && !pierce && !e.leader.gone && trialDist(e.leader, e) <= ENEMY_BEHAVIORS.tate.cover.radius) dmg *= ENEMY_BEHAVIORS.tate.cover.mul;
+  if (e.leader && !pierce && !cover && !e.leader.gone && trialDist(e.leader, e) <= ENEMY_BEHAVIORS.tate.cover.radius) dmg *= ENEMY_BEHAVIORS.tate.cover.mul;
   const hp0 = e.hp;
   e.hp -= dmg;
   e.hit = 0.18;
@@ -1127,7 +1263,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -1584,6 +1720,7 @@ function renderTrialSheet() {
         ? "<p>撃破 <b>" + R.kills + "</b>・大将 " + R.boss + "・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
+          (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
           '<br><small class="muted">サバイバルLv・強化・加入は、この戦闘だけのものです（兵士のLv・経験値には入りません）。</small></p>'
         : "<p>撃破 <b>" + R.kills + "/" + R.total + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time) + "秒</p>") +
@@ -1664,6 +1801,7 @@ function trialHudSync() {
       html2 =
         "<b>🔥 サバイバル</b>　👑 <b>" + esc(h.name) + "</b>　👥 仲間 <b>" + mates.filter((u) => !u.dead).length + "/" + (mates.length + T.reserve.length) + "</b><br><small>スティックで移動（攻撃と技は自動）。レベルアップで強化か仲間を選ぶ</small>";
     if (html2 !== trialHud) (trialHud = html2), ($("trialInfo").innerHTML = html2);
+    trialOugiSync(false);
     return;
   }
   const html =
@@ -1687,6 +1825,7 @@ function trialSyncUI() {
   bar.hidden = !T;
   trialHud = "";
   if (!T) {
+    trialOugiSync(true);
     if (typeof updateUI === "function") updateUI();
     return;
   }
@@ -1696,6 +1835,7 @@ function trialSyncUI() {
   // サバイバル：主人公は変えないので、兵士の札と「全員自動」は出さない（主人公の周りを広く見せる）
   $("trialUnits").hidden = T.mode === "survival";
   $("trialAutoAll").hidden = T.mode === "survival";
+  trialOugiSync(true);
   const rest = T.units.filter((u) => !u.placed).length;
   $("trialAuto").hidden = T.phase !== "deploy" || !rest;
   $("trialGo").hidden = T.phase !== "deploy";
@@ -1763,6 +1903,12 @@ $("trialUnits").addEventListener("click", (ev) => {
   trialControl(trial.control === id ? null : id); // 操作中の兵士をもう一度押すと全員自動
 });
 $("trialAutoAll").onclick = () => trialControl(null);
+// v108.3 奥義のボタン（右下）。PC は Space キー
+$("trialAction").addEventListener("click", (ev) => {
+  if (!ev.target.closest("#trialOugiBtn")) return;
+  const err = trialUseOugi();
+  if (err) toast(err), msg(err);
+});
 // v108.2 レベルアップの選択（画面のボタン・PC は 1〜3 のキー）
 $("trialLevelUp").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-trial-choose]");
@@ -1818,6 +1964,11 @@ $("trialLevelUp").addEventListener("click", (ev) => {
 const TRIAL_KEYS = { w: "up", arrowup: "up", s: "down", arrowdown: "down", a: "left", arrowleft: "left", d: "right", arrowright: "right" };
 window.addEventListener("keydown", (ev) => {
   if (trial && trial.choice && /^[1-3]$/.test(ev.key)) return trialChoose(+ev.key - 1), ev.preventDefault();
+  if (trial && trial.mode === "survival" && ev.key === " " && !/input|select|textarea|button/i.test(ev.target.tagName)) {
+    ev.preventDefault();
+    const err = trialUseOugi();
+    return err && toast(err);
+  }
   const k = TRIAL_KEYS[ev.key.toLowerCase()];
   if (!k || !trial || trial.phase !== "fight" || trial.control == null || /input|select|textarea/i.test(ev.target.tagName)) return;
   trialKeys.add(k);
