@@ -41,6 +41,13 @@
       soldiers: { version: 1, seq: soldiers.length, squadSeq: 2, fallen: [], squads: [{ id: 1, type: "ashigaru", slot: 0 }, { id: 2, type: "archer", slot: 1 }], soldiers },
       warlords: { version: 1, owned: {}, tickets: 3, history: [], forge: { items } },
       ui: { version: 1, all: true, seen: {}, fresh: {} },
+      // v108.3 剣聖の伝説の奥義3つの奥義書と、奥義継承者（試・剣神・八方天翔斬）。継承する奥義は兵士名簿の「⚔ 奥義」で変えられる
+      ougi: (() => {
+        const sid = PRESET.findIndex((p) => p[0] === "試・剣神") + 1,
+          at = Date.now(),
+          books = ["happouTenshou", "mumyouIssen", "tenkenRanbu"].map((k, i) => ({ uid: i + 1, k, from: "試・剣神（テスト）", job: "sword_saint", level: 1500, at }));
+        return { version: 1, seq: books.length, books, known: {}, rolls: {}, fails: {}, heir: { sid, k: "happouTenshou", book: 1 }, run: null };
+      })(),
     };
   }
   // 準備：今のテスト用データを控え（wdtest:testBackup）に残してから、テスト用データを作り直す
@@ -58,6 +65,7 @@
     localStorage.setItem("worldDefense.soldiers.v1", JSON.stringify(S.soldiers));
     localStorage.setItem("worldDefense.warlords.v1", JSON.stringify(S.warlords));
     localStorage.setItem("worldDefense.ui.v1", JSON.stringify(S.ui));
+    localStorage.setItem("worldDefense.ougi.v1", JSON.stringify(S.ougi));
     location.reload();
   }
   function reset() {

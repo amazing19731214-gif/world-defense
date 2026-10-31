@@ -1905,6 +1905,31 @@
         padding: 4px;
         overflow-wrap: anywhere;
       }
+      /* v108.3 奥義のボタン（スティックの右。将来の手動奥義の場所） */
+      .trial-action button {
+        width: 100%;
+        min-height: 96px;
+        display: grid;
+        place-items: center;
+        gap: 2px;
+        padding: 6px;
+        font-size: 15px;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+      .trial-action button b {
+        font-size: 19px;
+      }
+      .trial-action button small {
+        font-size: 12px;
+        color: #cfe3e8;
+      }
+      .trial-action button.ready {
+        border-color: #ffe27a;
+        background: radial-gradient(circle at 50% 30%, #8a5a1e, #4a2a10);
+        box-shadow: 0 0 0 2px #ffe27a inset, 0 0 14px #ffb84d88;
+        color: #fff4c8;
+      }
       .trial-levelup {
         position: fixed;
         inset: 0;
@@ -2918,7 +2943,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.2試作（戦場試練：サバイバル・主人公1人から仲間を増やす）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.3試作（戦場試練：サバイバル・奥義と技の演出）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23098,6 +23123,8 @@ OFF</button>
               start: (ids, opts) => startTrial(ids, "sanpou", opts),
               survival: TRIAL_SURVIVAL,
               choose: (i) => trialChoose(i),
+              ougi: () => trial && trialOugiInfo(trial),
+              useOugi: () => trialUseOugi(),
               place: (x, y) => trialPlace(x, y),
               auto: () => trialAutoPlace(),
               begin: () => trialBegin(),
@@ -23137,6 +23164,8 @@ OFF</button>
                   choice: trial.choice ? trial.choice.map((c) => (c.kind === "recruit" ? "recruit:" + c.unit.id : c.key)) : null,
                   reserve: trial.reserve ? trial.reserve.map((u) => u.id) : null,
                   boons: trial.boons ? { ...trial.boons } : null,
+                  ougiUsed: trial.ougiUsed ? { ...trial.ougiUsed } : null,
+                  flurry: trial.flurry ? trial.flurry.left : null,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
                 },
             },

@@ -152,7 +152,10 @@ try {
       L = T.live(),
       h = L.units[0];
     const before = h.dealt;
-    for (let i = 0; i < 100; i++) WD_DEBUG.step(0.1);
+    for (let i = 0; i < 900 && h.dealt === before; i++) {
+      if (L.choice) T.choose(0);
+      WD_DEBUG.step(0.1);
+    }
     return { dealt: h.dealt - before, mul: h.atkMul };
   });
   check(r.mul === 1.25 && r.dealt > 0, "攻撃力アップは主人公のダメージに掛かる（×" + r.mul + "）", r);
