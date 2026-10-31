@@ -2943,7 +2943,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.4試作（戦場試練：歩く速さ・攻撃の見え方）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.5試作（戦場試練：サバイバルの経験値コイン）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23125,6 +23125,9 @@ OFF</button>
               choose: (i) => trialChoose(i),
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
+              // 経験値コインを置く（試験用。倒した敵の代わり）
+              drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
+              coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
                 const s = soldierById(id);
@@ -23171,7 +23174,16 @@ OFF</button>
                   reserve: trial.reserve ? trial.reserve.map((u) => u.id) : null,
                   boons: trial.boons ? { ...trial.boons } : null,
                   ougiUsed: trial.ougiUsed ? { ...trial.ougiUsed } : null,
+                  coins: trial.coins ? trial.coins.length : null,
+                  coinXp: trial.coins ? trial.coins.reduce((n, c) => n + c.xp, 0) : null,
+                  xpTotal: trial.xpTotal || 0,
+                  dropped: trial.dropped || 0,
+                  picked: trial.picked || 0,
+                  merges: trial.merges || 0,
+                  sfx: trial.sfx || 0,
+                  gauge: trial.gauge ? { ...trial.gauge } : null,
                   flurry: trial.flurry ? trial.flurry.left : null,
+                  bossAt: trial.bossAt || null,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
                 },
             },

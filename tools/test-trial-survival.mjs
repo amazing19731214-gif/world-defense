@@ -188,6 +188,7 @@ try {
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       L = T.live();
+    for (let i = 0; i < 900 && L.units.length < 5; i++) WD_DEBUG.step(0.1); // v108.5：コインを拾って全員が加入するまで
     for (const u of L.units) if (u.id !== 5) u.hp = Math.max(1, u.hp * 0.6); // けがをさせて、衛生兵の回復を見る
     for (let i = 0; i < 300; i++) WD_DEBUG.step(0.1);
     return T.state().units.map((u) => ({ id: u.id, role: u.role, kills: u.kills, dealt: Math.round(u.dealt), healed: Math.round(u.healed), skills: Object.keys(u.skills).length }));
@@ -195,20 +196,34 @@ try {
   const by = (id) => r.find((u) => u.id === id);
   check(by(1).dealt > 0 && by(2).dealt > 0 && by(4).dealt > 0 && by(5).healed > 0, "仲間は職業に応じて戦う（剣聖・槍将は斬り、銃将は撃ち、医王は回復）", r);
   check(r.filter((u) => u.skills > 0).length >= 3, "主人公・仲間とも、職業技・閃きを自動で使う", r);
-  // 5. 時間とともに敵が増え、最後に強敵が出る。強敵を倒すと勝利（Lv300の5人。主人公は止まったまま）
+  // 5. 時間とともに敵が増え、最後に強敵が出る。強敵を倒すと勝利（Lv300の5人）
+  //    v108.5：主人公は、近くに敵がいないときは落ちている経験値コインの方へ歩く（コインを拾うのが遊び方の一部）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       out = { early: 0, late: 0 };
     let last = T.state().t,
       bossAt = null;
     for (let i = 0; i < 2400 && T.on(); i++) {
+      {
+        const L = T.live(),
+          h = L.units.find((u) => u.id === L.hero),
+          near = L.enemies.some((e) => !e.gone && Math.hypot(e.x - h.x, e.y - h.y) < 140),
+          c = L.coins.filter((c) => Math.hypot(c.x - h.x, c.y - h.y) < 500).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0];
+        if (!near && c) {
+          const d = Math.hypot(c.x - h.x, c.y - h.y) || 1;
+          T.stick((c.x - h.x) / d, (c.y - h.y) / d);
+        } else T.stick(0, 0);
+        // この試験は「大将を倒すと勝利になる流れ」を見る（難易度は test-trial-coins とシミュレーションで見る）。
+        // 職業技の確率しだいで主人公が倒れて結果が揺れないよう、主人公の HP は3割より下げない
+        if (h.hp < h.max * 0.3) h.hp = h.max * 0.3;
+      }
       const s0 = T.live().spawned;
       WD_DEBUG.step(0.1);
       if (!T.on()) break;
       const L = T.live(),
         d = L.spawned - s0;
       if (L.t < 120) out.early += 0;
-      if (L.boss && bossAt == null) bossAt = L.t;
+      if (L.boss && bossAt == null) bossAt = L.bossAt;
     }
     return { bossAt, res: T.result() };
   });
@@ -261,7 +276,11 @@ try {
     document.getElementById("trialSheet").hidden = true;
     T.start([1, 2, 3, 4, 5], { mode: "survival", hero: 5 }); // 衛生兵（医王）でも主人公になれる
     let L = T.live();
-    for (let i = 0; i < 600; i++) WD_DEBUG.step(0.1);
+    // 回復の様子を見るための試験：主人公（医王）は倒れないようにして、仲間が加入するまで進める（v108.5：仲間の加入はコインしだい）
+    for (let i = 0; i < 1200 && L.units.length < 3; i++) {
+      L.units[0].hp = L.units[0].max;
+      WD_DEBUG.step(0.1);
+    }
     for (const u of L.units) if (u.id !== 5) u.hp *= 0.5;
     for (let i = 0; i < 200; i++) WD_DEBUG.step(0.1);
     const healerHero = { control: T.state().control, healed: Math.round(L.units[0].healed) };
