@@ -2189,6 +2189,29 @@
           animation: none !important;
         }
       }
+      /* v108.8 攻撃スキルの選択肢（新しい習得は青、強化は緑、Lv5 は金）。宝箱のスキル進化は紫 */
+      .trial-levelup-card button.skill .tag {
+        justify-self: start;
+        font-size: 12px;
+        padding: 1px 8px;
+        border-radius: 8px;
+        background: #2f6fb0;
+        color: #fff;
+      }
+      .trial-levelup-card button.skill.up .tag {
+        background: #2f8a4a;
+      }
+      .trial-levelup-card button.skill.max {
+        border-color: #ffe27a;
+      }
+      .trial-levelup-card button.skill.max .tag {
+        background: #9a7a1e;
+      }
+      .trial-reward.evo {
+        border-color: #c06bff;
+        background: radial-gradient(circle at 50% 30%, #6a2a8a, #24102e);
+        box-shadow: 0 0 22px #c06bffaa;
+      }
       .trial-levelup-card button.recruit {
         border-color: #ffe27a;
         background: #5a4a1e;
@@ -3157,7 +3180,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.7試作（戦場試練：サバイバルの無限の面・宝箱）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.8試作（戦場試練：サバイバルの攻撃スキル）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17740,7 +17763,7 @@ const TRIAL_RULES = {
 const TRIAL_SURVIVAL = {
   duration: 180, // 1回の戦闘の目安（秒）。残り時間はここまで数える
   bossAt: 150, // 強敵が出る時刻（残り30秒）。強敵を倒せば勝ち
-  timeLimit: 300, // 強敵を倒せないまま、ここまで来たら時間切れ（敗北）
+  timeLimit: 360, // 強敵を倒せないまま、ここまで来たら時間切れ（敗北）。v108.8：300→360
   start: { x: 1150, y: 600 }, // 出撃の位置（川の東・中央の道）
   slots: [[-48, -44], [-48, 44], [48, -44], [48, 44]], // 仲間の持ち場（主人公からのずれ）
   follow: 230, // 仲間は、持ち場からこの距離までの敵を狙う
@@ -18075,6 +18098,10 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     st: 0, // その面の経過時間（秒。大将・敵の出方はこれで決まる）
     bosses: 0, // 倒した大将の数
     rewards: [], // 宝箱の報酬
+    skills: {}, // v108.8 攻撃スキル { key: Lv }（この挑戦の間だけ）
+    skillCd: {},
+    skillUse: {}, // 発動した回数（結果・試験用）
+    proj: [], // 飛んでいる手裏剣・弾（届いた時に当たる）
     cleared: null, // 大将を倒した直後（宝箱・次の面へ）
     chest: null,
     level: D.level,
@@ -18091,6 +18118,7 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     farCheck: 2,
     rng: () => ((seed = (seed * 16807) % 2147483647) / 2147483647), // 出現の位置・種類（同じ顔ぶれなら同じ流れ）
   };
+  trialStartSkill(trial, hero); // v108.8 職業に合わせた最初の攻撃スキル
   shots = [];
   effects.length = 0;
   trialStick = { x: 0, y: 0 };
@@ -18101,8 +18129,10 @@ function startSurvival(list, units, M, D, stageId, heroId) {
 // ===== v108.7 無限の面：大将を倒すと宝箱 → 次の面へ。全滅（主人公が倒れる）まで続く =====
 //   面ごとに敵が少しずつ強くなる（体力・攻撃・種類）。5面ごとに「鬼大将」。敵の数の上限（36体）は変えない
 const TRIAL_STAGES = {
-  hpStep: 0.22, // 面ごとに敵の体力 +22%（第1面が1倍）
-  atkStep: 0.1, // 面ごとに敵の攻撃 +10%
+  // v108.8 攻撃スキルで強くなる分に合わせて、面ごとに掛け算で強くする（第1面が1倍。第5面で体力 ×2.9・攻撃 ×1.7、第10面で体力 ×10.6・攻撃 ×3.5）
+  hpStep: 0.3, // 面ごとに敵の体力 ×1.3
+  atkStep: 0.15, // 面ごとに敵の攻撃 ×1.15
+  bossExp: 0.8, // 大将の体力の伸びは、ふつうの敵より少しゆるく（第10面で ×6.6。時間切れで終わりにくく）
   poolShift: 20, // 面ごとに、強い種類の敵が20秒ずつ早く混ざる（最大90秒）
   greatEvery: 5, // この面ごとに鬼大将
   great: { hp: 2.6, atk: 1.35, r: 1.3, name: "鬼大将" },
@@ -18122,6 +18152,7 @@ const TRIAL_REWARDS = {
     heal: { icon: "💚", name: "HP回復", text: "主人公と仲間の HP を最大の60%回復", weight: 1.2, amount: 0.6 },
     move: { icon: "👟", name: "移動速度アップ", text: "歩く速さ +15%", weight: 0.8 },
     range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", weight: 0.8 },
+    scroll: { icon: "📜", name: "技の巻物", text: "攻撃スキルを1つ強化（強化できるものがなければ、新しく習得）", weight: 1.5, needSkill: true },
   },
   special: {
     raijin: { icon: "⚡", name: "雷神の勾玉", text: "4秒ごとに、主人公のまわりの敵3体へ雷（攻撃力×1.2）", weight: 1, every: 4, n: 3, radius: 260, mul: 1.2 },
@@ -18131,17 +18162,22 @@ const TRIAL_REWARDS = {
 };
 // 報酬を引く（戦闘の乱数）。奥義の秘伝書は、主人公が奥義を使えるときだけ
 function trialRollReward(T, great) {
+  // v108.8 進化の条件（元の2つが Lv5）がそろっていれば、宝箱はスキル進化
+  const evo = trialEvolveReady(T);
+  if (evo.length) return { key: evo[0], special: true, evo: true };
+  const opt = trialSkillOptions(T),
+    canSkill = opt.up.length + opt.learn.length > 0;
   const R = TRIAL_REWARDS,
     hasOugi = !!(trialOugiInfo(T) || {}).key,
     special = T.rng() < (great ? R.specialChanceGreat : R.specialChance),
     table = special ? R.special : R.common,
-    keys = Object.keys(table).filter((k) => !table[k].needOugi || hasOugi),
+    keys = Object.keys(table).filter((k) => (!table[k].needOugi || hasOugi) && (!table[k].needSkill || canSkill)),
     total = keys.reduce((n, k) => n + table[k].weight, 0);
   let x = T.rng() * total;
   for (const k of keys) if ((x -= table[k].weight) <= 0) return { key: k, special };
   return { key: keys[keys.length - 1], special };
 }
-const trialRewardDef = (r) => (r.special ? TRIAL_REWARDS.special : TRIAL_REWARDS.common)[r.key];
+const trialRewardDef = (r) => (r.evo ? TRIAL_EVOLVES : r.special ? TRIAL_REWARDS.special : TRIAL_REWARDS.common)[r.key];
 // 強化を主人公に足す（レベルアップの強化と宝箱の報酬で同じ処理）
 function trialApplyBoon(T, hero, key, step) {
   if (key === "atk") hero.atkMul += step;
@@ -18159,7 +18195,12 @@ function trialApplyReward(T, r) {
   const hero = T.units.find((u) => u.id === T.hero),
     D = trialRewardDef(r);
   T.rewards.push({ key: r.key, special: r.special, name: D.name, icon: D.icon, stage: T.floor });
-  if (!r.special) {
+  if (r.evo) trialEvolve(T, r.key);
+  else if (!r.special && r.key === "scroll") {
+    const o = trialSkillOptions(T),
+      c = o.up.length ? o.up[Math.floor(T.rng() * o.up.length)] : o.learn[Math.floor(T.rng() * o.learn.length)];
+    if (c) trialSkillLearn(T, c.key), (T.rewards[T.rewards.length - 1].name += "（" + TRIAL_SKILLS[c.key].name + " Lv" + T.skills[c.key] + "）");
+  } else if (!r.special) {
     if (r.key === "heal") {
       for (const u of T.units) if (!u.dead) (u.hp = Math.min(u.max, u.hp + u.max * D.amount)), trialHealFx(u);
     } else trialApplyBoon(T, hero, r.key, TRIAL_SURVIVAL.boons[r.key].step);
@@ -18199,6 +18240,7 @@ function trialStageClear(T) {
       if (n++ < 12 && effects.length < 64) effects.push({ kind: "cboom", x: e.x, y: e.y - 8, ougi: false, age: -n * 0.04, duration: 0.5 });
     }
   T.enemies = [];
+  T.proj = [];
   const left = T.coins.reduce((a, c) => a + c.xp, 0);
   T.picked = (T.picked || 0) + T.coins.length;
   T.coins = [];
@@ -18302,6 +18344,401 @@ function trialBest(T) {
       /* 保存できなくても続ける */
     }
   return best;
+}
+// ===== v108.8 サバイバルの攻撃スキル（この挑戦の間だけ。本番の兵士には保存しない） =====
+//   レベルアップ・宝箱で習得し、同じスキルを選ぶと Lv が上がる（Lv1〜5）。最大6種類。自動で発動し、通常攻撃・職業技・閃き・奥義とは別に動く
+//   威力（mul）は主人公の攻撃力の何倍か（サバイバルの攻撃力の強化も効く）。cd は発動の間隔（秒）。数値は表のまま調整できる
+//   既存の職業技・閃き・奥義・永久のスキルはこの6枠に入らない
+const TRIAL_SKILL_RULES = { maxKinds: 6, maxLv: 5, fx: 64, aim: 180 };
+const TRIAL_SKILLS = {
+  thunder: {
+    icon: "⚡",
+    name: "雷撃",
+    cd: [2.6, 2.6, 2.6, 1.8, 1.6],
+    mul: [1.2, 1.8, 1.8, 1.9, 2.2],
+    chain: [1, 1, 3, 3, 5],
+    range: 320,
+    text: ["近くの敵1体に落雷", "雷の威力が上がる", "雷が3体へ連鎖する！", "雷が速く落ちる", "雷が5体へ連鎖し、敵をしびれさせる！"],
+  },
+  fireRing: {
+    icon: "🔥",
+    name: "火炎輪",
+    orbs: [1, 2, 3, 3, 3],
+    radius: [70, 75, 80, 95, 100],
+    mul: [0.5, 0.55, 0.6, 0.8, 0.9],
+    gap: 0.6, // 同じ敵に当たる間隔
+    spin: 2.6,
+    burn: [0, 0, 0, 0, 0.3], // Lv5：燃える（1秒ごとに攻撃力×0.3・2秒）
+    text: ["炎の玉が1つ、主人公のまわりを回る", "炎の玉が2つになる！", "炎の玉が3つになる！", "炎の輪が広く・強くなる", "大きな炎が回り、敵を燃やし続ける！"],
+  },
+  shuriken: {
+    icon: "✴️",
+    name: "手裏剣乱舞",
+    cd: [1.6, 1.6, 1.6, 1.1, 1.0],
+    n: [1, 2, 3, 3, 3],
+    mul: [0.9, 0.9, 0.9, 1.0, 1.4],
+    range: 380,
+    pierce: [false, false, false, false, true],
+    text: ["近くの敵へ手裏剣を1枚投げる", "手裏剣が2枚になる！", "手裏剣が3枚になる！", "手裏剣を速く投げる", "大きな手裏剣が敵を貫く！"],
+  },
+  vacuum: {
+    icon: "🌪️",
+    name: "真空斬",
+    cd: [2.2, 2.2, 2.2, 2.0, 1.8],
+    len: [260, 340, 340, 360, 380],
+    width: [26, 26, 26, 40, 48],
+    lines: [1, 1, 2, 2, 4],
+    mul: [1.4, 1.4, 1.4, 1.8, 2.0],
+    text: ["敵の方へ斬撃を飛ばす", "斬撃が遠くまで届く", "斬撃が2本になる！", "斬撃が太く・強くなる", "十字の斬撃が四方を切り裂く！"],
+  },
+  spear: {
+    icon: "🔱",
+    name: "槍衾",
+    cd: [1.8, 1.8, 1.8, 1.8, 1.6],
+    n: [1, 1, 3, 3, 5],
+    len: [120, 120, 130, 170, 200],
+    mul: [1.2, 1.6, 1.6, 1.7, 1.9],
+    push: [0, 0, 0, 0, 50],
+    text: ["敵の方へ槍で突く", "突きが強くなる", "槍が3本になる！", "突きが遠くまで届く", "5本の槍衾が敵を押し返す！"],
+  },
+  musket: {
+    icon: "💥",
+    name: "火縄銃連射",
+    cd: [2.0, 2.0, 2.0, 2.0, 2.4],
+    shots: [1, 1, 2, 2, 8],
+    mul: [1.8, 2.4, 2.4, 2.6, 2.2],
+    pierce: [1, 1, 1, 3, 3], // 1発で当たる敵の数
+    range: 420,
+    text: ["近くの敵を自動で撃つ", "弾が強くなる", "2連射になる！", "弾が敵を貫く（3体まで）", "八方へ一斉射撃！"],
+  },
+  whirl: {
+    icon: "🌀",
+    name: "旋風斬",
+    cd: [2.4, 2.4, 1.8, 1.8, 1.6],
+    radius: [90, 115, 115, 120, 170],
+    mul: [0.9, 0.9, 0.9, 1.3, 1.5],
+    max: 14,
+    text: ["主人公のまわりに回転斬り", "回転斬りが広くなる", "回転斬りが速くなる", "回転斬りが強くなる", "大きな旋風がまとめて斬る！"],
+  },
+  heal: {
+    icon: "💚",
+    name: "癒やしの陣",
+    cd: [6, 6, 6, 4.5, 4],
+    pct: [0.05, 0.08, 0.08, 0.09, 0.1],
+    allies: [0, 0, 160, 160, 420],
+    text: ["主人公を少しずつ回復する", "回復の量が増える", "近くの仲間も回復する！", "回復が速くなる", "広い範囲の味方を回復する！"],
+  },
+};
+// 進化スキル（大将の宝箱で、元の2つがどちらも Lv5 のとき）。元の2つは1つにまとまる（枠が1つ空く）。威力は2つを合わせたより少し強い程度
+const TRIAL_EVOLVES = {
+  raijinken: { icon: "⚡🌪️", name: "雷神剣", from: ["thunder", "vacuum"], text: "雷をまとった十字の斬撃。当たった敵から雷が連鎖する", cd: 1.6, len: 420, width: 50, mul: 2.4, chain: 2, chainMul: 1.6, ready: true },
+  guren: { icon: "🔥🌀", name: "紅蓮旋風", from: ["fireRing", "whirl"], text: "4つの大きな炎が回り、炎の旋風が周りを焼き払う", orbs: 4, radius: 110, orbMul: 1.0, gap: 0.5, cd: 1.6, whirl: 190, mul: 1.8, burn: 0.4, ready: true },
+  kagejin: { icon: "✴️🌪️", name: "影刃乱舞", from: ["shuriken", "vacuum"], text: "（準備中：データだけ）", ready: false },
+  teppeki: { icon: "🔱💥", name: "鉄壁の弾幕", from: ["spear", "musket"], text: "（準備中：データだけ）", ready: false },
+};
+const trialSkillDef = (k) => TRIAL_SKILLS[k] || TRIAL_EVOLVES[k];
+const trialSkillKinds = (T) => Object.keys(T.skills).length;
+// 最初のスキル：主人公の職業に合わせて1つ（近接は真空斬・槍は槍衾・弓は手裏剣・鉄砲は火縄銃・衛生兵は雷撃）
+function trialStartSkill(T, h) {
+  const k = h.role === "heal" ? "thunder" : h.role === "melee" ? (h.type === "spearman" ? "spear" : "vacuum") : h.shot === "musket" ? "musket" : "shuriken";
+  T.skills = { [k]: 1 };
+  T.skillCd = { [k]: 1 };
+}
+// レベルアップ・宝箱で取れるスキル：まだ Lv5 でない持っているスキル（強化）と、枠が空いていれば持っていないスキル（習得）。進化した元のスキルは出さない
+function trialSkillOptions(T) {
+  const used = new Set(Object.keys(TRIAL_EVOLVES).filter((k) => T.skills[k]).flatMap((k) => TRIAL_EVOLVES[k].from)),
+    up = [],
+    learn = [];
+  for (const k of Object.keys(TRIAL_SKILLS)) {
+    if (used.has(k)) continue;
+    const lv = T.skills[k] || 0;
+    if (lv && lv < TRIAL_SKILL_RULES.maxLv) up.push({ kind: "skill", key: k, from: lv, to: lv + 1 });
+    else if (!lv && trialSkillKinds(T) < TRIAL_SKILL_RULES.maxKinds) learn.push({ kind: "skill", key: k, from: 0, to: 1 });
+  }
+  return { up, learn };
+}
+function trialSkillLearn(T, key) {
+  const lv = (T.skills[key] || 0) + 1;
+  T.skills[key] = Math.min(TRIAL_SKILL_RULES.maxLv, lv);
+  if (!T.skillCd[key]) T.skillCd[key] = 0.5;
+  const h = T.units.find((u) => u.id === T.hero),
+    D = TRIAL_SKILLS[key];
+  if (effects.length < TRIAL_SKILL_RULES.fx) effects.push({ kind: "ctext", x: h.x, y: h.y - 100, text: D.icon + D.name + (lv > 1 ? " Lv" + lv : " 習得！"), ougi: lv >= 5, age: 0, duration: 1.3 });
+}
+// 進化：元の2つが Lv5 で、その進化をまだ持っていない（用意できている進化だけ）
+function trialEvolveReady(T) {
+  return Object.keys(TRIAL_EVOLVES).filter((k) => TRIAL_EVOLVES[k].ready && !T.skills[k] && TRIAL_EVOLVES[k].from.every((f) => T.skills[f] >= TRIAL_SKILL_RULES.maxLv));
+}
+function trialEvolve(T, key) {
+  const E = TRIAL_EVOLVES[key];
+  for (const f of E.from) delete T.skills[f], delete T.skillCd[f];
+  T.skills[key] = TRIAL_SKILL_RULES.maxLv;
+  T.skillCd[key] = 0.3;
+  T.evolved = (T.evolved || 0) + 1;
+}
+// ===== 発動（毎コマ。主人公が生きている間） =====
+function trialSkillTick(T, dt) {
+  const h = T.units.find((u) => u.id === T.hero);
+  if (!h || h.dead || !T.skills) return;
+  const atk = soldierStats(h.sh, true).atk,
+    foes = T.enemies.filter((e) => !e.gone);
+  // 燃えている敵（火炎輪 Lv5・紅蓮旋風）
+  for (const e of foes)
+    if (e.burn && e.burn.until > T.t && (e.burn.tick -= dt) <= 0) {
+      e.burn.tick = 1;
+      trialHitEnemy(h, e, e.burn.dmg, 0.2, true);
+    }
+  // 飛んでいる手裏剣・弾：届いた時に当てる（見た目と当たりをそろえる）
+  if (T.proj.length) {
+    for (const P of T.proj) P.t -= dt;
+    for (const P of T.proj.filter((P) => P.t <= 0)) for (const e of P.hits) if (!e.gone) trialHitEnemy(h, e, P.dmg, P.pierce || 0, true);
+    T.proj = T.proj.filter((P) => P.t > 0);
+  }
+  for (const k of Object.keys(T.skills)) {
+    const lv = T.skills[k],
+      i = lv - 1;
+    if (k === "fireRing" || k === "guren") trialOrbs(T, h, k, i, atk, foes);
+    if ((T.skillCd[k] = (T.skillCd[k] || 0) - dt) > 0) continue;
+    const D = trialSkillDef(k),
+      fire = TRIAL_SKILL_CAST[k];
+    if (!fire) continue;
+    T.skillCd[k] = Array.isArray(D.cd) ? D.cd[i] : D.cd || 1;
+    const used = fire(T, h, D, i, atk, foes);
+    if (used === false) T.skillCd[k] = 0.3; // 当てる相手がいなければ、すぐにもう一度ためす
+    else T.skillUse[k] = (T.skillUse[k] || 0) + 1;
+  }
+}
+const trialNearestN = (h, foes, n, range) =>
+  foes
+    .filter((e) => !e.gone && trialDist(e, h) <= range)
+    .sort((a, b) => trialDist(a, h) - trialDist(b, h))
+    .slice(0, n);
+// 直線に当たる敵（幅 width・長さ len・max 体まで。近い順）
+function trialLineHits(o, a, len, width, foes, max = 99) {
+  const ux = Math.cos(a),
+    uy = Math.sin(a),
+    out = [];
+  for (const e of foes) {
+    if (e.gone) continue;
+    const px = e.x - o.x,
+      py = e.y - o.y,
+      along = px * ux + py * uy;
+    if (along > 0 && along <= len && Math.abs(px * uy - py * ux) <= width + (e.r || 12)) out.push([along, e]);
+  }
+  return out
+    .sort((p, q) => p[0] - q[0])
+    .slice(0, max)
+    .map((p) => p[1]);
+}
+const trialFx = (e) => effects.length < TRIAL_SKILL_RULES.fx && effects.push(e);
+const trialShot = (s) => {
+  if (shots.length >= 160) shots.shift();
+  shots.push({ age: 0, quiet: true, col: "#a56b35", ...s });
+};
+// 雷の連鎖（雷撃・雷神剣）：最初の敵から近い敵へ順に
+function trialChainBolt(T, h, first, n, dmg, foes, stun) {
+  let cur = first;
+  const hit = new Set();
+  for (let c = 0; c < n && cur; c++) {
+    hit.add(cur);
+    trialHitEnemy(h, cur, dmg, 0.3, true);
+    if (stun && !cur.gone) (cur.evolutionSlow = { value: 0.5, until: T.t + 1.2 }), (cur.cd = Math.max(cur.cd, 0.6));
+    trialFx({ kind: "cline", x: cur.x, y: cur.y - 18, a: -Math.PI / 2 + 0.12, ougi: true, age: 0, duration: 0.3 });
+    const next = foes.filter((e) => !e.gone && !hit.has(e) && trialDist(e, cur) < 170).sort((a, b) => trialDist(a, cur) - trialDist(b, cur))[0];
+    if (next) trialShot({ x: cur.x, y: cur.y - 16, tx: next.x, ty: next.y - 16, type: "magic", duration: 0.09, trail: 2, glow: "#cfefff" });
+    cur = next;
+  }
+}
+const TRIAL_SKILL_CAST = {
+  thunder: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, Math.min(D.range, TRIAL_SKILL_RULES.aim))[0];
+    if (!t) return false;
+    trialChainBolt(T, h, t, D.chain[i], atk * D.mul[i], foes, i >= 4);
+    trialSfx("thunder", { vol: 0.7 });
+  },
+  shuriken: (T, h, D, i, atk, foes) => {
+    const list = trialNearestN(h, foes, D.n[i], Math.min(D.range, TRIAL_SKILL_RULES.aim));
+    if (!list.length) return false;
+    for (const e of list) {
+      const a = Math.atan2(e.y - h.y, e.x - h.x),
+        dur = Math.min(0.28, trialDist(e, h) / 900),
+        hits = D.pierce[i] ? trialLineHits(h, a, D.range, 22, foes, 8) : [e];
+      T.proj.push({ t: dur, hits, dmg: atk * D.mul[i] });
+      trialShot({ x: h.x, y: h.y - 20, tx: D.pierce[i] ? h.x + Math.cos(a) * D.range : e.x, ty: D.pierce[i] ? h.y - 20 + Math.sin(a) * D.range : e.y - 10, type: "arrow", duration: D.pierce[i] ? 0.35 : dur, trail: 2, glow: i >= 4 ? "#e0e0ff" : "#c8c8d8", col: "#6b7080" });
+    }
+    trialSfx("bow", { vol: 0.6 });
+  },
+  vacuum: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, Math.min(D.len[i] + 60, TRIAL_SKILL_RULES.aim))[0];
+    if (!t) return false;
+    const a0 = Math.atan2(t.y - h.y, t.x - h.x),
+      dirs = D.lines[i] === 4 ? [0, 1, 2, 3].map((k) => a0 + (k * Math.PI) / 2) : D.lines[i] === 2 ? [a0 - 0.22, a0 + 0.22] : [a0],
+      o = { x: h.x, y: h.y - 10 },
+      seen = new Set();
+    for (const a of dirs) for (const e of trialLineHits(o, a, D.len[i], D.width[i], foes)) if (!seen.has(e)) seen.add(e), trialHitEnemy(h, e, atk * D.mul[i], 0.1, true);
+    trialFx({ kind: "cwave", x: o.x, y: o.y, rays: dirs, len: D.len[i], width: D.width[i], ougi: i >= 4, age: 0, duration: 0.42 });
+    trialSfx("slash", { vol: 0.8 });
+  },
+  spear: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, D.len[i] + 40)[0];
+    if (!t) return false;
+    const a0 = Math.atan2(t.y - h.y, t.x - h.x),
+      n = D.n[i],
+      dirs = Array.from({ length: n }, (_, k) => a0 + (k - (n - 1) / 2) * 0.32),
+      seen = new Set();
+    for (const a of dirs) {
+      for (const e of trialLineHits(h, a, D.len[i], 18, foes))
+        if (!seen.has(e)) {
+          seen.add(e);
+          trialHitEnemy(h, e, atk * D.mul[i], 0.1, true);
+          if (D.push[i] && !e.gone && e !== T.boss) (e.x += Math.cos(a) * D.push[i]), (e.y += Math.sin(a) * D.push[i]), trialCollide(e);
+        }
+      trialShot({ x: h.x, y: h.y - 16, tx: h.x + Math.cos(a) * D.len[i], ty: h.y - 16 + Math.sin(a) * D.len[i], type: "arrow", duration: 0.12, trail: 2, glow: "#fff1a0", col: "#fff6c8" });
+    }
+    trialSfx("thrust", { vol: 0.8 });
+  },
+  musket: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, Math.min(D.range, TRIAL_SKILL_RULES.aim))[0];
+    if (!t && i < 4) return false;
+    const n = D.shots[i],
+      a0 = t ? Math.atan2(t.y - h.y, t.x - h.x) : 0,
+      dirs = n >= 8 ? Array.from({ length: 8 }, (_, k) => a0 + (k * Math.PI) / 4) : n === 2 ? [a0 - 0.08, a0 + 0.08] : [a0];
+    if (!t && !foes.some((e) => trialDist(e, h) < Math.min(D.range, TRIAL_SKILL_RULES.aim))) return false;
+    for (const a of dirs) {
+      const hits = trialLineHits(h, a, D.range, 14, foes, D.pierce[i]),
+        end = hits.length ? hits[hits.length - 1] : null,
+        far = end ? trialDist(end, h) : D.range,
+        dur = Math.min(0.16, far / 1800);
+      T.proj.push({ t: dur, hits, dmg: atk * D.mul[i], pierce: 0.2 });
+      trialShot({ x: h.x + Math.cos(a) * 16, y: h.y - 22, tx: h.x + Math.cos(a) * far, ty: h.y - 22 + Math.sin(a) * far, type: "magic", duration: dur || 0.1, trail: 1, glow: "#ffd27a" });
+    }
+    burst(h.x + Math.cos(a0) * 18, h.y - 22, "#fff0b0", "gunsmoke");
+    trialSfx("gun", { vol: 0.8 });
+  },
+  whirl: (T, h, D, i, atk, foes) => {
+    const list = trialNearestN(h, foes, D.max, D.radius[i]);
+    if (!list.length) return false;
+    for (const e of list) trialHitEnemy(h, e, atk * D.mul[i], 0.1, true);
+    trialFx({ kind: "cwave", x: h.x, y: h.y - 10, rays: [0, 1, 2, 3, 4, 5].map((k) => (k * Math.PI) / 3 + T.t * 3), len: D.radius[i], width: 18, ougi: i >= 4, age: 0, duration: 0.4 });
+    trialSfx("slash", { vol: 0.7 });
+  },
+  heal: (T, h, D, i) => {
+    const R = D.allies[i],
+      list = T.units.filter((u) => !u.dead && (u === h || (R && trialDist(u, h) <= R)) && u.hp < u.max);
+    if (!list.length) return;
+    for (const u of list) (u.hp = Math.min(u.max, u.hp + u.max * D.pct[i])), burst(u.x, u.y - 16, "#7be08a", "heal");
+    trialFx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: false, age: 0, duration: 0.5 });
+    trialSfx("heal", { vol: 0.8 });
+  },
+  // 進化：雷神剣（十字の斬撃＋当たった敵から雷の連鎖）
+  raijinken: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, Math.min(D.len + 60, TRIAL_SKILL_RULES.aim))[0];
+    if (!t) return false;
+    const a0 = Math.atan2(t.y - h.y, t.x - h.x),
+      dirs = [0, 1, 2, 3].map((k) => a0 + (k * Math.PI) / 2),
+      o = { x: h.x, y: h.y - 10 },
+      seen = new Set();
+    for (const a of dirs) for (const e of trialLineHits(o, a, D.len, D.width, foes)) if (!seen.has(e)) seen.add(e), trialHitEnemy(h, e, atk * D.mul, 0.2, true);
+    let n = 0;
+    for (const e of seen) if (n++ < 6) trialChainBolt(T, h, e, D.chain, atk * D.chainMul, foes.filter((x) => !seen.has(x) || x === e), true);
+    trialFx({ kind: "cwave", x: o.x, y: o.y, rays: dirs, len: D.len, width: D.width, ougi: true, age: 0, duration: 0.5 });
+    trialSfx("thunder");
+    trialSfx("slash");
+  },
+  // 進化：紅蓮旋風（炎の旋風。回る炎は trialOrbs）
+  guren: (T, h, D, i, atk, foes) => {
+    const list = trialNearestN(h, foes, 18, D.whirl);
+    if (!list.length) return false;
+    for (const e of list) {
+      trialHitEnemy(h, e, atk * D.mul, 0.2, true);
+      if (!e.gone) e.burn = { dmg: atk * D.burn, until: T.t + 2.2, tick: 1 };
+    }
+    trialFx({ kind: "cwave", x: h.x, y: h.y - 10, rays: [0, 1, 2, 3, 4, 5, 6, 7].map((k) => (k * Math.PI) / 4 + T.t * 4), len: D.whirl, width: 24, ougi: true, age: 0, duration: 0.45 });
+    burst(h.x, h.y - 10, "#ff8a3a", "gunsmoke");
+    trialSfx("slash");
+  },
+};
+// 回る炎（火炎輪・紅蓮旋風）：炎の位置に近い敵へ、同じ敵には gap 秒ごとに当てる
+function trialOrbs(T, h, k, i, atk, foes) {
+  const D = trialSkillDef(k),
+    n = k === "guren" ? D.orbs : D.orbs[i],
+    R = k === "guren" ? D.radius : D.radius[i],
+    mul = k === "guren" ? D.orbMul : D.mul[i],
+    burn = k === "guren" ? D.burn : D.burn[i],
+    size = k === "guren" ? 22 : i >= 4 ? 18 : 13,
+    gap = D.gap;
+  T.orbs = T.orbs || {};
+  const pos = [];
+  for (let j = 0; j < n; j++) {
+    const a = T.t * D.spin * (k === "guren" ? 1.2 : 1) + (j * Math.PI * 2) / n;
+    pos.push({ x: h.x + Math.cos(a) * R, y: h.y - 14 + Math.sin(a) * R * 0.7 });
+  }
+  T.orbs[k] = { pos, size, big: k === "guren" || i >= 4 };
+  for (const p of pos)
+    for (const e of foes) {
+      if (e.gone || Math.hypot(e.x - p.x, e.y - 8 - p.y) > size + (e.r || 12)) continue;
+      const key = "orb_" + k;
+      if (e[key] > T.t) continue;
+      e[key] = T.t + gap;
+      trialHitEnemy(h, e, atk * mul, 0.1, true);
+      if (burn && !e.gone) e.burn = { dmg: atk * burn, until: T.t + 2, tick: 1 };
+      trialFx({ kind: "cspark", x: e.x, y: e.y - 10, ougi: false, seed: e.x, age: 0, duration: 0.25 });
+    }
+}
+// 炎の玉を描く（見えている所だけ・数は多くても4つ×2）
+function trialDrawSkills(T) {
+  if (!T.orbs) return;
+  ctx.save();
+  for (const k of Object.keys(T.orbs)) {
+    if (!T.skills[k]) continue;
+    const O = T.orbs[k];
+    for (const p of O.pos) {
+      const fl = reduced ? 1 : 0.85 + 0.15 * Math.sin(visualTime * 20 + p.x);
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = O.big ? "#ff6a1a" : "#ff9a3a";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, O.size * 1.7 * fl, 0, 7);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#ffb347";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, O.size * fl, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = "#fff3c4";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - O.size * 0.2, O.size * 0.45, 0, 7);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+// 持っているスキルの表示（戦場の左、HP の棒の下）：アイコンと Lv（Lv5 は★、進化は✨）
+function trialDrawSkillBar(T, SW) {
+  const keys = Object.keys(T.skills || {});
+  if (!keys.length) return;
+  ctx.save();
+  ctx.textAlign = "center";
+  keys.forEach((k, j) => {
+    const D = trialSkillDef(k),
+      lv = T.skills[k],
+      evo = !!TRIAL_EVOLVES[k],
+      x = 26 + j * 54,
+      y = 136;
+    ctx.fillStyle = evo ? "#5a2a7acc" : lv >= 5 ? "#5a4a1ecc" : "#10182acc";
+    ctx.fillRect(x - 24, y - 20, 48, 46);
+    ctx.strokeStyle = evo ? "#c06bff" : lv >= 5 ? "#ffe27a" : "#9fd8ff88";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 24, y - 20, 48, 46);
+    // 絵文字はサロゲートペアがあるので、文字単位で数える（.slice(0,2) だと進化アイコンが文字化けする）
+    const ic = [...D.icon].reduce((a, c) => (c === "\uFE0F" && a.length ? (a[a.length - 1] += c) : a.push(c), a), []);
+    ctx.font = ic.length > 1 ? "16px system-ui" : "22px system-ui";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(ic.slice(0, 2).join(""), x, y + 4);
+    ctx.font = "bold 15px system-ui";
+    ctx.fillStyle = evo ? "#f0d0ff" : lv >= 5 ? "#ffe27a" : "#e8f3ff";
+    ctx.fillText(evo ? "進化" : lv >= 5 ? "★MAX" : "Lv" + lv, x, y + 22);
+  });
+  ctx.restore();
 }
 // ===== v108.2 この戦闘だけの成長（サバイバルLv・強化・仲間の加入）。本番の兵士・保存データには書かない =====
 function trialBoonInit(u) {
@@ -18675,11 +19112,19 @@ function trialGaugeStep(T) {
   return G;
 }
 // レベルアップの選択肢：仲間候補が残っていれば「👥 仲間を1人加入」＋強化2つ。いなければ強化3つ
+// v108.8 選択肢：仲間候補が残っていれば「仲間を1人加入」。残りは攻撃スキル（新しい習得と、持っているスキルの強化をなるべく両方）。
+//   スキルの候補が足りないとき（6種類そろって全部 Lv5 など）は、能力の強化で埋める。同じ候補は2回出さない
 function trialChoices(T) {
   const keys = Object.keys(TRIAL_SURVIVAL.boons),
-    out = [];
+    out = [],
+    pick = (arr) => arr.splice(Math.floor(T.rng() * arr.length), 1)[0];
   if (T.reserve.length) out.push({ kind: "recruit", unit: T.reserve[0] });
-  while (out.length < 3 && keys.length) out.push({ kind: "boon", key: keys.splice(Math.floor(T.rng() * keys.length), 1)[0] });
+  const { up, learn } = trialSkillOptions(T);
+  if (up.length && out.length < 3) out.push(pick(up));
+  if (learn.length && out.length < 3) out.push(pick(learn));
+  const rest = [...up, ...learn];
+  while (out.length < 3 && rest.length) out.push(pick(rest));
+  while (out.length < 3 && keys.length) out.push({ kind: "boon", key: pick(keys) });
   return out;
 }
 function trialOpenChoice(T) {
@@ -18703,6 +19148,7 @@ function trialChoose(i, force) {
   const S = TRIAL_SURVIVAL,
     hero = T.units.find((u) => u.id === T.hero);
   if (c.kind === "recruit") trialRecruit(T, hero);
+  else if (c.kind === "skill") trialSkillLearn(T, c.key);
   else {
     const B = S.boons[c.key];
     T.boons[c.key] = (T.boons[c.key] || 0) + 1;
@@ -18745,7 +19191,7 @@ function trialLevelSync() {
     box = $("trialLevelUp");
   if (!box) return;
   if (T && !T.choice && T.chest) return trialChestRender(T, box); // v108.7 宝箱・次の面へ
-  const key = T && T.choice ? T.slv + "|" + T.choice.map((c) => c.kind + (c.key || c.unit.id)).join(",") : "";
+  const key = T && T.choice ? T.slv + "|" + T.choice.map((c) => c.kind + (c.key || c.unit.id) + (c.to || "")).join(",") : "";
   if (key === trialLevelKey) return;
   trialLevelKey = key;
   box.hidden = !key;
@@ -18761,6 +19207,10 @@ function trialLevelSync() {
         if (c.kind === "recruit") {
           const u = c.unit;
           return '<button type="button" data-trial-choose="' + i + '" class="recruit"' + attr(i) + ">👥 <b>仲間を1人加入</b><small>" + esc(u.name.replace(/^🎖/, "")) + "（" + (JOBS[u.jobKey] ? JOBS[u.jobKey].icon + JOBS[u.jobKey].name : "") + "・Lv" + u.src.level + "）が主人公の近くに来る</small></button>";
+        }
+        if (c.kind === "skill") {
+          const D = TRIAL_SKILLS[c.key];
+          return '<button type="button" data-trial-choose="' + i + '" class="skill' + (c.from ? " up" : " new") + (c.to >= 5 ? " max" : "") + '"' + attr(i) + "><span class=\"tag\">" + (c.from ? "強化" : "新しい攻撃スキル") + "</span>" + D.icon + " <b>" + D.name + "</b> " + (c.from ? "Lv" + c.from + " → Lv" + c.to : "Lv1") + "<small>" + esc(D.text[c.to - 1]) + "</small></button>";
         }
         const B = S.boons[c.key];
         return '<button type="button" data-trial-choose="' + i + '"' + attr(i) + ">" + B.icon + " <b>" + B.name + "</b>" + (T.boons[c.key] ? "（" + (T.boons[c.key] + 1) + "回目）" : "") + "<small>" + B.text + "・主人公だけ・この戦闘の間だけ</small></button>";
@@ -18802,7 +19252,7 @@ function trialChestRender(T, box) {
   const D = trialRewardDef(C.reward);
   box.innerHTML =
     '<div class="trial-levelup-card ready trial-chest" role="dialog" aria-label="報酬">' + head +
-    '<div class="trial-reward' + (C.reward.special ? " special" : "") + '"><span class="reward-icon">' + D.icon + "</span><b>" + (C.reward.special ? "✨ 珍しい報酬 ✨<br>" : "") + esc(D.name) + "</b><small>" + esc(D.text) + "・この挑戦の間だけ</small></div>" +
+    '<div class="trial-reward' + (C.reward.special ? " special" : "") + (C.reward.evo ? " evo" : "") + '"><span class="reward-icon">' + D.icon + "</span><b>" + (C.reward.evo ? "✨ スキル進化 ✨<br>" + D.from.map((f) => TRIAL_SKILLS[f].name).join("＋") + " → " : C.reward.special ? "✨ 珍しい報酬 ✨<br>" : "") + esc(D.name) + "</b><small>" + esc(D.text) + (C.reward.evo ? "（元の2つは1つにまとまり、スキルの枠が1つ空く）" : "") + "・この挑戦の間だけ</small></div>" +
     '<button type="button" data-trial-chest="take" class="trial-take">✅ <b>受け取る</b></button></div>';
 }
 // サバイバルの敵の出る所：主人公から見て画面の外（少し先）。戦場の中・川と木や岩の外。見つからなければ null（次の機会に）
@@ -18840,9 +19290,9 @@ function trialSurvivalTick(T, dt) {
     alive = T.enemies.filter((e) => !e.gone),
     f = Math.min(1, T.st / S.bossAt),
     great = T.floor % G.greatEvery === 0,
-    sh = 1 + G.hpStep * (T.floor - 1), // 面が進むほど強い
-    sa = 1 + G.atkStep * (T.floor - 1),
-    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: (boss ? S.bossHp * (great ? G.great.hp : 1) : S.hp * (1 + S.hpGrow * f)) * sh, atkMul: (boss ? S.bossAtk * (great ? G.great.atk : 1) : S.atk) * (1 + S.atkGrow * f) * sa, speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
+    sh = Math.pow(1 + G.hpStep, T.floor - 1), // 面が進むほど強い（掛け算）
+    sa = Math.pow(1 + G.atkStep, T.floor - 1),
+    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: boss ? S.bossHp * (great ? G.great.hp : 1) * Math.pow(1 + G.hpStep, (T.floor - 1) * G.bossExp) : S.hp * (1 + S.hpGrow * f) * sh, atkMul: (boss ? S.bossAtk * (great ? G.great.atk : 1) : S.atk) * (1 + S.atkGrow * f) * sa, speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
   const add = (q) => {
     const e = trialEnemy(q, T, T.spawned);
     e.surv = true;
@@ -18880,7 +19330,8 @@ function trialSurvivalTick(T, dt) {
   T.next = (T.boss ? S.afterBoss : S.interval0 + (S.intervalEnd - S.interval0) * f) / keep;
   const pt = T.st + Math.min(90, G.poolShift * (T.floor - 1)), // 面が進むほど、強い種類が早く混ざる
     pool = S.pools.filter((p) => p[0] <= pt).pop()[1],
-    n = Math.min(S.maxAlive - alive.length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery)),
+    // ふつうの敵は36体まで（大将は別に数える。大将がいても、ふつうの敵は36体を超えない）
+    n = Math.min(S.maxAlive - alive.filter((e) => e !== T.boss).length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery)),
     p = n > 0 && trialSpawnPoint(T, hero);
   if (!p) return;
   for (let k = 0; k < n; k++) {
@@ -18936,6 +19387,7 @@ function tickTrial(dt) {
     T.st += dt;
     trialSurvivalTick(T, dt);
     if (T.raijin) trialRaijinTick(T, dt);
+    trialSkillTick(T, dt);
     if (T.flurry) trialFlurryTick(T, dt);
     trialCoinTick(T, dt);
     // 仲間の持ち場：主人公のまわり（主人公が動くと持ち場も動く）
@@ -19508,8 +19960,13 @@ function trialUnstick(e, dt) {
     e.unstuck = (e.unstuck || 0) + 1;
     e.wp = Math.min(e.lanePath.length, e.wp + 1);
     e.joined = true;
-    e.x += (Math.random() - 0.5) * 16;
-    e.y += (Math.random() - 0.5) * 16;
+    // 引っかかりを外すずらし。Math.random だと同じ戦闘でも勝ち負けが変わることがあるので、決まった値にする（戦闘の乱数 T.rng も使わない）
+    const j = (k) => {
+      const v = Math.sin(e.unstuck * 12.9898 + Math.round(e.lastX) * 78.233 + k * 37.719) * 43758.5453;
+      return v - Math.floor(v) - 0.5;
+    };
+    e.x += j(1) * 16;
+    e.y += j(2) * 16;
   }
 }
 // 敵の攻撃のダメージ：兵士の防御・受けるダメージ軽減のスキル・職業技の盾（防衛戦と同じ式）。一撃は最大HPの6割まで
@@ -19629,7 +20086,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -19862,7 +20319,7 @@ function drawTrial() {
     ctx.restore();
   }
   const actors = [];
-  if (T.mode === "survival") trialDrawCoins(T, V);
+  if (T.mode === "survival") trialDrawCoins(T, V), trialDrawSkills(T);
   for (const u of T.units) if (u.placed) actors.push({ y: u.y, draw: () => trialDrawUnit(u) });
   for (const e of T.enemies) if (!e.gone) actors.push({ y: e.y, draw: () => trialDrawEnemy(e) });
   actors.sort((a, b) => a.y - b.y);
@@ -19984,6 +20441,7 @@ function drawTrial() {
       ctx.strokeText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
       ctx.fillStyle = "#fff";
       ctx.fillText("HP " + Math.ceil(h.hp) + "/" + Math.round(h.max), 18, 103);
+      trialDrawSkillBar(T, SW); // v108.8 持っている攻撃スキル
       // v108.7 大将の HP（画面の下・横長。鬼大将は紫）
       const B = T.boss;
       if (B && !B.gone) {
@@ -20165,6 +20623,7 @@ function renderTrialSheet() {
       '<p class="trial-result"><b>' + (sv ? { win: "🏆 勝利！ 大将を倒した", lose: "第" + R.floor + "面で力尽きた（主人公が倒れた）", retreat: "↩ 第" + R.floor + "面で撤退", timeout: "⌛ 第" + R.floor + "面で時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
       (sv
         ? '<p class="trial-stage-sum">🏯 到達 <b>第' + R.floor + "面</b>・👑 大将を倒した数 <b>" + R.bosses + "</b>" + (R.best ? "・🏅 最高 第" + Math.max(R.best, 1) + "面クリア" : "") + "<br>撃破 <b>" + R.kills + "</b>・獲得 EXP <b>" + ((R.coins && R.coins.xp) || 0) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
+          (R.skillList.length ? "<p><small>🗡 攻撃スキル：" + R.skillList.map((x) => x.icon + esc(x.name) + (x.evo ? "（進化）" : x.lv >= 5 ? "★" : " Lv" + x.lv)).join("・") + "</small></p>" : "") +
           (R.rewardList.length ? "<p><small>🎁 報酬：" + R.rewardList.map((x) => (x.special ? "<b>" : "") + x.icon + esc(x.name) + (x.special ? "</b>" : "")).join("・") + "</small></p>" : "") +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
           (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）</small>" : "") +
@@ -29309,6 +29768,10 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               nextStage: () => trialNextStage(),
               best: () => trialBestRead(),
               roll: (great) => trial && trialRollReward(trial, !!great),
+              skillDefs: TRIAL_SKILLS,
+              evolveDefs: TRIAL_EVOLVES,
+              learn: (k) => trial && trialSkillLearn(trial, k),
+              skillOptions: () => trial && trialSkillOptions(trial),
               sfx: { stats: () => JSON.parse(JSON.stringify(trialSfxStats)), unlock: () => trialAudioUnlock(), level: (v) => (v === undefined ? trialSfxLevel : trialSfxSetLevel(v)), play: (k, o) => trialSfx(k, o), voices: () => trialVoices.length, reset: () => ((trialSfxLast = {}), (trialSfxStats.played = {}), (trialSfxStats.skipped = 0)) },
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
@@ -29380,6 +29843,9 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                   raijin: trial.raijin ? { ...trial.raijin } : null,
                   phoenix: trial.phoenix || 0,
                   ougiMul: trial.ougiMul || 1,
+                  skills: trial.skills ? { ...trial.skills } : null,
+                  skillUse: trial.skillUse ? { ...trial.skillUse } : null,
+                  proj: trial.proj ? trial.proj.length : 0,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y, great: !!trial.boss.great, name: trial.boss.name || null, atkMul: trial.boss.atkMul } : null,
                 },
             },

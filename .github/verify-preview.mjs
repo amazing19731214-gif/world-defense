@@ -131,8 +131,22 @@ try {
   step("12 サバイバル：主人公をスティックで動かせる", knob2, knob2 !== "none");
   // v108.2 敵を倒して経験値がたまると、戦闘が止まり選択画面 →「👥 仲間を1人加入」を指で押す
   let lvUp = false;
+  // v108.8 攻撃スキルは遠くの敵も倒すので、コインを拾うために、スティックで歩き回る（実際に遊ぶときと同じ）
   for (let i = 0; i < 60 && !lvUp; i++) {
-    await p.waitForTimeout(1000);
+    await p.evaluate(
+      async ([cx, cy, a]) => {
+        const pad = document.getElementById("trialPad"),
+          ev = (type, x, y) => pad.dispatchEvent(new PointerEvent(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+        const x = cx + Math.cos(a) * 50,
+          y = cy + Math.sin(a) * 50;
+        ev("pointerdown", cx, cy);
+        ev("pointermove", x, y);
+        await new Promise((r) => setTimeout(r, 900));
+        ev("pointerup", x, y);
+      },
+      [pad2.x + pad2.width / 2, pad2.y + pad2.height / 2, (i * Math.PI) / 2],
+    );
+    await p.waitForTimeout(100);
     lvUp = await p.evaluate(() => !document.getElementById("trialLevelUp").hidden);
   }
   const choice = await p.evaluate(() => [...document.querySelectorAll("[data-trial-choose]")].map((b) => b.textContent.slice(0, 40)));
