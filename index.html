@@ -3227,7 +3227,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109試作（戦場試練：縦長の画面・磁石・敵の群れ）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109.1試作（戦場試練：補助スキル「吸着」）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -18490,6 +18490,14 @@ const TRIAL_SKILLS = {
     allies: [0, 0, 160, 160, 420],
     text: ["主人公を少しずつ回復する", "回復の量が増える", "近くの仲間も回復する！", "回復が速くなる", "広い範囲の味方を回復する！"],
   },
+  // v109.1 補助スキル（support）：攻撃しない。攻撃スキルの6枠を使わない（いつでも習得・強化の候補に出る）
+  magnet: {
+    icon: "🧲",
+    name: "吸着",
+    support: true,
+    mul: [1.3, 1.6, 1.9, 2.2, 2.6], // 経験値コイン・磁石を吸い寄せる距離（倍。190 × mul）
+    text: ["コインを吸い寄せる距離 +30%", "吸い寄せる距離 +60%", "吸い寄せる距離 +90%", "吸い寄せる距離 +120%", "吸い寄せる距離 +160%（遠くのコインもどんどん集まる！）"],
+  },
 };
 // 進化スキル（大将の宝箱で、元の2つがどちらも Lv5 のとき）。元の2つは1つにまとまる（枠が1つ空く）。威力は2つを合わせたより少し強い程度
 const TRIAL_EVOLVES = {
@@ -18499,7 +18507,12 @@ const TRIAL_EVOLVES = {
   teppeki: { icon: "🔱💥", name: "鉄壁の弾幕", from: ["spear", "musket"], text: "（準備中：データだけ）", ready: false },
 };
 const trialSkillDef = (k) => TRIAL_SKILLS[k] || TRIAL_EVOLVES[k];
-const trialSkillKinds = (T) => Object.keys(T.skills).length;
+const trialSkillKinds = (T) => Object.keys(T.skills).filter((k) => !(TRIAL_SKILLS[k] && TRIAL_SKILLS[k].support)).length; // 攻撃スキルの数（補助スキルは数えない）
+// v109.1 コイン・磁石を吸い寄せる距離：基本 190 × 吸い寄せ範囲アップ（強化・宝箱）× 吸着（補助スキル）
+function trialMagnetR(T, h) {
+  const lv = T.skills && T.skills.magnet;
+  return TRIAL_SURVIVAL.magnet * ((h && h.magnetMul) || 1) * (lv ? TRIAL_SKILLS.magnet.mul[lv - 1] : 1);
+}
 // 最初のスキル：主人公の職業に合わせて1つ（近接は真空斬・槍は槍衾・弓は手裏剣・鉄砲は火縄銃・衛生兵は雷撃）
 function trialStartSkill(T, h) {
   const k = h.role === "heal" ? "thunder" : h.role === "melee" ? (h.type === "spearman" ? "spear" : "vacuum") : h.shot === "musket" ? "musket" : "shuriken";
@@ -18515,7 +18528,7 @@ function trialSkillOptions(T) {
     if (used.has(k)) continue;
     const lv = T.skills[k] || 0;
     if (lv && lv < TRIAL_SKILL_RULES.maxLv) up.push({ kind: "skill", key: k, from: lv, to: lv + 1 });
-    else if (!lv && trialSkillKinds(T) < TRIAL_SKILL_RULES.maxKinds) learn.push({ kind: "skill", key: k, from: 0, to: 1 });
+    else if (!lv && (TRIAL_SKILLS[k].support || trialSkillKinds(T) < TRIAL_SKILL_RULES.maxKinds)) learn.push({ kind: "skill", key: k, from: 0, to: 1 });
   }
   return { up, learn };
 }
@@ -18865,7 +18878,7 @@ function trialMagnetTick(T, h, dt) {
       dy = h.y - 10 - m.y,
       d = Math.hypot(dx, dy);
     if (!m.pull) {
-      if (d > S.magnet * (h.magnetMul || 1)) continue;
+      if (d > trialMagnetR(T, h)) continue;
       m.pull = true;
     }
     m.pt += dt;
@@ -18888,6 +18901,7 @@ function trialCoinTick(T, dt) {
   if (!h || h.dead) return;
   trialMagnetTick(T, h, dt);
   if (!T.coins.length) return;
+  const R = trialMagnetR(T, h);
   let got = 0,
     n = 0;
   for (let i = T.coins.length - 1; i >= 0; i--) {
@@ -18896,7 +18910,7 @@ function trialCoinTick(T, dt) {
       dy = h.y - 10 - c.y,
       d = Math.hypot(dx, dy);
     if (!c.pull) {
-      if (d > S.magnet * (h.magnetMul || 1)) continue; // 遠いコインは動かさない（数が増えても軽い）。吸い寄せ範囲アップで広がる
+      if (d > R) continue; // 遠いコインは動かさない（数が増えても軽い）。吸い寄せ範囲アップ・吸着で広がる
       c.pull = true;
     }
     c.pt += dt;
@@ -19340,7 +19354,7 @@ function trialLevelSync() {
         }
         if (c.kind === "skill") {
           const D = TRIAL_SKILLS[c.key];
-          return '<button type="button" data-trial-choose="' + i + '" class="skill' + (c.from ? " up" : " new") + (c.to >= 5 ? " max" : "") + '"' + attr(i) + "><span class=\"tag\">" + (c.from ? "強化" : "新しい攻撃スキル") + "</span>" + D.icon + " <b>" + D.name + "</b> " + (c.from ? "Lv" + c.from + " → Lv" + c.to : "Lv1") + "<small>" + esc(D.text[c.to - 1]) + "</small></button>";
+          return '<button type="button" data-trial-choose="' + i + '" class="skill' + (c.from ? " up" : " new") + (c.to >= 5 ? " max" : "") + '"' + attr(i) + "><span class=\"tag\">" + (c.from ? "強化" : D.support ? "新しい補助スキル" : "新しい攻撃スキル") + "</span>" + D.icon + " <b>" + D.name + "</b> " + (c.from ? "Lv" + c.from + " → Lv" + c.to : "Lv1") + "<small>" + esc(D.text[c.to - 1]) + "</small></button>";
         }
         const B = S.boons[c.key];
         return '<button type="button" data-trial-choose="' + i + '"' + attr(i) + ">" + B.icon + " <b>" + B.name + "</b>" + (T.boons[c.key] ? "（" + (T.boons[c.key] + 1) + "回目）" : "") + "<small>" + B.text + "・主人公だけ・この戦闘の間だけ</small></button>";
@@ -29973,7 +29987,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                   magnets: trial.magnets ? trial.magnets.length : 0,
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,
-                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? TRIAL_SURVIVAL.magnet * (h.magnetMul || 1) : null; })(),
+                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? trialMagnetR(trial, h) : null; })(),
                   merges: trial.merges || 0,
                   sfx: trial.sfx || 0,
                   gauge: trial.gauge ? { ...trial.gauge } : null,
