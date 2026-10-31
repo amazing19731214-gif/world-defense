@@ -1,0 +1,12 @@
+# WORLD DEFENSE テストプレイ版（戦場試練）
+
+このブランチ（`trial-test-preview`）は、iPhone の Safari で「⚔️ 戦場試練」をテストプレイするための**配信専用のブランチ**です。本番のゲーム（main・GitHub Pages）とは関係ありません。
+
+- 中身：`index.html` 1つ。Draft PR #127〜#131 と Phase 3.2 の機能を含むテスト用ビルドです（`node tools/build.mjs --test` で作成）。
+- 開くURL：<https://raw.githack.com/amazing19731214-gif/world-defense/trial-test-preview/index.html>
+  - raw.githack.com（無料・登録不要）が、このブランチの `index.html` をそのまま配信します。
+  - 本番の公開サイト（amazing19731214-gif.github.io）とは別のオリジンです。
+- 保存：このページは、すべてのキーの頭に `wdtest:` を付けた別の保存領域だけを使います。本番の保存データは読まない・書かない・消さない。
+- 停止・削除：このブランチを削除すると配信が止まります（raw.githack の短い保存期間のあと見られなくなります）。
+
+**マージしないでください。** このブランチは main とつながっていない（履歴が別の）配信専用のブランチです。
