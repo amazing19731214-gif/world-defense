@@ -166,7 +166,9 @@ try {
   await tap("[data-trial-go]");
   await p.waitForTimeout(4000);
   r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, overflow: document.documentElement.scrollWidth - innerWidth }));
-  check(/サバイバル/.test(r.info) && /試・弓聖/.test(r.info) && /HP/.test(r.info) && /残り/.test(r.info) && r.units && r.overflow <= 0, "サバイバル：主人公（試・弓聖）を選んで始められ、主人公のHP・残り時間が出る", r);
+  check(/サバイバル/.test(r.info) && /試・弓聖/.test(r.info) && /仲間 \d\/4/.test(r.info) && r.units && r.overflow <= 0, "サバイバル：主人公（試・弓聖）1人で始められ、主人公の名前と仲間の人数が出る（HP・経験値・残り時間は戦場の上）", r);
+  // レベルアップの選択画面が出ていたら、1つ目（仲間の加入）を指で押す
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
   const pad2 = await p.locator("#trialPad").boundingBox();
   await p.mouse.move(pad2.x + pad2.width / 2, pad2.y + pad2.height / 2);
   await p.mouse.down();
@@ -175,6 +177,7 @@ try {
   r = await p.evaluate(() => getComputedStyle(document.querySelector("#trialPad .trial-knob")).transform);
   await p.mouse.up();
   check(r !== "none", "サバイバル：主人公をスティックで動かせる", r);
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
   await tap("#trialRetreat");
   await p.waitForTimeout(300);
   r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialTitle").textContent + document.getElementById("trialBody").textContent }));

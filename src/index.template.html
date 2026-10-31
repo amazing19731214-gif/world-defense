@@ -1905,6 +1905,55 @@
         padding: 4px;
         overflow-wrap: anywhere;
       }
+      .trial-levelup {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: #0a141866;
+      }
+      .trial-levelup-card {
+        width: min(100%, 420px);
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 14px;
+        border: 2px solid #ffe27a;
+        background: #12343cf2;
+        box-shadow: 0 8px 24px #000a;
+      }
+      .trial-levelup-title {
+        margin: 0 0 2px;
+        font-size: 22px;
+        font-weight: bold;
+        color: #ffe9b0;
+        text-align: center;
+      }
+      .trial-levelup-title small {
+        display: block;
+        font-size: 13px;
+        font-weight: normal;
+        color: #cfe3e8;
+      }
+      .trial-levelup-card button {
+        min-height: 64px;
+        display: grid;
+        gap: 2px;
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 18px;
+        overflow-wrap: anywhere;
+      }
+      .trial-levelup-card button small {
+        font-size: 13px;
+        color: #cfe3e8;
+      }
+      .trial-levelup-card button.recruit {
+        border-color: #ffe27a;
+        background: #5a4a1e;
+      }
       .trial-modes button[aria-pressed="true"],
       .trial-heroes button[aria-pressed="true"] {
         border-color: #ffe27a;
@@ -2762,6 +2811,8 @@
           </div>
         </div>
         <button id="trialRetreat" class="retreat">↩ 撤退</button>
+        <!-- v108.2 サバイバルのレベルアップ：選ぶまで戦闘は止まる -->
+        <div id="trialLevelUp" class="trial-levelup" hidden></div>
       </section>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
         <div id="battleInfo" class="battle-info"></div>
@@ -2867,7 +2918,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.1試作（戦場試練：サバイバル・主人公と仲間）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.2試作（戦場試練：サバイバル・主人公1人から仲間を増やす）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23046,6 +23097,7 @@ OFF</button>
               maps: TRIAL_MAPS,
               start: (ids, opts) => startTrial(ids, "sanpou", opts),
               survival: TRIAL_SURVIVAL,
+              choose: (i) => trialChoose(i),
               place: (x, y) => trialPlace(x, y),
               auto: () => trialAutoPlace(),
               begin: () => trialBegin(),
@@ -23078,6 +23130,13 @@ OFF</button>
                   control: trial.control,
                   mode: trial.mode,
                   hero: trial.hero || null,
+                  slv: trial.slv || null,
+                  xp: trial.xp || 0,
+                  need: trial.slv ? TRIAL_SURVIVAL.need(trial.slv) : null,
+                  lvUps: trial.lvUps || 0,
+                  choice: trial.choice ? trial.choice.map((c) => (c.kind === "recruit" ? "recruit:" + c.unit.id : c.key)) : null,
+                  reserve: trial.reserve ? trial.reserve.map((u) => u.id) : null,
+                  boons: trial.boons ? { ...trial.boons } : null,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
                 },
             },
