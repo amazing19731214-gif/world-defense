@@ -60,19 +60,48 @@ try {
   for (const name of ["試・剣神", "試・槍将", "試・弓聖", "試・銃将", "試・医王"]) await p.locator("[data-trial-pick]", { hasText: name }).tap();
   await p.locator("[data-trial-go]").tap();
   await p.waitForTimeout(400);
-  const box = await p.locator("#game").boundingBox();
-  for (const [x, y] of [[700, 210], [700, 280], [700, 350], [760, 240], [770, 330]]) await p.touchscreen.tap(box.x + (x / 960) * box.width, box.y + (y / 600) * box.height);
+  // v108：広い戦場。配置は「🧭 自動で並べる」
+  await p.locator("#trialAuto").tap();
   await p.locator("#trialGo").tap();
-  await p.waitForTimeout(15000);
+  await p.waitForTimeout(8000);
   const info = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  step("5 戦場試練を開始できる（15秒たって戦闘が進む）", info, /味方 \d\/5/.test(info) && /\d+秒/.test(info));
+  step("5 戦場試練を開始できる（8秒たって戦闘が進む）", info, /味方 \d\/5/.test(info) && /\d+秒/.test(info));
+  // 兵士の札を押して操作 → スティックを指で倒す → 全員自動
+  await p.locator("#trialUnits [data-trial-ctl]").first().tap();
+  await p.waitForTimeout(500);
+  const ctl = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, chips: document.querySelectorAll("#trialUnits [data-trial-ctl]").length, pad: document.getElementById("trialPad").offsetParent !== null }));
+  step("6 兵士の札を押すと、その兵士を操作できる", ctl, ctl.info.includes("操作中") && ctl.chips === 5 && ctl.pad);
+  const pad = await p.locator("#trialPad").boundingBox();
+  const sy0 = await p.evaluate(() => scrollY);
+  const cx = pad.x + pad.width / 2,
+    cy = pad.y + pad.height / 2;
+  // 指の操作（タッチの pointer）を送る：押す → 左へ倒す → 離す
+  const knob = await p.evaluate(
+    async ([cx, cy]) => {
+      const pad = document.getElementById("trialPad"),
+        ev = (type, x, y) => pad.dispatchEvent(new PointerEvent(type, { pointerId: 7, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      ev("pointerdown", cx, cy);
+      for (let i = 1; i <= 5; i++) ev("pointermove", cx - i * 10, cy);
+      await new Promise((r) => setTimeout(r, 1200));
+      const t = getComputedStyle(pad.querySelector(".trial-knob")).transform;
+      ev("pointerup", cx - 50, cy);
+      return t;
+    },
+    [cx, cy],
+  );
+  const sy1 = await p.evaluate(() => scrollY);
+  step("7 スティックを指で倒せる（画面はスクロールしない）", { knob, sy0, sy1 }, knob !== "none" && sy0 === sy1);
+  await p.locator("#trialAutoAll").tap();
+  await p.waitForTimeout(300);
+  const auto = await p.evaluate(() => document.getElementById("trialInfo").textContent);
+  step("8 「🤖 全員自動」で操作を外せる", auto, auto.includes("全員自動"));
   await p.locator("#trialRetreat").tap();
   await p.waitForTimeout(800);
   const result = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, rows: document.querySelectorAll(".trial-unit").length, text: document.querySelector(".trial-result")?.textContent }));
-  step("6 撤退すると結果の画面", result, result.open && result.rows === 5);
+  step("9 撤退すると結果の画面", result, result.open && result.rows === 5);
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-  step("7 横にはみ出さない", overflow, overflow <= 0);
-  step("8 JavaScript のエラーなし", errors, errors.length === 0);
+  step("10 横にはみ出さない", overflow, overflow <= 0);
+  step("11 JavaScript のエラーなし", errors, errors.length === 0);
 } catch (e) {
   step("例外", String(e && e.message), false);
 }
