@@ -141,6 +141,13 @@ try {
   await p.waitForTimeout(800);
   const kills = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, box: document.getElementById("trialLevelUp").hidden }));
   step("12c 「仲間を1人加入」で仲間が1人増え、戦闘が再開する", kills, /仲間 1\/4/.test(kills.info) && kills.box);
+  // v108.6 効果音の音量のボタン：押すたびに 大→中→小→消音（音を出す処理で JavaScript のエラーが出ないこと）
+  const snd = [];
+  for (let i = 0; i < 4; i++) {
+    await p.locator("#trialSound").tap();
+    snd.push(await p.locator("#trialSound").textContent());
+  }
+  step("12d 効果音の音量のボタン（中→小→消音→大→中）", snd, snd.join() === "🔈 小,🔇 消音,🔊 大,🔉 中");
   if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
   await p.locator("#trialRetreat").tap();
   await p.waitForTimeout(800);

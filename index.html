@@ -2035,6 +2035,68 @@
         font-size: 13px;
         color: #cfe3e8;
       }
+      /* v108.6 HP が3割を切った兵士の札は赤く点滅 */
+      .trial-units-bar button.danger {
+        border-color: #ff3b2f;
+        animation: trialDanger 0.8s ease-in-out infinite alternate;
+      }
+      @keyframes trialDanger {
+        to {
+          background: #6a1a14;
+        }
+      }
+      /* v108.6 効果音の音量（撤退の右・小さく） */
+      .trial-bottom {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+      .trial-bottom .retreat {
+        margin: 0;
+      }
+      .trial-sound {
+        min-height: 48px;
+        min-width: 92px;
+        padding: 4px 8px;
+        font-size: 15px;
+        white-space: nowrap;
+      }
+      /* v108.6 レベルアップのカード：順に出る → 出そろうと光って押せる → 選ぶと光る */
+      .trial-levelup-card button {
+        animation: trialCardIn 0.22s ease-out both;
+      }
+      .trial-levelup-card.arming button {
+        opacity: 0.92;
+      }
+      .trial-levelup-card.ready button:not(:disabled) {
+        box-shadow: 0 0 0 2px #ffe27a88 inset, 0 0 12px #ffe27a55;
+        animation: trialCardIn 0.22s ease-out both, trialCardGlow 1.2s ease-in-out 0.2s infinite alternate;
+      }
+      .trial-levelup-card button:active {
+        transform: scale(0.97);
+        filter: brightness(1.3);
+      }
+      @keyframes trialCardIn {
+        from {
+          opacity: 0;
+          transform: translateY(18px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes trialCardGlow {
+        to {
+          box-shadow: 0 0 0 2px #ffe27a inset, 0 0 18px #ffe27a99;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .trial-levelup-card button,
+        .trial-levelup-card.ready button:not(:disabled) {
+          animation: none;
+        }
+      }
       .trial-levelup-card button.recruit {
         border-color: #ffe27a;
         background: #5a4a1e;
@@ -2895,7 +2957,7 @@
             </div>
           </div>
         </div>
-        <button id="trialRetreat" class="retreat">↩ 撤退</button>
+        <div class="trial-bottom"><button id="trialRetreat" class="retreat">↩ 撤退</button><button id="trialSound" type="button" class="trial-sound">🔉 中</button></div>
         <!-- v108.2 サバイバルのレベルアップ：選ぶまで戦闘は止まる -->
         <div id="trialLevelUp" class="trial-levelup" hidden></div>
       </section>
@@ -3003,7 +3065,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.5試作（戦場試練：サバイバルの経験値コイン）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.6試作（戦場試練：効果音とレベルアップの演出）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17952,6 +18014,7 @@ function trialGainXp(T, amount) {
     T.slv++;
     T.lvUps++;
     T.lvAt = T.t; // v108.5 ゲージが満タンで光るのを見せてから選択画面（0.5秒）
+    trialSfx("levelup");
   }
 }
 // ===== v108.5 経験値コイン（この戦闘だけ。保存しない） =====
@@ -18015,43 +18078,226 @@ function trialCoinTick(T, dt) {
   }
   trialCoinSound(n);
 }
-// 効果音（コインを拾った音）：Web Audio の短い音。iPhone は画面に触れたあとでないと鳴らせないので、触れたときに準備する
+// ===== v108.6 効果音（戦場試練だけ）：Web Audio で音を作る（音声ファイルは使わない）=====
+//   ・iPhone の Safari は、画面に触れたあとでないと音を出せない → 触れたとき（戦場試練の間）に準備する
+//   ・音が出せない環境（AudioContext がない・作れない）でも、ゲームはそのまま動く（鳴らさないだけ）
+//   ・同じ音は間をあける（種類ごとの最短の間隔）。同時に鳴る音は8つまで。通常攻撃は小さく、閃き・奥義・警告は大きく
+//   ・音量（大・中・小・消音）は、テスト版（テスト用の保存の領域）にだけ保存する。本番の版では保存しない（開くたびに「中」）
+const TRIAL_SFX = {
+  key: "worldDefense.trialSfx.v1",
+  levels: [
+    { v: 0.9, label: "🔊 大" },
+    { v: 0.55, label: "🔉 中" },
+    { v: 0.25, label: "🔈 小" },
+    { v: 0, label: "🔇 消音" },
+  ],
+  voices: 8, // 同時に鳴らす音の上限
+  // 種類：gap（同じ音の最短の間隔・秒）と vol（大きさの目安）
+  kinds: {
+    slash: { gap: 0.09, vol: 0.22 },
+    thrust: { gap: 0.1, vol: 0.22 },
+    bow: { gap: 0.1, vol: 0.18 },
+    hit: { gap: 0.08, vol: 0.14 },
+    gun: { gap: 0.14, vol: 0.32 },
+    heal: { gap: 0.3, vol: 0.2 },
+    hurt: { gap: 0.15, vol: 0.18 },
+    insight: { gap: 0.25, vol: 0.4 },
+    ougi: { gap: 0.5, vol: 0.7 },
+    warn: { gap: 1.0, vol: 0.35 },
+    coin: { gap: 0.06, vol: 0.22 },
+    levelup: { gap: 0.3, vol: 0.45 },
+    roll: { gap: 0.3, vol: 0.3 },
+    card: { gap: 0.05, vol: 0.2 },
+    pick: { gap: 0.2, vol: 0.45 },
+  },
+};
+// 音の雑音は、音だけの乱数で作る（Math.random を使うと、戦闘の乱数（職業技の発動など）の順番が変わってしまうため）
+let trialSfxSeed = 12345;
+const trialSfxRnd = () => ((trialSfxSeed = (trialSfxSeed * 16807) % 2147483647) / 2147483647);
 let trialAudio = null,
-  trialSoundAt = 0;
+  trialNoise = null,
+  trialMaster = null,
+  trialVoices = [], // 鳴っている音の終わる時刻
+  trialSfxLast = {},
+  trialSfxStats = { played: {}, skipped: 0, unlocked: false, failed: false },
+  trialSfxLevel = (() => {
+    // テスト版だけ、保存した音量を読む（本番の版では読まない・書かない）
+    if (!window.WD_TEST_STORAGE) return 1;
+    try {
+      const v = JSON.parse(localStorage.getItem(TRIAL_SFX.key) || "null");
+      return v && Number.isInteger(v.level) && TRIAL_SFX.levels[v.level] ? v.level : 1;
+    } catch (err) {
+      return 1;
+    }
+  })();
+const trialSfxVolume = () => TRIAL_SFX.levels[trialSfxLevel].v;
+function trialSfxSetLevel(level) {
+  trialSfxLevel = TRIAL_SFX.levels[level] ? level : 1;
+  if (trialMaster) trialMaster.gain.value = trialSfxVolume();
+  if (window.WD_TEST_STORAGE)
+    try {
+      localStorage.setItem(TRIAL_SFX.key, JSON.stringify({ level: trialSfxLevel }));
+    } catch (err) {
+      /* 保存できなくても続ける */
+    }
+  trialSfxButton();
+}
 function trialAudioUnlock() {
-  if (trialAudio || typeof window.AudioContext !== "function" && typeof window.webkitAudioContext !== "function") return;
+  if (trialAudio || trialSfxStats.failed) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (typeof AC !== "function") return (trialSfxStats.failed = true);
   try {
-    trialAudio = new (window.AudioContext || window.webkitAudioContext)();
+    trialAudio = new AC();
+    trialMaster = trialAudio.createGain();
+    trialMaster.gain.value = trialSfxVolume();
+    trialMaster.connect(trialAudio.destination);
+    // 斬撃・発砲・ドラムロール用の雑音（0.5秒を1つだけ作って使い回す）
+    const n = Math.floor(trialAudio.sampleRate * 0.5);
+    trialNoise = trialAudio.createBuffer(1, n, trialAudio.sampleRate);
+    const d = trialNoise.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = trialSfxRnd() * 2 - 1;
+    trialSfxStats.unlocked = true;
   } catch (err) {
     trialAudio = null;
+    trialSfxStats.failed = true;
   }
 }
-function trialCoinSound(n) {
-  if (trial) trial.sfx = (trial.sfx || 0) + 1;
-  const A = trialAudio,
-    now = performance.now();
-  if (!A || now - trialSoundAt < 70) return;
-  trialSoundAt = now;
+// 鳴らす：種類ごとの間隔・同時の数を見てから、build(A, out, t) で音を組み立てる。鳴らさなかったら false
+function trialSfx(kind, opt = {}) {
+  const K = TRIAL_SFX.kinds[kind];
+  if (!K) return false;
+  const now = performance.now() / 1000;
+  if (now - (trialSfxLast[kind] || -9) < K.gap) return (trialSfxStats.skipped++, false);
+  trialSfxLast[kind] = now;
+  trialSfxStats.played[kind] = (trialSfxStats.played[kind] || 0) + 1; // 試験用の記録（鳴らせない環境でも数える）
+  const A = trialAudio;
+  if (!A || !trialSfxVolume()) return false;
+  const t = A.currentTime;
+  trialVoices = trialVoices.filter((x) => x > t);
+  if (trialVoices.length >= TRIAL_SFX.voices && kind !== "ougi" && kind !== "warn") return (trialSfxStats.skipped++, false);
   try {
     if (A.state === "suspended") A.resume();
-    const o = A.createOscillator(),
-      g = A.createGain(),
-      t = A.currentTime,
-      f = Math.min(1600, 880 + n * 60);
-    o.type = "triangle";
-    o.frequency.setValueAtTime(f, t);
-    o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.07);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-    o.connect(g).connect(A.destination);
-    o.start(t);
-    o.stop(t + 0.13);
+    const out = A.createGain();
+    out.gain.value = K.vol * (opt.vol || 1);
+    out.connect(trialMaster);
+    const end = TRIAL_SFX_BUILD[kind](A, out, t + (opt.delay || 0), opt);
+    trialVoices.push(end);
+    return true;
   } catch (err) {
-    /* 鳴らなくても続ける */
+    return false;
   }
 }
-for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () => trial && trial.mode === "survival" && trialAudioUnlock(), { passive: true });
+// 音の部品：音程のある音（osc）と雑音（noise）。どちらも短く、最後は小さくして消す
+function trialTone(A, out, t, type, f0, f1, dur, peak = 1, attack = 0.005) {
+  const o = A.createOscillator(),
+    g = A.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(out);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+  return t + dur;
+}
+function trialHiss(A, out, t, dur, filter, f0, f1, peak = 1, q = 1) {
+  const s = A.createBufferSource(),
+    bq = A.createBiquadFilter(),
+    g = A.createGain();
+  s.buffer = trialNoise;
+  bq.type = filter;
+  bq.Q.value = q;
+  bq.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) bq.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(bq).connect(g).connect(out);
+  s.start(t, trialSfxRnd() * 0.3);
+  s.stop(t + dur + 0.02);
+  return t + dur;
+}
+const TRIAL_SFX_BUILD = {
+  // 刀：高い所から下がる鋭い風切り
+  slash: (A, o, t) => Math.max(trialHiss(A, o, t, 0.09, "bandpass", 5200, 1800, 1, 2.5), trialTone(A, o, t, "triangle", 1400, 600, 0.05, 0.25)),
+  // 槍：短く低い突き（ドスッ）
+  thrust: (A, o, t) => Math.max(trialTone(A, o, t, "sine", 260, 90, 0.09, 1), trialHiss(A, o, t, 0.05, "lowpass", 1800, 600, 0.5)),
+  // 弓：弦の音（ビュン）
+  bow: (A, o, t) => Math.max(trialTone(A, o, t, "triangle", 520, 180, 0.12, 0.8), trialHiss(A, o, t, 0.08, "highpass", 2500, 4000, 0.25)),
+  // 命中：小さなコツッ
+  hit: (A, o, t) => trialTone(A, o, t, "square", 900, 500, 0.035, 0.5),
+  // 鉄砲：低い爆発と雑音（ドン）
+  gun: (A, o, t) => Math.max(trialHiss(A, o, t, 0.22, "lowpass", 3000, 300, 1), trialTone(A, o, t, "sine", 120, 45, 0.2, 1)),
+  // 回復：明るい2つの音（上がる）
+  heal: (A, o, t) => Math.max(trialTone(A, o, t, "sine", 880, 880, 0.12, 0.7, 0.01), trialTone(A, o, t + 0.07, "sine", 1318, 1318, 0.16, 0.7, 0.01)),
+  // 被弾：短い低い音
+  hurt: (A, o, t) => trialTone(A, o, t, "square", 230, 110, 0.07, 0.6),
+  // 閃き：きらめく3つの高い音（通常攻撃と違う）
+  insight: (A, o, t) => [1568, 2093, 2637].reduce((e, f, i) => Math.max(e, trialTone(A, o, t + i * 0.05, "sine", f, f, 0.18, 0.6, 0.004)), 0),
+  // 奥義：低い衝撃・上がる風・和音
+  ougi: (A, o, t) =>
+    Math.max(
+      trialTone(A, o, t, "sine", 90, 35, 0.6, 1, 0.005),
+      trialHiss(A, o, t, 0.5, "bandpass", 400, 4000, 0.7, 1.2),
+      ...[523, 659, 784].map((f) => trialTone(A, o, t + 0.12, "sawtooth", f, f, 0.45, 0.18, 0.02)),
+    ),
+  // 警告：2つの短い音（ピッピッ）
+  warn: (A, o, t) => Math.max(trialTone(A, o, t, "square", 988, 988, 0.08, 0.5), trialTone(A, o, t + 0.13, "square", 740, 740, 0.08, 0.5)),
+  // コイン：短い電子音。続けて拾うと音程が上がる（opt.step）
+  coin: (A, o, t, opt) => {
+    const f = Math.min(2400, 1046 * Math.pow(2, (opt.step || 0) / 12));
+    return trialTone(A, o, t, "triangle", f, f * 1.5, 0.08, 0.8);
+  },
+  // レベルアップ：上がる4つの音
+  levelup: (A, o, t) => [523, 659, 784, 1046].reduce((e, f, i) => Math.max(e, trialTone(A, o, t + i * 0.07, "square", f, f, 0.12, 0.35, 0.004)), 0),
+  // ドラムロール風：短い雑音を速く刻んで、だんだん強く（0.45秒）
+  roll: (A, o, t) => {
+    let e = t;
+    for (let i = 0; i < 12; i++) e = Math.max(e, trialHiss(A, o, t + i * 0.035, 0.03, "bandpass", 900 + i * 40, 700, 0.3 + i * 0.05, 1));
+    return Math.max(e, trialTone(A, o, t + 0.42, "sine", 130, 70, 0.12, 0.9));
+  },
+  // カードが出る：小さなシュッ
+  card: (A, o, t) => trialHiss(A, o, t, 0.06, "highpass", 3000, 6000, 0.6),
+  // 決定：明るい和音ときらめき
+  pick: (A, o, t) => Math.max(...[784, 988, 1175].map((f) => trialTone(A, o, t, "triangle", f, f, 0.3, 0.45, 0.005)), trialTone(A, o, t + 0.08, "sine", 2349, 2349, 0.2, 0.3)),
+};
+// コインの音：0.6秒の間に続けて拾うと、半音ずつ上がる（12段まで）
+let trialCoinChain = { at: 0, step: 0 };
+function trialCoinSound(n) {
+  if (trial) trial.sfx = (trial.sfx || 0) + 1;
+  const now = performance.now();
+  trialCoinChain.step = now - trialCoinChain.at < 600 ? Math.min(12, trialCoinChain.step + Math.min(3, n)) : 0;
+  trialCoinChain.at = now;
+  trialSfx("coin", { step: trialCoinChain.step });
+}
+// 画面に触れたとき（戦場試練の間）に音を準備する。戦場のタップは先で止められる（stopImmediatePropagation）ので、window の capture で先に受け取る。
+//   iPhone は止まった音（suspended）を、触れたときにしか再開できないので、触れるたびに再開もする
+for (const type of ["pointerdown", "touchend", "keydown", "click"])
+  window.addEventListener(
+    type,
+    () => {
+      if (!trial) return;
+      trialAudioUnlock();
+      if (trialAudio && trialAudio.state === "suspended") trialAudio.resume().catch(() => {});
+    },
+    { passive: true, capture: true },
+  );
+// 音量のボタン（戦場試練の帯）：押すたびに 大 → 中 → 小 → 消音
+function trialSfxButton() {
+  const b = $("trialSound");
+  if (b) {
+    b.textContent = TRIAL_SFX.levels[trialSfxLevel].label;
+    b.setAttribute("aria-label", "効果音の音量：" + TRIAL_SFX.levels[trialSfxLevel].label.replace(/^\S+ /, "") + "（押すと変わる）");
+  }
+}
+$("trialSound").addEventListener("click", () => {
+  trialAudioUnlock();
+  trialSfxSetLevel((trialSfxLevel + 1) % TRIAL_SFX.levels.length);
+  trialSfx("card");
+});
+trialSfxButton();
 // コインの絵：青く光る丸（見えている所だけ描く）。合体したコインは少し大きい
 function trialDrawCoins(T, V) {
   if (!T.coins || !T.coins.length) return;
@@ -18113,12 +18359,17 @@ function trialOpenChoice(T) {
   T.choice = trialChoices(T);
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
+  // v108.6 3枚のカードが順に出て（0.08秒ずつ）、ドラムロール風の音のあと押せるようになる（0.45秒。動きを減らす設定では待たない）
+  T.choiceReadyAt = performance.now() + (reduced ? 0 : TRIAL_LEVELUP.ready * 1000);
+  trialSfx("roll");
   trialLevelSync();
 }
+const TRIAL_LEVELUP = { ready: 0.45, stagger: 0.08 };
 // 選ぶ：強化は主人公に足す。仲間は候補の次の1人を主人公の近くに呼ぶ。選んだら戦闘を再開
-function trialChoose(i) {
+function trialChoose(i, force) {
   const T = trial;
   if (!T || !T.choice) return "いまは選べません。";
+  if (!force && T.choiceReadyAt > performance.now()) return null; // カードが出そろうまでは押せない（押し間違いを防ぐ）
   const c = T.choice[i];
   if (!c) return "その選択肢はありません。";
   const S = TRIAL_SURVIVAL,
@@ -18141,6 +18392,10 @@ function trialChoose(i) {
   }
   T.lvUps--;
   T.choice = null;
+  // 決定：音と、主人公のまわりの光
+  trialSfx("pick");
+  if (effects.length < 64) effects.push({ kind: "cshock", x: hero.x, y: hero.y + 6, ougi: true, age: 0, duration: 0.5 });
+  burst(hero.x, hero.y - 20, "#fff4b0", "heal");
   if (T.lvUps) trialOpenChoice(T);
   trialLevelSync();
   trialSyncUI();
@@ -18174,20 +18429,31 @@ function trialLevelSync() {
   trialLevelKey = key;
   box.hidden = !key;
   if (!key) return (box.innerHTML = "");
-  const S = TRIAL_SURVIVAL;
+  const S = TRIAL_SURVIVAL,
+    wait = Math.max(0, (T.choiceReadyAt || 0) - performance.now()),
+    // v108.6 カードは順に出る（animation-delay）。出そろうまでは押せない（disabled）
+    attr = (i) => ' style="animation-delay:' + i * TRIAL_LEVELUP.stagger + 's"' + (wait > 0 ? " disabled" : "");
   box.innerHTML =
-    '<div class="trial-levelup-card" role="dialog" aria-label="レベルアップ"><p class="trial-levelup-title">⬆ サバイバル Lv' + T.slv + "<small>（戦闘は止まっています。1つ選ぶ）</small></p>" +
+    '<div class="trial-levelup-card' + (wait > 0 ? " arming" : " ready") + '" role="dialog" aria-label="レベルアップ"><p class="trial-levelup-title">⬆ サバイバル Lv' + T.slv + "<small>（戦闘は止まっています。1つ選ぶ）</small></p>" +
     T.choice
       .map((c, i) => {
         if (c.kind === "recruit") {
           const u = c.unit;
-          return '<button type="button" data-trial-choose="' + i + '" class="recruit">👥 <b>仲間を1人加入</b><small>' + esc(u.name.replace(/^🎖/, "")) + "（" + (JOBS[u.jobKey] ? JOBS[u.jobKey].icon + JOBS[u.jobKey].name : "") + "・Lv" + u.src.level + "）が主人公の近くに来る</small></button>";
+          return '<button type="button" data-trial-choose="' + i + '" class="recruit"' + attr(i) + ">👥 <b>仲間を1人加入</b><small>" + esc(u.name.replace(/^🎖/, "")) + "（" + (JOBS[u.jobKey] ? JOBS[u.jobKey].icon + JOBS[u.jobKey].name : "") + "・Lv" + u.src.level + "）が主人公の近くに来る</small></button>";
         }
         const B = S.boons[c.key];
-        return '<button type="button" data-trial-choose="' + i + '">' + B.icon + " <b>" + B.name + "</b>" + (T.boons[c.key] ? "（" + (T.boons[c.key] + 1) + "回目）" : "") + "<small>" + B.text + "・主人公だけ・この戦闘の間だけ</small></button>";
+        return '<button type="button" data-trial-choose="' + i + '"' + attr(i) + ">" + B.icon + " <b>" + B.name + "</b>" + (T.boons[c.key] ? "（" + (T.boons[c.key] + 1) + "回目）" : "") + "<small>" + B.text + "・主人公だけ・この戦闘の間だけ</small></button>";
       })
       .join("") +
     "</div>";
+  if (wait > 0)
+    setTimeout(() => {
+      // 押せるようになった：カードが光る（選べる合図）
+      const card = box.querySelector(".trial-levelup-card");
+      if (!card || trialLevelKey !== key) return;
+      card.classList.replace("arming", "ready");
+      for (const b of card.querySelectorAll("[data-trial-choose]")) b.disabled = false;
+    }, wait);
 }
 // サバイバルの敵の出る所：主人公から見て画面の外（少し先）。戦場の中・川と木や岩の外。見つからなければ null（次の機会に）
 function trialSpawnPoint(T, hero) {
@@ -18333,6 +18599,7 @@ function tickTrial(dt) {
   for (const u of T.units) {
     u.atk = Math.max(0, u.atk - dt);
     u.hit = Math.max(0, u.hit - dt);
+    if (u.danger && u.hp > u.max * 0.5) u.danger = false; // 回復したら警告を戻す
   }
   for (const e of T.enemies) {
     e.atkAnim = Math.max(0, e.atkAnim - dt);
@@ -18490,6 +18757,7 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
           name = job ? JOB_ACTIONS[key.slice(4)].names[Math.max(0, jobActionStage(s))] : INSIGHT_SKILLS[key] ? INSIGHT_SKILLS[key].name : key === "chronicleRescue" ? "緊急救命" : key;
         u.skills[name] = (u.skills[name] || 0) + 1;
         trialSkillFx(u, target, job ? JOB_ACTIONS[key.slice(4)].fx : "insight", event);
+        if (!job) trialSfx("insight"); // 閃き：きらめく特別な音
         // 強い技（上位の職業技・閃き）だけ、兵士の上に技名を出す（ふつうの職業技は光だけ）。同じ兵士は2.5秒に1回まで・数の上限つき
         if ((!job || jobActionStage(s) >= 1) && effects.length < 60 && !(u.nameUntil > T.t)) {
           u.nameUntil = T.t + 2.5;
@@ -18563,6 +18831,7 @@ function trialUseOugi() {
   if (!target) return "範囲内に敵がいません。奥義の使用回数は減っていません。";
   T.ougiUsed = { key: I.key, at: T.t, hits: 0, kills: 0 };
   combatFx.ougi("奥義・" + O.name, "👑 " + h.name);
+  trialSfx("ougi");
   const before = T.kills;
   if (O.kind === "pattern") {
     const P = ATTACK_PATTERNS[O.pattern],
@@ -18711,6 +18980,7 @@ function trialUnitAct(u, foes, live, dt) {
     u.healed += best.hp - hp0;
     u.atk = 0.18;
     trialHealFx(best);
+    trialSfx("heal");
     trialEvolution(u, best, "heal", beforeRatio);
     return;
   }
@@ -18758,6 +19028,11 @@ function trialUnitAct(u, foes, live, dt) {
   const ang = Math.atan2(e.y - u.y, e.x - u.x),
     roomy = effects.length < 56;
   if (shots.length >= 160) shots.shift();
+  // v108.6 攻撃の音（同じ音は間をあける。操作中・主人公の音は少し大きく）
+  const loud = trial.control === u.id ? 1 : 0.7;
+  if (u.role === "melee") trialSfx(u.type === "spearman" ? "thrust" : "slash", { vol: loud });
+  else if (u.shot === "musket") trialSfx("gun", { vol: loud });
+  else trialSfx("bow", { vol: loud }) && trialSfx("hit", { delay: 0.2, vol: loud });
   if (u.role === "melee") {
     burst(e.x, e.y - 10, "#fff1c4", "slash");
     if (u.type === "spearman") shots.push({ x: u.x, y: u.y - 18, tx: e.x - Math.cos(ang) * 6, ty: e.y - 12, type: "arrow", age: 0, duration: 0.12, col: "#fff6c8", trail: 1, glow: "#fff1a0", quiet: true });
@@ -18884,6 +19159,14 @@ function trialHitUnit(u, raw, ranged, e) {
   dmg = evolutionAbsorb(s, dmg, ranged, e, T_now()); // 職業技・閃きの盾と受け流し（写しの値だけ変わる）
   u.hp -= dmg;
   u.hit = 0.2;
+  // v108.6 被弾の音（小さく・間をあける）。HP が3割を切ったら警告（同じ兵士は8秒に1回まで。5割より回復したら、また鳴る）
+  trialSfx("hurt", { vol: trial.control === u.id ? 1 : 0.6 });
+  if (u.hp > 0 && u.hp < u.max * 0.3 && !u.danger && !(u.warnAt > trial.t - 8)) {
+    u.danger = true;
+    u.warnAt = trial.t;
+    trialSfx("warn");
+    if (effects.length < 60) effects.push({ kind: "ctext", x: u.x, y: u.y - 96, text: "⚠ " + u.name.replace(/^🎖/, "").slice(0, 5) + " 危険", ougi: false, age: 0, duration: 1.2 });
+  }
   if (u.hp <= 0 && !u.dead) {
     // 試作：仮の戦死（本番の兵士・英霊名鑑には反映しない）
     u.hp = 0;
@@ -19380,6 +19663,17 @@ function trialDrawUnit(u) {
   u.walkPrev = u.walk;
   ctx.restore();
   if (u.dead) return;
+  // v108.6 HP が3割を切ったら、足元に赤い輪が点滅（音を消していても危険が分かる）
+  if (u.hp < u.max * 0.3) {
+    ctx.save();
+    ctx.globalAlpha = reduced ? 0.8 : 0.45 + 0.4 * Math.abs(Math.sin(visualTime * 6));
+    ctx.strokeStyle = "#ff3b2f";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(u.x, u.y + 12, 26, 9, 0, 0, 7);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (u.hit > 0) {
     ctx.globalAlpha = u.hit * 2;
     ellipse(u.x, u.y - 8, 14, 16, "#ff7b6b");
@@ -19627,7 +19921,7 @@ function trialUnitsSync(force) {
   box.innerHTML = T.units
     .map(
       (u) =>
-        '<button type="button" data-trial-ctl="' + u.id + '" aria-pressed="' + (T.control === u.id) + '"' + (u.dead ? " disabled" : "") + ">" +
+        '<button type="button" data-trial-ctl="' + u.id + '" aria-pressed="' + (T.control === u.id) + '"' + (u.dead ? " disabled" : "") + (!u.dead && u.hp < u.max * 0.3 ? ' class="danger"' : "") + ">" +
         "<b>" + esc(u.name.replace(/^🎖/, "").slice(0, 4)) + "</b><small>" + (JOBS[u.jobKey] ? JOBS[u.jobKey].icon : "") + (u.dead ? "☠" : "") + "</small>" +
         '<i style="width:' + Math.max(0, Math.round((u.hp / u.max) * 100)) + '%"></i></button>',
     )
@@ -28582,7 +28876,8 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               maps: TRIAL_MAPS,
               start: (ids, opts) => startTrial(ids, "sanpou", opts),
               survival: TRIAL_SURVIVAL,
-              choose: (i) => trialChoose(i),
+              choose: (i) => trialChoose(i, true),
+              sfx: { stats: () => JSON.parse(JSON.stringify(trialSfxStats)), unlock: () => trialAudioUnlock(), level: (v) => (v === undefined ? trialSfxLevel : trialSfxSetLevel(v)), play: (k, o) => trialSfx(k, o), voices: () => trialVoices.length, reset: () => ((trialSfxLast = {}), (trialSfxStats.played = {}), (trialSfxStats.skipped = 0)) },
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
