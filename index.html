@@ -2045,6 +2045,50 @@
           background: #6a1a14;
         }
       }
+      /* v108.9 縦長の画面（スマホの縦向き）：操作パネルを低くして、戦場を大きく出す
+         スティック（左）の右に、奥義（小さく）・撤退・音量を縦に並べる。横向き・パソコンは今までどおり */
+      .tall-field #trialBar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "info info" "actions actions" "units units" "pad auto" "pad action" "pad bottom";
+        column-gap: 10px;
+        row-gap: 0;
+        align-items: center;
+      }
+      .tall-field #trialAction:not([hidden]) ~ *,
+      .tall-field #trialBar .trial-bottom { margin-top: 6px; }
+      .tall-field #trialBar > *,
+      .tall-field .trial-pad-row > *,
+      .tall-field .trial-right > * {
+        grid-column: 1 / -1;
+      }
+      .tall-field #trialInfo { grid-area: info; margin: 0; }
+      .tall-field #trialInfo small { display: none; }
+      .tall-field #trialBar .trial-actions { grid-area: actions; }
+      .tall-field .trial-ctl:not([hidden]),
+      .tall-field .trial-pad-row,
+      .tall-field .trial-right { display: contents; }
+      .tall-field #trialUnits { grid-area: units; margin: 0; }
+      .tall-field #trialPad { grid-area: pad; width: 120px; height: 120px; }
+      .tall-field #trialAutoAll { grid-area: auto; min-height: 44px; }
+      .tall-field #trialAutoAll[hidden],
+      .tall-field #trialAction[hidden] { display: none; }
+      .tall-field #trialAction { grid-area: action; }
+      .tall-field #trialBar .trial-bottom { grid-area: bottom; }
+      .tall-field #trialLevelUp { grid-area: auto; }
+      .tall-field #trialBar .trial-ctl[hidden] ~ .trial-bottom { grid-area: auto; grid-column: 1 / -1; }
+      /* 奥義のボタンは小さく1段（名前だけ。使ったあとは「使用済み」） */
+      .tall-field .trial-action button {
+        min-height: 44px;
+        grid-auto-flow: column;
+        gap: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+      }
+      .tall-field .trial-action button b { font-size: 15px; }
+      .tall-field .trial-action button small { display: none; }
+      .tall-field .trial-action button[disabled] { opacity: 0.55; }
+      .tall-field .trial-sound { min-width: 64px; }
       /* v108.6 効果音の音量（撤退の右・小さく） */
       .trial-bottom {
         display: grid;
@@ -2980,6 +3024,9 @@
       .dock-bar, .skill-dock, .menu-group, .compact-only, .drawer-head { display: none; }
       /* 縦向きの戦場（試作）：入口が上・城が下の縦長 */
       .vertical-field #game { aspect-ratio: 10 / 16; }
+      /* v108.9 戦場試練の縦長の画面：下の操作パネルが見える高さまで、縦長の戦場を大きく出す */
+      .tall-field #game { aspect-ratio: 10 / 16; }
+      .tall-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); margin-left: auto; margin-right: auto; }
       /* 見えている高さから、ヘッダー・ウェーブ操作・部隊の列の分を引いた高さに戦場を収める（幅は縦横比で決まる） */
       .compact-ui.vertical-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); margin-left: auto; margin-right: auto; }
       @media (min-width: 601px) {
@@ -3180,7 +3227,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.8試作（戦場試練：サバイバルの攻撃スキル）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109試作（戦場試練：縦長の画面・磁石・敵の群れ）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3513,14 +3560,17 @@ OFF</button>
         // 描画の解像度（v104.4）：スマホの高精細な画面で拡大されてぼやけないよう、表示の大きさ×画素密度で描く（1〜2倍）。
         // ゲームの座標は変えず、描くときの基準の倍率 RS を掛けるだけ。
         let RS = 1;
-        const logicalW = () => (VERTICAL ? H : W),
-          logicalH = () => (VERTICAL ? W : H);
+        // v108.9 TALL：戦場試練をスマホの縦向きで遊ぶときは、画面を縦長（600×960）にする（地面は回さない。カメラで見る範囲が縦長になるだけ）
+        let TALL = false;
+        const logicalW = () => (VERTICAL || TALL ? H : W),
+          logicalH = () => (VERTICAL || TALL ? W : H);
         function renderScale() {
           const css = C.getBoundingClientRect().width || logicalW();
           return Math.max(1, Math.min(2, ((window.devicePixelRatio || 1) * css) / logicalW()));
         }
         function applyFieldShape() {
           document.body.classList.toggle("vertical-field", VERTICAL);
+          document.body.classList.toggle("tall-field", TALL);
           const k = renderScale();
           C.width = Math.round(logicalW() * k);
           C.height = Math.round(logicalH() * k);
@@ -16390,9 +16440,11 @@ function chronicleWarBonusBlock(s) {
         }
         // 攻める戦いの始まり・終わりで戦場の向きを切り替える（描くたびに確認）
         function syncFieldShape() {
-          const want = fieldPref && !!battle;
-          if (want === VERTICAL) return;
+          const want = fieldPref && !!battle,
+            tall = !!trial && !want && window.innerHeight > window.innerWidth * 1.15; // 戦場試練・縦向きの画面
+          if (want === VERTICAL && tall === TALL) return;
           VERTICAL = want;
+          TALL = tall;
           applyFieldShape();
           scenery = null; // 背景を新しい向きで描き直す
           syncViewport();
@@ -17772,22 +17824,24 @@ const TRIAL_SURVIVAL = {
   rejoin: 8, // 持ち場から離れたまま戻れない時間（秒）がこれを超えたら、主人公の近くへ合流させる
   heroSpeed: 1.3, // 主人公の歩く速さ（倍。敵の群れから逃げ回れるように）
   enemySpeed: 0.75, // 敵の歩く速さ（倍。主人公より少し遅い。狼は速い）
-  maxAlive: 36, // 同時にいる敵の上限（iPhone の重さ）
-  interval0: 2.6, // 出現の間隔（秒）：最初
-  intervalEnd: 2.0, // 強敵が出る頃の間隔
-  batchEvery: 60, // この秒数ごとに、1回に出る数が1体増える（1体→2体→3体）
-  afterBoss: 3, // 強敵が出たあとの間隔（1体ずつ）
+  // v109 敵の増え方を激しく（群れで押し寄せる）：36→60体・間隔 2.6→1.6秒・30秒ごとに1回の数 +1・2面ごとに +1
+  maxAlive: 60, // 同時にいる敵の上限（iPhone の重さ。60体でも1コマ数ms）
+  interval0: 2.0, // 出現の間隔（秒）：最初
+  intervalEnd: 1.5, // 強敵が出る頃の間隔
+  batchEvery: 50, // この秒数ごとに、1回に出る数が1体増える（1体→2体→3体→4体）
+  batchFloor: 2, // この面ごとに、1回に出る数がさらに1体増える（第3面から +1、第5面から +2…）
+  afterBoss: 3, // 強敵が出たあとの間隔（1体ずつ。大将に集中できるように、ここはゆるいまま）
   margin: 70, // 画面の外のどれだけ先から出すか
   far: 1100, // 主人公からこれより遠い敵は、主人公の近くの画面の外へ移す（遠くに溜まらない）
   hp: 0.12, // 敵の体力（倍。群れで来るので1体は弱く、たくさん倒せる）
   hpGrow: 0.6, // 強敵が出る頃に、体力が (1 + hpGrow) 倍になるまで少しずつ強くなる（v108.3：レベルアップが減った分 0.8→0.6）
-  atk: 0.6, // 敵の攻撃（倍）
+  atk: 0.35, // 敵の攻撃（倍。v109：数が増えた分、1体は弱く 0.6→0.35）
   atkGrow: 0.6,
   bossHp: 0.6, // 強敵の体力（倍。大将の表に掛ける。5人で20〜30秒ほど）
   bossAtk: 1,
   // v108.2 主人公1人から始まる。敵を倒すと、この戦闘だけの経験値（本番の兵士の経験値・Lv には入らない）
   xp: { goblin: 1, wolf: 1, knight: 2, dragon: 2, boss: 0 }, // 敵1体の経験値
-  need: (lv) => 4 + 5 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（4・9・14・19…。v108.3：3分で5〜7回）
+  need: (lv) => 4 + 8 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（4・12・20・28…）。v109：敵が増えた分、3分で7〜9回（以前は 4 + 5×(lv−1)）
   recruitMax: 4, // 加入できる仲間（出撃の前に選んだ候補）の数
   // v108.5 経験値コイン：敵を倒すとその場に落ちる。主人公が近づくと吸い寄せられて、拾ったときに経験値が入る（仲間は拾わない）
   magnet: 190, // 主人公からこの距離に入ったコインは吸い寄せられる
@@ -17795,6 +17849,9 @@ const TRIAL_SURVIVAL = {
   pull0: 240, // 吸い寄せの速さ（px/秒）：はじめ
   pullAcc: 900, // 吸い寄せの加速（px/秒²。主人公より必ず速くなる）
   coinMax: 50, // 戦場に置くコインの上限。超えたら、落ちた所に一番近いコインへ合体（経験値の合計はそのまま）
+  // v109 磁石：敵をこの数だけ倒すごとに1つ落ちる（乱数は使わない）。拾うと、戦場のコインを全部吸い寄せる
+  magnetEvery: 70,
+  magnetMax: 2, // 戦場に置いておく磁石の数の上限
   // レベルアップの強化（この戦闘の主人公だけ。終わったら消える）。step は1回の上がり幅
   boons: {
     atk: { icon: "⚔️", name: "攻撃力アップ", text: "与えるダメージ・回復 +25%", step: 0.25 },
@@ -17803,6 +17860,7 @@ const TRIAL_SURVIVAL = {
     hp: { icon: "❤️", name: "最大HPアップ", text: "最大HP +25%（増えた分を回復）", step: 0.25 },
     def: { icon: "🛡️", name: "防御力アップ", text: "受けるダメージ −15%", step: 0.15 },
     range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", step: 0.2 },
+    magnet: { icon: "🧲", name: "吸い寄せ範囲アップ", text: "経験値コインを吸い寄せる距離 +30%", step: 0.3 }, // v109
   },
   // 出てくる敵の種類（時刻ごと）
   pools: [
@@ -18094,6 +18152,7 @@ function startSurvival(list, units, M, D, stageId, heroId) {
     choice: null, // レベルアップの選択肢（表示している間は戦闘が止まる）
     boons: {}, // 取った強化 { atk: 回数 }
     coins: [], // v108.5 経験値コイン { x, y, xp, pull }（この戦闘だけ）
+    magnets: [], // v109 磁石 { x, y, pull }（拾うとコインを全部吸い寄せる）
     floor: 1, // v108.7 いまの面（trial.stage はマップの名前なので別の名前）
     st: 0, // その面の経過時間（秒。大将・敵の出方はこれで決まる）
     bosses: 0, // 倒した大将の数
@@ -18152,6 +18211,7 @@ const TRIAL_REWARDS = {
     heal: { icon: "💚", name: "HP回復", text: "主人公と仲間の HP を最大の60%回復", weight: 1.2, amount: 0.6 },
     move: { icon: "👟", name: "移動速度アップ", text: "歩く速さ +15%", weight: 0.8 },
     range: { icon: "🎯", name: "攻撃範囲アップ", text: "射程・間合い +20%", weight: 0.8 },
+    magnet: { icon: "🧲", name: "吸い寄せ範囲アップ", text: "経験値コインを吸い寄せる距離 +30%", weight: 0.8 }, // v109
     scroll: { icon: "📜", name: "技の巻物", text: "攻撃スキルを1つ強化（強化できるものがなければ、新しく習得）", weight: 1.5, needSkill: true },
   },
   special: {
@@ -18185,6 +18245,7 @@ function trialApplyBoon(T, hero, key, step) {
   else if (key === "move") hero.speed *= 1 + step;
   else if (key === "def") hero.defMul *= 1 - step;
   else if (key === "range") (hero.range *= 1 + step), (hero.reachMul *= 1 + step);
+  else if (key === "magnet") hero.magnetMul = (hero.magnetMul || 1) + step;
   else if (key === "hp") {
     const add = hero.max * step;
     hero.max += add;
@@ -18244,6 +18305,7 @@ function trialStageClear(T) {
   const left = T.coins.reduce((a, c) => a + c.xp, 0);
   T.picked = (T.picked || 0) + T.coins.length;
   T.coins = [];
+  T.magnets = []; // 磁石は面をまたがない（クリアでコインは全部入るので要らない）
   if (left) trialGainXp(T, left);
   T.flurry = null;
   trialStick = { x: 0, y: 0 };
@@ -18742,7 +18804,7 @@ function trialDrawSkillBar(T, SW) {
 }
 // ===== v108.2 この戦闘だけの成長（サバイバルLv・強化・仲間の加入）。本番の兵士・保存データには書かない =====
 function trialBoonInit(u) {
-  Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1 });
+  Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1, magnetMul: 1 });
 }
 // 経験値：だれが倒しても入る（部隊の経験値）。必要な量に届いたらレベルアップ（選ぶまで戦闘を止める）
 function trialGainXp(T, amount) {
@@ -18779,11 +18841,53 @@ function trialDropCoin(T, e) {
   }
   T.coins.push({ x, y, xp: v, pull: false, pt: 0, seed: T.rng() * 6.28 });
 }
+// v109 磁石：敵を magnetEvery 体倒すごとに、倒した所に1つ落とす（乱数は使わない）
+function trialMagnetDrop(T, e) {
+  const S = TRIAL_SURVIVAL;
+  T.magnetKills = (T.magnetKills || 0) + 1;
+  if (T.magnetKills < S.magnetEvery) return;
+  T.magnetKills = 0;
+  T.magnets = T.magnets || [];
+  if (T.magnets.length >= S.magnetMax) return;
+  const M = T.map,
+    ok = (x, y) => !trialInRiver(M, x, y) && !M.obstacles.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 10),
+    [x, y] = ok(e.x, e.y) ? [e.x, e.y] : [e.px != null ? e.px : e.x, e.py != null ? e.py : e.y];
+  T.magnets.push({ x, y, pull: false, pt: 0 });
+  T.magnetDropped = (T.magnetDropped || 0) + 1;
+}
+// 磁石もコインと同じく、吸い寄せの範囲に入ると主人公へ飛んでくる。拾うと、戦場のコインを全部吸い寄せる
+function trialMagnetTick(T, h, dt) {
+  if (!T.magnets || !T.magnets.length) return;
+  const S = TRIAL_SURVIVAL;
+  for (let i = T.magnets.length - 1; i >= 0; i--) {
+    const m = T.magnets[i],
+      dx = h.x - m.x,
+      dy = h.y - 10 - m.y,
+      d = Math.hypot(dx, dy);
+    if (!m.pull) {
+      if (d > S.magnet * (h.magnetMul || 1)) continue;
+      m.pull = true;
+    }
+    m.pt += dt;
+    const step = Math.min(d, (S.pull0 + S.pullAcc * m.pt) * dt);
+    m.x += (dx / (d || 1)) * step;
+    m.y += (dy / (d || 1)) * step;
+    if (d - step > S.pick) continue;
+    T.magnets.splice(i, 1);
+    T.magnetPicked = (T.magnetPicked || 0) + 1;
+    for (const c of T.coins) c.pull = true; // 戦場のコインを全部吸い寄せる（遠くても加速して必ず届く）
+    if (effects.length < 64) effects.push({ kind: "ctext", x: h.x, y: h.y - 110, text: "🧲 コインを全部吸い寄せ！", ougi: true, age: 0, duration: 1.4 });
+    if (effects.length < 64) effects.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.6 });
+    trialSfx("pick");
+  }
+}
 // 吸い寄せと回収：主人公だけ。近づいたコインは加速して主人公へ。拾った分をまとめて経験値に（何枚でも合計がそのまま入る）
 function trialCoinTick(T, dt) {
   const S = TRIAL_SURVIVAL,
     h = T.units.find((u) => u.id === T.hero);
-  if (!h || h.dead || !T.coins.length) return;
+  if (!h || h.dead) return;
+  trialMagnetTick(T, h, dt);
+  if (!T.coins.length) return;
   let got = 0,
     n = 0;
   for (let i = T.coins.length - 1; i >= 0; i--) {
@@ -18792,7 +18896,7 @@ function trialCoinTick(T, dt) {
       dy = h.y - 10 - c.y,
       d = Math.hypot(dx, dy);
     if (!c.pull) {
-      if (d > S.magnet) continue; // 遠いコインは動かさない（数が増えても軽い）
+      if (d > S.magnet * (h.magnetMul || 1)) continue; // 遠いコインは動かさない（数が増えても軽い）。吸い寄せ範囲アップで広がる
       c.pull = true;
     }
     c.pt += dt;
@@ -19068,8 +19172,8 @@ function trialDrawCoins(T, V) {
   if (!T.coins || !T.coins.length) return;
   const x0 = V.ox - 20,
     y0 = V.oy - 20,
-    x1 = V.ox + W / V.z + 20,
-    y1 = V.oy + H / V.z + 20;
+    x1 = V.ox + logicalW() / V.z + 20,
+    y1 = V.oy + logicalH() / V.z + 20;
   ctx.save();
   for (const c of T.coins) {
     if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue;
@@ -19089,6 +19193,32 @@ function trialDrawCoins(T, V) {
     ctx.beginPath();
     ctx.arc(c.x - r * 0.3, c.y + bob - r * 0.3, r * 0.4, 0, 7);
     ctx.fill();
+  }
+  ctx.restore();
+}
+// v109 磁石：赤いU字の磁石が金色に光って、上下にゆれる
+function trialDrawMagnets(T) {
+  if (!T.magnets || !T.magnets.length) return;
+  ctx.save();
+  for (const m of T.magnets) {
+    const bob = reduced || m.pull ? 0 : Math.sin(visualTime * 3 + m.x) * 4,
+      glow = reduced ? 0.5 : 0.4 + 0.25 * Math.sin(visualTime * 6),
+      y = m.y - 14 + bob;
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = "#ffe27a";
+    ctx.beginPath();
+    ctx.arc(m.x, y, 34, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#fff6c8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(m.x, y, 26 + (reduced ? 0 : 4 * Math.sin(visualTime * 6)), 0, 7);
+    ctx.stroke();
+    ctx.font = "40px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🧲", m.x, y);
   }
   ctx.restore();
 }
@@ -19260,7 +19390,7 @@ function trialSpawnPoint(T, hero) {
   const S = TRIAL_SURVIVAL,
     M = T.map,
     Z = M.size,
-    vw = W / TRIAL_RULES.camZoom,
+    vw = W / TRIAL_RULES.camZoom, // 敵の出る位置は、画面の向き（縦長・横長）によらず 960×600 で決める（遊びが端末で変わらない）
     vh = H / TRIAL_RULES.camZoom,
     ox = Math.max(0, Math.min(Z.w - vw, hero.x - vw / 2)), // カメラと同じく、見える範囲は戦場の中に収まる
     oy = Math.max(0, Math.min(Z.h - vh, hero.y - 20 - vh / 2)),
@@ -19330,8 +19460,8 @@ function trialSurvivalTick(T, dt) {
   T.next = (T.boss ? S.afterBoss : S.interval0 + (S.intervalEnd - S.interval0) * f) / keep;
   const pt = T.st + Math.min(90, G.poolShift * (T.floor - 1)), // 面が進むほど、強い種類が早く混ざる
     pool = S.pools.filter((p) => p[0] <= pt).pop()[1],
-    // ふつうの敵は36体まで（大将は別に数える。大将がいても、ふつうの敵は36体を超えない）
-    n = Math.min(S.maxAlive - alive.filter((e) => e !== T.boss).length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery)),
+    // ふつうの敵は maxAlive 体まで（大将は別に数える。大将がいても、ふつうの敵は上限を超えない）
+    n = Math.min(S.maxAlive - alive.filter((e) => e !== T.boss).length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery) + Math.floor((T.floor - 1) / S.batchFloor)),
     p = n > 0 && trialSpawnPoint(T, hero);
   if (!p) return;
   for (let k = 0; k < n; k++) {
@@ -19877,7 +20007,7 @@ function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
     e.gone = true;
     u.kills++;
     trial.kills++;
-    if (trial.mode === "survival") trialDropCoin(trial, e);
+    if (trial.mode === "survival") trialDropCoin(trial, e), trialMagnetDrop(trial, e);
     trialKillFx(e);
   }
   return dmg;
@@ -20086,7 +20216,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0) } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0 } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -20234,7 +20364,7 @@ function trialBackground(M) {
 //   見える範囲はいつも戦場の中に収める。cam = { x, y, z }（見ている所の中心と拡大）
 function trialCamGoal(T) {
   const Z = T.map.size,
-    fit = Math.max(W / Z.w, H / Z.h),
+    fit = Math.max(logicalW() / Z.w, logicalH() / Z.h),
     u = T.control != null ? T.units.find((v) => v.id === T.control && !v.dead) : null;
   if (T.phase === "deploy") {
     const D = T.map.deploy;
@@ -20262,8 +20392,8 @@ function trialView() {
   if (!T.view) trialCamStep(T, true);
   const Z = T.map.size,
     v = T.view,
-    vw = W / v.z,
-    vh = H / v.z,
+    vw = logicalW() / v.z, // v108.9 スマホの縦向きでは画面が縦長（600×960）
+    vh = logicalH() / v.z,
     ox = Math.max(0, Math.min(Z.w - vw, v.x - vw / 2)),
     oy = Math.max(0, Math.min(Z.h - vh, v.y - vh / 2)),
     u = T.control != null ? T.units.find((x) => x.id === T.control && !x.dead) : null;
@@ -20283,10 +20413,10 @@ function drawTrial() {
   const V = trialView(),
     bg = trialBackground(T.map),
     k = bg.k;
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, logicalW(), logicalH());
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctxRaw.drawImage(bg, V.ox * k, V.oy * k, (W / V.z) * k, (H / V.z) * k, 0, 0, C.width, C.height);
+  ctxRaw.drawImage(bg, V.ox * k, V.oy * k, (logicalW() / V.z) * k, (logicalH() / V.z) * k, 0, 0, C.width, C.height);
   ctx.restore();
   ctx.save();
   ctx.setTransform(RS * V.z, 0, 0, RS * V.z, -V.ox * RS * V.z, -V.oy * RS * V.z);
@@ -20324,6 +20454,7 @@ function drawTrial() {
   for (const e of T.enemies) if (!e.gone) actors.push({ y: e.y, draw: () => trialDrawEnemy(e) });
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) a.draw();
+  if (T.mode === "survival") trialDrawMagnets(T); // v109 磁石は兵士・敵の上に（群れに隠れない）
   for (const s of shots) projectile(s);
   for (const e of effects) effect(e);
   ctx.restore();
@@ -20379,8 +20510,13 @@ function drawTrial() {
         T.mode === "survival"
           ? "第" + T.floor + "面　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
           : "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中");
-    ctx.font = "bold " + (T.mode === "survival" ? 25 : 22) + "px system-ui";
-    const w = ctx.measureText(text).width + 24;
+    // v108.9 縦長の画面（幅600）では、右上の全体図に重ならないよう文字を小さくして収める
+    let fs = T.mode === "survival" ? 25 : 22;
+    ctx.font = "bold " + fs + "px system-ui";
+    const room = SW - 184,
+      tw = ctx.measureText(text).width + 24;
+    if (tw > room) (fs = Math.max(14, Math.floor((fs * room) / tw))), (ctx.font = "bold " + fs + "px system-ui");
+    const w = Math.min(room, ctx.measureText(text).width + 24);
     ctx.fillStyle = "#1a120ccc";
     ctx.fillRect(Math.max(4, (SW - 170) / 2 - w / 2), 6, w, 32);
     ctx.fillStyle = "#ffe9b0";
@@ -20495,6 +20631,10 @@ function trialMiniMap(T, V, SW) {
     ctx.fillRect(x0 + T.map.river.x0 * s, y0, (T.map.river.x1 - T.map.river.x0) * s, mh);
   }
   ctx.globalAlpha = 1;
+  for (const m of T.magnets || []) {
+    ctx.fillStyle = "#ffe27a"; // v109 磁石（金）
+    ctx.fillRect(x0 + m.x * s - 3, y0 + m.y * s - 3, 6, 6);
+  }
   for (const e of T.enemies)
     if (!e.gone) {
       ctx.fillStyle = "#ff4a3a";
@@ -20507,7 +20647,7 @@ function trialMiniMap(T, V, SW) {
     }
   ctx.strokeStyle = "#ffffffcc";
   ctx.lineWidth = 1;
-  ctx.strokeRect(x0 + V.ox * s, y0 + V.oy * s, (W / V.z) * s, (H / V.z) * s);
+  ctx.strokeRect(x0 + V.ox * s, y0 + V.oy * s, (logicalW() / V.z) * s, (logicalH() / V.z) * s);
   ctx.restore();
 }
 function trialDrawUnit(u) {
@@ -20626,7 +20766,7 @@ function renderTrialSheet() {
           (R.skillList.length ? "<p><small>🗡 攻撃スキル：" + R.skillList.map((x) => x.icon + esc(x.name) + (x.evo ? "（進化）" : x.lv >= 5 ? "★" : " Lv" + x.lv)).join("・") + "</small></p>" : "") +
           (R.rewardList.length ? "<p><small>🎁 報酬：" + R.rewardList.map((x) => (x.special ? "<b>" : "") + x.icon + esc(x.name) + (x.special ? "</b>" : "")).join("・") + "</small></p>" : "") +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
-          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）</small>" : "") +
+          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）" + (R.coins.magnets ? "・🧲 磁石 " + R.coins.magnets + "回" : "") + "</small>" : "") +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
@@ -29777,6 +29917,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
               drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
+              dropMagnet: (x, y) => trial && (trial.magnets = trial.magnets || []).push({ x, y, pull: false, pt: 0 }),
               coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
@@ -29829,6 +29970,10 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                   xpTotal: trial.xpTotal || 0,
                   dropped: trial.dropped || 0,
                   picked: trial.picked || 0,
+                  magnets: trial.magnets ? trial.magnets.length : 0,
+                  magnetPicked: trial.magnetPicked || 0,
+                  magnetDropped: trial.magnetDropped || 0,
+                  magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? TRIAL_SURVIVAL.magnet * (h.magnetMul || 1) : null; })(),
                   merges: trial.merges || 0,
                   sfx: trial.sfx || 0,
                   gauge: trial.gauge ? { ...trial.gauge } : null,
@@ -30442,8 +30587,9 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           // 縦向きの戦場：ヘッダー・ウェーブ操作・部隊の列が必ず見えるよう、戦場の高さに使えない分を渡す
           const h = (sel) => Math.ceil(document.querySelector(sel)?.getBoundingClientRect().height || 0);
           // 攻める戦いの間は、戦闘の状況と必殺技の1段目が見えるようにする（撤退ボタンなどはスクロールで）
-          const inBattle = typeof battle !== "undefined" && battle && !$("battleBar").hidden;
-          root.setProperty("--field-reserve", (inBattle ? h("header") + h("#battleInfo") + Math.min(h("#battleSkills"), 80) + 40 : h("header") + h(".play-tools") + h("#dockBar") + 36) + "px");
+          const inBattle = typeof battle !== "undefined" && battle && !$("battleBar").hidden,
+            inTrial = typeof trial !== "undefined" && trial && !$("trialBar").hidden;
+          root.setProperty("--field-reserve", (inTrial ? h("header") + h("#trialBar") + 24 : inBattle ? h("header") + h("#battleInfo") + Math.min(h("#battleSkills"), 80) + 40 : h("header") + h(".play-tools") + h("#dockBar") + 36) + "px");
           const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
           root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
         }
