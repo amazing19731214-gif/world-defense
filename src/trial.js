@@ -630,7 +630,7 @@ function trialBest(T) {
 //   レベルアップ・宝箱で習得し、同じスキルを選ぶと Lv が上がる（Lv1〜5）。最大6種類。自動で発動し、通常攻撃・職業技・閃き・奥義とは別に動く
 //   威力（mul）は主人公の攻撃力の何倍か（サバイバルの攻撃力の強化も効く）。cd は発動の間隔（秒）。数値は表のまま調整できる
 //   既存の職業技・閃き・奥義・永久のスキルはこの6枠に入らない
-const TRIAL_SKILL_RULES = { maxKinds: 6, maxLv: 5, fx: 64, aim: 230 };
+const TRIAL_SKILL_RULES = { maxKinds: 6, maxLv: 5, fx: 64, aim: 180 };
 const TRIAL_SKILLS = {
   thunder: {
     icon: "⚡",

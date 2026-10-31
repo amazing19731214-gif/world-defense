@@ -118,6 +118,29 @@ try {
   const starts = [];
   for (const id of [1, 2, 3, 4, 5]) starts.push(Object.keys(await quiet(p, id)).join() + ":" + Object.values(await p.evaluate(() => WD_DEBUG.trial.state().skills)).join());
   check(starts.join() === "vacuum:1,spear:1,shuriken:1,musket:1,thunder:1", "最初の攻撃スキルは主人公の職業に合わせて1つ（Lv1）", starts);
+  // 1b. 遠くを狙いすぎない：立っているだけでも、スキルで倒した敵のコインが吸い寄せの範囲に落ちる（弓・鉄砲の主人公）
+  const stand = [];
+  for (const hero of [3, 4]) {
+    await p.evaluate(() => WD_DEBUG.trial.on() && WD_DEBUG.trial.retreat());
+    stand.push(
+      await p.evaluate((hero) => {
+        const T = WD_DEBUG.trial;
+        document.getElementById("trialSheet").hidden = true;
+        T.start([1, 2, 3, 4, 5], { mode: "survival", hero });
+        const L = T.live(),
+          h = L.units[0],
+          far = [];
+        let n0 = 0;
+        for (let i = 0; i < 600 && !L.choice; i++) {
+          WD_DEBUG.step(0.1);
+          for (; n0 < L.coins.length; n0++) far.push(Math.round(Math.hypot(L.coins[n0].x - h.x, L.coins[n0].y - h.y)));
+          n0 = L.coins.length;
+        }
+        return { hero, t: Math.round(L.st), lvUp: !!L.choice, xp: T.state().xpTotal, magnet: T.survival.magnet, far: far.slice(0, 8) };
+      }, hero),
+    );
+  }
+  check(stand.every((r) => r.lvUp && r.xp > 0 && r.t < 50), "弓・鉄砲の主人公が立っているだけでも、コインを拾ってレベルアップする（スキルは吸い寄せの範囲の敵から狙う）", stand);
   // 2. 8種類それぞれ：発動して敵に当たる・Lv が上がると当たる数・回復の量が増える
   await quiet(p, 1);
   const rows = {};
