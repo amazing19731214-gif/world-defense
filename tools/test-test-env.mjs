@@ -160,6 +160,25 @@ try {
   await tap("[data-trial-again]");
   r = await p.evaluate(() => !document.getElementById("trialSheet").hidden && document.querySelectorAll("[data-trial-pick]").length === 10);
   check(r, "結果の画面から、もう一度兵士を選び直せる（進行不能にならない）");
+  // v108.1 サバイバル：遊び方を切り替え、主人公（試・弓聖）を選んで始める → スティック → 撤退
+  await tap('[data-trial-mode="survival"]');
+  await p.locator("[data-trial-hero]", { hasText: "試・弓聖" }).tap();
+  await tap("[data-trial-go]");
+  await p.waitForTimeout(4000);
+  r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, overflow: document.documentElement.scrollWidth - innerWidth }));
+  check(/サバイバル/.test(r.info) && /試・弓聖/.test(r.info) && /HP/.test(r.info) && /残り/.test(r.info) && r.units && r.overflow <= 0, "サバイバル：主人公（試・弓聖）を選んで始められ、主人公のHP・残り時間が出る", r);
+  const pad2 = await p.locator("#trialPad").boundingBox();
+  await p.mouse.move(pad2.x + pad2.width / 2, pad2.y + pad2.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(pad2.x + pad2.width / 2 + 50, pad2.y + pad2.height / 2, { steps: 4 });
+  await p.waitForTimeout(500);
+  r = await p.evaluate(() => getComputedStyle(document.querySelector("#trialPad .trial-knob")).transform);
+  await p.mouse.up();
+  check(r !== "none", "サバイバル：主人公をスティックで動かせる", r);
+  await tap("#trialRetreat");
+  await p.waitForTimeout(300);
+  r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialTitle").textContent + document.getElementById("trialBody").textContent }));
+  check(r.open && r.text.includes("サバイバル") && r.text.includes("撤退") && r.text.includes("👑"), "サバイバル：撤退すると結果の画面（主人公に👑）", r.text.slice(0, 60));
   await tap("#trialClose");
   // 5. 再読み込みしても本番のデータは壊れない
   await p.reload();
