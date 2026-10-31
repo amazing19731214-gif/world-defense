@@ -259,7 +259,7 @@ try {
   });
   check(["cslash", "cspark", "cshock"].every((k) => r.kinds.includes(k)), "職業技・閃きが出ると、斬撃の軌跡・命中の火花・範囲の輪が出る", r.kinds);
   check(r.maxFx <= 80 && (r.minGap == null || r.minGap >= 2.49), "演出の数には上限（最大 " + r.maxFx + "）。技名は同じ兵士で2.5秒に1回まで（文字だらけにならない）", { maxFx: r.maxFx, minGap: r.minGap });
-  check(r.lv >= 5 && r.lv <= 7 && r.units === 5, "3分の戦闘でレベルアップは " + r.lv + " 回（5〜7回）。仲間は4人とも加入できる", r);
+  check(r.lv >= 7 && r.lv <= 9 && r.units === 5, "3分の戦闘でレベルアップは " + r.lv + " 回（7〜9回）。仲間は4人とも加入できる", r);
   check(r.result === "win" && r.skills.filter((n) => n > 0).length >= 4, "5人で戦い、大将を倒して第1面クリア（" + r.time + "秒・サバイバルLv" + r.slv + "）。仲間も職業技・閃きを使う", r);
   check((await storage(p)) === save0, "保存データは変わらない");
   await c.close();

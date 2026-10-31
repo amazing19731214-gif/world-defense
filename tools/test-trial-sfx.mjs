@@ -226,7 +226,7 @@ try {
       h = L.units[0];
     L.next = 1e9;
     T.sfx.reset();
-    for (let i = 0; i < 4; i++) T.drop(h.x + 30, h.y); // 4：Lv2 の分
+    for (let i = 0; i < T.survival.need(1); i++) T.drop(h.x + 30, h.y); // Lv2 に上がる分
     const seq = [];
     for (let i = 0; i < 30 && !L.choice; i++) {
       WD_DEBUG.step(0.05);

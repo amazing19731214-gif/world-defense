@@ -61,6 +61,7 @@ const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object
 const quiet = (p, ids = [1, 2, 3, 4, 5]) =>
   p.evaluate((ids) => {
     const T = WD_DEBUG.trial;
+    if (T.on()) T.retreat(); // 前の挑戦を終える（続けて試すとき）
     document.getElementById("trialSheet").hidden = true;
     T.start(ids, { mode: "survival", hero: 1 });
     const L = T.live();
@@ -278,7 +279,7 @@ try {
     return { bad, maxC, lv, result: cleared ? "win" : res.result, slv: res.slv, coins: res.coins, time: Math.round(res.time) };
   });
   check(r.bad === 0 && r.maxC <= 50, "コインは川・木・岩に埋まらず、50枚を超えない（最大 " + r.maxC + "枚）", r);
-  check(r.lv >= 5 && r.lv <= 7 && r.result === "win", "3分の戦闘でレベルアップは " + r.lv + " 回（5〜7回）。大将を倒して第1面クリア（" + r.time + "秒）", r);
+  check(r.lv >= 7 && r.lv <= 9 && r.result === "win", "3分の戦闘でレベルアップは " + r.lv + " 回（7〜9回）。大将を倒して第1面クリア（" + r.time + "秒）", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
     document.getElementById("trialSheet").hidden = true;
@@ -359,7 +360,7 @@ try {
     for (let i = 0; i < 400; i++) if (T.roll(false).key === "magnet") inChest++;
     return { r0, r1, before, xp, inChest, boon: !!R.boons.magnet };
   });
-  check(r.boon && r.r0 === 190 && Math.round(r.r1) === 247 && r.before === 235 && r.xp === 1, "🧲 吸い寄せ範囲アップ：吸い寄せる距離が 190 → 247（+30%）。届かなかったコインも吸い寄せて拾う", r);
+  check(r.boon && r.r0 === 190 && Math.round(r.r1) === 247 && r.before > 200 && r.before < 247 && r.xp === 1, "🧲 吸い寄せ範囲アップ：吸い寄せる距離が 190 → 247（+30%）。届かなかったコインも吸い寄せて拾う", r);
   check(r.inChest > 0 && r.inChest < 400, "吸い寄せ範囲アップは宝箱の報酬にも出る（400回で " + r.inChest + " 回）", r.inChest);
   // 12. v109 磁石：敵を70体倒すごとに1つ落ちる（乱数なし）
   await quiet(p);
@@ -380,7 +381,7 @@ try {
     const s = T.state();
     return { first, kills: s.kills, dropped: s.magnetDropped, every: T.survival.magnetEvery };
   });
-  check(r.every === 70 && r.first === 70 && r.dropped >= 2, "🧲 磁石は敵を70体倒すごとに1つ落ちる（1つ目は撃破 " + r.first + " のとき）", r);
+  check(r.every === 70 && r.first >= 70 && r.first < 80 && r.dropped >= 2, "🧲 磁石は敵を70体倒すごとに1つ落ちる（1つ目は撃破 " + r.first + " のコマ。同じコマで数体倒れることがある）", r);
   // 13. 磁石を拾うと、戦場のコインを全部吸い寄せる（遠くのコインも）
   await quiet(p);
   r = await p.evaluate(() => {

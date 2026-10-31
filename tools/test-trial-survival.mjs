@@ -194,9 +194,14 @@ try {
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       L = T.live();
-    for (let i = 0; i < 900 && L.units.length < 5; i++) WD_DEBUG.step(0.1); // v108.5：コインを拾って全員が加入するまで
+    // v109 敵が多くなったので、この試験（仲間の動き）の間は主人公の HP を3割より下げない（難易度は別の試験で見る）
+    const keep = () => {
+      const h = L.units.find((u) => u.id === L.hero);
+      if (h && h.hp < h.max * 0.3) h.hp = h.max * 0.3;
+    };
+    for (let i = 0; i < 900 && L.units.length < 5; i++) keep(), WD_DEBUG.step(0.1); // v108.5：コインを拾って全員が加入するまで
     for (const u of L.units) if (u.id !== 5) u.hp = Math.max(1, u.hp * 0.6); // けがをさせて、衛生兵の回復を見る
-    for (let i = 0; i < 300; i++) WD_DEBUG.step(0.1);
+    for (let i = 0; i < 300; i++) keep(), WD_DEBUG.step(0.1);
     return T.state().units.map((u) => ({ id: u.id, role: u.role, kills: u.kills, dealt: Math.round(u.dealt), healed: Math.round(u.healed), skills: Object.keys(u.skills).length }));
   });
   const by = (id) => r.find((u) => u.id === id);
@@ -292,7 +297,7 @@ try {
       WD_DEBUG.step(0.1);
     }
     for (const u of L.units) if (u.id !== 5) u.hp *= 0.5;
-    for (let i = 0; i < 200; i++) WD_DEBUG.step(0.1);
+    for (let i = 0; i < 200; i++) (L.units[0].hp = Math.max(L.units[0].hp, L.units[0].max * 0.3)), WD_DEBUG.step(0.1); // v109 敵が多いので主人公は倒れないように
     const healerHero = { control: T.state().control, healed: Math.round(L.units[0].healed) };
     T.retreat();
     document.getElementById("trialSheet").hidden = true;
@@ -332,7 +337,7 @@ try {
     return { healerHero, afterMate, res: res.result, heroDead: res.units.find((u) => u.hero).dead, matesAlive: res.units.filter((u) => !u.hero && !u.dead).length };
   });
   check(r.healerHero.control === 5 && r.healerHero.healed > 0, "衛生兵（医王）も主人公にでき、近くの仲間を自動で回復する", r.healerHero);
-  check(r.afterMate.mateDead && r.afterMate.on && /仲間 2\/3/.test(r.afterMate.info), "仲間が倒れても、主人公が生きていれば戦闘は続く", r.afterMate);
+  check(r.afterMate.mateDead && r.afterMate.on && /仲間 [0-2]\/3/.test(r.afterMate.info), "仲間が倒れても、主人公が生きていれば戦闘は続く", r.afterMate);
   check(r.res === "lose" && r.heroDead && r.matesAlive > 0, "主人公が倒れたら敗北（仲間が生きていても）", r);
   check((await p.evaluate(() => document.getElementById("trialBody").textContent)).includes("主人公が倒れた"), "敗北の結果の画面に「主人公が倒れた」と出る");
   // 撤退

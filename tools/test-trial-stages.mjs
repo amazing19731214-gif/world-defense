@@ -96,7 +96,7 @@ try {
   // 2. 大将を倒すと面のクリア：敵・時間が止まり、残りのコインは全部経験値に。勝利の音と光。宝箱
   r = await toClear(p);
   const clearKinds = r.kinds;
-  check(r.cleared && r.stage === 1 && r.maxE <= 37 && r.maxC <= 50, "大将を倒すと第1面クリア（" + Math.round(r.st) + "秒）", r);
+  check(r.cleared && r.stage === 1 && r.maxE <= 61 && r.maxC <= 50, "大将を倒すと第1面クリア（" + Math.round(r.st) + "秒）", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       L = T.live(),
@@ -367,7 +367,7 @@ try {
   });
   console.log("   10面：" + r.log.join(" "));
   check(r.bosses === 10 && r.stage === 11 && r.great.join() === "5,10", "10面を続けてクリアできる（大将10体・鬼大将は第5面と第10面。合計 " + Math.floor(r.time / 60) + "分・撃破 " + r.kills + "・サバイバルLv" + r.slv + "）", { bosses: r.bosses, stage: r.stage, great: r.great });
-  check(r.maxE <= 37 && r.maxC <= 50 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxList <= 130 && r.maxVoices <= 8, "面を重ねても溜まらない（敵 最大" + r.maxE + "・コイン " + r.maxC + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "・敵の記録 " + r.maxList + "）", r);
+  check(r.maxE <= 61 && r.maxC <= 50 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxList <= 130 && r.maxVoices <= 8, "面を重ねても溜まらない（敵 最大" + r.maxE + "・コイン " + r.maxC + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "・敵の記録 " + r.maxList + "）", r);
   check(r.rewards === 10 && /到達 第11面/.test(r.text) && /大将を倒した数 10/.test(r.text) && /獲得 EXP/.test(r.text) && /報酬：/.test(r.text), "結果の画面：到達した面・倒した大将の数・撃破・獲得 EXP・報酬", r.text.slice(0, 160));
   await c.close();
 
