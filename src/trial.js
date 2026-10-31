@@ -9,7 +9,7 @@
 const TRIAL_RULES = {
   maxUnits: 5, // 出撃できる人数
   real: false, // 本番モード（永久死亡・英霊名鑑）にするか。試作では false（変えない）
-  timeLimit: 300, // 時間切れ（秒）。衛生兵だけの出撃などで終わらなくならないように
+  timeLimit: 420, // 時間切れ（秒）。衛生兵だけの出撃などで終わらなくならないように（v108：戦場が広いので長め）
   march: 46, // 兵士の歩く速さ（px/秒）。兵種の march（騎兵など）を掛ける
   sep: 24, // 兵士・敵どうしが重なり続けない距離
   meleeReach: 34, // 近接の攻撃が届く距離（体の大きさを足す）
@@ -32,22 +32,57 @@ const TRIAL_RULES = {
   atkMul: 0.55, // 敵の攻撃の倍率（5人で囲まれても一瞬で倒れないように）
   bossHp: 1, // 中ボスの体力の倍率（大将の表はもともと硬い）
   bossAtk: 1, // 中ボスの攻撃の倍率
-  zoom: 1.9, // 兵士をタップしたときの拡大
+  // v108：広い戦場とカメラ・操作
+  camZoom: 1, // 操作している兵士を追うときの拡大（1 = ゲームの 960×600 の広さを映す）
+  camEase: 6, // カメラの追い方（大きいほど早く追いつく。急に飛ばないように少しずつ）
+  stickDead: 0.15, // 仮想スティックの遊び（これより小さい傾きは止まる）
 };
-// マップ：道（敵の進む線）・合流点・味方の配置場所・砦・出現の順番。座標はゲームの 960×600
+// マップ：道（敵の進む線）・合流点・味方の配置場所・砦・地形・出現の順番。座標は戦場（world）の座標
+//   v108：三方の関を 1920×1200（以前の 960×600 の4倍の広さ）に広げ、カメラで動かして見る
+//   river：川（通れない帯）。bridges：橋（川を渡れる所。道が川を渡る所に1本ずつ）
+//   rocks・forests：木と岩（通れない丸）。避けて歩く（押し出される）だけの簡単なしくみ
+const trialForest = (cx, cy, n, spread, seed) => {
+  let r = seed;
+  const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2 + rnd(),
+      d = spread * Math.sqrt(rnd());
+    return { x: Math.round(cx + Math.cos(a) * d), y: Math.round(cy + Math.sin(a) * d * 0.8), r: 18, kind: ["pine0", "pine1", "round0", "round1", "sakura0"][i % 5] };
+  });
+};
 const TRIAL_MAPS = {
   sanpou: {
     name: "三方の関",
-    text: "上・中央・下の3つの道から敵が攻めてくる。道は関の手前で合流する",
+    text: "広い原野。北・中央・南の3つの道から敵が攻めてくる。川は橋でしか渡れない。道は関の手前で合流する",
+    size: { w: 1920, h: 1200 },
     lanes: {
-      top: [[-20, 92], [230, 92], [430, 230], [585, 300]],
-      mid: [[-20, 300], [585, 300]],
-      bot: [[-20, 508], [230, 508], [430, 370], [585, 300]],
+      top: [[-30, 170], [560, 170], [830, 170], [1080, 360], [1260, 600]],
+      mid: [[-30, 600], [1260, 600]],
+      bot: [[-30, 1030], [560, 1030], [830, 1030], [1080, 840], [1260, 600]],
     },
-    join: [585, 300], // 合流点：ここを過ぎた敵は、どこにいる兵士でも狙う
-    road: [[585, 300], [905, 300]], // 合流点から関（砦）までの道
-    fort: { x: 880, y: 300 },
-    deploy: { x: 640, y: 170, w: 210, h: 260 }, // 味方の配置場所
+    join: [1260, 600], // 合流点：ここを過ぎた敵は、どこにいる兵士でも狙う
+    road: [[1260, 600], [1860, 600]], // 合流点から関（砦）までの道
+    fort: { x: 1800, y: 600 },
+    gate: { x: 1300, y0: 360, y1: 840 }, // 関所の土塁（見た目だけ。道の所は門）
+    deploy: { x: 1340, y: 440, w: 300, h: 320 }, // 味方の配置場所
+    river: { x0: 680, x1: 750 },
+    bridges: [
+      { x0: 668, x1: 762, y0: 136, y1: 204 },
+      { x0: 668, x1: 762, y0: 566, y1: 634 },
+      { x0: 668, x1: 762, y0: 996, y1: 1064 },
+    ],
+    obstacles: [
+      ...trialForest(400, 390, 9, 120, 11),
+      ...trialForest(400, 810, 9, 120, 23),
+      ...trialForest(1080, 150, 6, 80, 37),
+      ...trialForest(1080, 1050, 6, 80, 41),
+      ...trialForest(1560, 230, 6, 90, 53),
+      ...trialForest(1560, 970, 6, 90, 59),
+      { x: 960, y: 520, r: 16, kind: "rock" },
+      { x: 990, y: 690, r: 16, kind: "rock" },
+      { x: 250, y: 600 - 110, r: 16, kind: "rock" },
+      { x: 1180, y: 470, r: 16, kind: "rock" },
+    ],
     labels: { top: "北の道", mid: "中央の道", bot: "南の道" },
     // 出現：t 秒に lane から kind を n 体（role mid は中ボス。formation tate は盾兵が前・鉄砲足軽2体が後ろ）
     waves: [
@@ -297,11 +332,13 @@ function tickTrial(dt) {
   }
   const live = T.units.filter((u) => !u.dead),
     foes = T.enemies.filter((e) => !e.gone);
+  for (const o of [...live, ...foes]) (o.px = o.x), (o.py = o.y);
   for (const u of live) if (!u.dead) trialUnitAct(u, foes, live, dt);
   for (const e of foes) if (!e.gone) trialEnemyAct(e, T.units.filter((u) => !u.dead), dt);
   trialSeparate(T.units.filter((u) => !u.dead), 1);
   trialSeparate(T.enemies.filter((e) => !e.gone), 0.8);
   trialSeparateBetween(T.units.filter((u) => !u.dead), T.enemies.filter((e) => !e.gone));
+  for (const o of [...T.units.filter((u) => !u.dead), ...T.enemies.filter((e) => !e.gone)]) trialCollide(o);
   for (const u of T.units) {
     u.atk = Math.max(0, u.atk - dt);
     u.hit = Math.max(0, u.hit - dt);
@@ -334,8 +371,55 @@ function trialMove(o, tx, ty, speed, dt) {
   o.y += (dy / d) * step;
   o.face = dx < 0 ? -1 : 1;
   o.walk = (o.walk || 0) + step;
-  o.x = Math.max(10, Math.min(950, o.x));
-  o.y = Math.max(40, Math.min(580, o.y));
+  const Z = trial ? trial.map.size : { w: W, h: H };
+  o.x = Math.max(10, Math.min(Z.w - 10, o.x));
+  o.y = Math.max(30, Math.min(Z.h - 10, o.y));
+}
+// 川：橋の上でなければ通れない
+const trialInRiver = (M, x, y) => !!M.river && x > M.river.x0 && x < M.river.x1 && !M.bridges.some((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
+// 行き先へ向かう（AI の移動）。川の向こうへ行くときは、近い橋を通る
+function trialGo(o, tx, ty, speed, dt) {
+  const M = trial.map,
+    R = M.river;
+  if (R) {
+    const side = (x) => (x < R.x0 ? -1 : x > R.x1 ? 1 : 0),
+      s0 = side(o.x),
+      s1 = side(tx);
+    if (s0 !== s1) {
+      // 橋の上（川の帯の中）にいる：そのまま行き先の側へ渡る。まだ岸にいる：一番近い橋のたもとへ
+      if (s0 === 0) {
+        const b = M.bridges.find((v) => o.y >= v.y0 - 2 && o.y <= v.y1 + 2) || M.bridges[0];
+        return trialMove(o, s1 < 0 ? R.x0 - 14 : R.x1 + 14, Math.max(b.y0 + 10, Math.min(b.y1 - 10, o.y)), speed, dt);
+      }
+      const cost = (b) => Math.hypot((b.x0 + b.x1) / 2 - o.x, (b.y0 + b.y1) / 2 - o.y) + Math.hypot((b.x0 + b.x1) / 2 - tx, (b.y0 + b.y1) / 2 - ty),
+        b = M.bridges.reduce((a, c) => (cost(c) < cost(a) ? c : a)),
+        by = (b.y0 + b.y1) / 2,
+        ex = s0 < 0 ? R.x0 - 6 : R.x1 + 6;
+      if (Math.abs(o.y - by) > 16 || Math.abs(o.x - ex) > 30) return trialMove(o, ex, by, speed, dt);
+      return trialMove(o, s0 < 0 ? R.x1 + 14 : R.x0 - 14, by, speed, dt);
+    }
+  }
+  trialMove(o, tx, ty, speed, dt);
+}
+// 地形に重ならないようにする：木・岩からは押し出し、川（橋の外）に入ったら元の位置へ戻す
+function trialCollide(o) {
+  const M = trial.map;
+  for (const b of M.obstacles) {
+    const dx = o.x - b.x,
+      dy = o.y - b.y,
+      d = Math.hypot(dx, dy) || 0.01,
+      R = b.r + 10;
+    if (d < R) {
+      o.x = b.x + (dx / d) * R;
+      o.y = b.y + (dy / d) * R;
+    }
+  }
+  if (trialInRiver(M, o.x, o.y) && o.px != null) {
+    // 横から入ったなら x を、縦から入ったなら y を戻す（岸に沿って滑る）
+    if (!trialInRiver(M, o.px, o.y)) o.x = o.px;
+    else if (!trialInRiver(M, o.x, o.py)) o.y = o.py;
+    else (o.x = o.px), (o.y = o.py);
+  }
 }
 // ===== 職業技・閃き：既存の evolutionAction を戦場試練でも使う（技の条件・待ち時間・効果は既存のまま） =====
 //   c.friends は出撃した全員（同じ隊として扱う）。blocked は「その敵が自分を狙って近くにいる」（足止めの代わり）
@@ -383,15 +467,41 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
       }
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
+// v108：操作している兵士（trial.control）は、スティックの向きにだけ動く（AI は動かさない）。攻撃・回復・職業技は自動のまま
+//   操作していない兵士は、これまでどおり AI で動く。操作を外すと（全員自動・切り替え）、次のコマから AI に戻る
+let trialStick = { x: 0, y: 0 }, // 仮想スティック・キーボードの向き（-1〜1）
+  trialKeys = new Set();
+function trialInput() {
+  let x = trialStick.x,
+    y = trialStick.y;
+  if (trialKeys.size) {
+    x = (trialKeys.has("right") ? 1 : 0) - (trialKeys.has("left") ? 1 : 0);
+    y = (trialKeys.has("down") ? 1 : 0) - (trialKeys.has("up") ? 1 : 0);
+  }
+  const m = Math.hypot(x, y);
+  if (m < TRIAL_RULES.stickDead) return { x: 0, y: 0, m: 0 };
+  return m > 1 ? { x: x / m, y: y / m, m: 1 } : { x, y, m };
+}
 function trialUnitAct(u, foes, live, dt) {
-  const s = u.sh;
+  const s = u.sh,
+    ctl = trial.control === u.id,
+    go = ctl ? () => {} : (tx, ty, sp) => trialGo(u, tx, ty, sp, dt);
   u.cd -= dt;
+  if (ctl) {
+    // スティックの向きへ歩く（指を離すと止まる）
+    const v = trialInput();
+    u.moving = v.m > 0;
+    if (u.moving) {
+      trialMove(u, u.x + v.x * 200, u.y + v.y * 200, u.speed * v.m, dt);
+      u.face = v.x < -0.05 ? -1 : v.x > 0.05 ? 1 : u.face;
+    }
+  }
   if (u.role === "heal") {
     let best = null,
       ratio = 0.97;
     for (const v of live) {
       const r = v.hp / v.max;
-      if (v !== u && !v.dead && r < ratio) (ratio = r), (best = v);
+      if (v !== u && !v.dead && r < ratio && (!ctl || trialDist(u, v) <= u.range)) (ratio = r), (best = v);
     }
     if (!best && u.hp < u.max * 0.97) best = u; // 自分しか傷ついていなければ自分
     if (!best) {
@@ -400,12 +510,12 @@ function trialUnitAct(u, foes, live, dt) {
       if (front) {
         const tx = front.x + 60,
           ty = front.y;
-        if (trialDist(u, { x: tx, y: ty }) > 20) trialMove(u, tx, ty, u.speed * 0.8, dt);
+        if (trialDist(u, { x: tx, y: ty }) > 20) go(tx, ty, u.speed * 0.8);
       }
       return;
     }
     const d = trialDist(u, best);
-    if (d > u.range * 0.8 && best !== u) return trialMove(u, best.x, best.y, u.speed, dt);
+    if (d > u.range * 0.8 && best !== u) return go(best.x, best.y, u.speed);
     if (u.cd > 0) return;
     const st = soldierStats(s, true),
       beforeRatio = best.hp / best.max,
@@ -421,11 +531,14 @@ function trialUnitAct(u, foes, live, dt) {
     return;
   }
   // 狙う敵：いまの相手が生きていれば続ける（少し遠くなっても）。いなければ一番近い敵
-  if (!u.target || u.target.gone || trialDist(u, u.target) > u.range + 260) u.target = trialNearest(u, foes.filter((e) => !e.gone));
+  if (ctl) {
+    const reach0 = (e) => (u.role === "melee" ? Math.max(u.range, TRIAL_RULES.meleeReach) + (e.r || 12) : u.range);
+    if (!u.target || u.target.gone || trialDist(u, u.target) > reach0(u.target)) u.target = trialNearest(u, foes.filter((e) => !e.gone && trialDist(u, e) <= reach0(e)));
+  } else if (!u.target || u.target.gone || trialDist(u, u.target) > u.range + 260) u.target = trialNearest(u, foes.filter((e) => !e.gone));
   const e = u.target;
   if (!e) {
     // 敵がいない：配置した場所へ戻る
-    if (u.home && trialDist(u, u.home) > 6) trialMove(u, u.home.x, u.home.y, u.speed * 0.7, dt);
+    if (u.home && trialDist(u, u.home) > 6) go(u.home.x, u.home.y, u.speed * 0.7);
     return;
   }
   const d = trialDist(u, e),
@@ -434,8 +547,8 @@ function trialUnitAct(u, foes, live, dt) {
     // 近づかれたら少し下がる（関の方へ）
     const bx = u.x + ((u.x - e.x) / (d || 1)) * 40,
       by = u.y + ((u.y - e.y) / (d || 1)) * 40;
-    trialMove(u, bx, by, u.speed * 0.7, dt);
-  } else if (d > reach) return trialMove(u, e.x, e.y, u.speed, dt);
+    go(bx, by, u.speed * 0.7);
+  } else if (d > reach) return go(e.x, e.y, u.speed);
   u.face = e.x < u.x ? -1 : 1;
   if (u.cd > 0 || d > reach) return;
   const st = soldierStats(s, true),
@@ -507,7 +620,7 @@ function trialEnemyAct(e, live, dt) {
     // 道を進む（合流点を過ぎたら関へ）。進めなくなったら次の目印へ（引っかかって止まらない）
     const goal = covered ? { x: e.leader.x - 46, y: e.leader.y } : null,
       p = e.lanePath[e.wp] || trial.map.road[1];
-    trialMove(e, goal ? goal.x : p[0], goal ? goal.y : p[1], speed, dt);
+    trialGo(e, goal ? goal.x : p[0], goal ? goal.y : p[1], speed, dt);
     if (!goal && Math.hypot(p[0] - e.x, p[1] - e.y) < 10) {
       if (e.wp < e.lanePath.length) e.wp++;
       if (e.wp >= e.lanePath.length) e.joined = true;
@@ -523,13 +636,13 @@ function trialEnemyAct(e, live, dt) {
       dl = trialDist(L, u) || 1,
       bx = L.x - ((u.x - L.x) / dl) * 46,
       by = L.y - ((u.y - L.y) / dl) * 46 + (e.id.charCodeAt(e.id.length - 1) % 2 ? 22 : -22);
-    if (trialDist(e, { x: bx, y: by }) > 12) trialMove(e, bx, by, speed, dt);
+    if (trialDist(e, { x: bx, y: by }) > 12) trialGo(e, bx, by, speed, dt);
     if (d > reach) return;
   } else if (range && d < range * 0.45) {
     // 遠距離の敵：近づかれたら少し下がる
-    trialMove(e, e.x + ((e.x - u.x) / (d || 1)) * 30, e.y + ((e.y - u.y) / (d || 1)) * 30, speed * 0.6, dt);
+    trialGo(e, e.x + ((e.x - u.x) / (d || 1)) * 30, e.y + ((e.y - u.y) / (d || 1)) * 30, speed * 0.6, dt);
   } else if (d > reach) {
-    trialMove(e, u.x, u.y, speed, dt);
+    trialGo(e, u.x, u.y, speed, dt);
     trialUnstick(e, dt);
     return;
   }
@@ -578,7 +691,12 @@ function trialHitUnit(u, raw, ranged, e) {
     s.alive = false;
     u.diedAt = trial.t;
     u.killedBy = e.kind;
-    if (trial.cam === u.id) trial.cam = null;
+    if (trial.control === u.id) {
+      const next = trial.units.find((v) => !v.dead);
+      trial.control = next ? next.id : null;
+      if (next) msg("🎮 操作を " + next.name + " に切り替えた");
+      trialSyncUI();
+    }
     msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
   }
 }
