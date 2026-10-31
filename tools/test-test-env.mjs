@@ -192,6 +192,10 @@ try {
     return b && { text: b.textContent, disabled: b.disabled };
   });
   check(r && !r.disabled && /八方天翔斬/.test(r.text), "サバイバル：奥義継承者（試・剣神）を主人公にすると、右下に「⚔️ 奥義 八方天翔斬」", r);
+  // v108.6 効果音の音量：押すと変わり、テスト版の保存の領域（wdtest:）にだけ保存する
+  await tap("#trialSound");
+  r = await p.evaluate(() => ({ label: document.getElementById("trialSound").textContent, raw: window.WD_TEST_STORAGE.raw.get.call(localStorage, "wdtest:worldDefense.trialSfx.v1"), plain: window.WD_TEST_STORAGE.raw.get.call(localStorage, "worldDefense.trialSfx.v1") }));
+  check(/小/.test(r.label) && r.raw && JSON.parse(r.raw).level === 2 && r.plain === null, "効果音の音量のボタン（中→小）。設定はテスト版の保存の領域にだけ入る（本番の領域には書かない）", r);
   let used = null;
   for (let i = 0; i < 40 && !used; i++) {
     await p.waitForTimeout(1000);

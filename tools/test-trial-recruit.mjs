@@ -186,6 +186,7 @@ try {
     L.lvUps = 1;
     WD_DEBUG.step(0.1);
   });
+  await p.waitForTimeout(500); // v108.6：カードが出そろうまで（0.45秒）は押せない
   await p.keyboard.press("2");
   r = await p.evaluate(() => WD_DEBUG.trial.state());
   check(r.choice === null && r.lvUps === 0, "PC では 1〜3 のキーでも選べる", { choice: r.choice, lvUps: r.lvUps });

@@ -191,7 +191,7 @@ try {
       };
     }, ids);
     check(r.before.hp && !r.during.hp && !r.during.gold && !r.during.wave, "戦場試練の間は城HP・ゴールド・ウェーブの表示を隠す（" + width + "px）", r);
-    check(r.info.includes("三方の関") && /味方 \d\/5/.test(r.info) && /敵 \d+/.test(r.info) && /\d+秒/.test(r.info) && r.retreat && r.buttons <= 7, "ステージ名・生存兵士数・残り敵数・経過時間と、撤退ボタンだけ（" + width + "px）", r.info);
+    check(r.info.includes("三方の関") && /味方 \d\/5/.test(r.info) && /敵 \d+/.test(r.info) && /\d+秒/.test(r.info) && r.retreat && r.buttons <= 8, "ステージ名・生存兵士数・残り敵数・経過時間と、撤退ボタンと効果音の音量だけ（" + width + "px）", r.info);
     check(r.overflow <= 0, "iPhone縦（" + width + "px）で戦闘中の画面がはみ出さない", r.overflow);
     r = await p.evaluate(() => {
       const T = WD_DEBUG.trial,
