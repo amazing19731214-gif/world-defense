@@ -673,6 +673,10 @@
   - 危険の表示（赤い札と輪）。保存データが変わらない。
 - `test-test-env.mjs`（31件）：テスト版で音量を変えると、テスト用の保存の領域にだけ入る。
 
+### 画像（iPhone縦 390px）
+- [trial-sfx-cards-in.jpg](proto/trial-sfx-cards-in.jpg)：カードが順に出る（3枚目が出てくるところ）
+- [trial-sfx-cards-ready.jpg](proto/trial-sfx-cards-ready.jpg)：出そろって光り、押せるようになった（足元の赤い輪は HP が3割を切った仲間）
+
 ### 実機で確かめてほしいこと
 - 音量（iPhone のスピーカー・イヤホン）と、5人の戦闘での音の多さ。
 - 画面に触れてから音が出るか（マナーモードのときは、iPhone の仕様で鳴らないことがあります）。
