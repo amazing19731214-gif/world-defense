@@ -76,4 +76,5 @@
 - [combat-eight-slash.mp4](proto/combat-eight-slash.mp4)・[gif](proto/combat-eight-slash.gif)：八方斬撃（通常 → 奥義・八方天翔斬）。gif は 1.5倍ゆっくり
 - [combat-eight-slash.png](proto/combat-eight-slash.png)：同じ場面のコマ
 - [combat-phone.jpg](proto/combat-phone.jpg)：iPhone縦（修練場の切り替え・奥義の技名・奥義のあと）※v106の画面
+- [ougi-final-phone.jpg](proto/ougi-final-phone.jpg)：iPhone縦（v106.3）。満杯の引退・整理の一覧・処分の確認・引退できる・使用済み・再読み込みのあとの新しい挑戦
 - [ougi-phone.jpg](proto/ougi-phone.jpg)：iPhone縦（v106.1）。継承者の選択・使えるボタン・八方天翔斬・無明一閃・天剣乱舞・使用済み

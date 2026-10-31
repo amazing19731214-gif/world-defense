@@ -123,3 +123,8 @@ PR #128（伝説の奥義 Phase 1）の上に作った試作です。**正式な
   - 倉庫500冊・満杯の引退・処分；
   - 旧版で遊んだあと・画面。
 - `node tools/test-legend-ougi.mjs`（30件）：奥義の発動・使用の制限・ボタン
+
+## 確認用の画像
+
+- [ougi-books-phone.jpg](proto/ougi-books-phone.jpg)：iPhone縦（v106.2）。兵士名簿・奥義の画面・奥義書の一覧・引退・閃き・修練場
+- [ougi-final-phone.jpg](proto/ougi-final-phone.jpg)：iPhone縦（v106.3）。満杯の引退・整理の一覧・処分の確認・引退できる・使用済み・再読み込みのあとの新しい挑戦
