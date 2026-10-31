@@ -10342,6 +10342,7 @@ function chronicleWarBonusBlock(s) {
               if (Number.isInteger(b.pending)) {
                 x.pending = b.pending;
                 if (ougiLifeOk(b.life)) x.life = b.life;
+                if (Number.isFinite(b.pat)) x.pat = b.pat; // 引退を始めた時刻（指導員名簿の記録と照らし合わせる）
               }
               return x;
             });
@@ -10437,6 +10438,15 @@ function chronicleWarBonusBlock(s) {
             }
           });
         }
+        // 引退の途中の奥義書を確定してよいか：この版の引退が保存されたときは、同じ保存（指導員名簿）に
+        // 同じ名前・職業・Lv の指導員が、引退を始めた時刻の直後（OUGI_RETIRE_WINDOW 以内）に記録されている。
+        // 兵士がいなくても記録が無い・時刻が離れている（旧版で引退した・戦死した・除隊した）なら、書は作らない
+        const OUGI_RETIRE_WINDOW = 10000;
+        function ougiRetireCommitted(b, mentors) {
+          return (Array.isArray(mentors) ? mentors : []).some(
+            (m) => m && m.name === b.from && m.job === b.job && m.level === b.level && (b.pat == null || (m.at >= b.pat - 1000 && m.at <= b.pat + OUGI_RETIRE_WINDOW)),
+          );
+        }
         // 起動したとき：兵士の保存データと突き合わせる（旧版で遊んだ・引退の途中で閉じた・英霊名鑑から外れた など）
         function reconcileOugi(save) {
           const live = new Map(save.soldiers.map((v) => [v.id, v])),
@@ -10447,7 +10457,8 @@ function chronicleWarBonusBlock(s) {
             S = ougiSave;
           for (const b of S.books.slice()) {
             if (b.pending == null) continue;
-            if (live.has(b.pending)) S.books = S.books.filter((x) => x !== b); // 引退は保存されていない → 書も無かったことに
+            // 兵士が残っている（引退は保存されていない）か、この版の引退の記録が無い（旧版で引退した など）→ 書は無かったことに
+            if (live.has(b.pending) || !ougiRetireCommitted(b, heroSave.forge && heroSave.forge.mentors)) S.books = S.books.filter((x) => x !== b);
             else {
               if (b.life) {
                 delete S.known[b.life];
@@ -10456,6 +10467,7 @@ function chronicleWarBonusBlock(s) {
               }
               delete b.pending;
               delete b.life;
+              delete b.pat;
             }
           }
           for (const life of Object.keys(S.known)) if (!lives.has(life) && !fallen.has(life)) delete S.known[life];
@@ -10514,7 +10526,8 @@ function chronicleWarBonusBlock(s) {
           if (ougiSave.books.length >= OUGI_RULES.books) return { error: "奥義書の倉庫がいっぱいです（" + OUGI_RULES.books + "冊まで）。" };
           let book = null;
           const ok = ougiCommit((S) => {
-            book = { uid: ++S.seq, k, from: soldierName(s), job: jobOf(s), level: s.level, at: Date.now(), pending: s.id, life: ougiLife(s) };
+            const now = Date.now();
+            book = { uid: ++S.seq, k, from: soldierName(s), job: jobOf(s), level: s.level, at: now, pending: s.id, life: ougiLife(s), pat: now };
             S.books.push(book);
           });
           return ok ? { book } : { error: "保存できなかったため、引退をやめました（奥義書）。" };
@@ -10542,6 +10555,7 @@ function chronicleWarBonusBlock(s) {
             if (b) {
               delete b.pending;
               delete b.life;
+              delete b.pat;
             }
             delete S.known[life];
             delete S.rolls[life];

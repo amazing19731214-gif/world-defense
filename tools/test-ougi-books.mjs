@@ -44,20 +44,20 @@ const save = {
     ...[5, 6, 7, 8].map((id) => ({ id, type: "spearman", squadId: 2, level: 200, chronicle: { life: "soldier:life" + id } })),
   ],
 };
-async function open({ query = "?debug&proto=combat", ougi = null, width = 375, height = 667 } = {}) {
+async function open({ query = "?debug&proto=combat", ougi = null, war = null, width = 375, height = 667 } = {}) {
   const c = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await c.addInitScript(
-    ([save, ougi]) => {
+    ([save, ougi, war]) => {
       requestAnimationFrame = () => 0;
       if (sessionStorage.s) return;
       sessionStorage.s = 1;
       localStorage.clear();
       localStorage.setItem("worldDefense.soldiers.v1", JSON.stringify(save));
-      localStorage.setItem("worldDefense.warlords.v1", JSON.stringify({ version: 1, owned: {}, tickets: 3, history: [] }));
+      localStorage.setItem("worldDefense.warlords.v1", JSON.stringify(war || { version: 1, owned: {}, tickets: 3, history: [] }));
       localStorage.setItem("worldDefense.training.v1", JSON.stringify({ best: { beginner: { waves: 3, level: 6 } }, clears: { beginner: 2 } }));
       if (ougi) localStorage.setItem("worldDefense.ougi.v1", JSON.stringify(ougi));
     },
-    [save, ougi],
+    [save, ougi, war],
   );
   const p = await c.newPage();
   p.setDefaultTimeout(8000);
@@ -221,23 +221,80 @@ try {
   });
   check(typeof r.err === "string" && r.alive && r.save.books.length === 0 && r.known[0] === "tenkenRanbu", "引退の保存に失敗すると、兵士も奥義書も奥義の知識も元のまま", r);
   await c.close();
-  // 引退の途中で閉じた：兵士の保存が残っていれば書を消し、兵士がいなければ書を確定する
+  // 引退の途中で閉じた：兵士の保存が残っていれば書を消す。兵士がいなければ、この版の引退の記録（指導員名簿）があるときだけ確定する
+  //   旧版で引退した（指導員名簿の時刻が離れている）・記録が無い（戦死・除隊）ときは、奥義書を作らない（v106.3 の修正）
+  const T0 = 1.8e12,
+    mentor = (name, level, at) => ({ name, job: "sword_saint", level, skill: "「攻撃の書」", at });
   ({ c, p } = await open({
     ougi: {
       version: 1,
-      seq: 2,
+      seq: 4,
       books: [
-        { uid: 1, k: "happouTenshou", from: "朧", job: "sword_saint", level: 200, at: 1, pending: 2, life: "soldier:life2" },
-        { uid: 2, k: "tenkenRanbu", from: "古老", job: "sword_saint", level: 300, at: 1, pending: 99, life: "soldier:gone" },
+        { uid: 1, k: "happouTenshou", from: "朧", job: "sword_saint", level: 200, at: T0, pending: 2, life: "soldier:life2", pat: T0 },
+        { uid: 2, k: "tenkenRanbu", from: "古老", job: "sword_saint", level: 300, at: T0, pending: 99, life: "soldier:gone", pat: T0 },
+        { uid: 3, k: "mumyouIssen", from: "旧版の剣聖", job: "sword_saint", level: 250, at: T0, pending: 98, life: "soldier:old", pat: T0 },
+        { uid: 4, k: "mumyouIssen", from: "戦死した剣聖", job: "sword_saint", level: 260, at: T0, pending: 97, life: "soldier:dead", pat: T0 },
       ],
-      known: { "soldier:life2": { list: [{ k: "happouTenshou", at: 1 }] }, "soldier:gone": { list: [{ k: "tenkenRanbu", at: 1 }] } },
+      known: { "soldier:life2": { list: [{ k: "happouTenshou", at: 1 }] }, "soldier:gone": { list: [{ k: "tenkenRanbu", at: 1 }] }, "soldier:old": { list: [{ k: "mumyouIssen", at: 1 }] } },
       rolls: {},
       heir: null,
       run: null,
     },
+    war: { version: 1, owned: {}, tickets: 3, history: [], forge: { mentors: [mentor("古老", 300, T0 + 40), mentor("旧版の剣聖", 250, T0 + 10 * 60 * 1000)] } },
   }));
   r = await p.evaluate(() => WD_DEBUG.combat.ougi.save());
-  check(r.books.length === 1 && r.books[0].uid === 2 && r.books[0].pending === undefined && !r.known["soldier:gone"] && r.known["soldier:life2"], "引退の途中で閉じても、兵士の保存データに合わせて奥義書を確定・取り消す", r);
+  check(r.books.length === 1 && r.books[0].uid === 2 && r.books[0].pending === undefined && r.books[0].pat === undefined && r.known["soldier:life2"], "引退の途中で閉じても、兵士の保存データと指導員名簿に合わせて奥義書を確定・取り消す", r.books);
+  check(!r.books.some((b) => b.uid === 3) && !r.known["soldier:old"], "途中で閉じたあと旧版で引退した兵士の奥義書は、あとから確定しない（再現・修正）", r);
+  check(!r.books.some((b) => b.uid === 4), "引退の記録が無く兵士がいない（戦死・除隊）ときも、奥義書を作らない", r.books);
+  await c.close();
+  // 実際の流れで再現：引退の途中（奥義書だけ保存できた）で止まる → 旧版で同じ兵士が引退した（時刻は1分後）→ 開き直す
+  ({ c, p } = await open());
+  r = await p.evaluate(() => {
+    const K = WD_DEBUG.combat.ougi;
+    K.grant(2, "tenkenRanbu");
+    const set = Storage.prototype.setItem;
+    let ougiWrites = 0;
+    Storage.prototype.setItem = function (k, v) {
+      if (k === "worldDefense.ougi.v1" && ougiWrites++ < 1) return set.call(this, k, v); // 「引退の途中」の奥義書だけ保存できた
+      throw new Error("ページが落ちた");
+    };
+    const pre = ougiWrites;
+    const err = K.retire(2, 0);
+    Storage.prototype.setItem = set;
+    const pending = JSON.parse(localStorage.getItem("worldDefense.ougi.v1")).books;
+    // 旧版で引退：兵士の保存から外れ、指導員名簿に1分後の記録（旧版は奥義書を作らない）
+    const sv = JSON.parse(localStorage.getItem("worldDefense.soldiers.v1"));
+    sv.soldiers = sv.soldiers.filter((x) => x.id !== 2);
+    localStorage.setItem("worldDefense.soldiers.v1", JSON.stringify(sv));
+    const w = JSON.parse(localStorage.getItem("worldDefense.warlords.v1"));
+    w.forge = w.forge || {};
+    w.forge.mentors = [{ name: pending[0] && pending[0].from, job: "sword_saint", level: 200, skill: "「攻撃の書」", at: (pending[0] && pending[0].pat) + 60000 }, ...(w.forge.mentors || [])];
+    localStorage.setItem("worldDefense.warlords.v1", JSON.stringify(w));
+    return { err, pending, pre };
+  });
+  check(typeof r.err === "string" && r.pending.length === 1 && r.pending[0].pending === 2, "再現：引退の途中で止まると「引退の途中」の奥義書だけが残る", r);
+  await reload(p);
+  r = await p.evaluate(() => WD_DEBUG.combat.ougi.save());
+  check(r.books.length === 0 && !r.known["soldier:life2"], "再現：旧版で引退したあと開き直しても、奥義書は確定しない", r);
+  await c.close();
+  // 通常の引退（指導員名簿の記録が直後にある）は、奥義書の確定の前に落ちても、開き直すと確定する
+  ({ c, p } = await open());
+  r = await p.evaluate(() => {
+    const K = WD_DEBUG.combat.ougi;
+    K.grant(2, "tenkenRanbu");
+    const set = Storage.prototype.setItem;
+    let ougiWrites = 0;
+    Storage.prototype.setItem = function (k, v) {
+      if (k === "worldDefense.ougi.v1" && ougiWrites++ >= 1) throw new Error("確定の前にページが落ちた");
+      return set.call(this, k, v);
+    };
+    const err = K.retire(2, 0);
+    Storage.prototype.setItem = set;
+    return { err, pending: JSON.parse(localStorage.getItem("worldDefense.ougi.v1")).books };
+  });
+  await reload(p);
+  const fin = await p.evaluate(() => WD_DEBUG.combat.ougi.save().books);
+  check(r.err === null && r.pending[0].pending === 2 && fin.length === 1 && fin[0].pending === undefined && fin[0].from.includes("朧"), "引退は保存できて奥義書の確定の前に落ちたときは、開き直すと奥義書を確定する", { r, fin });
   await c.close();
 
   // 6. 継承者は全軍で1人、有効な奥義書は1冊。剣聖だけ。戦闘中は変えられない
