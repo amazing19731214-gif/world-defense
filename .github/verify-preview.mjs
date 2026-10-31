@@ -17,8 +17,25 @@ const step = (name, value, pass) => {
   if (!pass) ok = false;
 };
 try {
-  const res = await p.goto(URL, { waitUntil: "load" });
+  let res = await p.goto(URL, { waitUntil: "load" });
   await p.waitForTimeout(2500);
+  // raw.githack.com は、ブラウザで開くと「External Content Notice」（外部の中身の注意）の画面を先に出すことがある。
+  // その画面の文と、先へ進むボタン・リンクを記録して、押せるなら押して進む
+  if (!(await p.title()).includes("【テスト】")) {
+    const notice = await p.evaluate(() => ({
+      title: document.title,
+      text: document.body.innerText.slice(0, 1500),
+      links: [...document.querySelectorAll("a,button,input[type=submit]")].map((a) => [a.tagName, (a.innerText || a.value || "").trim().slice(0, 60), a.getAttribute("href")]).slice(0, 20),
+    }));
+    console.log("NOTICE " + JSON.stringify(notice, null, 1));
+    const go = p.locator("a,button,input[type=submit]").filter({ hasText: /continue|proceed|view|続|進|open|I understand|accept/i }).first();
+    if (await go.count()) {
+      await go.tap();
+      await p.waitForLoadState("load");
+      await p.waitForTimeout(3000);
+      console.log("AFTER_NOTICE " + JSON.stringify({ url: p.url(), title: await p.title() }));
+    }
+  }
   step("1 ページが表示される", { status: res.status(), type: res.headers()["content-type"], title: await p.title() }, res.status() === 200 && (await p.title()).includes("【テスト】"));
   const badge = await p.evaluate(() => {
     const b = document.getElementById("testBadge");
