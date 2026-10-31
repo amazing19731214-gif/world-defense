@@ -1808,6 +1808,83 @@
         background: linear-gradient(#d9542f, #a8331b);
         border-color: #ffd28a;
       }
+      /* 戦場試練の操作（v108）：兵士の札・仮想スティック（左）・全員自動（右） */
+      .trial-ctl[hidden] {
+        display: none;
+      }
+      .trial-units-bar {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        margin: 4px 0 6px;
+      }
+      .trial-units-bar button {
+        position: relative;
+        min-height: 46px;
+        padding: 4px 2px 8px;
+        display: grid;
+        place-items: center;
+        line-height: 1.1;
+        overflow: hidden;
+      }
+      .trial-units-bar button b {
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .trial-units-bar button small {
+        font-size: 12px;
+      }
+      .trial-units-bar button i {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 4px;
+        background: #5fd36b;
+      }
+      .trial-units-bar button[aria-pressed="true"] {
+        border-color: #ffe27a;
+        box-shadow: 0 0 0 2px #ffe27a inset;
+        background: linear-gradient(#5a4316, #3a2a10);
+      }
+      .trial-pad-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .trial-pad {
+        width: 132px;
+        height: 132px;
+        border-radius: 50%;
+        border: 2px solid #ffe27a88;
+        background: radial-gradient(circle, #ffffff1a, #0000003a 70%);
+        display: grid;
+        place-items: center;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      .trial-pad.on {
+        border-color: #ffe27a;
+      }
+      .trial-knob {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #fff6d0, #c8921f);
+        box-shadow: 0 2px 6px #0008;
+        pointer-events: none;
+      }
+      .trial-right {
+        display: grid;
+        gap: 6px;
+        align-content: center;
+      }
+      .trial-right button {
+        min-height: 48px;
+      }
       .trial-result {
         font-size: 22px;
         margin: 4px 0;
@@ -2647,6 +2724,17 @@
       <section id="trialBar" class="panel train-bar trial-bar" hidden aria-label="戦場試練">
         <div id="trialInfo" class="battle-info"></div>
         <div class="trial-actions"><button id="trialAuto">🧭 自動で並べる</button><button id="trialGo" class="trial-go">⚔ 戦闘開始</button></div>
+        <div id="trialCtl" class="trial-ctl" hidden>
+          <div id="trialUnits" class="trial-units-bar" aria-label="操作する兵士を選ぶ"></div>
+          <div class="trial-pad-row">
+            <div id="trialPad" class="trial-pad" aria-label="移動のスティック"><div class="trial-knob"></div></div>
+            <div class="trial-right">
+              <button id="trialAutoAll" type="button">🤖 全員自動</button>
+              <!-- 将来：操作している兵士の奥義・必殺技のボタンをここに置く（今は使わない） -->
+              <div id="trialAction" class="trial-action" hidden></div>
+            </div>
+          </div>
+        </div>
         <button id="trialRetreat" class="retreat">↩ 撤退</button>
       </section>
       <section id="battleBar" class="panel" hidden aria-label="攻城戦">
@@ -2753,7 +2841,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v107.1試作（戦場試練の戦闘進化・伝説の奥義と奥義書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108試作（戦場試練：広い戦場と兵士の操作）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -22943,6 +23031,11 @@ OFF</button>
               enemyLevel: (ids) => trialEnemyLevel(ids.map((id, i) => trialUnit(soldierById(id), i))),
               tap: (x, y) => trialTap(x, y),
               view: () => (trial ? trialView() : null),
+              snap: () => trial && trialCamStep(trial, true),
+              control: (id) => trialControl(id),
+              stick: (x, y) => (trialStick = { x, y }),
+              toScreen: (x, y) => trialToScreen(x, y),
+              map: () => trial && trial.map,
               state: () =>
                 trial && {
                   phase: trial.phase,
@@ -22955,7 +23048,7 @@ OFF</button>
                   enemies: trial.enemies.map((e) => ({ id: e.id, kind: e.kind, behavior: e.behavior, lane: e.lane, role: e.role, x: e.x, y: e.y, hp: e.hp, gone: e.gone, unstuck: e.unstuck || 0, leader: e.leader ? e.leader.id : null, target: e.target ? e.target.id : null })),
                   fx: effects.length,
                   shots: shots.length,
-                  cam: trial.cam,
+                  control: trial.control,
                 },
             },
             // 試作の戦闘（v106試作）：修練場だけ
