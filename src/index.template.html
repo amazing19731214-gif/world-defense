@@ -2943,7 +2943,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.3試作（戦場試練：サバイバル・奥義と技の演出）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.4試作（戦場試練：歩く速さ・攻撃の見え方）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23125,6 +23125,11 @@ OFF</button>
               choose: (i) => trialChoose(i),
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
+              // 歩く速さの「速さ」ポイント抜きの値（試験用）
+              walkBase: (id) => {
+                const s = soldierById(id);
+                return TRIAL_RULES.march * (unitOf(s).march || 1) * Math.max(0.3, 1 + skillSum(s, "march"));
+              },
               place: (x, y) => trialPlace(x, y),
               auto: () => trialAutoPlace(),
               begin: () => trialBegin(),
@@ -23154,6 +23159,7 @@ OFF</button>
                   enemies: trial.enemies.map((e) => ({ id: e.id, kind: e.kind, behavior: e.behavior, lane: e.lane, role: e.role, x: e.x, y: e.y, hp: e.hp, gone: e.gone, unstuck: e.unstuck || 0, leader: e.leader ? e.leader.id : null, target: e.target ? e.target.id : null })),
                   fx: effects.length,
                   shots: shots.length,
+                  glows: [...new Set(shots.map((x) => x.glow).filter(Boolean))],
                   control: trial.control,
                   mode: trial.mode,
                   hero: trial.hero || null,

@@ -31,7 +31,8 @@ const U = [
 const items = [];
 const soldiers = U.map(([type, job, prof, gear, ins], i) => {
   items.push({ uid: i + 1, id: gear, owner: i + 1, lock: true });
-  return { id: i + 1, type, squadId: 1, level: 300, name: "兵" + (i + 1), job, jobs: [type, job], prof, insight: { known: [ins], equipped: [ins] } };
+  // 兵2（槍将）だけ、ステータスポイント「速さ」を100（+25%）
+  return { id: i + 1, type, squadId: 1, level: 300, name: "兵" + (i + 1), job, jobs: [type, job], prof, insight: { known: [ins], equipped: [ins] }, ...(i === 1 ? { pts: { atk: 0, def: 0, spd: 100, rng: 0 } } : {}) };
 });
 const save = { version: 1, seq: 5, squadSeq: 1, fallen: [], squads: [{ id: 1, type: "ashigaru", slot: 0 }], soldiers };
 async function open({ width = 390, height = 844, query = "?debug" } = {}) {
@@ -288,6 +289,45 @@ try {
   check(k0 - r.x > 20 && r.y - ky0 > 20, "PC では WASD・矢印キーで動かせる", { k0, x: r.x, ky0, y: r.y });
   await c.close();
 
+  // v108.4 歩く速さ：ステータス「速さ」を反映（攻城戦の進軍と同じ式）。操作している兵士は 1.25 倍
+  ({ c, p } = await open());
+  await begin(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      q0 = (L.queue.length = 0, L.queue.push({ t: 1e9, lane: "mid" }), (L.enemies.length = 0)),
+      R = T.rules,
+      u1 = L.units.find((u) => u.id === 1),
+      u2 = L.units.find((u) => u.id === 2),
+      base = (u) => T.walkBase(u.id);
+    T.control(2);
+    u2.x = 1000;
+    u2.y = 600;
+    T.stick(1, 0);
+    WD_DEBUG.step(1);
+    T.stick(0, 0);
+    const walked = u2.x - 1000;
+    return { s1: u1.speed / base(u1), s2: u2.speed / base(u2), walked, expect: u2.speed * R.ctlSpeed };
+  });
+  check(Math.abs(r.s1 - 1) < 0.001 && Math.abs(r.s2 - 1.25) < 0.001, "歩く速さにステータス「速さ」が入る（速さ100 で ×" + r.s2.toFixed(2) + "。振っていない兵士は ×1）", r);
+  check(Math.abs(r.walked - r.expect) < 3, "スティックで操作している兵士は、さらに 1.25 倍で歩く（1秒で " + Math.round(r.walked) + "）", r);
+  await c.close();
+  // v108.4 通常攻撃の見え方：近接は斬撃の軌跡、弓・鉄砲は光る軌跡（敵の矢・弾は赤く光る）。兵士の絵は大きめ
+  ({ c, p } = await open());
+  await begin(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      kinds = new Set(),
+      glows = new Set();
+    for (let i = 0; i < 900 && T.on(); i++) {
+      WD_DEBUG.step(0.1);
+      for (const k of WD_DEBUG.combat.fx().kinds) kinds.add(k);
+      const st = T.state();
+      if (st) for (const g of st.glows) glows.add(g);
+    }
+    return { kinds: [...kinds], glows: [...glows] };
+  });
+  check(r.kinds.includes("cslash") && r.kinds.includes("cspark") && r.glows.includes("#bfeaff") && r.glows.includes("#ffd27a") && r.glows.includes("#ff8a6a"), "通常攻撃：近接の斬撃の軌跡・弓の光る矢・鉄砲の光る弾と火花・敵の赤い矢と弾", r);
   // 6. 防衛戦には何も出ない（戦場試練の外ではスティック・兵士の札を出さない）
   ({ c, p } = await open());
   r = await p.evaluate(() => ({ bar: document.getElementById("trialBar").hidden, ctl: document.getElementById("trialCtl").hidden }));
