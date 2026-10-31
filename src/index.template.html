@@ -1885,6 +1885,32 @@
       .trial-right button {
         min-height: 48px;
       }
+      /* v108.1：遊び方（三方の関・サバイバル）と主人公を選ぶ */
+      .trial-modes,
+      .trial-heroes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin: 4px 0 8px;
+      }
+      .trial-heroes {
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      }
+      .trial-modes button,
+      .trial-heroes button {
+        min-height: 48px;
+        display: grid;
+        place-items: center;
+        line-height: 1.15;
+        padding: 4px;
+        overflow-wrap: anywhere;
+      }
+      .trial-modes button[aria-pressed="true"],
+      .trial-heroes button[aria-pressed="true"] {
+        border-color: #ffe27a;
+        box-shadow: 0 0 0 2px #ffe27a inset;
+        background: #5a4a1e;
+      }
       .trial-result {
         font-size: 22px;
         margin: 4px 0;
@@ -2841,7 +2867,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108試作（戦場試練：広い戦場と兵士の操作）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.1試作（戦場試練：サバイバル・主人公と仲間）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23018,7 +23044,8 @@ OFF</button>
             trial: {
               rules: TRIAL_RULES,
               maps: TRIAL_MAPS,
-              start: (ids) => startTrial(ids),
+              start: (ids, opts) => startTrial(ids, "sanpou", opts),
+              survival: TRIAL_SURVIVAL,
               place: (x, y) => trialPlace(x, y),
               auto: () => trialAutoPlace(),
               begin: () => trialBegin(),
@@ -23049,6 +23076,9 @@ OFF</button>
                   fx: effects.length,
                   shots: shots.length,
                   control: trial.control,
+                  mode: trial.mode,
+                  hero: trial.hero || null,
+                  boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y } : null,
                 },
             },
             // 試作の戦闘（v106試作）：修練場だけ
