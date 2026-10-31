@@ -113,7 +113,7 @@ try {
   await p.locator("[data-trial-go]").tap();
   await p.waitForTimeout(6000);
   const sv = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, pad: document.getElementById("trialPad").offsetParent !== null }));
-  step("11 サバイバルが主人公1人で始まる（仲間 0/4・スティック）", sv, /サバイバル/.test(sv.info) && /試・弓聖/.test(sv.info) && /仲間 [01]\/4/.test(sv.info) && sv.units && sv.pad);
+  step("11 サバイバルが主人公1人・第1面で始まる（仲間 0/4・スティック）", sv, /第1面/.test(sv.info) && /試・弓聖/.test(sv.info) && /仲間 [01]\/4/.test(sv.info) && sv.units && sv.pad);
   const pad2 = await p.locator("#trialPad").boundingBox();
   const knob2 = await p.evaluate(
     async ([cx, cy]) => {
@@ -152,7 +152,7 @@ try {
   await p.locator("#trialRetreat").tap();
   await p.waitForTimeout(800);
   const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 600) }));
-  step("13 サバイバル：撤退すると結果の画面（主人公に👑）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑"));
+  step("13 サバイバル：撤退すると結果の画面（主人公に👑・到達した面）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑") && /到達 第1面/.test(svr.text));
   // v108.5 経験値コイン：拾った枚数と経験値が結果の画面に出る（レベルアップしていれば、コインを拾って経験値が入っている）
   const coin = (svr.text.match(/経験値コイン：(\d+)枚・EXP (\d+)/) || []).slice(1).map(Number);
   step("13a サバイバル：経験値コインを拾って経験値が入る（結果：" + (coin[0] ?? "?") + "枚・EXP " + (coin[1] ?? "?") + "）", coin, coin.length === 2 && coin[0] > 0 && coin[1] >= 4);
