@@ -1975,6 +1975,68 @@
         font-size: 13px;
         color: #cfe3e8;
       }
+      /* v108.6 HP が3割を切った兵士の札は赤く点滅 */
+      .trial-units-bar button.danger {
+        border-color: #ff3b2f;
+        animation: trialDanger 0.8s ease-in-out infinite alternate;
+      }
+      @keyframes trialDanger {
+        to {
+          background: #6a1a14;
+        }
+      }
+      /* v108.6 効果音の音量（撤退の右・小さく） */
+      .trial-bottom {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+      .trial-bottom .retreat {
+        margin: 0;
+      }
+      .trial-sound {
+        min-height: 48px;
+        min-width: 92px;
+        padding: 4px 8px;
+        font-size: 15px;
+        white-space: nowrap;
+      }
+      /* v108.6 レベルアップのカード：順に出る → 出そろうと光って押せる → 選ぶと光る */
+      .trial-levelup-card button {
+        animation: trialCardIn 0.22s ease-out both;
+      }
+      .trial-levelup-card.arming button {
+        opacity: 0.92;
+      }
+      .trial-levelup-card.ready button:not(:disabled) {
+        box-shadow: 0 0 0 2px #ffe27a88 inset, 0 0 12px #ffe27a55;
+        animation: trialCardIn 0.22s ease-out both, trialCardGlow 1.2s ease-in-out 0.2s infinite alternate;
+      }
+      .trial-levelup-card button:active {
+        transform: scale(0.97);
+        filter: brightness(1.3);
+      }
+      @keyframes trialCardIn {
+        from {
+          opacity: 0;
+          transform: translateY(18px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes trialCardGlow {
+        to {
+          box-shadow: 0 0 0 2px #ffe27a inset, 0 0 18px #ffe27a99;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .trial-levelup-card button,
+        .trial-levelup-card.ready button:not(:disabled) {
+          animation: none;
+        }
+      }
       .trial-levelup-card button.recruit {
         border-color: #ffe27a;
         background: #5a4a1e;
@@ -2835,7 +2897,7 @@
             </div>
           </div>
         </div>
-        <button id="trialRetreat" class="retreat">↩ 撤退</button>
+        <div class="trial-bottom"><button id="trialRetreat" class="retreat">↩ 撤退</button><button id="trialSound" type="button" class="trial-sound">🔉 中</button></div>
         <!-- v108.2 サバイバルのレベルアップ：選ぶまで戦闘は止まる -->
         <div id="trialLevelUp" class="trial-levelup" hidden></div>
       </section>
@@ -2943,7 +3005,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.5試作（戦場試練：サバイバルの経験値コイン）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.6試作（戦場試練：効果音とレベルアップの演出）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23122,7 +23184,8 @@ OFF</button>
               maps: TRIAL_MAPS,
               start: (ids, opts) => startTrial(ids, "sanpou", opts),
               survival: TRIAL_SURVIVAL,
-              choose: (i) => trialChoose(i),
+              choose: (i) => trialChoose(i, true),
+              sfx: { stats: () => JSON.parse(JSON.stringify(trialSfxStats)), unlock: () => trialAudioUnlock(), level: (v) => (v === undefined ? trialSfxLevel : trialSfxSetLevel(v)), play: (k, o) => trialSfx(k, o), voices: () => trialVoices.length, reset: () => ((trialSfxLast = {}), (trialSfxStats.played = {}), (trialSfxStats.skipped = 0)) },
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
