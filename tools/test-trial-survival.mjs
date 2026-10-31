@@ -213,6 +213,9 @@ try {
           const d = Math.hypot(c.x - h.x, c.y - h.y) || 1;
           T.stick((c.x - h.x) / d, (c.y - h.y) / d);
         } else T.stick(0, 0);
+        // この試験は「大将を倒すと勝利になる流れ」を見る（難易度は test-trial-coins とシミュレーションで見る）。
+        // 職業技の確率しだいで主人公が倒れて結果が揺れないよう、主人公の HP は3割より下げない
+        if (h.hp < h.max * 0.3) h.hp = h.max * 0.3;
       }
       const s0 = T.live().spawned;
       WD_DEBUG.step(0.1);
