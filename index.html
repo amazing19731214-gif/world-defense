@@ -17703,7 +17703,7 @@ const TRIAL_RULES = {
 const TRIAL_SURVIVAL = {
   duration: 180, // 1回の戦闘の目安（秒）。残り時間はここまで数える
   bossAt: 150, // 強敵が出る時刻（残り30秒）。強敵を倒せば勝ち
-  timeLimit: 300, // 強敵を倒せないまま、ここまで来たら時間切れ（敗北）
+  timeLimit: 360, // 強敵を倒せないまま、ここまで来たら時間切れ（敗北）。v108.8：300→360
   start: { x: 1150, y: 600 }, // 出撃の位置（川の東・中央の道）
   slots: [[-48, -44], [-48, 44], [48, -44], [48, 44]], // 仲間の持ち場（主人公からのずれ）
   follow: 230, // 仲間は、持ち場からこの距離までの敵を狙う
@@ -18069,9 +18069,10 @@ function startSurvival(list, units, M, D, stageId, heroId) {
 // ===== v108.7 無限の面：大将を倒すと宝箱 → 次の面へ。全滅（主人公が倒れる）まで続く =====
 //   面ごとに敵が少しずつ強くなる（体力・攻撃・種類）。5面ごとに「鬼大将」。敵の数の上限（36体）は変えない
 const TRIAL_STAGES = {
-  // v108.8 攻撃スキルで強くなる分に合わせて、面ごとに掛け算で強くする（第1面が1倍。第5面で体力 ×2.4・攻撃 ×1.6）
-  hpStep: 0.25, // 面ごとに敵の体力 ×1.25
-  atkStep: 0.12, // 面ごとに敵の攻撃 ×1.12
+  // v108.8 攻撃スキルで強くなる分に合わせて、面ごとに掛け算で強くする（第1面が1倍。第5面で体力 ×2.9・攻撃 ×1.7、第10面で体力 ×10.6・攻撃 ×3.5）
+  hpStep: 0.3, // 面ごとに敵の体力 ×1.3
+  atkStep: 0.15, // 面ごとに敵の攻撃 ×1.15
+  bossExp: 0.8, // 大将の体力の伸びは、ふつうの敵より少しゆるく（第10面で ×6.6。時間切れで終わりにくく）
   poolShift: 20, // 面ごとに、強い種類の敵が20秒ずつ早く混ざる（最大90秒）
   greatEvery: 5, // この面ごとに鬼大将
   great: { hp: 2.6, atk: 1.35, r: 1.3, name: "鬼大将" },
@@ -19229,7 +19230,7 @@ function trialSurvivalTick(T, dt) {
     great = T.floor % G.greatEvery === 0,
     sh = Math.pow(1 + G.hpStep, T.floor - 1), // 面が進むほど強い（掛け算）
     sa = Math.pow(1 + G.atkStep, T.floor - 1),
-    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: (boss ? S.bossHp * (great ? G.great.hp : 1) : S.hp * (1 + S.hpGrow * f)) * sh, atkMul: (boss ? S.bossAtk * (great ? G.great.atk : 1) : S.atk) * (1 + S.atkGrow * f) * sa, speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
+    spec = (kind, at, boss) => ({ kind, at, role: boss ? "boss" : null, hpMul: boss ? S.bossHp * (great ? G.great.hp : 1) * Math.pow(1 + G.hpStep, (T.floor - 1) * G.bossExp) : S.hp * (1 + S.hpGrow * f) * sh, atkMul: (boss ? S.bossAtk * (great ? G.great.atk : 1) : S.atk) * (1 + S.atkGrow * f) * sa, speedMul: S.enemySpeed * (boss ? 1.2 : 1) });
   const add = (q) => {
     const e = trialEnemy(q, T, T.spawned);
     e.surv = true;

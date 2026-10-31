@@ -166,7 +166,13 @@ try {
   });
   check(r.moved > 150 && r.stopped < 2, "主人公はスティックで動き、指を離すと止まる", r);
   // 3. 戦う：敵は画面の外から出る。主人公が止まっていても自動で攻撃し、戦闘が続く。地形に埋まらない
-  r = await runWatch(p, 60);
+  // v108.8：手裏剣などの攻撃スキルは遠くの敵も倒すので、主人公は近くに敵がいないとき、落ちたコインの方へ歩く（コインを拾うのも遊び方）
+  r = await runWatch(
+    p,
+    60,
+    "const h = L.units.find((u) => u.id === L.hero), near = L.enemies.some((e) => !e.gone && Math.hypot(e.x - h.x, e.y - h.y) < 140), c = L.coins.slice().sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0]; if (!near && c) { const d = Math.hypot(c.x - h.x, c.y - h.y) || 1; WD_DEBUG.trial.stick((c.x - h.x) / d, (c.y - h.y) / d); } else WD_DEBUG.trial.stick(0, 0);",
+  );
+  await p.evaluate(() => WD_DEBUG.trial.stick(0, 0));
   const s60 = await p.evaluate(() => WD_DEBUG.trial.state());
   check(r.spawns >= 10 && r.inView.length === 0, "敵は主人公の画面の外から出てくる（目の前に急に出ない）（" + r.spawns + "体）", r.inView.slice(0, 3));
   const hero60 = s60.units.find((u) => u.id === 3);
@@ -292,7 +298,18 @@ try {
     document.getElementById("trialSheet").hidden = true;
     T.start([1, 2, 3, 4], { mode: "survival", hero: 1 });
     L = T.live();
-    for (let i = 0; i < 900 && !L.units.some((u) => u.id === 3); i++) WD_DEBUG.step(0.1);
+    // v108.8：攻撃スキルで遠くの敵も倒すので、近くに敵がいないときは落ちたコインの方へ歩く（仲間を呼ぶため）
+    for (let i = 0; i < 1500 && !L.units.some((u) => u.id === 3); i++) {
+      const h = L.units[0],
+        near = L.enemies.some((e) => !e.gone && Math.hypot(e.x - h.x, e.y - h.y) < 140),
+        c = L.coins.slice().sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0];
+      if (!near && c) {
+        const d = Math.hypot(c.x - h.x, c.y - h.y) || 1;
+        T.stick((c.x - h.x) / d, (c.y - h.y) / d);
+      } else T.stick(0, 0);
+      WD_DEBUG.step(0.1);
+    }
+    T.stick(0, 0);
     const mate = L.units.find((u) => u.id === 3);
     for (let i = 0; i < 100; i++) WD_DEBUG.step(0.1);
     // 仲間（弓聖）が倒れる：続く
