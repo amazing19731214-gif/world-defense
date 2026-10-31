@@ -99,9 +99,40 @@ try {
   await p.waitForTimeout(800);
   const result = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, rows: document.querySelectorAll(".trial-unit").length, text: document.querySelector(".trial-result")?.textContent }));
   step("9 撤退すると結果の画面", result, result.open && result.rows === 5);
+  // v108.1 サバイバル：もう一度 → 「🔥 サバイバル」→ 主人公（試・弓聖）→ 開始 → スティック → 撤退
+  await p.locator("[data-trial-again]").tap();
+  await p.locator('[data-trial-mode="survival"]').tap();
+  await p.locator("[data-trial-hero]", { hasText: "試・弓聖" }).tap();
+  const heroBtn = await p.evaluate(() => [...document.querySelectorAll("[data-trial-hero]")].map((b) => [b.textContent, b.getAttribute("aria-pressed")]));
+  step("10 サバイバル：選んだ5人から主人公（試・弓聖）を選べる", heroBtn, heroBtn.length === 5 && heroBtn.some(([t, a]) => t.includes("試・弓聖") && a === "true"));
+  await p.locator("[data-trial-go]").tap();
+  await p.waitForTimeout(6000);
+  const sv = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, units: document.getElementById("trialUnits").hidden, pad: document.getElementById("trialPad").offsetParent !== null }));
+  step("11 サバイバルが始まり、主人公のHP・残り時間・撃破・仲間が出る", sv, /サバイバル/.test(sv.info) && /試・弓聖/.test(sv.info) && /HP/.test(sv.info) && /残り/.test(sv.info) && /撃破/.test(sv.info) && /仲間/.test(sv.info) && sv.units && sv.pad);
+  const pad2 = await p.locator("#trialPad").boundingBox();
+  const knob2 = await p.evaluate(
+    async ([cx, cy]) => {
+      const pad = document.getElementById("trialPad"),
+        ev = (type, x, y) => pad.dispatchEvent(new PointerEvent(type, { pointerId: 8, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      ev("pointerdown", cx, cy);
+      for (let i = 1; i <= 5; i++) ev("pointermove", cx + i * 10, cy - i * 6);
+      await new Promise((r) => setTimeout(r, 1500));
+      const t = getComputedStyle(pad.querySelector(".trial-knob")).transform;
+      ev("pointerup", cx + 50, cy - 30);
+      return t;
+    },
+    [pad2.x + pad2.width / 2, pad2.y + pad2.height / 2],
+  );
+  step("12 サバイバル：主人公をスティックで動かせる", knob2, knob2 !== "none");
+  await p.waitForTimeout(4000);
+  const kills = await p.evaluate(() => document.getElementById("trialInfo").textContent);
+  await p.locator("#trialRetreat").tap();
+  await p.waitForTimeout(800);
+  const svr = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent.slice(0, 120) }));
+  step("13 サバイバル：撤退すると結果の画面（主人公に👑）", { svr, kills }, svr.open && svr.title.includes("サバイバル") && svr.text.includes("撤退") && svr.text.includes("👑"));
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-  step("10 横にはみ出さない", overflow, overflow <= 0);
-  step("11 JavaScript のエラーなし", errors, errors.length === 0);
+  step("14 横にはみ出さない", overflow, overflow <= 0);
+  step("15 JavaScript のエラーなし", errors, errors.length === 0);
 } catch (e) {
   step("例外", String(e && e.message), false);
 }
