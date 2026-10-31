@@ -327,19 +327,24 @@ try {
     });
   await p.evaluate(() => WD_DEBUG.combat.ougi.setHeir(1, { book: 1 }));
   r = await startRun();
-  const used = await p.evaluate(() => ({ use: WD_DEBUG.combat.ougi.use(), again: WD_DEBUG.combat.ougi.use(), run: WD_DEBUG.combat.ougi.save().run }));
-  check(r.heirId === 1 && used.use && !used.again && used.run && used.run.used, "奥義は1回の挑戦で全軍1回。使った記録を保存する", used);
+  const runA = await p.evaluate(() => WD_DEBUG.combat.ougi.run());
+  const used = await p.evaluate(() => ({ use: WD_DEBUG.combat.ougi.use(), again: WD_DEBUG.combat.ougi.use(), err: WD_DEBUG.combat.ougi.error(), run: WD_DEBUG.combat.ougi.save().run }));
+  check(r.heirId === 1 && r.used === false && used.use && !used.again && used.err.includes("もう使いました"), "新しい挑戦では1回使える。同じ挑戦では2回発動できない", used);
+  check(used.run && used.run.id === runA && used.run.used && /^ougi-run:/.test(runA), "使用記録は挑戦IDといっしょに保存する", used.run);
+  r = await p.evaluate((id) => ({ same: WD_DEBUG.combat.ougi.runStart(id).used, other: WD_DEBUG.combat.ougi.runStart("ougi-run:other").used }), runA);
+  check(r.same === true && r.other === false, "同じ挑戦IDなら使用済みを戻せる（将来の途中再開の用意）。別の挑戦IDなら戻さない", r);
   await reload(p);
   r = await startRun();
+  const runB = await p.evaluate(() => WD_DEBUG.combat.ougi.run());
   const why = await p.evaluate(() => ({ err: WD_DEBUG.combat.ougi.error(), use: WD_DEBUG.combat.ougi.use() }));
-  check(r.used && r.carried && !why.use && why.err.includes("途中で閉じた"), "挑戦の途中で再読み込みしても、使用回数は復活しない", { r, why });
+  check(runB !== runA && r.used === false && why.err === null && why.use, "再読み込みのあと、新しく始めた挑戦は不当に使用済みにならない（新しい挑戦ID・1回使える）", { runA, runB, r, why });
   r = await p.evaluate(() => {
+    const again = WD_DEBUG.combat.ougi.use();
     WD_DEBUG.trainingApi.endTraining("retreat");
-    const run = WD_DEBUG.combat.ougi.save().run;
-    return { run };
+    return { again, run: WD_DEBUG.combat.ougi.save().run };
   });
   const next = await startRun();
-  check(r.run === null && next.used === false, "挑戦が終わると、次の挑戦でまた1回使える", { r, next });
+  check(!r.again && r.run.id === runB && r.run.used && r.run.ended && next.used === false, "挑戦が終わると使用記録を確定し、次の挑戦（新しいID）でまた1回使える", { r, next });
   // 戦死しても使用回数は戻らない
   r = await p.evaluate(() => {
     const K = WD_DEBUG.combat.ougi,
@@ -382,6 +387,100 @@ try {
   await reload(p);
   r = await p.evaluate(() => ({ known: Object.keys(WD_DEBUG.combat.ougi.save().known), heir: WD_DEBUG.combat.ougi.heir() }));
   check(r.known.join() === "soldier:life2" && r.heir === null, "再読み込みしても戦死・復活の結果は変わらない（データが矛盾しない）", r);
+  await c.close();
+
+  // 10. 閃きの確率：0.1%から、続けて外れた10回ごとに +0.1ポイント、最大2%。閃いたら外れた回数を0に。3つ覚えたら引かない
+  ({ c, p } = await open());
+  r = await p.evaluate(() => {
+    const K = WD_DEBUG.combat.ougi;
+    return [0, 9, 10, 19, 20, 29, 50, 59, 100, 109, 189, 190, 500, 1e6].map((f) => Math.round(K.rateFor(f) * 1e4) / 1e4);
+  });
+  check(r.join() === "0.001,0.001,0.002,0.002,0.003,0.003,0.006,0.006,0.011,0.011,0.019,0.02,0.02,0.02", "確率：外れ0〜9回 0.1%・10〜19回 0.2%・20回台 0.3%・50回台 0.6%・100回台 1.1%・190回以上 2%（2%を超えない）", r);
+  r = await p.evaluate(() => {
+    const K = WD_DEBUG.combat.ougi,
+      life = "soldier:life2",
+      fails = () => K.save().fails[life] || 0;
+    WD_DEBUG.trainingApi.startTraining("beginner");
+    K.setRoll(() => 0.0015); // 0.1%では外れ、0.2%なら当たる値
+    const out = [];
+    for (let i = 0; i < 10; i++) out.push(K.roll(2));
+    const f10 = fails(),
+      rate10 = K.rate(2);
+    const hit = K.roll(2); // 外れ10回 → 0.2% なので当たる
+    const after = { fails: fails(), rate: K.rate(2), known: K.known(2) };
+    K.setRoll(() => 0);
+    K.roll(2);
+    K.roll(2);
+    const all = K.known(2).length,
+      rolls = K.save().rolls[life];
+    const none = K.roll(2),
+      rolls2 = K.save().rolls[life];
+    K.setRoll(null);
+    return { misses: out.every((v) => v === null), f10, rate10, hit, after, all, none, rolls, rolls2, eligible: K.eligible(2) };
+  });
+  check(r.misses && r.f10 === 10 && r.rate10 === 0.002, "外れるたびに外れた回数を数え、10回で確率が0.2%に上がる", r);
+  check(r.hit && r.after.fails === 0 && r.after.rate === 0.001 && r.after.known.length === 1, "閃くと外れた回数を0に戻し、確率も0.1%に戻る", r.after);
+  check(r.all === 3 && r.none === null && r.rolls === r.rolls2 && r.eligible === false, "3つすべて覚えたら、もう抽選しない（回数も増えない）", r);
+  await reload(p);
+  r = await p.evaluate(() => ({ fails: WD_DEBUG.combat.ougi.save().fails, rolls: WD_DEBUG.combat.ougi.save().rolls["soldier:life2"] }));
+  check(r.rolls === 13 && !r.fails["soldier:life2"], "抽選の回数と外れた回数は保存され、再読み込みでやり直せない", r);
+  await c.close();
+
+  // 11. 奥義書の倉庫：500冊まで。満杯なら引退を止める。処分は確認つき・継承中は処分できない・ほかの保存データは変わらない
+  const full = {
+    version: 1,
+    seq: 500,
+    books: Array.from({ length: 500 }, (_, i) => ({ uid: i + 1, k: ["happouTenshou", "mumyouIssen", "tenkenRanbu"][i % 3], from: "剣聖" + (i + 1), job: "sword_saint", level: 150 + i, at: 1 })),
+    known: { "soldier:life1": { list: [{ k: "happouTenshou", at: 1 }] } },
+    rolls: {},
+    fails: {},
+    heir: { sid: 2, k: "happouTenshou", book: 1 },
+    run: null,
+  };
+  ({ c, p } = await open({ ougi: full }));
+  const lbFull = await legendBookCount(p);
+  const before = { s: await raw(p, SOLD), w: await raw(p, WAR) };
+  r = await p.evaluate(() => {
+    const K = WD_DEBUG.combat.ougi;
+    return { n: K.save().books.length, heir: K.heir(), err: K.retire(1, 0), alive: WD_DEBUG.state().soldiers.some((x) => x.id === 1 && x.alive), n2: K.save().books.length };
+  });
+  check(r.n === 500 && r.heir.valid, "奥義書を500冊まで保存できる", r);
+  check(typeof r.err === "string" && r.err.includes("いっぱい") && r.alive && r.n2 === 500, "倉庫が満杯のときは引退を止める（兵士はそのまま）", r);
+  check((await raw(p, SOLD)) === before.s && (await raw(p, WAR)) === before.w && (await legendBookCount(p)) === lbFull, "止めた引退は、兵士・伝承の秘伝書の保存データを変えない");
+  await p.evaluate(() => document.getElementById("soldiers").click());
+  await p.evaluate(() => document.querySelector('#soldierList [data-retire="1"]').click());
+  await p.evaluate(() => document.querySelector('[data-retire-pick="0"]').click());
+  r = await p.evaluate(() => ({ warn: document.getElementById("retireBody").textContent.includes("倉庫がいっぱい"), go: !!document.querySelector("[data-retire-go]"), open: !!document.querySelector("[data-retire-ougi-open]") }));
+  check(r.warn && !r.go && r.open, "引退の画面で、引退の前に倉庫が満杯と表示し、引退させるボタンを出さない（整理の画面へ）", r);
+  await p.evaluate(() => document.querySelector("[data-retire-ougi-open]").click());
+  r = await p.evaluate(() => {
+    const t0 = performance.now();
+    const body = document.getElementById("ougiBody");
+    return {
+      open: !document.getElementById("ougiSheet").hidden,
+      cards: body.querySelectorAll(".ougi-card").length,
+      del: body.querySelectorAll("[data-ougi-del]").length,
+      activeNote: body.textContent.includes("継承中の奥義書は処分できません"),
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      wide: [...body.querySelectorAll(".ougi-card")].slice(0, 5).some((el) => el.getBoundingClientRect().right > innerWidth + 1),
+    };
+  });
+  check(r.open && r.cards === 500 && r.del === 499 && r.activeNote, "整理の画面：500冊の一覧。継承中の1冊は処分できない", r);
+  check(r.overflow <= 0 && !r.wide, "iPhone縦（375px）で整理の画面がはみ出さない", r);
+  r = await p.evaluate(() => ({ active: WD_DEBUG.combat.ougi.deleteBook(1), n: WD_DEBUG.combat.ougi.save().books.length }));
+  check(typeof r.active === "string" && r.active.includes("継承中") && r.n === 500, "継承中の奥義書は、継承をやめるまで処分できない", r);
+  await p.evaluate(() => document.querySelector('#ougiBody [data-ougi-del="2"]').click());
+  r = await p.evaluate(() => ({ confirm: !!document.querySelector('#ougiBody [data-ougi-del-go="2"]'), n: WD_DEBUG.combat.ougi.save().books.length }));
+  await p.evaluate(() => document.querySelector("#ougiBody [data-ougi-del-cancel]").click());
+  const kept = await p.evaluate(() => WD_DEBUG.combat.ougi.save().books.length);
+  check(r.confirm && r.n === 500 && kept === 500, "処分は確認つき（「処分…」→「処分する」。やめれば何も消えない）", { r, kept });
+  await p.evaluate(() => document.querySelector('#ougiBody [data-ougi-del="2"]').click());
+  await p.evaluate(() => document.querySelector('#ougiBody [data-ougi-del-go="2"]').click());
+  r = await p.evaluate(() => ({ n: WD_DEBUG.combat.ougi.save().books.length, gone: !WD_DEBUG.combat.ougi.save().books.some((b) => b.uid === 2), heir: WD_DEBUG.combat.ougi.heir() }));
+  check(r.n === 499 && r.gone && r.heir.valid, "確認すると1冊処分する（継承中の書・継承者はそのまま）", r);
+  check((await raw(p, SOLD)) === before.s && (await raw(p, WAR)) === before.w, "奥義書の処分で、兵士・伝承の秘伝書の保存データは変わらない");
+  r = await p.evaluate(() => ({ err: WD_DEBUG.combat.ougi.retire(1, 0), n: WD_DEBUG.combat.ougi.save().books.length }));
+  check(r.err === null && r.n === 500 && (await legendBookCount(p)) === lbFull + 1, "空きができると引退でき、奥義書がまた500冊になる", r);
   await c.close();
 
   // 9. 旧版に戻したとき：旧版は奥義のキーを読まない。旧版で継承者が戦死・引退していたら、次に開いたときに直す
