@@ -277,9 +277,12 @@ try {
       const a = document.getElementById("trialPad").getBoundingClientRect(),
         b = document.getElementById("trialOugiBtn").getBoundingClientRect(),
         overlap = !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
-      return { overlap, pad: [Math.round(a.left), Math.round(a.right)], btn: [Math.round(b.left), Math.round(b.right), Math.round(b.height)], w: innerWidth, overflow: document.documentElement.scrollWidth - innerWidth };
+      const g = document.querySelector("#gameView canvas").getBoundingClientRect();
+      return { overlap, pad: [Math.round(a.left), Math.round(a.right)], btn: [Math.round(b.left), Math.round(b.right), Math.round(b.height)], w: innerWidth, overflow: document.documentElement.scrollWidth - innerWidth, game: [Math.round(g.width), Math.round(g.height)] };
     });
-    check(!r.overlap && r.btn[1] <= r.w && r.btn[2] >= 80 && r.pad[0] >= 0 && r.overflow <= 0, "iPhone縦（" + width + "px）：左にスティック、右に奥義のボタン（重ならない・はみ出さない）", r);
+    // v108.9 奥義のボタンは小さく1段（指で押せる44px以上）。そのぶん戦場を縦長に大きく
+    check(!r.overlap && r.btn[1] <= r.w && r.btn[2] >= 44 && r.btn[2] < 80 && r.pad[0] >= 0 && r.overflow <= 0, "iPhone縦（" + width + "px）：左にスティック、右に小さな奥義のボタン（重ならない・はみ出さない）", r);
+    check(r.game[1] > r.game[0] * 1.4, "iPhone縦（" + width + "px）：戦場は縦長で大きい（" + r.game.join("×") + "）", r.game);
     await gather(p, 4);
     await p.evaluate(() => document.getElementById("trialOugiBtn").scrollIntoView({ block: "center" }));
     await p.locator("#trialOugiBtn").tap();
@@ -287,6 +290,17 @@ try {
     check(r && r.hits > 0, "指で奥義のボタンを押すと発動する（" + width + "px）", r);
     await c.close();
   }
+  // v108.9 横向き・パソコンの画面は、今までどおり横長（960×600）
+  ({ c, p } = await open({ width: 1280, height: 800, ougi: ougiSave("happouTenshou") }));
+  r = await p.evaluate(() => {
+    document.getElementById("trialSheet").hidden = true;
+    WD_DEBUG.trial.start([1, 2, 3], { mode: "survival", hero: 1 });
+    WD_DEBUG.heroApi.draw();
+    const C = document.querySelector("#gameView canvas");
+    return { tall: document.body.classList.contains("tall-field"), ratio: Math.round((C.width / C.height) * 100) / 100 };
+  });
+  check(!r.tall && r.ratio === 1.6, "横長の画面（1280×800）では、戦場は今までどおり横長（960×600）", r);
+  await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);
 } finally {

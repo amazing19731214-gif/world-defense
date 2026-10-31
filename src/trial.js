@@ -1349,8 +1349,8 @@ function trialDrawCoins(T, V) {
   if (!T.coins || !T.coins.length) return;
   const x0 = V.ox - 20,
     y0 = V.oy - 20,
-    x1 = V.ox + W / V.z + 20,
-    y1 = V.oy + H / V.z + 20;
+    x1 = V.ox + logicalW() / V.z + 20,
+    y1 = V.oy + logicalH() / V.z + 20;
   ctx.save();
   for (const c of T.coins) {
     if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue;
@@ -1541,7 +1541,7 @@ function trialSpawnPoint(T, hero) {
   const S = TRIAL_SURVIVAL,
     M = T.map,
     Z = M.size,
-    vw = W / TRIAL_RULES.camZoom,
+    vw = W / TRIAL_RULES.camZoom, // 敵の出る位置は、画面の向き（縦長・横長）によらず 960×600 で決める（遊びが端末で変わらない）
     vh = H / TRIAL_RULES.camZoom,
     ox = Math.max(0, Math.min(Z.w - vw, hero.x - vw / 2)), // カメラと同じく、見える範囲は戦場の中に収まる
     oy = Math.max(0, Math.min(Z.h - vh, hero.y - 20 - vh / 2)),
@@ -2515,7 +2515,7 @@ function trialBackground(M) {
 //   見える範囲はいつも戦場の中に収める。cam = { x, y, z }（見ている所の中心と拡大）
 function trialCamGoal(T) {
   const Z = T.map.size,
-    fit = Math.max(W / Z.w, H / Z.h),
+    fit = Math.max(logicalW() / Z.w, logicalH() / Z.h),
     u = T.control != null ? T.units.find((v) => v.id === T.control && !v.dead) : null;
   if (T.phase === "deploy") {
     const D = T.map.deploy;
@@ -2543,8 +2543,8 @@ function trialView() {
   if (!T.view) trialCamStep(T, true);
   const Z = T.map.size,
     v = T.view,
-    vw = W / v.z,
-    vh = H / v.z,
+    vw = logicalW() / v.z, // v108.9 スマホの縦向きでは画面が縦長（600×960）
+    vh = logicalH() / v.z,
     ox = Math.max(0, Math.min(Z.w - vw, v.x - vw / 2)),
     oy = Math.max(0, Math.min(Z.h - vh, v.y - vh / 2)),
     u = T.control != null ? T.units.find((x) => x.id === T.control && !x.dead) : null;
@@ -2564,10 +2564,10 @@ function drawTrial() {
   const V = trialView(),
     bg = trialBackground(T.map),
     k = bg.k;
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, logicalW(), logicalH());
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctxRaw.drawImage(bg, V.ox * k, V.oy * k, (W / V.z) * k, (H / V.z) * k, 0, 0, C.width, C.height);
+  ctxRaw.drawImage(bg, V.ox * k, V.oy * k, (logicalW() / V.z) * k, (logicalH() / V.z) * k, 0, 0, C.width, C.height);
   ctx.restore();
   ctx.save();
   ctx.setTransform(RS * V.z, 0, 0, RS * V.z, -V.ox * RS * V.z, -V.oy * RS * V.z);
@@ -2660,8 +2660,13 @@ function drawTrial() {
         T.mode === "survival"
           ? "第" + T.floor + "面　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
           : "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中");
-    ctx.font = "bold " + (T.mode === "survival" ? 25 : 22) + "px system-ui";
-    const w = ctx.measureText(text).width + 24;
+    // v108.9 縦長の画面（幅600）では、右上の全体図に重ならないよう文字を小さくして収める
+    let fs = T.mode === "survival" ? 25 : 22;
+    ctx.font = "bold " + fs + "px system-ui";
+    const room = SW - 184,
+      tw = ctx.measureText(text).width + 24;
+    if (tw > room) (fs = Math.max(14, Math.floor((fs * room) / tw))), (ctx.font = "bold " + fs + "px system-ui");
+    const w = Math.min(room, ctx.measureText(text).width + 24);
     ctx.fillStyle = "#1a120ccc";
     ctx.fillRect(Math.max(4, (SW - 170) / 2 - w / 2), 6, w, 32);
     ctx.fillStyle = "#ffe9b0";
@@ -2788,7 +2793,7 @@ function trialMiniMap(T, V, SW) {
     }
   ctx.strokeStyle = "#ffffffcc";
   ctx.lineWidth = 1;
-  ctx.strokeRect(x0 + V.ox * s, y0 + V.oy * s, (W / V.z) * s, (H / V.z) * s);
+  ctx.strokeRect(x0 + V.ox * s, y0 + V.oy * s, (logicalW() / V.z) * s, (logicalH() / V.z) * s);
   ctx.restore();
 }
 function trialDrawUnit(u) {

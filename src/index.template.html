@@ -1985,6 +1985,50 @@
           background: #6a1a14;
         }
       }
+      /* v108.9 縦長の画面（スマホの縦向き）：操作パネルを低くして、戦場を大きく出す
+         スティック（左）の右に、奥義（小さく）・撤退・音量を縦に並べる。横向き・パソコンは今までどおり */
+      .tall-field #trialBar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "info info" "actions actions" "units units" "pad auto" "pad action" "pad bottom";
+        column-gap: 10px;
+        row-gap: 0;
+        align-items: center;
+      }
+      .tall-field #trialAction:not([hidden]) ~ *,
+      .tall-field #trialBar .trial-bottom { margin-top: 6px; }
+      .tall-field #trialBar > *,
+      .tall-field .trial-pad-row > *,
+      .tall-field .trial-right > * {
+        grid-column: 1 / -1;
+      }
+      .tall-field #trialInfo { grid-area: info; margin: 0; }
+      .tall-field #trialInfo small { display: none; }
+      .tall-field #trialBar .trial-actions { grid-area: actions; }
+      .tall-field .trial-ctl:not([hidden]),
+      .tall-field .trial-pad-row,
+      .tall-field .trial-right { display: contents; }
+      .tall-field #trialUnits { grid-area: units; margin: 0; }
+      .tall-field #trialPad { grid-area: pad; width: 120px; height: 120px; }
+      .tall-field #trialAutoAll { grid-area: auto; min-height: 44px; }
+      .tall-field #trialAutoAll[hidden],
+      .tall-field #trialAction[hidden] { display: none; }
+      .tall-field #trialAction { grid-area: action; }
+      .tall-field #trialBar .trial-bottom { grid-area: bottom; }
+      .tall-field #trialLevelUp { grid-area: auto; }
+      .tall-field #trialBar .trial-ctl[hidden] ~ .trial-bottom { grid-area: auto; grid-column: 1 / -1; }
+      /* 奥義のボタンは小さく1段（名前だけ。使ったあとは「使用済み」） */
+      .tall-field .trial-action button {
+        min-height: 44px;
+        grid-auto-flow: column;
+        gap: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+      }
+      .tall-field .trial-action button b { font-size: 15px; }
+      .tall-field .trial-action button small { display: none; }
+      .tall-field .trial-action button[disabled] { opacity: 0.55; }
+      .tall-field .trial-sound { min-width: 64px; }
       /* v108.6 効果音の音量（撤退の右・小さく） */
       .trial-bottom {
         display: grid;
@@ -2920,6 +2964,9 @@
       .dock-bar, .skill-dock, .menu-group, .compact-only, .drawer-head { display: none; }
       /* 縦向きの戦場（試作）：入口が上・城が下の縦長 */
       .vertical-field #game { aspect-ratio: 10 / 16; }
+      /* v108.9 戦場試練の縦長の画面：下の操作パネルが見える高さまで、縦長の戦場を大きく出す */
+      .tall-field #game { aspect-ratio: 10 / 16; }
+      .tall-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); margin-left: auto; margin-right: auto; }
       /* 見えている高さから、ヘッダー・ウェーブ操作・部隊の列の分を引いた高さに戦場を収める（幅は縦横比で決まる） */
       .compact-ui.vertical-field #gameView canvas { max-width: calc((var(--app-h) - var(--field-reserve, 230px)) * 0.625); margin-left: auto; margin-right: auto; }
       @media (min-width: 601px) {
@@ -3120,7 +3167,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.8試作（戦場試練：サバイバルの攻撃スキル）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.9試作（戦場試練：スマホ縦向きで戦場を大きく）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3453,14 +3500,17 @@ OFF</button>
         // 描画の解像度（v104.4）：スマホの高精細な画面で拡大されてぼやけないよう、表示の大きさ×画素密度で描く（1〜2倍）。
         // ゲームの座標は変えず、描くときの基準の倍率 RS を掛けるだけ。
         let RS = 1;
-        const logicalW = () => (VERTICAL ? H : W),
-          logicalH = () => (VERTICAL ? W : H);
+        // v108.9 TALL：戦場試練をスマホの縦向きで遊ぶときは、画面を縦長（600×960）にする（地面は回さない。カメラで見る範囲が縦長になるだけ）
+        let TALL = false;
+        const logicalW = () => (VERTICAL || TALL ? H : W),
+          logicalH = () => (VERTICAL || TALL ? W : H);
         function renderScale() {
           const css = C.getBoundingClientRect().width || logicalW();
           return Math.max(1, Math.min(2, ((window.devicePixelRatio || 1) * css) / logicalW()));
         }
         function applyFieldShape() {
           document.body.classList.toggle("vertical-field", VERTICAL);
+          document.body.classList.toggle("tall-field", TALL);
           const k = renderScale();
           C.width = Math.round(logicalW() * k);
           C.height = Math.round(logicalH() * k);
@@ -13369,9 +13419,11 @@ OFF</button>
         }
         // 攻める戦いの始まり・終わりで戦場の向きを切り替える（描くたびに確認）
         function syncFieldShape() {
-          const want = fieldPref && !!battle;
-          if (want === VERTICAL) return;
+          const want = fieldPref && !!battle,
+            tall = !!trial && !want && window.innerHeight > window.innerWidth * 1.15; // 戦場試練・縦向きの画面
+          if (want === VERTICAL && tall === TALL) return;
           VERTICAL = want;
+          TALL = tall;
           applyFieldShape();
           scenery = null; // 背景を新しい向きで描き直す
           syncViewport();
@@ -23981,8 +24033,9 @@ OFF</button>
           // 縦向きの戦場：ヘッダー・ウェーブ操作・部隊の列が必ず見えるよう、戦場の高さに使えない分を渡す
           const h = (sel) => Math.ceil(document.querySelector(sel)?.getBoundingClientRect().height || 0);
           // 攻める戦いの間は、戦闘の状況と必殺技の1段目が見えるようにする（撤退ボタンなどはスクロールで）
-          const inBattle = typeof battle !== "undefined" && battle && !$("battleBar").hidden;
-          root.setProperty("--field-reserve", (inBattle ? h("header") + h("#battleInfo") + Math.min(h("#battleSkills"), 80) + 40 : h("header") + h(".play-tools") + h("#dockBar") + 36) + "px");
+          const inBattle = typeof battle !== "undefined" && battle && !$("battleBar").hidden,
+            inTrial = typeof trial !== "undefined" && trial && !$("trialBar").hidden;
+          root.setProperty("--field-reserve", (inTrial ? h("header") + h("#trialBar") + 24 : inBattle ? h("header") + h("#battleInfo") + Math.min(h("#battleSkills"), 80) + 40 : h("header") + h(".play-tools") + h("#dockBar") + 36) + "px");
           const dock = [$("squadPanel"), $("towerPanel")].find((el) => !el.hidden);
           root.setProperty("--dock-h", (dock ? Math.ceil(dock.getBoundingClientRect().height) : 0) + "px");
         }
