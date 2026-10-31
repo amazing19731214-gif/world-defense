@@ -17666,8 +17666,12 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
   if (E && E.common !== before.common)
     for (const [key, at] of Object.entries(E.ready))
       if (at !== before.ready[key]) {
-        const name = key.startsWith("job:") ? JOB_ACTIONS[key.slice(4)].names[Math.max(0, jobActionStage(s))] : INSIGHT_SKILLS[key] ? INSIGHT_SKILLS[key].name : key === "chronicleRescue" ? "緊急救命" : key;
+        const job = key.startsWith("job:"),
+          name = job ? JOB_ACTIONS[key.slice(4)].names[Math.max(0, jobActionStage(s))] : INSIGHT_SKILLS[key] ? INSIGHT_SKILLS[key].name : key === "chronicleRescue" ? "緊急救命" : key;
         u.skills[name] = (u.skills[name] || 0) + 1;
+        // 強い技（上位の職業技・閃き）だけ、兵士の上に技名を出す（ふつうの職業技は光だけ。数の上限つき）
+        if ((!job || jobActionStage(s) >= 1) && effects.length < 60)
+          effects.push({ kind: "ctext", x: u.x, y: u.y - 78, text: (job ? "" : "💡") + name, ougi: false, age: 0, duration: 1.1 });
       }
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
