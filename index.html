@@ -1773,8 +1773,29 @@
       }
       /* 終盤（試作）：伝説の能力・指導員・特殊装備 */
       #retireSheet,
+      #ougiSheet,
       #previewSheet {
         z-index: 13;
+      }
+      /* 伝説の奥義（試作）：奥義書の一覧 */
+      .ougi-card {
+        margin: 6px 0;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #c8921f88;
+        background: linear-gradient(90deg, #c8921f1c, transparent 85%);
+      }
+      .ougi-card p {
+        margin: 2px 0;
+        overflow-wrap: anywhere;
+      }
+      .ougi-card button {
+        min-height: 40px;
+        margin-top: 4px;
+      }
+      .ougi-heir-tag {
+        color: #ffd36a;
+        font-weight: bold;
       }
       .legend-box {
         margin: 4px 0;
@@ -2658,7 +2679,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v106.1試作（修練場で新しい戦い・伝説の奥義）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v106.2試作（修練場で新しい戦い・伝説の奥義と奥義書）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -2859,6 +2880,15 @@ OFF</button>
           ><button id="retireClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="retireBody"></div>
+      </div>
+    </div>
+    <div id="ougiSheet" class="sheet-back" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ougiTitle">
+        <div class="panel-head hg-head">
+          <strong id="ougiTitle">⚔ 伝説の奥義（試作）</strong
+          ><button id="ougiClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
+        </div>
+        <div id="ougiBody"></div>
       </div>
     </div>
     <div id="previewSheet" class="sheet-back" hidden>
@@ -10270,20 +10300,235 @@ function chronicleWarBonusBlock(s) {
           mumyouIssen: { name: "無明一閃", job: "sword_saint", kind: "single", reach: 560, mul: 14, text: "強敵1体へ強烈な一閃（大将・中ボス・体力の多い敵を狙う）" },
           tenkenRanbu: { name: "天剣乱舞", job: "sword_saint", kind: "flurry", radius: 300, hits: 6, gap: 0.2, perHit: 10, mul: 0.9, text: "周りの広い範囲へ6回の連続斬撃" },
         };
-        let protoHeirPick = null, // 修練場を始める前に選ぶ試作の継承者（兵士ID。保存しない）
-          protoOugiPick = "happouTenshou",
-          ougiFlurry = null; // 天剣乱舞の残りの斬撃（戦闘を止めずに、時間をずらして当てる）
-        const ougiHeirOk = (s) => !!(s && s.alive && LEGEND_OUGI[protoOugiPick] && jobOf(s) === LEGEND_OUGI[protoOugiPick].job);
-        const ougiHeirList = () => soldiers.filter((s) => s.alive && Object.values(LEGEND_OUGI).some((O) => jobOf(s) === O.job));
+        let ougiFlurry = null; // 天剣乱舞の残りの斬撃（戦闘を止めずに、時間をずらして当てる）
         const ougiState = () => (protoCombatOn() && training.ougi) || null;
+        // ===== 奥義書・奥義継承者・奥義の閃き（v106.2試作） =====
+        // 保存先は専用のキー worldDefense.ougi.v1（伝承の秘伝書・兵士の保存データ・書き込みの先行ログとは別）。
+        //   旧版はこのキーを読み書きしないので、旧版に戻して遊んでも奥義書は消えない。旧版での戦死・引退は、次にこの版で開いたときに
+        //   兵士の保存データと突き合わせて直す（reconcileOugi）。
+        //   known：奥義の知識。兵士の一生（戦歴の life。復活の書で戻っても同じ）ごと。戦死しても英霊名鑑にいる間は残す（復活で戻る）
+        //   rolls：奥義の閃きを引いた回数（一生ごと）。結果は兵士の閃きの種と回数で決まるので、再読み込みしても変わらない
+        //   heir：奥義継承者（全軍で1人）。book があれば奥義書を継承、なければ自分で閃いた奥義。有効な奥義書は heir.book の1冊だけ
+        //   run：1回の挑戦で使った記録。挑戦が終わると消す（途中で閉じたときは、次の挑戦も使用済みとして続きにする）
+        //   books：奥義書（消費しない）。pending は引退の途中（兵士の保存が確定したら消す。確定しなければ書を消す）
+        const OUGI_KEY = "worldDefense.ougi.v1";
+        const OUGI_RULES = {
+          level: 150, // 奥義の閃き：剣聖の Lv
+          prof: 10, // 剣聖の熟練度
+          bossKills: 10, // 戦歴「強敵への最後の一撃」の回数
+          rate: 0.0005, // 1回の抽選で閃く確率（0.05%・仮）。抽選は強敵（中ボス・大将）を倒したときと、修練場をクリアしたとき
+          books: 500, // 奥義書の倉庫（伝承の秘伝書の200冊とは別）
+        };
+        let ougiRollOverride = null; // 試験用：閃きの抽選の結果を差し替える
+        const ougiLifeOk = (v) => typeof v === "string" && /^[\w:-]{1,100}$/.test(v);
+        function cleanOugiSave(o) {
+          o = o && typeof o === "object" ? o : {};
+          const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : ""),
+            num = (v) => (Number.isFinite(v) ? v : 0);
+          const books = (Array.isArray(o.books) ? o.books : [])
+            .filter((b) => b && Number.isInteger(b.uid) && b.uid > 0 && LEGEND_OUGI[b.k])
+            .filter((b, i, a) => a.findIndex((x) => x.uid === b.uid) === i)
+            .slice(0, OUGI_RULES.books)
+            .map((b) => {
+              const x = { uid: b.uid, k: b.k, from: str(b.from, 40), job: JOBS[b.job] ? b.job : LEGEND_OUGI[b.k].job, level: Math.max(1, Math.floor(num(b.level)) || 1), at: num(b.at) };
+              if (Number.isInteger(b.pending)) {
+                x.pending = b.pending;
+                if (ougiLifeOk(b.life)) x.life = b.life;
+              }
+              return x;
+            });
+          const known = {};
+          for (const [life, v] of Object.entries(o.known && typeof o.known === "object" ? o.known : {})) {
+            if (!ougiLifeOk(life) || !v || !Array.isArray(v.list)) continue;
+            const list = v.list.filter((x) => x && LEGEND_OUGI[x.k]).filter((x, i, a) => a.findIndex((y) => y.k === x.k) === i).map((x) => ({ k: x.k, at: num(x.at) }));
+            if (list.length) known[life] = { list, name: str(v.name, 40) };
+          }
+          const rolls = {};
+          for (const [life, v] of Object.entries(o.rolls && typeof o.rolls === "object" ? o.rolls : {})) if (ougiLifeOk(life) && Number.isInteger(v) && v > 0) rolls[life] = Math.min(v, 1e9);
+          const h = o.heir,
+            heir = h && Number.isInteger(h.sid) && LEGEND_OUGI[h.k] ? { sid: h.sid, k: h.k, book: Number.isInteger(h.book) ? h.book : null } : null;
+          const run = o.run && o.run.used === true ? { used: true, at: num(o.run.at), by: str(o.run.by, 40) } : null;
+          return { version: 1, seq: Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...books.map((b) => b.uid), 0), books, known, rolls, heir, run };
+        }
+        let ougiSave = (() => {
+          try {
+            return cleanOugiSave(JSON.parse(localStorage.getItem(OUGI_KEY) || "null"));
+          } catch (err) {
+            return cleanOugiSave(null);
+          }
+        })();
+        function persistOugi() {
+          try {
+            localStorage.setItem(OUGI_KEY, JSON.stringify(ougiSave));
+            return true;
+          } catch (err) {
+            return false;
+          }
+        }
+        // 変更して保存する。保存できなければ変更を取り消して false
+        function ougiCommit(change) {
+          const before = JSON.stringify(ougiSave);
+          change(ougiSave);
+          if (persistOugi()) return true;
+          ougiSave = cleanOugiSave(JSON.parse(before));
+          return false;
+        }
+        const ougiLife = (s) => chronicleOf(s).life;
+        const ougiKnownOf = (s) => (s && s.alive && ougiSave.known[ougiLife(s)] ? ougiSave.known[ougiLife(s)].list.map((x) => x.k) : []);
+        const ougiBook = (uid) => ougiSave.books.find((b) => b.uid === uid && b.pending == null) || null;
+        const ougiBooks = () => ougiSave.books.filter((b) => b.pending == null);
+        const ougiForJob = (j) => Object.keys(LEGEND_OUGI).filter((k) => LEGEND_OUGI[k].job === j);
+        // 継承者の兵士と、継承が今も有効か（無効なら理由）
+        function ougiHeirNow() {
+          const h = ougiSave.heir;
+          if (!h) return null;
+          const s = soldiers.find((x) => x.id === h.sid) || null;
+          let why = null;
+          if (!s || !s.alive) why = "奥義継承者が戦死しました。";
+          else if (jobOf(s) !== LEGEND_OUGI[h.k].job) why = "奥義継承者が" + JOBS[LEGEND_OUGI[h.k].job].name + "ではありません。";
+          else if (h.book != null ? !ougiBook(h.book) : !ougiKnownOf(s).includes(h.k)) why = "継承した奥義が見つかりません。";
+          return { h, s, why };
+        }
+        // 継承者を指定できるか。choice は { k }（自分で閃いた奥義）か { book: uid }（奥義書）
+        function ougiHeirError(s, choice) {
+          const busy = legendBusyError();
+          if (busy) return "奥義継承者は戦闘の前（ウェーブの合間）にだけ変えられます。" + busy;
+          if (!s || !s.alive) return "その兵士はいません。";
+          if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから継承できます。";
+          const k = choice && choice.book != null ? ougiBook(choice.book)?.k : choice && choice.k;
+          if (!k || !LEGEND_OUGI[k]) return "その奥義書・奥義はありません。";
+          if (jobOf(s) !== LEGEND_OUGI[k].job) return "この奥義を継承できるのは" + JOBS[LEGEND_OUGI[k].job].name + "だけです。";
+          if (choice.book == null && !ougiKnownOf(s).includes(k)) return "この兵士はその奥義を閃いていません。";
+          return null;
+        }
+        function setOugiHeir(sid, choice) {
+          const s = soldierById(sid),
+            err = ougiHeirError(s, choice || {});
+          if (err) return err;
+          const book = choice.book != null ? choice.book : null,
+            k = book != null ? ougiBook(book).k : choice.k;
+          return ougiCommit((S) => (S.heir = { sid, k, book })) ? null : "保存できなかったため、継承者を変えませんでした。";
+        }
+        function clearOugiHeir() {
+          const busy = legendBusyError();
+          if (busy) return "奥義継承者は戦闘の前（ウェーブの合間）にだけ変えられます。" + busy;
+          return ougiCommit((S) => (S.heir = null)) ? null : "保存できませんでした。";
+        }
+        // 戦死：継承者なら指定を外す（奥義書は倉庫に残る）。英霊名鑑に載らない兵士の知識はここで失われる
+        function ougiOnDeath(s) {
+          const life = ougiLife(s);
+          ougiCommit((S) => {
+            if (S.heir && S.heir.sid === s.id) S.heir = null;
+            if (!s.name) {
+              delete S.known[life];
+              delete S.rolls[life];
+            }
+          });
+        }
+        // 起動したとき：兵士の保存データと突き合わせる（旧版で遊んだ・引退の途中で閉じた・英霊名鑑から外れた など）
+        function reconcileOugi(save) {
+          const live = new Map(save.soldiers.map((v) => [v.id, v])),
+            lifeOfSaved = (v) => (v && v.chronicle && v.chronicle.life) || null,
+            lives = new Set(save.soldiers.map(lifeOfSaved).filter(Boolean)),
+            fallen = new Set(save.fallen.map((f) => (f.snap && f.snap.chronicle && f.snap.chronicle.life) || null).filter(Boolean)),
+            before = JSON.stringify(ougiSave),
+            S = ougiSave;
+          for (const b of S.books.slice()) {
+            if (b.pending == null) continue;
+            if (live.has(b.pending)) S.books = S.books.filter((x) => x !== b); // 引退は保存されていない → 書も無かったことに
+            else {
+              if (b.life) {
+                delete S.known[b.life];
+                delete S.rolls[b.life];
+              }
+              delete b.pending;
+              delete b.life;
+            }
+          }
+          for (const life of Object.keys(S.known)) if (!lives.has(life) && !fallen.has(life)) delete S.known[life];
+          for (const life of Object.keys(S.rolls)) if (!lives.has(life) && !fallen.has(life)) delete S.rolls[life];
+          const h = S.heir,
+            v = h && live.get(h.sid);
+          if (h && (!v || (v.job && JOBS[v.job] ? v.job : v.type) !== LEGEND_OUGI[h.k].job || (h.book != null ? !S.books.some((b) => b.uid === h.book && b.pending == null) : !(S.known[lifeOfSaved(v)] || { list: [] }).list.some((x) => x.k === h.k)))) S.heir = null;
+          if (JSON.stringify(S) !== before) persistOugi();
+        }
+        // 奥義の閃き：剣聖・Lv150・熟練度10・強敵への最後の一撃10回。修練場（試作）の強敵撃破・クリアで1回ずつ抽選
+        const ougiCandidates = (s) => ougiForJob(jobOf(s)).filter((k) => !ougiKnownOf(s).includes(k));
+        function ougiEligible(s) {
+          return !!(s && s.alive && jobOf(s) === "sword_saint" && s.level >= OUGI_RULES.level && profLv(s, "sword_saint") >= OUGI_RULES.prof && (chronicleOf(s).bossKills || 0) >= OUGI_RULES.bossKills && ougiCandidates(s).length);
+        }
+        function ougiInsightRoll(s, why) {
+          if (!protoCombatOn() || !ougiEligible(s) || !savedSoldier(s.id)) return null;
+          const life = ougiLife(s),
+            n = ougiSave.rolls[life] || 0,
+            seed = insightOf(s).seed + ":legend-ougi:" + n,
+            r = ougiRollOverride ? ougiRollOverride(s, n, why) : insightHash(seed) / 4294967296,
+            list = ougiCandidates(s),
+            k = r < OUGI_RULES.rate ? list[insightHash(seed + ":pick") % list.length] : null;
+          // 回数と結果を一緒に保存する（保存できなければ引かなかったことにして、次の機会に同じ番号で引き直す＝結果は同じ）
+          const ok = ougiCommit((S) => {
+            S.rolls[life] = n + 1;
+            if (k) {
+              const e = S.known[life] || (S.known[life] = { list: [], name: "" });
+              e.list.push({ k, at: Date.now() });
+              e.name = soldierName(s);
+            }
+          });
+          if (!ok || !k) return null;
+          const O = LEGEND_OUGI[k];
+          logHistory(s, "⚔ 伝説の奥義「" + O.name + "」を閃いた");
+          combatFx.ougi("閃き！ 奥義・" + O.name, "⚔ " + soldierName(s) + " が伝説の奥義を閃いた");
+          const q = squadById(s.squadId);
+          if (q) evolutionFx({ pos: q }, "⚔", "bulb", [], true);
+          eventNotice("insight", soldierName(s) + "：伝説の奥義「" + O.name + "」");
+          msg("⚔ " + soldierName(s) + " が伝説の奥義「" + O.name + "」を閃いた！（兵士名簿の ⚔ 奥義 から継承者に）");
+          return k;
+        }
+        // 指導員の引退：奥義を閃いた兵士は、選んだ奥義を奥義書として残す（伝承の秘伝書とは別に1冊）
+        //   先に「引退の途中」の書を保存 → 引退（兵士の保存）→ 書を確定。途中で閉じても、起動時に兵士の保存データで決める
+        function ougiRetirePrepare(s, k) {
+          const known = ougiKnownOf(s);
+          if (!known.length) return { book: null };
+          if (!k && known.length === 1) k = known[0];
+          if (!k || !known.includes(k)) return { error: "奥義書として残す奥義を選んでください。" };
+          if (ougiSave.books.length >= OUGI_RULES.books) return { error: "奥義書の倉庫がいっぱいです（" + OUGI_RULES.books + "冊まで）。" };
+          let book = null;
+          const ok = ougiCommit((S) => {
+            book = { uid: ++S.seq, k, from: soldierName(s), job: jobOf(s), level: s.level, at: Date.now(), pending: s.id, life: ougiLife(s) };
+            S.books.push(book);
+          });
+          return ok ? { book } : { error: "保存できなかったため、引退をやめました（奥義書）。" };
+        }
+        function ougiRetireAbort(book) {
+          ougiCommit((S) => (S.books = S.books.filter((b) => b.uid !== book.uid)));
+        }
+        function ougiRetireFinish(book, s) {
+          const life = book.life;
+          ougiCommit((S) => {
+            const b = S.books.find((x) => x.uid === book.uid);
+            if (b) {
+              delete b.pending;
+              delete b.life;
+            }
+            delete S.known[life];
+            delete S.rolls[life];
+            if (S.heir && S.heir.sid === s.id) S.heir = null;
+          });
+        }
+        // 挑戦の始め：継承者は保存した指定から決める（戦闘中は変えられない）。前の挑戦を途中で閉じていたら、その使用記録を引き継ぐ
+        function ougiRunStart() {
+          const H = ougiHeirNow(),
+            ok = H && !H.why;
+          return { key: ok ? H.h.k : null, heirId: ok ? H.s.id : null, book: ok ? H.h.book : null, used: !!ougiSave.run, carried: !!ougiSave.run };
+        }
         // 使えない理由（使えるなら null）。対象の有無は押したときに確かめる（いなければ回数を減らさない）
         function ougiError() {
           const U = ougiState();
           if (!U) return "奥義は修練場の「新しい戦い（試作）」でだけ使えます。";
-          const O = LEGEND_OUGI[U.key];
-          if (U.used) return "この挑戦ではもう使いました（1回の挑戦で全軍1回）。";
+          if (U.used) return U.carried ? "途中で閉じた前回の挑戦で使用済みです（この挑戦が終わるとまた使えます）。" : "この挑戦ではもう使いました（1回の挑戦で全軍1回）。";
           const s = U.heirId != null ? soldiers.find((x) => x.id === U.heirId) : null;
-          if (!s) return "奥義継承者がいません（修練場を始める前に剣聖を指定）。";
+          if (!s) return "奥義継承者がいません（兵士名簿の剣聖の「⚔ 奥義」で指定）。";
+          const O = LEGEND_OUGI[U.key];
           if (!s.alive) return "奥義継承者が戦死しました。";
           if (jobOf(s) !== O.job) return "奥義継承者が" + JOBS[O.job].name + "ではありません。";
           const q = squadById(s.squadId);
@@ -10314,6 +10559,12 @@ function chronicleWarBonusBlock(s) {
           } else target = list.find((e) => dist(e, q) <= O.radius) || null;
           if (!target) {
             const t = "範囲内に敵がいません。奥義の使用回数は減っていません。";
+            msg(t);
+            toast(t);
+            return false;
+          }
+          if (!ougiCommit((S) => (S.run = { used: true, at: Date.now(), by: soldierName(s) }))) {
+            const t = "保存できないため、奥義を使えませんでした（使用回数は減っていません）。";
             msg(t);
             toast(t);
             return false;
@@ -10542,7 +10793,7 @@ function chronicleWarBonusBlock(s) {
             key,
             proto: protoCombatPick, // 新しい戦い（試作）：新しい敵と技・演出（修練場だけ）
             // 伝説の奥義（試作）：継承者・選んだ奥義・この挑戦で使ったか（戦闘中だけ。保存しない）
-            ougi: protoCombatPick ? { key: protoOugiPick, heirId: ougiHeirOk(soldiers.find((x) => x.id === protoHeirPick)) ? protoHeirPick : null, used: false } : null,
+            ougi: protoCombatPick ? ougiRunStart() : null,
             jobDropRunId: newJobDropRunId(),
             D,
             waves,
@@ -10593,6 +10844,11 @@ function chronicleWarBonusBlock(s) {
         function endTraining(result) {
           const T = training;
           if (!T || T.done) return;
+          // 伝説の奥義（試作）：クリアで閃きの抽選（戦った剣聖）。挑戦が終わったので使用の記録を消す（次の挑戦でまた1回）
+          if (T.ougi) {
+            if (result === "clear") for (const s of soldiers) if (s.alive && T.joined.has(s.id)) ougiInsightRoll(s, "clear");
+            if (ougiSave.run) ougiCommit((S) => (S.run = null));
+          }
           T.done = true;
           const lastLv = trainLevel(T, Math.max(1, T.cleared || T.wave));
           // 戦いの途中なら片付ける（敵・足止め・撤退中の部隊・武将の効果）
@@ -10707,23 +10963,16 @@ function chronicleWarBonusBlock(s) {
             TRAINING.diffs[trainPick].name +
             (TRAINING.diffs[trainPick].endless ? "で挑戦する</button>" : "・" + trainingSave.waves + "ウェーブに挑戦する</button>");
         }
-        // 試作の奥義継承者（剣聖）と奥義を選ぶ欄。選んだものは保存しない（ページを開き直すと選び直し）
+        // 修練場の画面：今の奥義継承者（兵士名簿の「⚔ 奥義」で指定。ここでは見るだけ）
         function ougiPickHtml() {
-          const list = ougiHeirList();
-          if (protoHeirPick != null && !list.some((s) => s.id === protoHeirPick)) protoHeirPick = null;
+          const H = ougiHeirNow(),
+            O = H && LEGEND_OUGI[H.h.k];
           return (
-            '<div class="tr-ougi"><b>⚔ 伝説の奥義（試作）</b>' +
-            '<label for="trOugi">奥義</label><select id="trOugi">' +
-            Object.entries(LEGEND_OUGI).map(([k, O]) => '<option value="' + k + '"' + (k === protoOugiPick ? " selected" : "") + ">" + O.name + "（" + JOBS[O.job].name + "）</option>").join("") +
-            "</select>" +
-            '<label for="trHeir">奥義継承者（全軍で1人）</label><select id="trHeir"><option value="">指定しない</option>' +
-            list.map((s) => '<option value="' + s.id + '"' + (s.id === protoHeirPick ? " selected" : "") + ">" + esc(soldierName(s)) + " Lv" + s.level + "</option>").join("") +
-            "</select>" +
-            '<p class="muted">' +
-            esc(LEGEND_OUGI[protoOugiPick].text) +
-            "。ボタンで使い、1回の挑戦で全軍1回だけ。" +
-            (list.length ? "" : "剣聖の兵士がいません（試作では剣聖だけが継承者になれます）。") +
-            "継承者は保存しません。</p></div>"
+            '<div class="tr-ougi"><b>⚔ 伝説の奥義（試作）</b><p>' +
+            (H && !H.why ? "奥義継承者：" + esc(soldierName(H.s)) + "・奥義「" + O.name + "」" + (H.h.book != null ? "（奥義書）" : "（自分で閃いた）") : "奥義継承者：なし" + (H && H.why ? "（" + esc(H.why) + "）" : "")) +
+            '</p><p class="muted">ボタンで使い、1回の挑戦で全軍1回だけ。' +
+            (ougiSave.run ? "前回の挑戦を途中で閉じたため、次の挑戦は使用済みから始まります。" : "") +
+            '</p><button type="button" data-ougi-open>⚔ 奥義書・継承者</button></div>'
           );
         }
         function openTraining() {
@@ -10742,8 +10991,6 @@ function chronicleWarBonusBlock(s) {
         $("trClose").onclick = closeTraining;
         $("trainRetreat").onclick = retreatTraining;
         $("trainingSheet").addEventListener("change", ev => {
-          if (ev.target.id === "trHeir" && !training) return (protoHeirPick = ev.target.value === "" ? null : +ev.target.value), renderTrainingSheet();
-          if (ev.target.id === "trOugi" && !training && LEGEND_OUGI[ev.target.value]) return (protoOugiPick = ev.target.value), renderTrainingSheet();
           if (ev.target.id === "trProto" && !training) {
             protoCombatPick = ev.target.checked;
             uiSave.combatProto = protoCombatPick || undefined;
@@ -10759,6 +11006,7 @@ function chronicleWarBonusBlock(s) {
           if (ev.target === $("trainingSheet")) return closeTraining();
           const b = ev.target.closest("button");
           if (!b || b.disabled || b.id === "trClose") return;
+          if (b.dataset.ougiOpen !== undefined) return openOugiSheet(null);
           if (b.dataset.trDiff) {
             trainPick = b.dataset.trDiff;
             renderTrainingSheet();
@@ -10809,7 +11057,7 @@ function chronicleWarBonusBlock(s) {
           const O = LEGEND_OUGI[U.key],
             s = U.heirId != null ? soldiers.find((x) => x.id === U.heirId) : null,
             err = ougiError();
-          const name = "⚔ 奥義「" + O.name + "」" + (U.used ? " 使用済み" : ""),
+          const name = (O ? "⚔ 奥義「" + O.name + "」" : "⚔ 奥義（継承者なし）") + (U.used ? " 使用済み" : ""),
             why = err || "継承者：" + soldierName(s) + "（全軍で1回だけ）";
           // 毎フレーム呼ぶので、変わったときだけ書き換える
           if ($("ougiName").textContent !== name) $("ougiName").textContent = name;
@@ -12486,6 +12734,7 @@ function chronicleWarBonusBlock(s) {
           if (!s || !s.alive) return;
           s.kills++;
           earnXp(s, "kill", 1, e);
+          if (protoCombatOn() && (e.kind === "boss" || e.boss || e.role)) ougiInsightRoll(s, "kill"); // 試作：強敵への最後の一撃で奥義の閃き
         }
         function squadsWaveStart() {
           chronicleDeployMany(fieldSquads().flatMap(q=>members(q)).filter(s=>!s.inWave));
@@ -13007,6 +13256,7 @@ function chronicleWarBonusBlock(s) {
           }
         }
         const soldierSave = loadSoldierSave();
+        reconcileOugi(soldierSave); // 奥義書・継承者（別の保存）を兵士の保存データに合わせる
         let soldierSaveOk = true;
         chronicleSyncCommitted(); // 初回復元のHP計算にも保存済み戦歴を反映する。
         function writeSoldierSave() {
@@ -13069,6 +13319,7 @@ function chronicleWarBonusBlock(s) {
         }
         // 戦死：保存データから外し、名前付きの兵士は英霊名鑑に記録する
         function recordDeath(s) {
+          ougiOnDeath(s); // 奥義継承者なら指定を外す（奥義書は倉庫へ）
           chronicleDeath(s);
           soldierSave.soldiers = soldierSave.soldiers.filter((x) => x.id !== s.id);
           refreshSiege(); // 攻城編成からも外す
@@ -19350,7 +19601,27 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         let retireBonus = null, // 直前の引退で出た超秘伝書（お知らせ用）
           retireBook = null; // 直前の引退で残した伝承の秘伝書（お知らせ用）
         // 指導員として引退：選んだスキル1つを伝承の秘伝書として残し、兵士は部隊から外れる（元に戻せない）
-        function retireSoldier(id, pickIndex) {
+        // 奥義を閃いた兵士は、奥義書も1冊残す（ougiK：残す奥義。1つだけなら省略可）。伝承の秘伝書の処理（retireSoldierBase）は変えない
+        function retireSoldier(id, pickIndex, ougiK) {
+          const s = soldierById(id),
+            err = retireError(s);
+          if (err) return err;
+          retireOugiBook = null;
+          if (!inheritables(s)[pickIndex]) return "残すスキルを選んでください。";
+          const P = ougiRetirePrepare(s, ougiK);
+          if (P.error) return P.error;
+          const r = retireSoldierBase(id, pickIndex);
+          if (P.book) {
+            if (r) ougiRetireAbort(P.book);
+            else {
+              ougiRetireFinish(P.book, s);
+              retireOugiBook = ougiBook(P.book.uid);
+            }
+          }
+          return r;
+        }
+        let retireOugiBook = null; // 直前の引退で残した奥義書（お知らせ用）
+        function retireSoldierBase(id, pickIndex) {
           const s = soldierById(id),
             err = retireError(s);
           if (err) return err;
@@ -19611,6 +19882,12 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             "）"
           );
         }
+        // 奥義継承者の印と、閃いた奥義（兵士名簿のカード）
+        function ougiCardTag(s) {
+          const H = ougiHeirNow(),
+            known = ougiKnownOf(s);
+          return (H && !H.why && H.s === s ? ' <span class="ougi-heir-tag">⚔ 奥義継承者</span>' : "") + (known.length ? ' <small class="ougi-heir-tag">（奥義：' + known.map((k) => LEGEND_OUGI[k].name).join("・") + "）</small>" : "");
+        }
         function soldierCard(s) {
           const max = s.level >= SQUAD_RULES.maxLevel,
             need = SQUAD_RULES.xpToLevel(s.level),
@@ -19627,6 +19904,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
           act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
           act += '<button data-gear-open="' + s.id + '">🎒 装備</button>';
+          if (jobOf(s) === "sword_saint" || ougiKnownOf(s).length) act += '<button data-ougi-for="' + s.id + '">⚔ 奥義</button>'; // 伝説の奥義（試作）
           // 指導員として引退：Lv100から（主人公は引退できない）。Lv99以下は押せないボタンで条件を見せる
           if (!isHeroSoldier(s))
             act +=
@@ -19641,6 +19919,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
             '"><h3>' +
             esc(soldierName(s)) +
             (s.chronicle?.selected?" 🏅"+esc(CHRONICLE_HONORS[s.chronicle.selected].name):"") +
+            ougiCardTag(s) +
             " <small>" +
             JOBS[jobOf(s)].icon +
             jobName(s) +
@@ -19828,6 +20107,8 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (ev.target === $("soldierSheet")) return closeSoldierSheet();
           const go = ev.target.closest("[data-gear-open]");
           if (go) return openGear(+go.dataset.gearOpen);
+          const og = ev.target.closest("[data-ougi-for]");
+          if (og) return openOugiSheet(+og.dataset.ougiFor);
           const jo = ev.target.closest("[data-job-open]");
           if (jo) return openJobSheet(+jo.dataset.jobOpen);
           const lo = ev.target.closest("[data-legend-on]");
@@ -19862,9 +20143,92 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           renderSoldierSheet();
           updateUI();
         });
+        // ===== 伝説の奥義（試作）：奥義書・継承者の画面 =====
+        // 兵士名簿の剣聖の「⚔ 奥義」（その兵士に継承させる）か、修練場の画面（見るだけ）から開く
+        let ougiSheetFor = null;
+        function ougiCardHtml(k, extra) {
+          const O = LEGEND_OUGI[k];
+          return '<div class="ougi-card"><p><b>⚔ ' + O.name + "</b> <small>（" + JOBS[O.job].name + "）</small></p><p><small>" + esc(O.text) + "</small></p>" + extra + "</div>";
+        }
+        function renderOugiSheet() {
+          const s = ougiSheetFor != null ? soldierById(ougiSheetFor) : null,
+            H = ougiHeirNow(),
+            busy = legendBusyError();
+          let html = "<p><b>奥義継承者（全軍で1人）</b><br>";
+          if (H && !H.why) {
+            const b = H.h.book != null ? ougiBook(H.h.book) : null;
+            html += '<span class="ougi-heir-tag">⚔ ' + esc(soldierName(H.s)) + "</span>・奥義「" + LEGEND_OUGI[H.h.k].name + "」" + (b ? "（奥義書：" + esc(b.from) + "）" : "（自分で閃いた）");
+            html += '</p><div class="card-actions"><button data-ougi-clear' + (busy ? " disabled" : "") + ">継承をやめる</button></div>";
+          } else html += "なし" + (H && H.why ? "（" + esc(H.why) + "）" : "") + "</p>";
+          html += '<p class="muted"><small>奥義は修練場の「新しい戦い（試作）」で、継承者がボタンで使います（1回の挑戦で全軍1回）。継承者を変えられるのは戦闘の前だけ。奥義を継承できるのは剣聖だけです。</small></p>';
+          if (busy) html += '<p class="injured">' + esc(busy) + "</p>";
+          // この兵士が自分で閃いた奥義
+          if (s) {
+            const known = ougiKnownOf(s),
+              isHeir = H && !H.why && H.s === s;
+            html += "<h4>" + esc(soldierName(s)) + "（" + JOBS[jobOf(s)].icon + jobName(s) + "・Lv" + s.level + "）</h4>";
+            if (jobOf(s) !== "sword_saint") html += '<p class="muted">剣聖ではないので、奥義を継承できません。</p>';
+            if (known.length)
+              html += known
+                .map((k) =>
+                  ougiCardHtml(
+                    k,
+                    "<p><small>自分で閃いた奥義</small></p>" +
+                      (isHeir && H.h.book == null && H.h.k === k ? '<p class="ougi-heir-tag">⚔ 継承中</p>' : '<button data-ougi-self="' + k + '"' + (ougiHeirError(s, { k }) ? " disabled" : "") + ">この奥義で継承者になる</button>"),
+                  ),
+                )
+                .join("");
+            else if (jobOf(s) === "sword_saint")
+              html +=
+                '<p class="muted"><small>まだ奥義を閃いていません。閃きの条件：剣聖・Lv' + OUGI_RULES.level + "以上・剣聖の熟練度" + OUGI_RULES.prof + "・強敵への最後の一撃" + OUGI_RULES.bossKills + "回（今 " + (chronicleOf(s).bossKills || 0) + "回）。修練場（試作）で強敵を倒したとき・クリアしたときに、ごくまれに閃きます。</small></p>";
+          }
+          // 奥義書の一覧（倉庫）
+          const books = ougiBooks();
+          html += "<h4>奥義書（" + books.length + "冊・消費しない・有効にできるのは全軍で1冊）</h4>";
+          if (!books.length) html += '<p class="muted">奥義書はまだありません。奥義を閃いた剣聖が指導員として引退すると、1冊残します。</p>';
+          for (const b of books) {
+            const active = H && !H.why && H.h.book === b.uid;
+            html += ougiCardHtml(
+              b.k,
+              "<p><small>伝承者：" + esc(b.from) + "（" + (JOBS[b.job] ? JOBS[b.job].name : "") + "・Lv" + b.level + "）" + (b.at ? "・" + new Date(b.at).toLocaleDateString("ja-JP") : "") + "</small></p><p><small>今の継承者：" +
+                (active ? '<span class="ougi-heir-tag">⚔ ' + esc(soldierName(H.s)) + "</span>" : "なし") +
+                "</small></p>" +
+                (s && !active ? '<button data-ougi-book="' + b.uid + '"' + (ougiHeirError(s, { book: b.uid }) ? " disabled" : "") + ">" + esc(soldierName(s)) + " が継承する</button>" : ""),
+            );
+          }
+          $("ougiBody").innerHTML = html;
+        }
+        function openOugiSheet(sid) {
+          ougiSheetFor = sid;
+          renderOugiSheet();
+          $("ougiSheet").hidden = false;
+          $("ougiClose").focus();
+        }
+        const closeOugiSheet = () => {
+          $("ougiSheet").hidden = true;
+          if (!$("soldierSheet").hidden) renderSoldierSheet();
+          if (!$("trainingSheet").hidden) renderTrainingSheet();
+        };
+        $("ougiClose").onclick = closeOugiSheet;
+        $("ougiSheet").addEventListener("click", (ev) => {
+          if (ev.target === $("ougiSheet")) return closeOugiSheet();
+          const b = ev.target.closest("button");
+          if (!b || b.disabled || b.id === "ougiClose") return;
+          const d = b.dataset;
+          let err = null,
+            done = "";
+          if (d.ougiSelf) (err = setOugiHeir(ougiSheetFor, { k: d.ougiSelf })), (done = "⚔ " + soldierName(soldierById(ougiSheetFor)) + " が奥義継承者になった（" + LEGEND_OUGI[d.ougiSelf].name + "）。");
+          else if (d.ougiBook) (err = setOugiHeir(ougiSheetFor, { book: +d.ougiBook })), (done = "⚔ " + soldierName(soldierById(ougiSheetFor)) + " が奥義書を継承した。");
+          else if (d.ougiClear !== undefined) (err = clearOugiHeir()), (done = "奥義継承者の指定を外した（奥義書は倉庫に戻る）。");
+          else return;
+          msg(err ? "⚠ " + err : done);
+          if (err) toast(err);
+          renderOugiSheet();
+        });
         // ===== 指導員として引退（確認画面） =====
         let retireId = null,
-          retirePick = null;
+          retirePick = null,
+          retireOugiPick = null; // 奥義書として残す奥義（奥義を閃いた兵士だけ）
         function renderRetire() {
           const s = soldierById(retireId);
           if (!s || !s.alive) {
@@ -19901,12 +20265,20 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
               )
               .join("") +
             "</div>";
-          if (retirePick != null && list[retirePick] && !err)
+          const known = ougiKnownOf(s);
+          if (known.length === 1) retireOugiPick = known[0];
+          if (known.length)
+            html +=
+              '<p><b>⚔ 奥義書として残す奥義</b><small>（伝承の秘伝書とは別に1冊。消費しない）</small></p><div class="retire-list">' +
+              known.map((k) => '<button data-retire-ougi="' + k + '" aria-pressed="' + (retireOugiPick === k) + '"' + (err ? " disabled" : "") + ">" + (retireOugiPick === k ? "☑ " : "☐ ") + "⚔ " + LEGEND_OUGI[k].name + "</button>").join("") +
+              "</div>";
+          if (retirePick != null && list[retirePick] && !err && (!known.length || retireOugiPick))
             html +=
               '<div class="forge-confirm"><p><b>' +
               esc(soldierName(s)) +
               " を指導員として引退させますか？</b><br>残すスキル：" +
               esc(legendBookText(list[retirePick])) +
+              (known.length ? "<br>奥義書：⚔ " + LEGEND_OUGI[retireOugiPick].name : "") +
               '</p><p class="injured">引退した兵士は戻せません。</p><div class="card-actions"><button data-retire-go>🎓 引退させる</button><button data-retire-cancel>やめる</button></div></div>';
           $("retireBody").innerHTML = html;
         }
@@ -19914,6 +20286,7 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if(pendingInsights.has(id)&&!flushInsights())return toast("閃きの記録が保存待ちです。先に途中保存をやり直してください。");
           retireId = id;
           retirePick = null;
+          retireOugiPick = null;
           renderRetire();
           $("retireSheet").hidden = false;
           $("retireClose").focus();
@@ -19935,11 +20308,12 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
           if (!b || b.disabled || b.id === "retireClose") return;
           const d = b.dataset;
           if (d.retirePick) retirePick = +d.retirePick;
+          else if (d.retireOugi) retireOugiPick = d.retireOugi;
           else if (d.retireCancel !== undefined) retirePick = null;
           else if (d.retireGo !== undefined) {
             const s = soldierById(retireId),
               name = s ? soldierName(s) : "",
-              err = retireSoldier(retireId, retirePick);
+              err = retireSoldier(retireId, retirePick, retireOugiPick);
             if (err) {
               msg("⚠ " + err);
               toast(err);
@@ -19953,6 +20327,10 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                   (retireBonus ? " さらに " + legendBookText(retireBonus) + " を手に入れた！" : ""),
               );
               if (retireBonus) toast("🌟 超秘伝書「" + LEGEND.abil[retireBonus.k].name + "」を手に入れた！");
+              if (retireOugiBook) {
+                msg("⚔ " + name + " が奥義書「" + LEGEND_OUGI[retireOugiBook.k].name + "」を残しました（兵士名簿の剣聖の ⚔ 奥義 から継承）。");
+                toast("⚔ 奥義書「" + LEGEND_OUGI[retireOugiBook.k].name + "」（伝承者：" + retireOugiBook.from + "）");
+              }
               closeRetire();
               if (soldierFormationReturn) closeSoldierSheet();
               else if (!$("soldierSheet").hidden) openSoldierSheet("mentor");
@@ -25570,9 +25948,29 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
                 state: () => (training && training.ougi ? { ...training.ougi } : null),
                 error: () => ougiError(),
                 use: () => useOugi(),
-                pickHeir: (id) => (protoHeirPick = id),
-                pickOugi: (k) => (protoOugiPick = k),
-                heirs: () => ougiHeirList().map((s) => s.id),
+                save: () => JSON.parse(JSON.stringify(ougiSave)),
+                setHeir: (sid, choice) => setOugiHeir(sid, choice),
+                clearHeir: () => clearOugiHeir(),
+                heir: () => {
+                  const H = ougiHeirNow();
+                  return H && { ...H.h, valid: !H.why, why: H.why };
+                },
+                known: (sid) => ougiKnownOf(soldierById(sid)),
+                eligible: (sid) => ougiEligible(soldierById(sid)),
+                roll: (sid, why) => ougiInsightRoll(soldierById(sid), why || "test"),
+                setRoll: (fn) => (ougiRollOverride = fn || null),
+                rules: OUGI_RULES,
+                // 試験用：奥義を閃いたことにする（保存もする）
+                grant: (sid, k) => {
+                  const s = soldierById(sid);
+                  return ougiCommit((S) => {
+                    const e = S.known[ougiLife(s)] || (S.known[ougiLife(s)] = { list: [], name: soldierName(s) });
+                    if (!e.list.some((x) => x.k === k)) e.list.push({ k, at: Date.now() });
+                  });
+                },
+                retire: (sid, pick, k) => retireSoldier(sid, pick, k),
+                reconcile: () => reconcileOugi(soldierSave),
+                open: (sid) => openOugiSheet(sid),
                 flurry: () => (ougiFlurry ? ougiFlurry.left : 0),
               },
               damage: (e, raw, options) => dealEnemyDamage(e, raw, {}, options || {}),

@@ -1,4 +1,4 @@
-// 伝説の奥義（v106.1試作）：修練場の「新しい戦い（試作）」だけ。継承者1人・手動・1回の挑戦で全軍1回。奥義ゲージは廃止
+// 伝説の奥義（v106.1試作・v106.2で継承者を保存）：修練場の「新しい戦い（試作）」だけ。継承者1人・手動・1回の挑戦で全軍1回。奥義ゲージは廃止
 //   node tools/test-legend-ougi.mjs
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -22,7 +22,8 @@ const check = (ok, text, detail) => {
 const KEYS = ["worldDefense.soldiers.v1", "worldDefense.warlords.v1", "worldDefense.training.v1", "worldDefense.ui.v1"];
 // 足軽4人（1人目・2人目を剣聖にする）と槍兵4人
 const save = { version: 1, seq: 8, squadSeq: 2, fallen: [], squads: [{ id: 1, type: "ashigaru", slot: 0 }, { id: 2, type: "spearman", slot: 1 }], soldiers: [] };
-for (let k = 0; k < 8; k++) save.soldiers.push({ id: k + 1, type: k < 4 ? "ashigaru" : "spearman", squadId: k < 4 ? 1 : 2, level: 200 });
+for (let k = 0; k < 8; k++)
+  save.soldiers.push({ id: k + 1, type: k < 4 ? "ashigaru" : "spearman", squadId: k < 4 ? 1 : 2, level: 200, ...(k < 2 ? { job: "sword_saint", jobs: ["ashigaru", "samurai", "kensei", "sword_saint"] } : {}) });
 async function open({ query = "?debug&proto=combat", width = 375, height = 667, warlord = null } = {}) {
   const c = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await c.addInitScript(
@@ -58,8 +59,12 @@ const begin = (p, { heir = 1, key = "happouTenshou", deploy = true } = {}) =>
     ({ heir, key, deploy }) => {
       const K = WD_DEBUG.combat.ougi,
         S = WD_DEBUG.state;
-      K.pickOugi(key);
-      K.pickHeir(heir);
+      // 継承者：その奥義を閃いたことにして指定する（保存される。v106.2）
+      if (heir != null) {
+        K.grant(heir, key);
+        const e = K.setHeir(heir, { k: key });
+        if (e) return e;
+      }
       const err = WD_DEBUG.trainingApi.startTraining("beginner");
       if (deploy) WD_DEBUG.squadApi.deployReserve(S().squads[0], 620, 300);
       WD_DEBUG.squadApi.deployReserve(S().squads[1], 400, 165);
@@ -80,23 +85,16 @@ const foes = (p, list) =>
   p.evaluate((list) => list.map(([d, hp, extra]) => WD_DEBUG.addEnemy({ d, hp, speed: 0, unitCd: 1e9, ...(extra || {}) })).length, list);
 const hpOf = (p) => p.evaluate(() => WD_DEBUG.state().enemies.map((e) => Math.round(e.hp)));
 try {
-  // 1. 修練場の画面：試作をオンにすると、奥義と継承者（剣聖だけ）を選べる。iPhone縦ではみ出さない
+  // 1. 修練場の画面：試作をオンにすると、今の奥義継承者と「⚔ 奥義書・継承者」のボタン。iPhone縦ではみ出さない
   let { c, p } = await open();
   await p.tap("#trainingOpen");
   let r = await p.evaluate(() => {
-    const h = document.getElementById("trHeir"),
-      o = document.getElementById("trOugi");
-    return { heirs: h && [...h.options].map((x) => x.value), ougi: o && [...o.options].map((x) => x.textContent), overflow: document.documentElement.scrollWidth - innerWidth };
+    const box = document.querySelector(".tr-ougi");
+    return { text: box && box.textContent, btn: !!document.querySelector("[data-ougi-open]"), overflow: document.documentElement.scrollWidth - innerWidth, defs: Object.values(WD_DEBUG.combat.ougi.defs).map((O) => O.name + ":" + O.job) };
   });
-  check(r.heirs && r.heirs.join() === ",1,2", "継承者に選べるのは剣聖だけ（ほかの兵士は出ない）", r);
-  check(r.ougi && r.ougi.length === 3 && ["八方天翔斬", "無明一閃", "天剣乱舞"].every((k, i) => r.ougi[i].startsWith(k)), "奥義は八方天翔斬・無明一閃・天剣乱舞の3つ", r.ougi);
+  check(r.text && r.text.includes("奥義継承者：なし") && r.btn, "修練場の画面に今の奥義継承者（なし）と奥義の画面へのボタン", r);
+  check(r.defs.join() === "八方天翔斬:sword_saint,無明一閃:sword_saint,天剣乱舞:sword_saint", "奥義は剣聖の八方天翔斬・無明一閃・天剣乱舞の3つ", r.defs);
   check(r.overflow <= 0, "iPhone縦（375px）で修練場の画面がはみ出さない", r);
-  const before = await saves(p);
-  await p.selectOption("#trHeir", "2");
-  await p.selectOption("#trOugi", "mumyouIssen");
-  r = await p.evaluate(() => ({ heir: document.getElementById("trHeir").value, ougi: document.getElementById("trOugi").value }));
-  check(r.heir === "2" && r.ougi === "mumyouIssen", "選んだ継承者・奥義が画面に残る", r);
-  check(JSON.stringify(await saves(p)) === JSON.stringify(before), "継承者・奥義を選んでも保存データは変わらない");
   await c.close();
 
   // 2. ボタンは1つ。ウェーブ前は押せず理由を出す。対象がいなければ回数を減らさない。使うと全軍で1回だけ
@@ -146,7 +144,6 @@ try {
   r = await p.evaluate(() => {
     const a = WD_DEBUG.trainingApi;
     if (a.training()) a.endTraining("retreat");
-    WD_DEBUG.combat.ougi.pickHeir(1);
     a.startTraining("beginner");
     return WD_DEBUG.combat.ougi.state();
   });
@@ -162,9 +159,11 @@ try {
   check(!r.used && r.err.includes("継承者がいません"), "継承者を指定しないと使えない", r);
   await c.close();
   ({ c, p } = await open());
-  await begin(p, { heir: 3 }); // 剣聖ではない兵士は継承者にならない
-  r = await p.evaluate(() => WD_DEBUG.combat.ougi.state());
-  check(r.heirId === null, "剣聖でない兵士は継承者に指定できない", r);
+  r = await p.evaluate(() => {
+    WD_DEBUG.combat.ougi.grant(3, "happouTenshou");
+    return WD_DEBUG.combat.ougi.setHeir(3, { k: "happouTenshou" });
+  }); // 剣聖ではない兵士は継承者にならない
+  check(typeof r === "string" && r.includes("剣聖だけ"), "剣聖でない兵士は継承者に指定できない", r);
   await c.close();
   ({ c, p } = await open());
   await begin(p, { deploy: false });
@@ -266,13 +265,13 @@ try {
   });
   r = await saves(p);
   const text = Object.values(r).join("");
-  check(!/ougi|heir|Ougi|protoGauge|protoHits/.test(text), "保存データに奥義・継承者・試作の数値を入れない");
+  check(!/ougi|heir|Ougi|protoGauge|protoHits/.test(text), "既存の保存データ（兵士・武将・修練場・表示）に奥義・継承者・試作の数値を入れない（奥義は専用の保存キー）");
   const sv = JSON.parse(r["worldDefense.soldiers.v1"]);
   check(Array.isArray(sv.soldiers) && sv.soldiers.length === 8 && sv.squads.length === 2, "兵士の保存データは壊れていない（人数・部隊）", { soldiers: sv.soldiers.length, squads: sv.squads.length });
   await p.reload();
   await p.waitForFunction(() => window.WD_DEBUG);
-  r = await p.evaluate(() => ({ n: WD_DEBUG.state().soldiers.length, err: WD_DEBUG.combat.ougi.state() }));
-  check(r.n === 8 && r.err === null, "開き直すと継承者は選び直し（保存しない）、兵士はそのまま", r);
+  r = await p.evaluate(() => ({ n: WD_DEBUG.state().soldiers.length, st: WD_DEBUG.combat.ougi.state(), heir: WD_DEBUG.combat.ougi.heir() }));
+  check(r.n === 8 && r.st === null && r.heir && r.heir.sid === 1 && r.heir.valid, "開き直しても兵士と奥義継承者はそのまま（v106.2で継承者を保存）", r);
   await c.close();
 
   check(errors.length === 0, "ページのエラーなし", errors);
