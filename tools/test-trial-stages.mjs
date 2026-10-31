@@ -205,9 +205,9 @@ try {
     }
     L.floor = 2;
     const base = { goblin: 45, wolf: 35, knight: 145, dragon: 135 }; // 敵の種類ごとの体力の表（修練場と同じ）
-    return { g2, g6, ratioHp: g6.max / base[g6.kind] / (g2.max / base[g2.kind]), ratioAtk: g6.atk / g2.atk, kinds: [...kinds], expectHp: (1 + G.hpStep * 5) / (1 + G.hpStep), expectAtk: (1 + G.atkStep * 5) / (1 + G.atkStep) };
+    return { g2, g6, ratioHp: g6.max / base[g6.kind] / (g2.max / base[g2.kind]), ratioAtk: g6.atk / g2.atk, kinds: [...kinds], expectHp: Math.pow(1 + G.hpStep, 4), expectAtk: Math.pow(1 + G.atkStep, 4) }; // v108.8：面ごとに掛け算
   });
-  check(Math.abs(r.ratioHp - r.expectHp) < 0.02 && Math.abs(r.ratioAtk - r.expectAtk) < 0.02, "面が進むと敵の体力 +22%・攻撃 +10%ずつ（第6面は第2面の体力 ×" + r.ratioHp.toFixed(2) + "・攻撃 ×" + r.ratioAtk.toFixed(2) + "）", r);
+  check(Math.abs(r.ratioHp - r.expectHp) < 0.02 && Math.abs(r.ratioAtk - r.expectAtk) < 0.02, "面が進むと敵の体力 ×1.3・攻撃 ×1.15ずつ（第6面は第2面の体力 ×" + r.ratioHp.toFixed(2) + "・攻撃 ×" + r.ratioAtk.toFixed(2) + "）", r);
   check(r.kinds.length >= 3, "面が進むと、強い種類の敵が早くから混ざる（第5面のはじめ：" + r.kinds.join("・") + "）", r.kinds);
   await c.close();
 

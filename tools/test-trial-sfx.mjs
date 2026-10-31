@@ -182,6 +182,10 @@ try {
     const warns = [];
     for (let i = 0; i < 80; i++) {
       if (m.hp > m.max * 0.25) m.hp = m.max * 0.25;
+      // 敵を1体、仲間のすぐ横に置く（攻撃されるように。攻撃スキルで周りの敵が減るため）
+      const e = L.enemies.find((x) => !x.gone);
+      if (e && Math.hypot(e.x - m.x, e.y - m.y) > 40) (e.x = m.x + 30), (e.y = m.y), (e.target = m), (e.hp = e.max = 1e9);
+      if (!e) L.next = 0;
       if (L.choice) T.choose(0);
       WD_DEBUG.step(0.1);
       warns.push(T.sfx.stats().played.warn || 0);
@@ -198,7 +202,8 @@ try {
       if (m.hp > m.max * 0.25) m.hp = m.max * 0.25;
       // 敵を1体、仲間のすぐ横に置く（攻撃されるように）
       const e = L.enemies.find((x) => !x.gone);
-      if (e && Math.hypot(e.x - m.x, e.y - m.y) > 40) (e.x = m.x + 30), (e.y = m.y), (e.target = m);
+      if (e && Math.hypot(e.x - m.x, e.y - m.y) > 40) (e.x = m.x + 30), (e.y = m.y), (e.target = m), (e.hp = e.max = 1e9);
+      if (!e) L.next = 0;
       if (L.choice) T.choose(0);
       WD_DEBUG.step(0.1);
     }

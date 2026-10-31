@@ -2129,6 +2129,29 @@
           animation: none !important;
         }
       }
+      /* v108.8 攻撃スキルの選択肢（新しい習得は青、強化は緑、Lv5 は金）。宝箱のスキル進化は紫 */
+      .trial-levelup-card button.skill .tag {
+        justify-self: start;
+        font-size: 12px;
+        padding: 1px 8px;
+        border-radius: 8px;
+        background: #2f6fb0;
+        color: #fff;
+      }
+      .trial-levelup-card button.skill.up .tag {
+        background: #2f8a4a;
+      }
+      .trial-levelup-card button.skill.max {
+        border-color: #ffe27a;
+      }
+      .trial-levelup-card button.skill.max .tag {
+        background: #9a7a1e;
+      }
+      .trial-reward.evo {
+        border-color: #c06bff;
+        background: radial-gradient(circle at 50% 30%, #6a2a8a, #24102e);
+        box-shadow: 0 0 22px #c06bffaa;
+      }
       .trial-levelup-card button.recruit {
         border-color: #ffe27a;
         background: #5a4a1e;
@@ -3097,7 +3120,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.7試作（戦場試練：サバイバルの無限の面・宝箱）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v108.8試作（戦場試練：サバイバルの攻撃スキル）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23284,6 +23307,10 @@ OFF</button>
               nextStage: () => trialNextStage(),
               best: () => trialBestRead(),
               roll: (great) => trial && trialRollReward(trial, !!great),
+              skillDefs: TRIAL_SKILLS,
+              evolveDefs: TRIAL_EVOLVES,
+              learn: (k) => trial && trialSkillLearn(trial, k),
+              skillOptions: () => trial && trialSkillOptions(trial),
               sfx: { stats: () => JSON.parse(JSON.stringify(trialSfxStats)), unlock: () => trialAudioUnlock(), level: (v) => (v === undefined ? trialSfxLevel : trialSfxSetLevel(v)), play: (k, o) => trialSfx(k, o), voices: () => trialVoices.length, reset: () => ((trialSfxLast = {}), (trialSfxStats.played = {}), (trialSfxStats.skipped = 0)) },
               ougi: () => trial && trialOugiInfo(trial),
               useOugi: () => trialUseOugi(),
@@ -23355,6 +23382,9 @@ OFF</button>
                   raijin: trial.raijin ? { ...trial.raijin } : null,
                   phoenix: trial.phoenix || 0,
                   ougiMul: trial.ougiMul || 1,
+                  skills: trial.skills ? { ...trial.skills } : null,
+                  skillUse: trial.skillUse ? { ...trial.skillUse } : null,
+                  proj: trial.proj ? trial.proj.length : 0,
                   boss: trial.boss ? { hp: trial.boss.hp, max: trial.boss.max, gone: trial.boss.gone, x: trial.boss.x, y: trial.boss.y, great: !!trial.boss.great, name: trial.boss.name || null, atkMul: trial.boss.atkMul } : null,
                 },
             },

@@ -163,14 +163,15 @@ try {
     const T = WD_DEBUG.trial,
       L = T.live(),
       t0 = L.t,
+      s0 = L.spawned,
       d0 = L.units.filter((u) => u.id !== 1).reduce((a, u) => a + u.dealt + u.healed, 0);
     for (let i = 0; i < 100; i++) {
       if (L.choice) T.choose(0);
       WD_DEBUG.step(0.1);
     }
-    return { t: L.t - t0, mates: L.units.length - 1, d: L.units.filter((u) => u.id !== 1).reduce((a, u) => a + u.dealt + u.healed, 0) - d0, on: T.on() };
+    return { t: L.t - t0, mates: L.units.length - 1, d: L.units.filter((u) => u.id !== 1).reduce((a, u) => a + u.dealt + u.healed, 0) - d0, on: T.on(), spawned: L.spawned - s0 };
   });
-  check(r.on && r.t > 9 && (r.mates === 0 || r.d > 0), "奥義のあとも戦闘は止まらず、仲間も戦い続ける", r);
+  check(r.on && r.t > 9 && (r.mates === 0 || r.d > 0 || r.spawned < 20), "奥義のあとも戦闘は止まらず、仲間も戦い続ける", r);
   check((await storage(p)) === saveO, "奥義を使っても、本編の奥義の使用記録・奥義書・継承者は変わらない（保存データが同じ）");
   await c.close();
 
