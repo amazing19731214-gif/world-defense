@@ -17695,7 +17695,7 @@ function trialBegin() {
   if (!T || T.phase !== "deploy") return "いまは始められません。";
   if (T.units.some((u) => !u.placed)) return "全員を配置してから始めます（「自動で並べる」も使えます）。";
   T.phase = "fight";
-  msg("⚔️ 戦場試練「" + T.map.name + "」開始！ 兵士はそれぞれ自分で戦います（兵士をタップすると拡大）。");
+  msg("⚔️ 戦場試練「" + T.map.name + "」開始！ 兵士はそれぞれ自分で戦います。下の名前か戦場の兵士を押すと、その兵士をスティックで動かせます。");
   trialSyncUI();
   return null;
 }

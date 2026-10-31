@@ -99,8 +99,10 @@ try {
   await tap("[data-trial-go]");
   const box = await p.locator("#game").boundingBox();
   const tapMap = (x, y) => p.touchscreen.tap(box.x + (x / 960) * box.width, box.y + (y / 600) * box.height);
-  await tapMap(680, 230);
-  await tapMap(700, 370);
+  // v108：配置の間は、カメラが関の手前の広場（光っている所）を映す。広場の中を2か所タップ
+  await p.waitForTimeout(1500);
+  await tapMap(430, 260);
+  await tapMap(520, 360);
   r = await p.evaluate(() => document.getElementById("trialInfo").textContent);
   check(/あと\s*3人/.test(r), "戦場を指でタップして1人ずつ配置できる", r);
   await tap("#trialAuto");
@@ -124,20 +126,24 @@ try {
   check(perf.median < 34, "戦闘中の描画が極端に重くない（1コマの間隔の中央値 " + Math.round(perf.median) + "ms）", perf);
   r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, stats: getComputedStyle(document.querySelector("header .stats")).display, overflow: document.documentElement.scrollWidth - innerWidth }));
   check(/\d+秒/.test(r.info) && r.stats === "none" && r.overflow <= 0, "戦闘が進み、城HPなどの表示は隠れ、横にはみ出さない", r);
-  // 兵士をタップして拡大 → もう一度で全体
-  await p.waitForTimeout(1500);
-  const before = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  // 配置した辺り（関の手前）にいる兵士をタップ：兵士は動くので、いくつかの所を順に試す
-  let zoomed = false;
-  for (const [x, y] of [[680, 210], [700, 300], [660, 260], [620, 300], [580, 300], [720, 350]]) {
-    await tapMap(x, y);
-    zoomed = (await p.evaluate(() => document.getElementById("trialInfo").textContent)).includes("拡大中");
-    if (zoomed) break;
-  }
-  check(zoomed, "兵士をタップすると拡大して追いかける", before);
-  await tapMap(30, 580);
+  // v108：兵士の札を押して操作 → スティックを指で倒して動かす → 「全員自動」に戻す
+  await p.waitForTimeout(1000);
+  await p.locator("#trialUnits [data-trial-ctl]").first().tap();
+  r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, pad: document.getElementById("trialPad").offsetParent !== null }));
+  check(r.info.includes("操作中") && r.pad, "兵士の札を押すと、その兵士を操作できる（スティックが出る）", r);
+  const pad = await p.locator("#trialPad").boundingBox();
+  const scroll0 = await p.evaluate(() => scrollY);
+  await p.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(pad.x + pad.width / 2 - 50, pad.y + pad.height / 2, { steps: 4 });
+  await p.waitForTimeout(600);
+  r = await p.evaluate(() => getComputedStyle(document.querySelector("#trialPad .trial-knob")).transform);
+  await p.mouse.up();
+  const scroll1 = await p.evaluate(() => scrollY);
+  check(r !== "none" && scroll1 === scroll0, "スティックを指で倒せる（画面はスクロールしない）", { knob: r, scroll0, scroll1 });
+  await tap("#trialAutoAll");
   r = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  check(!r.includes("拡大中"), "ほかの所をタップすると全体の表示に戻る", r);
+  check(r.includes("全員自動"), "「🤖 全員自動」で操作を外せる", r);
   // 画面を横にして戻しても操作できる
   await p.setViewportSize({ width: 844, height: 390 });
   await p.waitForTimeout(500);

@@ -101,13 +101,17 @@ try {
   r = await p.evaluate(() => ({ st: WD_DEBUG.trial.state(), bar: !document.getElementById("trialBar").hidden, go: document.getElementById("trialGo").disabled, sheet: document.getElementById("trialSheet").hidden, play: getComputedStyle(document.querySelector(".play-tools")).display }));
   check(r.st.phase === "deploy" && r.bar && r.go && r.sheet && r.play === "none", "出撃すると配置の段階（戦闘開始は全員を置くまで押せない。ウェーブ開始などは隠す）", r);
   const box = await p.locator("#game").boundingBox();
-  const tap = (x, y) => p.mouse.click(box.x + (x / 960) * box.width, box.y + (y / 600) * box.height);
-  await tap(200, 300); // 配置場所の外
-  await tap(690, 250);
-  await tap(700, 350);
+  // 戦場の点（world）を、いまのカメラで画面の点に直してタップする（v108：戦場はカメラで動かして見る）
+  const tap = async (x, y) => {
+    const q = await p.evaluate(([x, y]) => (WD_DEBUG.trial.snap(), WD_DEBUG.trial.toScreen(x, y)), [x, y]);
+    await p.mouse.click(box.x + (q.x / 960) * box.width, box.y + (q.y / 600) * box.height);
+  };
+  await tap(1250, 600); // 配置場所の外（合流点）
+  await tap(1400, 520);
+  await tap(1420, 680);
   r = await p.evaluate(() => ({ st: WD_DEBUG.trial.state(), squads: WD_DEBUG.state().squads.map((q) => q.state), towers: WD_DEBUG.state().towers.length, early: WD_DEBUG.trial.begin() }));
   const placed = r.st.units.filter((u) => u.placed);
-  check(placed.length === 2 && Math.abs(placed[0].x - 690) < 3 && Math.abs(placed[1].y - 350) < 3, "タップした所（配置場所の中）に1人ずつ配置する。外は置けない", placed);
+  check(placed.length === 2 && Math.abs(placed[0].x - 1400) < 3 && Math.abs(placed[1].y - 680) < 3, "タップした所（配置場所の中）に1人ずつ配置する。外は置けない", placed);
   check(r.squads.every((s) => s !== "deployed") && r.towers === 0, "配置のタップは防衛戦（部隊・塔）に渡らない", r);
   check(typeof r.early === "string" && r.early.includes("全員"), "全員を置くまで戦闘は始まらない", r.early);
   r = await p.evaluate(() => {
