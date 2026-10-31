@@ -53,11 +53,13 @@ const TRIAL_SURVIVAL = {
   rejoin: 8, // 持ち場から離れたまま戻れない時間（秒）がこれを超えたら、主人公の近くへ合流させる
   heroSpeed: 1.3, // 主人公の歩く速さ（倍。敵の群れから逃げ回れるように）
   enemySpeed: 0.75, // 敵の歩く速さ（倍。主人公より少し遅い。狼は速い）
-  maxAlive: 36, // 同時にいる敵の上限（iPhone の重さ）
-  interval0: 2.6, // 出現の間隔（秒）：最初
-  intervalEnd: 2.0, // 強敵が出る頃の間隔
-  batchEvery: 60, // この秒数ごとに、1回に出る数が1体増える（1体→2体→3体）
-  afterBoss: 3, // 強敵が出たあとの間隔（1体ずつ）
+  // v109 敵の増え方を激しく（群れで押し寄せる）：36→60体・間隔 2.6→1.6秒・30秒ごとに1回の数 +1・2面ごとに +1
+  maxAlive: 60, // 同時にいる敵の上限（iPhone の重さ。60体でも1コマ数ms）
+  interval0: 1.6, // 出現の間隔（秒）：最初
+  intervalEnd: 0.9, // 強敵が出る頃の間隔
+  batchEvery: 30, // この秒数ごとに、1回に出る数が1体増える（1体→2体→…→6体）
+  batchFloor: 2, // この面ごとに、1回に出る数がさらに1体増える（第3面から +1、第5面から +2…）
+  afterBoss: 2, // 強敵が出たあとの間隔（1体ずつ）
   margin: 70, // 画面の外のどれだけ先から出すか
   far: 1100, // 主人公からこれより遠い敵は、主人公の近くの画面の外へ移す（遠くに溜まらない）
   hp: 0.12, // 敵の体力（倍。群れで来るので1体は弱く、たくさん倒せる）
@@ -1683,8 +1685,8 @@ function trialSurvivalTick(T, dt) {
   T.next = (T.boss ? S.afterBoss : S.interval0 + (S.intervalEnd - S.interval0) * f) / keep;
   const pt = T.st + Math.min(90, G.poolShift * (T.floor - 1)), // 面が進むほど、強い種類が早く混ざる
     pool = S.pools.filter((p) => p[0] <= pt).pop()[1],
-    // ふつうの敵は36体まで（大将は別に数える。大将がいても、ふつうの敵は36体を超えない）
-    n = Math.min(S.maxAlive - alive.filter((e) => e !== T.boss).length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery)),
+    // ふつうの敵は maxAlive 体まで（大将は別に数える。大将がいても、ふつうの敵は上限を超えない）
+    n = Math.min(S.maxAlive - alive.filter((e) => e !== T.boss).length, T.boss ? 1 : 1 + Math.floor(T.st / S.batchEvery) + Math.floor((T.floor - 1) / S.batchFloor)),
     p = n > 0 && trialSpawnPoint(T, hero);
   if (!p) return;
   for (let k = 0; k < n; k++) {

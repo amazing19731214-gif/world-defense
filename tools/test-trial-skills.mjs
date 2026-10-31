@@ -364,7 +364,7 @@ try {
     }
     return { maxN, maxFx, maxShots, maxProj, tick: Math.round((tick / 900) * 100) / 100, draw: Math.round((draw / frames) * 10) / 10 };
   });
-  check(r.maxN <= 36 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxProj < 60, "ふつうの敵は36体まで（大将は別に数える）。演出・矢弾・飛んでいる弾は溜まらない（敵 " + r.maxN + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "）", r);
+  check(r.maxN <= 60 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxProj < 60, "ふつうの敵は60体まで（大将は別に数える）。演出・矢弾・飛んでいる弾は溜まらない（敵 " + r.maxN + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "）", r);
   check(r.tick + r.draw < 16, "攻撃スキル6つ（Lv5）でも軽い（1コマの処理 " + r.tick + "ms・描画 " + r.draw + "ms）", r);
   await c.close();
 

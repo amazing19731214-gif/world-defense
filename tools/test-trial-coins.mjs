@@ -249,7 +249,7 @@ try {
   check(r.opened && r.still && r.after === 1, "レベルアップの選択中は、コインも経験値も時間も止まる（選んだあとで拾う）", r);
   await c.close();
 
-  // 8. iPhone縦：コイン50枚・敵36体でも重くならない（1コマの描画と処理の時間）。地形に埋まらない
+  // 8. iPhone縦：コイン50枚・敵60体でも重くならない（1コマの描画と処理の時間）。地形に埋まらない
   ({ c, p } = await open({ width: 390, height: 844 }));
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
@@ -291,12 +291,12 @@ try {
       if (L.choice) T.choose(L.choice.findIndex((x) => x.kind === "recruit"));
     }
     L.next = 1e9;
-    // 敵36体・コイン50枚を画面の中に
-    for (let i = 0; i < 36; i++) L.enemies.push(Object.assign({}, L.enemies[0] || {}));
+    // 敵60体（v109 の上限）・コイン50枚を画面の中に
+    for (let i = 0; i < 60; i++) L.enemies.push(Object.assign({}, L.enemies[0] || {}));
     L.enemies.length = 0;
     L.st = 100; // v108.7：敵の出方はその面の時間で決まる
     L.next = 0;
-    for (let i = 0; i < 600 && L.enemies.filter((e) => !e.gone).length < 36; i++) {
+    for (let i = 0; i < 600 && L.enemies.filter((e) => !e.gone).length < 60; i++) {
       L.next = 0;
       for (const u of L.units) u.hp = u.max;
       WD_DEBUG.step(0.1);
@@ -317,7 +317,7 @@ try {
     }
     return { enemies: L.enemies.filter((e) => !e.gone).length, coins: L.coins.length, tick: Math.round((tick / 30) * 10) / 10, draw: Math.round((draw / 30) * 10) / 10 };
   });
-  check(r.enemies >= 30 && r.coins >= 40 && r.tick + r.draw < 16, "敵 " + r.enemies + "体・コイン " + r.coins + "枚でも、1コマの処理 " + r.tick + "ms・描画 " + r.draw + "ms（重くならない）", r);
+  check(r.enemies >= 50 && r.coins >= 40 && r.tick + r.draw < 16, "敵 " + r.enemies + "体・コイン " + r.coins + "枚でも、1コマの処理 " + r.tick + "ms・描画 " + r.draw + "ms（重くならない）", r);
   await c.close();
 
   // 9. 三方の関はコインを落とさない（いままでどおり）
