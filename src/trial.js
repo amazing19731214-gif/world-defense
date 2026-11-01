@@ -2251,6 +2251,7 @@ function trialExploreJoin(T, v, hero) {
   const s = r.soldier;
   rec.name = soldierName(s);
   rec.id = s.id;
+  rec.named = s.named || null; // v113.2 ネームド（名のある人物）も雇用と同じ確率で出る
   if (T.units.filter((u) => !u.dead).length < E.partyMax) {
     const u = trialUnit(s, T.units.length),
       S = TRIAL_SURVIVAL,
@@ -2268,7 +2269,9 @@ function trialExploreJoin(T, v, hero) {
   }
   msg("🏘 " + v.name + "を救った！ " + SOLDIER_TYPES[v.type].name + "「" + soldierName(s) + "」が仲間に加わり、兵士名簿に入った" + (rec.joined ? "。" : "（部隊は5人いっぱいなので、陣で待つ）。"));
   if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 120, text: "👥 " + soldierName(s).replace(/^🎖/, "") + " 仲間に！", ougi: true, age: 0, duration: 1.8 });
-  combatFx.banner = { name: v.icon + " " + v.name + " を救った", who: SOLDIER_TYPES[v.type].name + "「" + soldierName(s).replace(/^🎖/, "") + "」が仲間に（無料）", age: 0, duration: 1.8 };
+  combatFx.banner = s.named
+    ? { name: "✨ 名のある人物「" + soldierName(s).replace(/^🎖/, "") + "」", who: v.name + "で出会い、仲間に加わった（無料）", age: 0, duration: 2.2 }
+    : { name: v.icon + " " + v.name + " を救った", who: SOLDIER_TYPES[v.type].name + "「" + soldierName(s).replace(/^🎖/, "") + "」が仲間に（無料）", age: 0, duration: 1.8 };
   trialSfx("rare");
 }
 // 本番の名簿に兵士を1人加える（雇用と同じ流れ。お金は取らない）。保存できなければ元に戻す
@@ -3996,7 +3999,7 @@ function renderTrialSheet() {
       exploreHtml = X
         ? '<p class="trial-stage-sum">🌑 第' + X.region + "地まで探索（最後の地は " + X.pct + "% 探索）<br>" +
           "👥 仲間になった兵士：<b>" + X.recruits.filter((r) => r.name).length + "人</b>" +
-          (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? esc(r.name.replace(/^🎖/, "")) + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
+          (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? (r.named ? "✨" : "") + esc(r.name.replace(/^🎖/, "")) + (r.named ? "（名のある人物）" : "") + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
           (X.heroFell ? '<br><span class="injured">👑 主人公 ' + esc(X.heroFell.name) + " が倒れた：Lv" + X.heroFell.from + " → Lv1 から再出発（死なない）</span>" : "") +
           (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した仲間はいません。</small>") +
           "</p>"

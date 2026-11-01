@@ -157,6 +157,18 @@ try {
     return { type: v.type, recType: JSON.parse(localStorage.getItem("worldDefense.soldiers.v1")).soldiers.find((s) => s.id === id).type };
   }, r.rec.id);
   check(r.type === r.recType, "村の種類の兵士が仲間になる（" + r.type + "）", r);
+  // 5b. v113.2 探索でもネームド（名のある人物）が出る（雇用と同じ抽選・確率 2%。ここでは必ず当たるようにして見る）
+  r = await p.evaluate(() => {
+    WD_DEBUG.namedApi.setRng(() => 0);
+    return true;
+  });
+  {
+    const f = await freeVillage(p);
+    await p.evaluate(() => WD_DEBUG.namedApi.setRng(() => 1)); // 試験のほかの所に影響しないよう、出さない設定に戻す（?debug の既定）
+    const save = await roster(p),
+      me = f.rec && save.soldiers.find((s) => s.id === f.rec.id);
+    check(f.got && f.rec.named && me && me.named === f.rec.named && me.name, "探索でもネームドが出る：" + (f.rec && f.rec.name) + "（名のある人物）が仲間になり、名簿に入る", { rec: f.rec, saved: me && { named: me.named, name: me.name } });
+  }
   // 6. 本当の戦死：仲間が倒れると兵士名簿から外れ、英霊名鑑（戦死の記録）に入る
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
