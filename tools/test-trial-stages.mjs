@@ -363,12 +363,12 @@ try {
       s = T.state();
     T.retreat();
     const R = T.result();
-    return { stage: s.stage, bosses: R.bosses, log, great, maxE, maxC, maxFx, maxShots, maxList, maxVoices, ms, time: Math.round(R.time), kills: R.kills, exp: R.coins.xp, slv: R.slv, rewards: R.rewardList.length, text: document.getElementById("trialBody").textContent };
+    return { stage: s.stage, bosses: R.bosses, log, great, maxE, maxC, maxFx, maxShots, maxList, maxVoices, ms, time: Math.round(R.time), kills: R.kills, exp: R.coins.xp, slv: R.slv, rewards: R.rewardList.length, rivals: (R.rivals || []).length, text: document.getElementById("trialBody").textContent };
   });
   console.log("   10面：" + r.log.join(" "));
   check(r.bosses === 10 && r.stage === 11 && r.great.join() === "5,10", "10面を続けてクリアできる（大将10体・鬼大将は第5面と第10面。合計 " + Math.floor(r.time / 60) + "分・撃破 " + r.kills + "・サバイバルLv" + r.slv + "）", { bosses: r.bosses, stage: r.stage, great: r.great });
-  check(r.maxE <= 61 && r.maxC <= 50 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxList <= 130 && r.maxVoices <= 8, "面を重ねても溜まらない（敵 最大" + r.maxE + "・コイン " + r.maxC + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "・敵の記録 " + r.maxList + "）", r);
-  check(r.rewards === 10 && /到達 第11面/.test(r.text) && /大将を倒した数 10/.test(r.text) && /獲得 EXP/.test(r.text) && /報酬：/.test(r.text), "結果の画面：到達した面・倒した大将の数・撃破・獲得 EXP・報酬", r.text.slice(0, 160));
+  check(r.maxE <= 62 && r.maxC <= 50 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxList <= 130 && r.maxVoices <= 8, "面を重ねても溜まらない（敵 最大" + r.maxE + "・コイン " + r.maxC + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "・敵の記録 " + r.maxList + "）", r);
+  check(r.rewards === 10 + r.rivals && /到達 第11面/.test(r.text) && /大将を倒した数 10/.test(r.text) && /獲得 EXP/.test(r.text) && /報酬：/.test(r.text), "結果の画面：到達した面・倒した大将の数・撃破・獲得 EXP・報酬（宝箱10＋ライバル武将 " + r.rivals + "）", r.text.slice(0, 160));
   await c.close();
 
   // 9. ゲームオーバー：主人公が倒れたら終わり（本編の兵士には何も起きない）。結果の画面から再挑戦できる

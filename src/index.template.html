@@ -3167,7 +3167,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v110試作（戦場試練：進化スキル4種・おにぎり・爆弾）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v111試作（戦場試練：戦国ライバル武将の乱入）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -12049,7 +12049,7 @@ OFF</button>
           ctx.font = "bold 12px system-ui";
           const R = e.siegeRole && siegeRoleOf(e.kind, e.siegeRole),
             BH = e.behavior && ENEMY_BEHAVIORS[e.behavior], // 試作の敵：「鉄」「盾」の印
-            label = (R ? R.mark + " " : e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : BH ? BH.mark + " " : "") + "Lv" + e.lv,
+            label = (R ? R.mark + " " : e.rival ? "武将 " : e.role === "boss" ? "大将 " : e.role === "mid" ? "中ボス " : BH ? BH.mark + " " : "") + "Lv" + e.lv,
             w = ctx.measureText(label).width + 8;
           ctx.fillStyle = e.role ? "#b8322bee" : BH ? "#2c3f6aee" : "#1f2a22cc";
           ctx.fillRect(e.x - w / 2, y - 14, w, 14);
@@ -23368,6 +23368,18 @@ OFF</button>
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
               drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
+              rivals: TRIAL_RIVALS,
+              hitEnemy: (e, raw) => trial && trialHitEnemy(trial.units.find((u) => u.id === trial.hero), e, raw, 0, true),
+              unique: TRIAL_UNIQUE,
+              // v111 試験用：ライバル武将をすぐ乱入させる（key：masayuki・jouun・danzo）
+              rivalSpawn: (key) => {
+                if (!trial || trial.mode !== "survival") return null;
+                trial.rivalChecked = true;
+                trial.forceRival = key;
+                trialSurvivalTick(trial, 0); // 敵を出す処理（spec・add）は trialSurvivalTick の中にある
+                const e = trial.rival;
+                return e ? { name: e.name, hp: e.hp, max: e.max } : null;
+              },
               dropMagnet: (x, y, kind = "magnet") => trial && (trial.magnets = trial.magnets || []).push({ kind, x, y, pull: false, pt: 0 }),
               coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
@@ -23426,6 +23438,9 @@ OFF</button>
                   itemDropped: { ...(trial.itemDropped || {}) },
                   itemPicked: { ...(trial.itemPicked || {}) },
                   bombKills: trial.bombKills || 0,
+                  rival: trial.rival ? { key: trial.rival.rival, name: trial.rival.name, hp: trial.rival.hp, max: trial.rival.max, guard: trial.rival.guardUntil > trial.t } : null,
+                  rivalsMet: trial.rivalsMet || 0,
+                  rivalsDown: (trial.rivalsDown || []).map((x) => ({ ...x })),
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,
                   magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? trialMagnetR(trial, h) : null; })(),
