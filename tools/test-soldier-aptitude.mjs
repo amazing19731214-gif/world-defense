@@ -43,19 +43,18 @@ try {
       A = D.chronicleApi,
       Q = D.squadApi,
       [s, t] = D.state().soldiers;
-    A.aptitude(s).type = "mighty";
-    A.aptitude(t).type = "stout";
+    A.growthRanks(s).values.atk = 10;
+    A.growthRanks(t).values.atk = 1;
     const b = [A.base(s, "atk"), A.base(t, "atk")],
       hp = s.hp,
-      g = Q.growthLv(s.level);
+      oldLevel = s.level;
     Q.gainXp(s, 1e5, true);
     Q.gainXp(t, 1e5, true);
-    const unit = D.jobApi.unitOf(s),
-      diff = Q.growthLv(s.level) - g;
+    const diff = s.level - oldLevel;
     return {
       first: A.base(s, "atk") - b[0],
       second: A.base(t, "atk") - b[1],
-      expected: unit.grow.atk * diff,
+      expected: diff,
       level: s.level,
       sameLevel: s.level === t.level,
       hpSame: hp === s.hp,
@@ -63,10 +62,8 @@ try {
     };
   });
   check(
-    r.sameLevel &&
-      Math.abs(r.first / r.expected - 1.1) < 1e-8 &&
-      Math.abs(r.second / r.expected - 0.95) < 1e-8,
-    "同じ職・同じLvでも豪腕と頑健の攻撃成長が異なる",
+    r.sameLevel && Math.abs(r.first - r.expected * 10) < 1e-8 && Math.abs(r.second - r.expected) < 1e-8,
+    "同じ職・同じLvでもSとIの固定成長が異なる",
   );
   check(r.hpSame, "レベルアップしても現在HPを回復しない");
   await p.evaluate(() => WD_DEBUG.squadApi.saveRoster());
@@ -76,10 +73,9 @@ try {
       const A = WD_DEBUG.chronicleApi,
         [s, t] = WD_DEBUG.state().soldiers;
       return (
-        A.aptitude(s).type === "mighty" &&
-        A.aptitude(t).type === "stout" &&
-        A.aptitude(s).delta.atk > 0 &&
-        A.aptitude(t).delta.atk < 0
+        A.growthRanks(s).values.atk === 10 &&
+        A.growthRanks(t).values.atk === 1 &&
+        A.growthRanks(s).gains.atk === A.growthRanks(t).gains.atk * 10
       );
     }),
     "適性と蓄積した成長差を再読込後も維持",
@@ -101,10 +97,7 @@ try {
       healGrowth: A.base(s, "heal") > old,
     };
   });
-  check(
-    !r.error && r.type === "mighty" && r.before && r.healGrowth,
-    "転職で適性を再抽選せず過去の差分を維持し新職で成長する",
-  );
+  check(!r.error && r.before && r.healGrowth, "転職で適性を再抽選せず過去の差分を維持し新職で成長する");
   r = await p.evaluate(() => {
     const D = WD_DEBUG,
       A = D.chronicleApi,
@@ -186,15 +179,16 @@ try {
       s = D.state().soldiers[0],
       a = A.aptitude(s),
       u = D.jobApi.unitOf(s),
-      lv = D.squadApi.growthLv(s.level);
+      r = A.growthRanks(s),
+      lv = D.squadApi.growthLv(r.startAt);
     a.delta.hp = 1e8;
     a.earned.hp = 1e9;
-    const difference = A.base(s, "hp") - u.hp - u.grow.hp * lv;
+    const difference = A.base(s, "hp") - u.hp - u.grow.hp * lv - r.gains.hp;
     return Math.abs(difference) <= u.grow.hp * lv * 0.1 + 1e-8;
   });
-  check(r, "職業変更後も現在の基礎成長に対する補正を10%以内へ制限");
+  check(r, "職業変更後も旧適性の補正を移行時の基礎成長の10%以内へ制限");
   await p.evaluate(() => WD_DEBUG.chronicleApi.open("live"));
-  check((await p.locator(".chronicle-aptitude").count()) === 2, "詳細画面に4種類の成長適性を表示");
+  check((await p.locator(".chronicle-aptitude").count()) === 2, "詳細画面に各兵士の成長適性を表示");
   check(
     await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     "スマホの適性表示が横にはみ出さない",

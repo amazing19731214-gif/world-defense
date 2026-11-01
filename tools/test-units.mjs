@@ -97,7 +97,7 @@ await ev(page, () => WD_DEBUG.setGold(9999));
 
 console.log("■ 雇用メニューと能力値");
 let text = await page.textContent("#unitTools");
-check("雇用はランダム1人24Gで兵種選択なし",/24G/.test(text)&&await page.locator('[data-u]').count()===0);
+check("初回雇用は無料で兵種選択なし",/無料/.test(text)&&await page.locator('[data-u]').count()===0);
 let r = await ev(page, () => {
   const F = WD_DEBUG.unitConfig.UNIT_FRAMES,
     btn = F.medic.idle;
