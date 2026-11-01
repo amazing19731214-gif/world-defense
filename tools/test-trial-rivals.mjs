@@ -377,6 +377,83 @@ try {
   check(/討ち取ったライバル武将：真田昌幸（第2面・✨六連の計）/.test(r.result) && /六連の計（固有）/.test(r.result), "結果の画面に、討ち取ったライバル武将と固有の技が出る", r.result.slice(0, 200));
   check((await storage(p)) === save0, "ライバル武将・固有の技は保存データに入らない（本番の兵士・武将・奥義は変わらない）");
   await c.close();
+  // 9. v112.3 乱入の予告（3秒前に「⚠ 何者かが近づいてくる…」）・画面の外のライバル武将を指す矢印・一時停止
+  ({ c, p } = await open());
+  await quiet(p);
+  await toFloor2(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      R = T.rivals,
+      h = L.units[0],
+      c0 = R.chance;
+    R.chance = 1;
+    L.st = 70;
+    L.rivalChecked = false;
+    let warnAt = null,
+      spawnAt = null;
+    for (let i = 0; i < 80 && spawnAt == null; i++) {
+      h.hp = h.max;
+      while (L.choice) T.choose(0);
+      WD_DEBUG.step(0.1);
+      const s = T.state();
+      if (warnAt == null && s.rivalPending) warnAt = Math.round(L.st * 10) / 10;
+      if (s.rival) spawnAt = Math.round(L.st * 10) / 10;
+    }
+    R.chance = c0;
+    // 画面の外へ置いて、矢印と名前が描かれるか（文字を記録）
+    const e = L.rival;
+    Object.assign(e, { x: h.x + 1400 > 1880 ? h.x - 1400 : h.x + 1400, y: h.y, px: e.x, py: e.y, cd: 99 });
+    const C = [...document.querySelectorAll("canvas")].map((c) => c.getContext("2d")).find((c) => c && Object.prototype.hasOwnProperty.call(c, "fillText")),
+      orig = C.fillText,
+      texts = [];
+    C.fillText = function (t, ...a) {
+      texts.push(String(t));
+      return orig.call(this, t, ...a);
+    };
+    try {
+      WD_DEBUG.heroApi.draw();
+    } finally {
+      C.fillText = orig;
+    }
+    return { warnAt, spawnAt, arrow: texts.some((t) => t === TRIAL_LABEL()), name: e.name };
+    function TRIAL_LABEL() {
+      const D = R.list[e.rival];
+      return D.icon + D.name;
+    }
+  });
+  check(r.warnAt >= 72 && r.warnAt < 73 && r.spawnAt >= 75 && r.spawnAt < 75.2, "乱入の3秒前（" + r.warnAt + "秒）に「⚠ 何者かが近づいてくる…」、75秒で乱入（" + r.spawnAt + "秒）", r);
+  check(r.arrow, "画面の外にいるライバル武将は、画面の端に武将の色の矢印と名前（" + r.name + "）", r);
+  // 一時停止：戦闘・面の時計が止まる。再開で動く。3択の間は一時停止できない
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      btn = document.getElementById("trialPause");
+    const shown = !btn.hidden;
+    btn.click();
+    const st0 = L.st,
+      label = btn.textContent;
+    for (let i = 0; i < 20; i++) WD_DEBUG.step(0.1);
+    const stopped = L.st === st0 && T.state().paused;
+    btn.click();
+    for (let i = 0; i < 5; i++) WD_DEBUG.step(0.1);
+    const moved = L.st > st0 && !T.state().paused;
+    L.lvUps = 1;
+    L.lvAt = null;
+    for (let i = 0; i < 10 && !L.choice; i++) WD_DEBUG.step(0.05);
+    const err = T.pause(true);
+    while (L.choice) T.choose(0);
+    return { shown, label, stopped, moved, err, label2: btn.textContent };
+  });
+  check(r.shown && r.label === "▶ 再開" && r.stopped && r.moved && r.label2 === "⏸ 停止", "⏸ 一時停止：戦闘と面の時計が止まり、「▶ 再開」で動く", r);
+  check(r.err === "いまは一時停止できません。", "3択の画面のあいだは一時停止しない（自動選択の10秒で進む）", r.err);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial;
+    T.retreat();
+    return document.getElementById("trialPause").hidden;
+  });
+  check(r, "戦闘が終わると一時停止のボタンは隠れる", r);
+  await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);
 } finally {

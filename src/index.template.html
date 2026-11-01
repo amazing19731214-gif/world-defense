@@ -2034,10 +2034,13 @@
       .tall-field .trial-action button small { display: none; }
       .tall-field .trial-action button[disabled] { opacity: 0.55; }
       .tall-field .trial-sound { min-width: 64px; }
+      .trial-pause { min-width: 56px; }
+      .trial-pause[hidden] { display: none; }
+      .trial-pause[aria-pressed="true"] { border-color: #ffe27a; background: linear-gradient(#5a4316, #3a2a10); }
       /* v108.6 効果音の音量（撤退の右・小さく） */
       .trial-bottom {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         gap: 6px;
       }
       .trial-bottom .retreat {
@@ -3064,7 +3067,7 @@
             </div>
           </div>
         </div>
-        <div class="trial-bottom"><button id="trialRetreat" class="retreat">↩ 撤退</button><button id="trialSound" type="button" class="trial-sound">🔉 中</button></div>
+        <div class="trial-bottom"><button id="trialRetreat" class="retreat">↩ 撤退</button><button id="trialPause" type="button" class="trial-sound trial-pause" aria-pressed="false" hidden>⏸ 停止</button><button id="trialSound" type="button" class="trial-sound">🔉 中</button></div>
         <!-- v108.2 サバイバルのレベルアップ：選ぶまで戦闘は止まる -->
         <div id="trialLevelUp" class="trial-levelup" hidden></div>
       </section>
@@ -3172,7 +3175,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112.2試作（戦場試練：3択の自動選択）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112.3試作（戦場試練：一時停止・乱入の予告）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23377,6 +23380,7 @@ OFF</button>
               hitEnemy: (e, raw) => trial && trialHitEnemy(trial.units.find((u) => u.id === trial.hero), e, raw, 0, true),
               unique: TRIAL_UNIQUE,
               // v111 試験用：ライバル武将をすぐ乱入させる（key：masayuki・jouun・danzo）
+              pause: (on) => trialPauseToggle(on), // v112.3
               rivalSpawn: (key) => {
                 if (!trial || trial.mode !== "survival") return null;
                 trial.rivalChecked = true;
@@ -23446,6 +23450,8 @@ OFF</button>
                   rival: trial.rival ? { key: trial.rival.rival, name: trial.rival.name, hp: trial.rival.hp, max: trial.rival.max, guard: trial.rival.guardUntil > trial.t } : null,
                   rivalsMet: trial.rivalsMet || 0,
                   autoPicked: trial.autoPicked || 0,
+                  paused: !!trial.paused,
+                  rivalPending: !!trial.rivalPending,
                   autoLeft: trial.choiceAutoAt ? Math.round((trial.choiceAutoAt - performance.now()) / 100) / 10 : null,
                   rivalsDown: (trial.rivalsDown || []).map((x) => ({ ...x })),
                   magnetPicked: trial.magnetPicked || 0,

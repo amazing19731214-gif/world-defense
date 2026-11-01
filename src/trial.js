@@ -600,6 +600,7 @@ function trialNextStage() {
   T.bossAt = null;
   T.rival = null; // v111 次の面ではまた乱入があるかもしれない
   T.rivalChecked = false;
+  T.rivalPending = false;
   T.rivalBlasts = [];
   T.enemies = [];
   T.coins = [];
@@ -1586,6 +1587,10 @@ function trialSfxButton() {
     b.setAttribute("aria-label", "効果音の音量：" + TRIAL_SFX.levels[trialSfxLevel].label.replace(/^\S+ /, "") + "（押すと変わる）");
   }
 }
+$("trialPause").addEventListener("click", () => {
+  const err = trialPauseToggle();
+  if (err) toast(err);
+});
 $("trialSound").addEventListener("click", () => {
   trialAudioUnlock();
   trialSfxSetLevel((trialSfxLevel + 1) % TRIAL_SFX.levels.length);
@@ -1726,6 +1731,26 @@ function trialOpenChoice(T) {
   trialLevelSync();
 }
 const TRIAL_LEVELUP = { ready: 0.45, stagger: 0.08, autoPick: 10 }; // v112.2 autoPick：この秒数（本物の時間）選ばなければ、いちばん上のカードを自動で選ぶ（0 で自動にしない）
+// v112.3 一時停止（戦闘中だけ。3択・宝箱の画面のあいだは押せない）
+function trialPauseToggle(force) {
+  const T = trial;
+  if (!T || T.phase !== "fight" || T.result) return "戦闘中に使えます。";
+  const want = force === undefined ? !T.paused : !!force;
+  if (want && (T.choice || T.cleared)) return "いまは一時停止できません。";
+  T.paused = want;
+  if (!want && T.choiceAutoAt) T.choiceAutoAt = performance.now() + TRIAL_LEVELUP.autoPick * 1000;
+  trialPauseSync();
+  return null;
+}
+function trialPauseSync() {
+  const b = $("trialPause"),
+    T = trial;
+  if (!b) return;
+  const on = !!(T && T.paused);
+  b.textContent = on ? "▶ 再開" : "⏸ 停止";
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.hidden = !(T && T.phase === "fight");
+}
 // v112.2 自動で選ぶカードの名前（いちばん上のカード）
 function trialChoiceName(T, c) {
   if (!c) return "";
@@ -1898,7 +1923,8 @@ function trialSpawnPoint(T, hero) {
 //   既存の武将60人・名のある兵士18人と重ならない人物（山県昌景・馬場信春は除く）。本番の保存データには何も書かない
 const TRIAL_RIVALS = {
   fromFloor: 2, // この面から出る
-  at: 75, // 面の時計がこの秒を過ぎたら、出るかどうかを1回だけ決める（大将の前）
+  at: 75, // 面の時計がこの秒で乱入する（大将の前）
+  warn: 3, // v112.3 乱入の何秒前に、出るかどうかを決めて予告するか
   chance: 0.6, // 出る確率（戦闘の乱数）
   stay: 70, // この秒数たっても倒せなければ退く
   hp: 0.8, // 大将と比べた体力
@@ -1935,9 +1961,19 @@ function trialRivalTick(T, dt, hero, add, spec) {
     T.forceRival = null;
     trialRivalSpawn(T, hero, add, spec, k); // 試験用（WD_DEBUG.trial.rivalSpawn）
   }
-  if (!T.rivalChecked && T.floor >= R.fromFloor && T.st >= R.at && !T.boss && !T.cleared) {
+  // v112.3 乱入の予告：3秒前に決めて「⚠ 何者かが近づいてくる…」。75秒で乱入（乱入の時刻・確率は v111 のまま）
+  if (!T.rivalChecked && T.floor >= R.fromFloor && T.st >= R.at - R.warn && !T.boss && !T.cleared) {
     T.rivalChecked = true;
-    if (T.rng() < R.chance) trialRivalSpawn(T, hero, add, spec);
+    if (T.rng() < R.chance) {
+      T.rivalPending = true;
+      msg("⚠ 何者かが近づいてくる…");
+      if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 120, text: "⚠ 何者かが近づいてくる…", ougi: true, age: 0, duration: 2.4 });
+      trialSfx("warn");
+    }
+  }
+  if (T.rivalPending && T.st >= R.at && !T.cleared) {
+    T.rivalPending = false;
+    trialRivalSpawn(T, hero, add, spec);
   }
   // v112 津軽為信の火矢（落ちる時刻になったら、輪の中の兵士に当たる。武将が倒れても、放った火矢は落ちる）
   if (T.rivalBlasts && T.rivalBlasts.length) {
@@ -2196,6 +2232,7 @@ function trialBegin() {
 function tickTrial(dt) {
   const T = trial;
   if (!T) return;
+  if (T.paused) return; // v112.3 一時停止（戦闘も、3択の自動選択の時計も止まる）
   if (!T.mathRng) {
     let s = 98765;
     T.mathRng = () => ((s = (s * 48271) % 2147483647) / 2147483647);
@@ -3175,8 +3212,10 @@ function drawTrial() {
       const sx = (e.x - V.ox) * V.z,
         sy = (e.y - V.oy) * V.z;
       if (sx >= 0 && sx <= SW && sy >= 0 && sy <= SH) continue;
-      if (e === T.boss) {
-        // 大将：画面の端に、向きを指す大きい矢印と「大将」
+      if (e === T.boss || e.rival) {
+        // 大将：画面の端に、向きを指す大きい矢印と「大将」。v112.3 ライバル武将は武将の色と名前
+        const RD = e.rival ? TRIAL_RIVALS.list[e.rival] : null,
+          label = RD ? RD.icon + RD.name : "大将";
         const cx = SW / 2,
           cy = SH / 2,
           a = Math.atan2(sy - cy, sx - cx),
@@ -3186,7 +3225,7 @@ function drawTrial() {
         ctx.save();
         ctx.translate(ax, ay);
         ctx.rotate(a);
-        ctx.fillStyle = "#ff2a1a";
+        ctx.fillStyle = RD ? RD.color : "#ff2a1a";
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -3202,9 +3241,10 @@ function drawTrial() {
         ctx.textAlign = "center";
         ctx.lineWidth = 4;
         ctx.strokeStyle = "#1a120c";
-        ctx.strokeText("大将", ax - Math.cos(a) * 34, ay - Math.sin(a) * 28 + 6);
-        ctx.fillStyle = "#ffd0c8";
-        ctx.fillText("大将", ax - Math.cos(a) * 34, ay - Math.sin(a) * 28 + 6);
+        const lx = Math.max(48, Math.min(SW - 48, ax - Math.cos(a) * (RD ? 50 : 34)));
+        ctx.strokeText(label, lx, ay - Math.sin(a) * 28 + 6);
+        ctx.fillStyle = RD ? "#fff" : "#ffd0c8";
+        ctx.fillText(label, lx, ay - Math.sin(a) * 28 + 6);
         continue;
       }
       ctx.fillStyle = e.role ? "#ff2a1acc" : "#ff5a4acc";
@@ -3314,6 +3354,19 @@ function drawTrial() {
     }
   });
   screenSpace(drawCombatOverlay);
+  if (T.paused)
+    screenSpace((SW, SH) => {
+      // v112.3 一時停止中：画面を暗くして大きく表示
+      ctx.fillStyle = "#0a141899";
+      ctx.fillRect(0, 0, SW, SH);
+      ctx.textAlign = "center";
+      ctx.font = "bold 44px system-ui";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("⏸ 一時停止中", SW / 2, SH / 2);
+      ctx.font = "bold 20px system-ui";
+      ctx.fillStyle = "#ffe27a";
+      ctx.fillText("「▶ 再開」で続ける", SW / 2, SH / 2 + 40);
+    });
   trialHudSync();
   trialUnitsSync(false);
 }
@@ -3580,6 +3633,7 @@ function renderTrialSheet() {
 function trialHudSync() {
   const T = trial;
   if (!T) return;
+  trialPauseSync(); // v112.3
   const rest = T.units.filter((u) => !u.placed).length,
     left = T.queue.length + T.enemies.filter((e) => !e.gone).length,
     alive = T.units.filter((u) => !u.dead).length;
@@ -3614,6 +3668,7 @@ function trialSyncUI() {
   trialHud = "";
   if (!T) {
     trialOugiSync(true);
+    trialPauseSync(); // v112.3 一時停止のボタンを隠す
     if (typeof updateUI === "function") updateUI();
     return;
   }
