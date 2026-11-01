@@ -312,6 +312,12 @@ function startTrial(ids, stageId = "sanpou", opts = {}) {
     units = list.map(trialUnit),
     D = trialEnemyLevel(units);
   if (opts.mode === "survival") return startSurvival(list, units, M, D, stageId, opts.hero);
+  if (opts.mode === "explore") {
+    // v113 探索：テスト版だけ。主人公1人で出発（敵の強さは主人公で決める）
+    if (!TRIAL_EXPLORE.real()) return "探索はテスト版だけで遊べます（兵士名簿・戦死に書き込むため）。";
+    const hero = units.find((u) => u.id === opts.hero) || units[0];
+    return startExplore(list, [hero], trialEnemyLevel([hero]), hero.id, opts.seed);
+  }
   const queue = [],
     keep = Math.min(1, TRIAL_RULES.countBase + TRIAL_RULES.countStep * units.length);
   let acc = 1 - keep; // 最初の敵は必ず出す
@@ -1587,6 +1593,13 @@ function trialSfxButton() {
     b.setAttribute("aria-label", "効果音の音量：" + TRIAL_SFX.levels[trialSfxLevel].label.replace(/^\S+ /, "") + "（押すと変わる）");
   }
 }
+$("trialLeave").addEventListener("click", () => {
+  if (!trial || !trial.explore) return;
+  const left = trial.map.villages.filter((v) => v.state !== "freed").length;
+  if (left && !confirm("この地を去って、新しい地へ行きますか？（まだ救っていない村が" + left + "つあります）")) return;
+  const err = trialExploreLeave();
+  if (err) toast(err);
+});
 $("trialPause").addEventListener("click", () => {
   const err = trialPauseToggle();
   if (err) toast(err);
@@ -1750,6 +1763,8 @@ function trialPauseSync() {
   b.textContent = on ? "▶ 再開" : "⏸ 停止";
   b.setAttribute("aria-pressed", on ? "true" : "false");
   b.hidden = !(T && T.phase === "fight");
+  const lv = $("trialLeave"); // v113 探索：この地を去る
+  if (lv) lv.hidden = !(T && T.explore && T.phase === "fight");
 }
 // v112.2 自動で選ぶカードの名前（いちばん上のカード）
 function trialChoiceName(T, c) {
@@ -1919,6 +1934,381 @@ function trialSpawnPoint(T, hero) {
   return null;
 }
 // サバイバルの敵の出現：時間とともに間隔が短く、数が多く、強くなる。上限あり。遠くに離れた敵は近くへ移す。最後に強敵
+// ===== v113 探索（試作・テスト版だけ）：暗闇のランダムなマップで村を探し、仲間を得る =====
+//   ・主人公1人で出発。村を見つけると野盗が襲っている → 追い払うと、その村の兵士が無料で仲間に（すぐ兵士名簿へ）
+//   ・兵士が倒れたら本当に戦死（英霊名鑑へ）。名簿・戦死の書き込みはテスト版（wdtest: の保存領域）だけ
+//   ・「この地を去る」で、いつでも新しいランダムなマップへ。主人公が倒れたら探索は終わり（得た仲間は残る）
+//   ・サバイバルのしくみ（経験値コイン・攻撃スキル・レベルアップ・アイテム・ライバル武将）はそのまま使う。大将・面クリアはない
+const TRIAL_EXPLORE = {
+  size: { w: 2400, h: 2400 },
+  cell: 40, // 暗闇のマスの大きさ
+  sight: 250, // 兵士が見える距離
+  villages: [3, 5], // 1枚のマップの村の数（最小・最大）
+  kinds: [
+    { key: "teppo", name: "鉄砲の村", icon: "💥", type: "gunner" },
+    { key: "yari", name: "槍の里", icon: "🔱", type: "spearman" },
+    { key: "yumi", name: "弓の村", icon: "🏹", type: "archer" },
+    { key: "tera", name: "山寺", icon: "🩹", type: "medic" },
+    { key: "ronin", name: "浪人の宿場", icon: "🗡", type: "ashigaru" },
+    { key: "uma", name: "馬の里", icon: "🐎", type: "cavalry" },
+  ],
+  guards: 4, // 村を襲う野盗の数（地が進むと +1 ずつ）
+  findR: 170, // 村のまわりがこの距離まで見えたら「見つけた」
+  roam: { every: 8, max: 22 }, // うろつく敵（間隔・同時の上限）
+  partyMax: 5, // 一緒に歩く仲間（主人公を入れて）
+  real: () => !!window.WD_TEST_BUILD, // 本番の名簿・戦死へ書くのはテスト版だけ（本番の版では探索を出さない）
+};
+// ランダムなマップ（同じ seed なら同じ形）：道でつながった村・川と橋・森と岩
+function trialExploreMap(seed, region) {
+  const E = TRIAL_EXPLORE,
+    Z = E.size;
+  let r = seed % 2147483647 || 7;
+  const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647),
+    start = { x: 240, y: Math.round(400 + rnd() * (Z.h - 800)) },
+    n = E.villages[0] + Math.floor(rnd() * (E.villages[1] - E.villages[0] + 1)),
+    kinds = E.kinds.filter((k) => SOLDIER_TYPES[k.type] && SOLDIER_TYPES[k.type].enabled),
+    villages = [];
+  for (let tries = 0; villages.length < n && tries < 400; tries++) {
+    const x = Math.round(380 + rnd() * (Z.w - 600)),
+      y = Math.round(260 + rnd() * (Z.h - 520));
+    if (Math.hypot(x - start.x, y - start.y) < 600 || villages.some((v) => Math.hypot(v.x - x, v.y - y) < 520)) continue;
+    const K = kinds[Math.floor(rnd() * kinds.length)];
+    villages.push({ id: villages.length, x, y, kind: K.key, name: K.name, icon: K.icon, type: K.type, state: "hidden", guards: [] });
+  }
+  // 道：出発地 → 近い順に村をつなぐ（少し曲げる）
+  const roads = [],
+    linked = [start];
+  for (const v of [...villages].sort((a, b) => Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y))) {
+    const from = linked.reduce((m, p) => (Math.hypot(p.x - v.x, p.y - v.y) < Math.hypot(m.x - v.x, m.y - v.y) ? p : m), linked[0]),
+      mx = (from.x + v.x) / 2 + (rnd() - 0.5) * 240,
+      my = (from.y + v.y) / 2 + (rnd() - 0.5) * 240;
+    roads.push([[from.x, from.y], [Math.round(mx), Math.round(my)], [v.x, v.y]]);
+    linked.push(v);
+  }
+  // 川（半分くらいのマップ）：縦の帯。道が渡る所に橋
+  let river = null;
+  const bridges = [];
+  if (rnd() < 0.5) {
+    const x0 = Math.round(900 + rnd() * 700);
+    river = { x0, x1: x0 + 70 };
+    for (const p of roads)
+      for (let i = 0; i < p.length - 1; i++) {
+        const [ax, ay] = p[i],
+          [bx, by] = p[i + 1];
+        if ((ax - river.x0) * (bx - river.x0) > 0 && (ax - river.x1) * (bx - river.x1) > 0) continue;
+        const cx = (river.x0 + river.x1) / 2,
+          t = bx === ax ? 0.5 : (cx - ax) / (bx - ax),
+          y = Math.round(ay + (by - ay) * Math.max(0, Math.min(1, t)));
+        bridges.push({ x0: river.x0 - 12, x1: river.x1 + 12, y0: y - 34, y1: y + 34 });
+      }
+    for (const v of villages) if (v.x > river.x0 - 120 && v.x < river.x1 + 120) v.x = v.x < (river.x0 + river.x1) / 2 ? river.x0 - 130 : river.x1 + 130;
+    if (!bridges.length) bridges.push({ x0: river.x0 - 12, x1: river.x1 + 12, y0: start.y - 34, y1: start.y + 34 });
+  }
+  // 森と岩：村・出発地・道の上には置かない
+  const nearRoad = (x, y) =>
+      roads.some((p) =>
+        p.some((q, i) => {
+          if (!i) return false;
+          const [ax, ay] = p[i - 1],
+            [bx, by] = q,
+            L = Math.hypot(bx - ax, by - ay) || 1,
+            t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (L * L)));
+          return Math.hypot(ax + (bx - ax) * t - x, ay + (by - ay) * t - y) < 46;
+        }),
+      ),
+    blocked = (x, y) => nearRoad(x, y) || Math.hypot(x - start.x, y - start.y) < 180 || villages.some((v) => Math.hypot(v.x - x, v.y - y) < 190) || (river && x > river.x0 - 30 && x < river.x1 + 30);
+  const obstacles = [];
+  for (let k = 0; k < 14; k++) {
+    const cx = 100 + rnd() * (Z.w - 200),
+      cy = 100 + rnd() * (Z.h - 200);
+    for (const o of trialForest(cx, cy, 5 + Math.floor(rnd() * 5), 90 + rnd() * 60, Math.floor(rnd() * 1e6) + 1)) if (!blocked(o.x, o.y) && o.x > 20 && o.y > 20 && o.x < Z.w - 20 && o.y < Z.h - 20) obstacles.push(o);
+  }
+  for (let k = 0; k < 10; k++) {
+    const x = Math.round(80 + rnd() * (Z.w - 160)),
+      y = Math.round(80 + rnd() * (Z.h - 160));
+    if (!blocked(x, y)) obstacles.push({ x, y, r: 16, kind: "rock" });
+  }
+  return {
+    name: "未踏の地 第" + region + "地（" + seed + "）",
+    text: "暗闇の原野。村を探して仲間を得よう",
+    explore: true,
+    size: Z,
+    lanes: Object.fromEntries(roads.map((p, i) => ["r" + i, p])),
+    road: [],
+    labels: null,
+    fort: null,
+    gate: null,
+    deploy: { x: start.x - 60, y: start.y - 50, w: 120, h: 100 }, // 出発地（陣）
+    river,
+    bridges,
+    obstacles,
+    villages,
+    start,
+    waves: [],
+  };
+}
+// 暗闇：一度見た所は薄暗く残る（地図が埋まる）
+function trialFogInit(T) {
+  const E = TRIAL_EXPLORE,
+    Z = T.map.size,
+    cols = Math.ceil(Z.w / E.cell),
+    rows = Math.ceil(Z.h / E.cell);
+  T.fog = { cols, rows, seen: new Uint8Array(cols * rows), n: 0, cv: null, t: 0 };
+}
+function trialFogTick(T, dt) {
+  const F = T.fog,
+    E = TRIAL_EXPLORE,
+    c = E.cell,
+    R = E.sight;
+  if (!F || (F.t -= dt) > 0) return;
+  F.t = 0.1;
+  for (const u of T.units) {
+    if (u.dead) continue;
+    const c0 = Math.max(0, Math.floor((u.x - R) / c)),
+      c1 = Math.min(F.cols - 1, Math.floor((u.x + R) / c)),
+      r0 = Math.max(0, Math.floor((u.y - R) / c)),
+      r1 = Math.min(F.rows - 1, Math.floor((u.y + R) / c));
+    for (let y = r0; y <= r1; y++)
+      for (let x = c0; x <= c1; x++) {
+        const i = y * F.cols + x;
+        if (F.seen[i] || Math.hypot((x + 0.5) * c - u.x, (y + 0.5) * c - u.y) > R) continue;
+        F.seen[i] = 1;
+        F.n++;
+      }
+  }
+}
+const trialFogSeen = (T, x, y) => {
+  const F = T.fog,
+    c = TRIAL_EXPLORE.cell,
+    cx = Math.floor(x / c),
+    cy = Math.floor(y / c);
+  return !!F && cx >= 0 && cy >= 0 && cx < F.cols && cy < F.rows && !!F.seen[cy * F.cols + cx];
+};
+// いま見えている所か（兵士の見える距離の中）
+const trialVisible = (T, x, y) => T.units.some((u) => !u.dead && Math.hypot(u.x - x, u.y - y) <= TRIAL_EXPLORE.sight);
+// 暗闇を描く（小さな画像に 1マス1点で描いて、なめらかに拡大）
+function trialFogImage(T) {
+  const F = T.fog,
+    E = TRIAL_EXPLORE;
+  if (!F.cv) {
+    F.cv = document.createElement("canvas");
+    F.cv.width = F.cols;
+    F.cv.height = F.rows;
+    F.img = F.cv.getContext("2d").createImageData(F.cols, F.rows);
+  }
+  const d = F.img.data,
+    live = T.units.filter((u) => !u.dead),
+    R = E.sight,
+    c = E.cell;
+  for (let y = 0; y < F.rows; y++)
+    for (let x = 0; x < F.cols; x++) {
+      const i = y * F.cols + x,
+        px = (x + 0.5) * c,
+        py = (y + 0.5) * c;
+      let a = F.seen[i] ? 150 : 250;
+      for (const u of live) {
+        const dd = Math.hypot(u.x - px, u.y - py);
+        if (dd < R) a = Math.min(a, dd < R * 0.7 ? 0 : Math.round(((dd - R * 0.7) / (R * 0.3)) * 150));
+      }
+      d[i * 4] = 6;
+      d[i * 4 + 1] = 8;
+      d[i * 4 + 2] = 14;
+      d[i * 4 + 3] = a;
+    }
+  F.cv.getContext("2d").putImageData(F.img, 0, 0);
+  return F.cv;
+}
+function trialDrawFog(T) {
+  if (!T.fog) return;
+  const cv = trialFogImage(T),
+    Z = T.map.size;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(cv, 0, 0, Z.w, Z.h);
+  ctx.restore();
+}
+// 出発：主人公1人。サバイバルの出撃を使い、マップと暗闇を探索のものにする
+function startExplore(list, units, D, heroId, seed0) {
+  const hero = units.find((u) => u.id === heroId) || units[0],
+    seed = seed0 || (Date.now() % 100000) + 1, // 試験では種を決められる
+    err = startSurvival([hero.src], [hero], trialExploreMap(seed, 1), D, "explore", hero.id);
+  if (err) return err;
+  const T = trial;
+  T.explore = { region: 1, seed, recruits: [], fallen: [], left: 0 };
+  T.floor = 1;
+  T.reserve = [];
+  T.next = 3;
+  trialExplorePlace(T);
+  trialFogInit(T);
+  msg("🌑 探索に出発！ 暗闇の中で村を探そう。村を襲う野盗を追い払うと、その村の兵士が仲間になる（兵士名簿へ）。倒れた兵士は本当に戦死する。「🚪 この地を去る」で新しい地へ。");
+  trialSyncUI();
+  return null;
+}
+// 生きている兵士を出発地（陣）のまわりに置く
+function trialExplorePlace(T) {
+  const S = TRIAL_SURVIVAL,
+    st = T.map.start;
+  T.units
+    .filter((u) => !u.dead)
+    .forEach((u, i) => {
+      const o = i ? S.slots[(i - 1) % S.slots.length] : [0, 0],
+        x = st.x + o[0],
+        y = st.y + o[1];
+      Object.assign(u, { x, y, px: x, py: y, placed: true, home: { x, y }, target: null });
+    });
+}
+// この地を去る：新しいランダムなマップへ（仲間・スキル・Lv はそのまま。倒れた兵士は戻らない）
+function trialExploreLeave() {
+  const T = trial;
+  if (!T || !T.explore) return "探索の間だけ使えます。";
+  if (T.choice || T.cleared) return "いまは移れません。";
+  const X = T.explore;
+  X.region++;
+  X.left++;
+  X.seed = (X.seed * 48271) % 2147483647 || 7;
+  T.map = trialExploreMap(X.seed, X.region);
+  T.floor = X.region;
+  T.enemies = [];
+  T.coins = [];
+  T.magnets = [];
+  T.proj = [];
+  T.rival = null;
+  T.rivalChecked = false;
+  T.rivalPending = false;
+  T.rivalBlasts = [];
+  T.st = 0;
+  T.next = 3;
+  T.view = null;
+  shots = [];
+  effects.length = 0;
+  trialExplorePlace(T);
+  trialFogInit(T);
+  trialStick = { x: 0, y: 0 };
+  msg("🚪 この地を去り、新しい地（第" + X.region + "地）へ。");
+  trialSfx("card");
+  trialSyncUI();
+  return null;
+}
+// 探索の毎コマ：暗闇・村・うろつく敵・ライバル武将（大将と面クリアはない）
+function trialExploreTick(T, dt, hero, add, spec) {
+  const E = TRIAL_EXPLORE;
+  trialFogTick(T, dt);
+  for (const v of T.map.villages) {
+    if (v.state === "hidden" && trialVisible(T, v.x, v.y + E.findR - 20) + trialVisible(T, v.x, v.y) + trialVisible(T, v.x + E.findR - 20, v.y) + trialVisible(T, v.x - E.findR + 20, v.y) + trialVisible(T, v.x, v.y - E.findR + 20)) {
+      v.state = "found";
+      const n = E.guards + T.floor - 1;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2,
+          x = v.x + Math.cos(a) * 110,
+          y = v.y + Math.sin(a) * 90;
+        if (trialInRiver(T.map, x, y)) continue;
+        const g = add(spec(k % 3 === 2 ? "knight" : "goblin", { x, y }, false));
+        g.villageGuard = v.id;
+        v.guards.push(g);
+      }
+      msg("🏘 " + v.name + "を見つけた！ 野盗に襲われている。追い払えば仲間が加わる。");
+      if (effects.length < 60) effects.push({ kind: "ctext", x: v.x, y: v.y - 120, text: v.icon + " " + v.name + " 発見！", ougi: true, age: 0, duration: 1.6 });
+      trialSfx("warn");
+    }
+    if (v.state === "found" && v.guards.every((g) => g.gone)) {
+      v.state = "freed";
+      trialExploreJoin(T, v, hero);
+    }
+  }
+  trialRivalTick(T, dt, hero, add, spec);
+  if ((T.next -= dt) > 0) return;
+  T.next = E.roam.every;
+  const alive = T.enemies.filter((e) => !e.gone && !e.villageGuard && !e.rival).length;
+  if (alive >= E.roam.max) return;
+  const p = trialSpawnPoint(T, hero);
+  if (!p) return;
+  const pool = TRIAL_SURVIVAL.pools.filter((q) => q[0] <= Math.min(115, T.st + 30 * (T.floor - 1))).pop()[1],
+    n = 2 + Math.floor(T.rng() * 2) + Math.floor((T.floor - 1) / 2);
+  for (let k = 0; k < n; k++) add(spec(pool[Math.floor(T.rng() * pool.length)], { x: p.x + (T.rng() - 0.5) * 60, y: p.y + (T.rng() - 0.5) * 60 }, false));
+}
+// 村を救った：その村の兵士が無料で仲間に（兵士名簿へ。テスト版だけ）。部隊が5人いれば名簿にだけ入る
+function trialExploreJoin(T, v, hero) {
+  const E = TRIAL_EXPLORE,
+    rec = { village: v.name, icon: v.icon, type: v.type, name: null, joined: false, error: null };
+  T.explore.recruits.push(rec);
+  if (!E.real()) {
+    rec.error = "テスト版だけで仲間になります";
+    msg("🏘 " + v.name + "を救った（本番の版では仲間は加わりません）");
+    return;
+  }
+  const r = trialExploreRecruitReal(v.type);
+  if (r.error) {
+    rec.error = r.error;
+    msg("🏘 " + v.name + "を救った。しかし " + r.error);
+    if (effects.length < 60) effects.push({ kind: "ctext", x: v.x, y: v.y - 120, text: "🏘 " + v.name + " を救った", ougi: false, age: 0, duration: 1.6 });
+    return;
+  }
+  const s = r.soldier;
+  rec.name = soldierName(s);
+  rec.id = s.id;
+  if (T.units.filter((u) => !u.dead).length < E.partyMax) {
+    const u = trialUnit(s, T.units.length),
+      S = TRIAL_SURVIVAL,
+      o = S.slots[T.joined.length % S.slots.length],
+      Z = T.map.size,
+      x = Math.max(20, Math.min(Z.w - 20, hero.x + o[0])),
+      y = Math.max(40, Math.min(Z.h - 20, hero.y + o[1]));
+    trialBoonInit(u);
+    Object.assign(u, { x, y, px: x, py: y, placed: true, slot: o, home: { x, y }, cd: 0.4, joinedAt: T.t });
+    T.units.push(u);
+    T.joined.push(u.id);
+    trialCollide(u);
+    rec.joined = true;
+    burst(u.x, u.y - 16, "#ffe27a", "heal");
+  }
+  msg("🏘 " + v.name + "を救った！ " + SOLDIER_TYPES[v.type].name + "「" + soldierName(s) + "」が仲間に加わり、兵士名簿に入った" + (rec.joined ? "。" : "（部隊は5人いっぱいなので、陣で待つ）。"));
+  if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 120, text: "👥 " + soldierName(s).replace(/^🎖/, "") + " 仲間に！", ougi: true, age: 0, duration: 1.8 });
+  combatFx.banner = { name: v.icon + " " + v.name + " を救った", who: SOLDIER_TYPES[v.type].name + "「" + soldierName(s).replace(/^🎖/, "") + "」が仲間に（無料）", age: 0, duration: 1.8 };
+  trialSfx("rare");
+}
+// 本番の名簿に兵士を1人加える（雇用と同じ流れ。お金は取らない）。保存できなければ元に戻す
+function trialExploreRecruitReal(type) {
+  const slots = randomRecruitSlots();
+  if (!slots.length) return { error: "部隊がすべて満員のため、兵士名簿に入れられなかった（" + SQUAD_RULES.maxSquads + "部隊×" + SQUAD_RULES.squadSize + "人まで）。" };
+  if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return { error: "未保存の進行があるため、兵士名簿に入れられなかった。" };
+  const before = { gold, squads: squads.slice(), soldiers: soldiers.slice(), soldierSeq, squadSeq, roster: JSON.parse(JSON.stringify(soldierSave)), defense: heroSave.defense, news: namedNews.length, q: squads.map((q) => ({ q, type: q.type, slot: q.slot })), batch: gameSaveBatch, active: gameSaveBatchActive };
+  const existing = slots.find((q) => q && q.type === type) || slots.find((q) => q === null) || slots.find((q) => q) || null;
+  recruitSaving = true;
+  const q = existing || newSquad(type),
+    soldier = newSoldier(type, q.id, true);
+  refreshSquadType(q);
+  const saved = saveDefenseCheckpoint();
+  recruitSaving = false;
+  if (!saved) {
+    gold = before.gold;
+    squads = before.squads;
+    soldiers = before.soldiers;
+    soldierSeq = before.soldierSeq;
+    squadSeq = before.squadSeq;
+    heroSave.defense = before.defense;
+    for (const v of before.q) (v.q.type = v.type), (v.q.slot = v.slot);
+    for (const k of Object.keys(soldierSave)) delete soldierSave[k];
+    Object.assign(soldierSave, before.roster);
+    namedNews.length = before.news;
+    gameSaveBatch = before.batch;
+    gameSaveBatchActive = before.active;
+    return { error: "保存できなかったため、仲間にできなかった。" };
+  }
+  zukanSync();
+  refreshSiege();
+  return { soldier, squad: q };
+}
+// 探索で倒れた兵士は本当に戦死（英霊名鑑へ。防衛戦の戦死と同じ処理）。テスト版だけ
+function trialExploreDeath(u) {
+  const T = trial;
+  if (!T || !T.explore || !TRIAL_EXPLORE.real()) return;
+  const s = u.src,
+    q = squads.find((v) => v.id === s.squadId);
+  if (!s || !s.alive || !q) return;
+  T.explore.fallen.push(u.name);
+  killSoldier(s, q);
+  saveDefenseCheckpoint();
+}
 // ===== v111 戦国ライバル武将（サバイバル・試作）：面の途中に乱入する強敵。倒すと珍しい報酬、10% で固有の技（この挑戦の間だけ） =====
 //   既存の武将60人・名のある兵士18人と重ならない人物（山県昌景・馬場信春は除く）。本番の保存データには何も書かない
 const TRIAL_RIVALS = {
@@ -2152,11 +2542,12 @@ function trialSurvivalTick(T, dt) {
   if ((T.farCheck -= dt) <= 0) {
     T.farCheck = 2;
     for (const e of alive)
-      if (e !== T.boss && !e.rival && trialDist(e, hero) > S.far) {
+      if (e !== T.boss && !e.rival && e.villageGuard == null && trialDist(e, hero) > S.far) {
         const p = trialSpawnPoint(T, hero);
         if (p) Object.assign(e, { x: p.x, y: p.y, px: p.x, py: p.y, lastX: p.x, lastY: p.y, target: null, moved: (e.moved || 0) + 1 });
       }
   }
+  if (T.explore) return trialExploreTick(T, dt, hero, add, spec); // v113 探索（大将・面クリアはない）
   if (!T.boss && T.st >= S.bossAt) {
     const p = trialSpawnPoint(T, hero);
     if (p) {
@@ -2297,7 +2688,7 @@ function tickTrialCore(dt) {
     // サバイバル：主人公が倒れたら敗北（仲間が倒れても続く）。強敵を倒したら勝利
     if (T.units.find((u) => u.id === T.hero).dead) return endTrial("lose");
     if (T.boss && T.boss.gone) return trialStageClear(T); // v108.7 勝利で終わらず、宝箱 → 次の面へ
-    if (T.st >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
+    if (!T.explore && T.st >= TRIAL_SURVIVAL.timeLimit) return endTrial("timeout");
     // 奥義の直後は、演出を見せてから選択画面を出す（1.5秒。天剣乱舞の連続斬撃の間も待つ）
     if (T.lvUps && !T.flurry && !(T.ougiUsed && T.t - T.ougiUsed.at < 1.5) && !(T.lvAt != null && T.t - T.lvAt < 0.5)) trialOpenChoice(T);
     return;
@@ -2889,7 +3280,10 @@ function trialHitUnit(u, raw, ranged, e) {
       if (next) msg("🎮 操作を " + next.name + " に切り替えた");
       trialSyncUI();
     }
-    msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
+    if (trial.explore && TRIAL_EXPLORE.real()) {
+      trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）
+      msg("☠ " + u.name + " が戦死した（英霊名鑑へ）");
+    } else msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
   }
 }
 // ===== 演出（控えめ。技名は職業技・閃きの演出が出す。数の上限つき） =====
@@ -2963,7 +3357,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -3014,7 +3408,7 @@ function trialBackground(M) {
     pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
     g.stroke();
   };
-  const all = [...Object.values(M.lanes), M.road];
+  const all = [...Object.values(M.lanes), M.road].filter((p) => p && p.length);
   for (const p of all) road(p, 52, "#7a5a36");
   for (const p of all) road(p, 42, "#d4b07a");
   for (const p of all) road(p, 3, "#c49c62");
@@ -3084,8 +3478,32 @@ function trialBackground(M) {
     }
   }
   // 関（砦）：ドット絵の城、なければ簡単な櫓
+  // v113 探索の村：わらぶきの家3軒と柵
+  for (const v of M.villages || []) {
+    g.fillStyle = "#a88a5a";
+    g.beginPath();
+    g.ellipse(v.x, v.y, 120, 80, 0, 0, 7);
+    g.fill();
+    for (const [dx, dy] of [[-50, -20], [40, -30], [-5, 30]]) {
+      const hx = v.x + dx,
+        hy = v.y + dy;
+      g.fillStyle = "#6b4a2a";
+      g.fillRect(hx - 22, hy - 10, 44, 26);
+      g.fillStyle = "#c9a85a";
+      g.beginPath();
+      g.moveTo(hx - 30, hy - 8);
+      g.lineTo(hx, hy - 36);
+      g.lineTo(hx + 30, hy - 8);
+      g.fill();
+    }
+    g.strokeStyle = "#5a3a1a";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.ellipse(v.x, v.y, 128, 88, 0, 0, 7);
+    g.stroke();
+  }
   const F = M.fort;
-  if (!(pixelOn() && pix("castle1_ally", F.x, F.y + 50, PIX_SCALE.castle))) {
+  if (F && !(pixelOn() && pix("castle1_ally", F.x, F.y + 50, PIX_SCALE.castle))) {
     g.fillStyle = "#3b3b46";
     g.fillRect(F.x - 40, F.y - 70, 80, 110);
     g.fillStyle = "#8a2f2a";
@@ -3100,10 +3518,11 @@ function trialBackground(M) {
   g.fillStyle = "#fff4d0";
   g.strokeStyle = "#3a2a16";
   g.lineWidth = 4;
-  for (const [k2, p] of Object.entries(M.lanes)) {
-    g.strokeText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
-    g.fillText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
-  }
+  if (M.labels)
+    for (const [k2, p] of Object.entries(M.lanes)) {
+      g.strokeText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
+      g.fillText("⚑ " + M.labels[k2], 14, p[0][1] - 34);
+    }
   trialScenery = cv;
   return cv;
 }
@@ -3148,6 +3567,7 @@ function trialView() {
 }
 // サバイバルの残り時間（強敵が出たあと、時間を過ぎたら「強敵を倒せ」）
 // v108.7 面の時計：大将が出るまでの残り時間。大将が出たら「⚠大将」
+const trialExplorePct = (T) => (T.fog ? Math.floor((T.fog.n / (T.fog.cols * T.fog.rows)) * 100) : 0);
 function trialClock(T) {
   if (T.cleared) return "🏆 クリア";
   if (T.boss && !T.boss.gone) return "⚠ " + (T.boss.name || "大将") + "を倒せ！";
@@ -3204,6 +3624,7 @@ function drawTrial() {
   if (T.mode === "survival") trialDrawMagnets(T), trialDrawRivalFx(T); // v109 磁石は兵士・敵の上に（群れに隠れない）。v112 火矢の輪・人望の輪
   for (const s of shots) projectile(s);
   for (const e of effects) effect(e);
+  if (T.explore) trialDrawFog(T); // v113 暗闇
   ctx.restore();
   screenSpace((SW, SH) => {
     // 画面の外の敵の向きを、端に赤い印で出す（見失わない）
@@ -3212,6 +3633,7 @@ function drawTrial() {
       const sx = (e.x - V.ox) * V.z,
         sy = (e.y - V.oy) * V.z;
       if (sx >= 0 && sx <= SW && sy >= 0 && sy <= SH) continue;
+      if (T.explore && !e.rival && !trialVisible(T, e.x, e.y)) continue; // v113 暗闇の中の敵は知らせない
       if (e === T.boss || e.rival) {
         // 大将：画面の端に、向きを指す大きい矢印と「大将」。v112.3 ライバル武将は武将の色と名前
         const RD = e.rival ? TRIAL_RIVALS.list[e.rival] : null,
@@ -3258,7 +3680,9 @@ function drawTrial() {
       alive = T.units.filter((u) => !u.dead).length,
       text =
         T.mode === "survival"
-          ? "第" + T.floor + "面　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
+          ? T.explore
+            ? "🌑 第" + T.floor + "地　村 " + T.map.villages.filter((v) => v.state === "freed").length + "/" + T.map.villages.length + "　探索 " + trialExplorePct(T) + "%　👥" + T.units.filter((u) => !u.dead).length
+            : "第" + T.floor + "面　" + trialClock(T) + "　撃破 " + T.kills + "　👥" + T.units.filter((u) => !u.dead).length + "/" + (T.units.length + T.reserve.length)
           : "⚔ " + T.map.name + "　敵 " + left + "/" + T.total + "　味方 " + alive + "/" + T.units.length + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "　配置中");
     // v108.9 縦長の画面（幅600）では、右上の全体図に重ならないよう文字を小さくして収める
     let fs = T.mode === "survival" ? 25 : 22;
@@ -3400,8 +3824,18 @@ function trialMiniMap(T, V, SW) {
     ctx.fillStyle = TRIAL_SURVIVAL.items[m.kind || "magnet"].glow; // v109 磁石（金）・v110 おにぎり（緑）・爆弾（赤）
     ctx.fillRect(x0 + m.x * s - 3, y0 + m.y * s - 3, 6, 6);
   }
+  if (T.explore && T.fog) {
+    // v113 暗闇：見ていない所は黒く、見た所は薄暗く。見つけた村は印
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(trialFogImage(T), x0, y0, mw, mh);
+    for (const v of T.map.villages)
+      if (v.state !== "hidden") {
+        ctx.fillStyle = v.state === "freed" ? "#7be08a" : "#ffb03a";
+        ctx.fillRect(x0 + v.x * s - 4, y0 + v.y * s - 4, 8, 8);
+      }
+  }
   for (const e of T.enemies)
-    if (!e.gone) {
+    if (!e.gone && (!T.explore || trialVisible(T, e.x, e.y))) {
       ctx.fillStyle = "#ff4a3a";
       ctx.fillRect(x0 + e.x * s - 1.5, y0 + e.y * s - 1.5, e.role ? 5 : 3, e.role ? 5 : 3);
     }
@@ -3550,10 +3984,19 @@ function renderTrialSheet() {
     const alive = R.units.filter((u) => !u.dead),
       dead = R.units.filter((u) => u.dead);
     const sv = R.mode === "survival";
-    $("trialTitle").textContent = sv ? "🔥 サバイバル（" + R.stage + "）" : "⚔️ 戦場試練「" + R.stage + "」";
+    $("trialTitle").textContent = R.explore ? "🌑 探索の結果" : sv ? "🔥 サバイバル（" + R.stage + "）" : "⚔️ 戦場試練「" + R.stage + "」";
+    const X = R.explore,
+      exploreHtml = X
+        ? '<p class="trial-stage-sum">🌑 第' + X.region + "地まで探索（最後の地は " + X.pct + "% 探索）<br>" +
+          "👥 仲間になった兵士：<b>" + X.recruits.filter((r) => r.name).length + "人</b>" +
+          (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? esc(r.name.replace(/^🎖/, "")) + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
+          (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した兵士はいません。</small>") +
+          "</p>"
+        : "";
     $("trialBody").innerHTML =
-      '<p class="trial-result"><b>' + (sv ? { win: "🏆 勝利！ 大将を倒した", lose: "第" + R.floor + "面で力尽きた（主人公が倒れた）", retreat: "↩ 第" + R.floor + "面で撤退", timeout: "⌛ 第" + R.floor + "面で時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
-      (sv
+      exploreHtml +
+      '<p class="trial-result"><b>' + (X ? { lose: "主人公が倒れ、探索は終わった", retreat: "↩ 探索から戻った", win: "探索を終えた", timeout: "探索を終えた" }[R.result] : sv ? { win: "🏆 勝利！ 大将を倒した", lose: "第" + R.floor + "面で力尽きた（主人公が倒れた）", retreat: "↩ 第" + R.floor + "面で撤退", timeout: "⌛ 第" + R.floor + "面で時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
+      (sv && !X
         ? '<p class="trial-stage-sum">🏯 到達 <b>第' + R.floor + "面</b>・👑 大将を倒した数 <b>" + R.bosses + "</b>" + (R.best ? "・🏅 最高 第" + Math.max(R.best, 1) + "面クリア" : "") + "<br>撃破 <b>" + R.kills + "</b>・獲得 EXP <b>" + ((R.coins && R.coins.xp) || 0) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
           (R.skillList.length ? "<p><small>🗡 攻撃スキル：" + R.skillList.map((x) => x.icon + esc(x.name) + (x.uni ? "（固有）" : x.evo ? "（進化）" : x.lv >= 5 ? "★" : " Lv" + x.lv)).join("・") + "</small></p>" : "") +
           (R.rivals && R.rivals.length ? "<p><small>⚔ 討ち取ったライバル武将：" + R.rivals.map((x) => esc(x.name) + "（第" + x.floor + "面" + (x.skill ? "・✨" + esc(x.skill) : "") + "）").join("・") + "</small></p>" : "") +
@@ -3564,7 +4007,7 @@ function renderTrialSheet() {
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
           '<br><small class="muted">サバイバルLv・強化・加入は、この戦闘だけのものです（兵士のLv・経験値には入りません）。</small></p>'
-        : "<p>撃破 <b>" + R.kills + "/" + R.total + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time) + "秒</p>") +
+        : "<p>撃破 <b>" + R.kills + (X ? "" : "/" + R.total) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time) + "秒" + (X ? "・サバイバルLv" + R.slv : "") + "</p>") +
       "<p>生存 " + alive.length + "人・戦死 " + dead.length + "人" + (dead.length && !R.real ? '<br><small class="muted">試作のため戦死は仮です。本番の兵士は失われず、英霊名鑑にも載りません。</small>' : "") + "</p>" +
       '<div class="trial-units">' +
       R.units
@@ -3591,17 +4034,23 @@ function renderTrialSheet() {
   const list = soldiers.filter((s) => s.alive).sort((a, b) => b.level - a.level),
     n = trialPick.length,
     busy = trialBusyError(),
-    sv = trialMode === "survival";
+    ex = trialMode === "explore" && TRIAL_EXPLORE.real(), // v113 探索（テスト版だけ）
+    sv = trialMode === "survival" || ex;
   if (!trialPick.includes(trialHero)) trialHero = trialPick[0] ?? null;
   $("trialBody").innerHTML =
     '<div class="trial-modes" role="group" aria-label="遊び方">' +
     '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>' +
-    '<button type="button" data-trial-mode="survival" aria-pressed="' + sv + '">🔥 サバイバル<small>主人公を操作</small></button></div>' +
-    (sv
+    '<button type="button" data-trial-mode="survival" aria-pressed="' + (sv && !ex) + '">🔥 サバイバル<small>主人公を操作</small></button>' +
+    (TRIAL_EXPLORE.real() ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>村で仲間を得る（テスト版）</small></button>' : "") +
+    "</div>" +
+    (ex
+      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた兵士は本当に戦死</b>し、英霊名鑑に入ります。「🚪 この地を去る」で、いつでも新しい地へ。主人公が倒れたら探索は終わり（得た仲間は残ります）。<br>' +
+        "<b>テスト版の保存領域（wdtest:）にだけ書きます。本番のデータは変わりません。</b></small></p>"
+      : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
         '<p class="muted"><small>育てた兵士を最大' + TRIAL_RULES.maxUnits + "人まで選び、1人ずつ配置します。戦闘が始まると、兵士はそれぞれ自分で敵を探して戦い、職業技・閃きも使います（衛生兵は味方を回復）。敵の強さは、出撃する兵士のLv・職業・装備から決まります。<br>") +
-    "<b>試作のため、戦死は仮です（本番の兵士は失われません）。報酬・経験値もありません。</b>修練場はこれまでどおり育成の場所です。</small></p>" +
+    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。報酬・経験値もありません。</b>修練場はこれまでどおり育成の場所です。</small></p>") +
     (sv && n
       ? '<p>👑 主人公：</p><div class="trial-heroes">' +
         trialPick
@@ -3627,7 +4076,7 @@ function renderTrialSheet() {
       })
       .join("") +
     "</div>" +
-    '<div class="card-actions"><button data-trial-go' + (n && !busy ? "" : " disabled") + ">" + (sv ? "🔥 主人公1人でサバイバル開始" + (n > 1 ? "（候補" + (n - 1) + "人）" : "") : "⚔️ " + n + "人で出撃（配置へ）") + "</button></div>";
+    '<div class="card-actions"><button data-trial-go' + (n && !busy ? "" : " disabled") + ">" + (ex ? "🌑 主人公1人で探索に出る" : sv ? "🔥 主人公1人でサバイバル開始" + (n > 1 ? "（候補" + (n - 1) + "人）" : "") : "⚔️ " + n + "人で出撃（配置へ）") + "</button></div>";
 }
 // 戦闘中の帯：ステージ・味方・敵の残り・時間（変わったときだけ書き換える）
 function trialHudSync() {
@@ -3641,7 +4090,9 @@ function trialHudSync() {
     const h = T.units.find((u) => u.id === T.hero),
       mates = T.units.filter((u) => u.id !== T.hero),
       html2 =
-        "<b>🔥 第" + T.floor + "面</b>　👑 <b>" + esc(h.name) + "</b>　👥 仲間 <b>" + mates.filter((u) => !u.dead).length + "/" + (mates.length + T.reserve.length) + "</b><br><small>スティックで移動（攻撃と技は自動）。レベルアップで強化か仲間を選ぶ</small>";
+        (T.explore
+          ? "<b>🌑 第" + T.floor + "地</b>　👑 <b>" + esc(h.name) + "</b>　🏘 村 <b>" + T.map.villages.filter((v) => v.state === "freed").length + "/" + T.map.villages.length + "</b>　👥 <b>" + T.units.filter((u) => !u.dead).length + "/" + TRIAL_EXPLORE.partyMax + "</b><br><small>暗闇で村を探そう。野盗を追い払うと仲間に（兵士名簿へ）。倒れた兵士は本当に戦死</small>"
+          : "<b>🔥 第" + T.floor + "面</b>　👑 <b>" + esc(h.name) + "</b>　👥 仲間 <b>" + mates.filter((u) => !u.dead).length + "/" + (mates.length + T.reserve.length) + "</b><br><small>スティックで移動（攻撃と技は自動）。レベルアップで強化か仲間を選ぶ</small>");
     if (html2 !== trialHud) (trialHud = html2), ($("trialInfo").innerHTML = html2);
     trialOugiSync(false);
     return;
@@ -3841,7 +4292,7 @@ $("trialSheet").addEventListener("click", (ev) => {
     trialPick = trialPick.includes(id) ? trialPick.filter((x) => x !== id) : trialPick.length < TRIAL_RULES.maxUnits ? [...trialPick, id] : trialPick;
     renderTrialSheet();
   } else if (d.trialMode) {
-    trialMode = d.trialMode === "survival" ? "survival" : "field";
+    trialMode = d.trialMode === "survival" || d.trialMode === "explore" ? d.trialMode : "field";
     renderTrialSheet();
   } else if (d.trialHero) {
     trialHero = +d.trialHero;

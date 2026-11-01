@@ -1995,7 +1995,7 @@
       .tall-field #trialBar {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
-        grid-template-areas: "info info" "actions actions" "units units" "pad auto" "pad action" "pad bottom";
+        grid-template-areas: "info info" "actions actions" "units units" "pad auto" "pad action" "pad leave" "pad bottom";
         column-gap: 10px;
         row-gap: 0;
         align-items: center;
@@ -2019,6 +2019,8 @@
       .tall-field #trialAutoAll[hidden],
       .tall-field #trialAction[hidden] { display: none; }
       .tall-field #trialAction { grid-area: action; }
+      .tall-field #trialLeave { grid-area: leave; min-height: 40px; margin-top: 6px; }
+      .trial-leave[hidden] { display: none; }
       .tall-field #trialBar .trial-bottom { grid-area: bottom; }
       .tall-field #trialLevelUp { grid-area: auto; }
       .tall-field #trialBar .trial-ctl[hidden] ~ .trial-bottom { grid-area: auto; grid-column: 1 / -1; }
@@ -3064,6 +3066,7 @@
               <button id="trialAutoAll" type="button">🤖 全員自動</button>
               <!-- 将来：操作している兵士の奥義・必殺技のボタンをここに置く（今は使わない） -->
               <div id="trialAction" class="trial-action" hidden></div>
+              <button id="trialLeave" type="button" class="trial-leave" hidden>🚪 この地を去る</button>
             </div>
           </div>
         </div>
@@ -9815,7 +9818,7 @@ OFF</button>
         }
         // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × hireSize
         const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
-        const RANDOM_RECRUIT = { price: 24 };
+        const RANDOM_RECRUIT = { price: 2500 }; // v113 雇用は2500G（仲間は探索の村で無料で得る。兵種を選ぶ部隊の雇用は変えない）
         let recruitRng = Math.random;
         const randomRecruitCost = () => Math.max(1, Math.round(RANDOM_RECRUIT.price * (1 - territoryBonus("hire"))));
         function randomRecruitSlots() {
@@ -23381,6 +23384,10 @@ OFF</button>
               unique: TRIAL_UNIQUE,
               // v111 試験用：ライバル武将をすぐ乱入させる（key：masayuki・jouun・danzo）
               pause: (on) => trialPauseToggle(on), // v112.3
+              explore: TRIAL_EXPLORE, // v113
+              leave: () => trialExploreLeave(),
+              exploreState: () => trial && trial.explore ? { region: trial.explore.region, villages: trial.map.villages.map((v) => ({ id: v.id, x: v.x, y: v.y, state: v.state, type: v.type, name: v.name, guards: v.guards.filter((g) => !g.gone).length })), start: trial.map.start, size: trial.map.size, river: trial.map.river, recruits: trial.explore.recruits.slice(), fallen: trial.explore.fallen.slice(), pct: trialExplorePct(trial), seen: trial.fog ? trial.fog.n : 0, units: trial.units.map((u) => ({ id: u.id, dead: u.dead, x: u.x, y: u.y })) } : null,
+              exploreMap: (seed, region) => trialExploreMap(seed, region || 1),
               rivalSpawn: (key) => {
                 if (!trial || trial.mode !== "survival") return null;
                 trial.rivalChecked = true;
