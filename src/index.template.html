@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113.2試作（三方の関を探索に入れ替え）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v114（暗闇の探索・村で仲間）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -9818,12 +9818,12 @@ OFF</button>
         }
         // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × hireSize
         const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
-        const RANDOM_RECRUIT = { price: 24 };
-        // v113 テスト版では雇用を2500Gに（仲間は探索の村で無料で得る）。テスト版が WD_FLAGS.recruitPrice を立てる。本番の版は24Gのまま
+        // v114 ランダム雇用は2500G（仲間は探索の村で無料で得る）。本番の版もテスト版も同じ。WD_FLAGS.recruitPrice で変えられる
+        const RANDOM_RECRUIT = { price: 2500 };
         const recruitBasePrice = () => (window.WD_FLAGS && window.WD_FLAGS.recruitPrice) || RANDOM_RECRUIT.price;
         let recruitRng = Math.random;
-        // v113.1 テスト版（雇用2500G）では、生きている兵士がいないときの最初の1人は無料（始めたばかりでも兵士を得られる）
-        const firstRecruitFree = () => !!(window.WD_FLAGS && window.WD_FLAGS.recruitPrice) && !soldiers.some((s) => s.alive);
+        // v113.1 生きている兵士がいないときの最初の1人は無料（雇用2500Gでも、始めたばかりで兵士を得られる）
+        const firstRecruitFree = () => recruitBasePrice() > 100 && !soldiers.some((s) => s.alive);
         const randomRecruitCost = () => (firstRecruitFree() ? 0 : Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire")))));
         const recruitCostText = () => (randomRecruitCost() ? randomRecruitCost() + "G" : "無料");
         function randomRecruitSlots() {
