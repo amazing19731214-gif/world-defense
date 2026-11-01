@@ -3227,7 +3227,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v111試作（戦場試練：戦国ライバル武将の乱入）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112試作（戦場試練：ライバル武将8人）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -18371,6 +18371,7 @@ function trialNextStage() {
   T.bossAt = null;
   T.rival = null; // v111 次の面ではまた乱入があるかもしれない
   T.rivalChecked = false;
+  T.rivalBlasts = [];
   T.enemies = [];
   T.coins = [];
   T.next = 1.5;
@@ -18806,6 +18807,54 @@ const TRIAL_SKILL_CAST = {
     for (const e of trialLineHits(o, a, D.len, D.width, foes, 16)) trialHitEnemy(h, e, atk * D.mul, 0.3, true);
     trialFx({ kind: "cwave", x: o.x, y: o.y, rays: [a], len: D.len, width: D.width, ougi: true, age: 0, duration: 0.35 });
     trialShot({ x: o.x, y: o.y, tx: o.x + Math.cos(a) * D.len, ty: o.y + Math.sin(a) * D.len, type: "arrow", duration: 0.18, trail: 4, glow: "#a06bff", col: "#2a1a3a" });
+    trialSfx("slash");
+  },
+  // v112 固有の技：赤備え（4秒のあいだ与えるダメージ ×1.4）
+  akazonae: (T, h, D, i, atk, foes) => {
+    if (!foes.some((e) => trialDist(e, h) < TRIAL_SKILL_RULES.aim * 1.5)) return false;
+    h.rageUntil = T.t + D.time;
+    trialFx({ kind: "ctext", x: h.x, y: h.y - 100, text: "🐎 赤備え！", ougi: true, age: 0, duration: 1.0 });
+    trialFx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.5 });
+    trialSfx("insight", { vol: 0.6 });
+  },
+  // v112 固有の技：犬伏の誓い（主人公と仲間を回復）
+  inubushi: (T, h, D) => {
+    const list = T.units.filter((u) => !u.dead && u.hp < u.max);
+    if (!list.length) return false;
+    for (const u of list) (u.hp = Math.min(u.max, u.hp + u.max * D.heal)), burst(u.x, u.y - 16, "#7be08a", "heal");
+    trialFx({ kind: "ctext", x: h.x, y: h.y - 100, text: "🏯 犬伏の誓い", ougi: false, age: 0, duration: 1.0 });
+    trialSfx("heal");
+  },
+  // v112 固有の技：津軽の火矢（近くの敵5体へ。燃える）
+  hiya: (T, h, D, i, atk, foes) => {
+    const list = trialNearestN(h, foes, D.n, D.range);
+    if (!list.length) return false;
+    for (const e of list) {
+      const dur = Math.min(0.3, trialDist(e, h) / 900);
+      T.proj.push({ t: dur, hits: [e], dmg: atk * D.mul });
+      if (!e.gone) e.burn = { dmg: atk * D.burn, until: T.t + 2, tick: 1 };
+      trialShot({ x: h.x, y: h.y - 26, tx: e.x, ty: e.y - 10, type: "arrow", duration: dur, trail: 2, glow: "#ff9a2a", col: "#ff6a1a" });
+    }
+    trialSfx("bow");
+  },
+  // v112 固有の技：でくのぼう踊り（まわりの敵を遅くする）
+  dengaku: (T, h, D, i, atk, foes) => {
+    const list = foes.filter((e) => trialDist(e, h) <= D.r);
+    if (!list.length) return false;
+    for (const e of list) {
+      trialHitEnemy(h, e, atk * D.mul, 0, true);
+      if (!e.gone) e.evolutionSlow = { value: D.slow, until: T.t + D.time };
+    }
+    trialFx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: false, age: 0, duration: 0.6 });
+    trialFx({ kind: "ctext", x: h.x, y: h.y - 100, text: "🌾 でくのぼう踊り", ougi: false, age: 0, duration: 1.0 });
+    trialSfx("card");
+  },
+  // v112 固有の技：若武者の一閃（いちばん近い敵へ ×5）
+  issen: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, TRIAL_SKILL_RULES.aim)[0];
+    if (!t) return false;
+    trialHitEnemy(h, t, atk * D.mul, 0.5, true);
+    trialFx({ kind: "cslash", x: t.x, y: t.y - 14, a: Math.atan2(t.y - h.y, t.x - h.x), ougi: true, age: 0, duration: 0.35 });
     trialSfx("slash");
   },
   // 進化：紅蓮旋風（炎の旋風。回る炎は trialOrbs）
@@ -19343,6 +19392,37 @@ function trialDrawCoins(T, V) {
   }
   ctx.restore();
 }
+// v112 ライバル武将の見える合図：津軽為信の火矢が落ちる所（赤い輪が縮む）・成田長親の人望の輪（まわりの敵が守られている）
+function trialDrawRivalFx(T) {
+  ctx.save();
+  for (const b of T.rivalBlasts || []) {
+    const left = Math.max(0, b.at - T.t);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#ff3a1a";
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y, b.r, b.r * 0.55, 0, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "#ffb03a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y, b.r * (0.3 + left * 0.7), b.r * (0.3 + left * 0.7) * 0.55, 0, 0, 7);
+    ctx.stroke();
+  }
+  const R = T.rival;
+  if (R && !R.gone && R.rival === "nagachika") {
+    const A = TRIAL_RIVALS.list.nagachika.aura;
+    ctx.globalAlpha = reduced ? 0.25 : 0.2 + 0.1 * Math.sin(visualTime * 3);
+    ctx.strokeStyle = "#ffe27a";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.ellipse(R.x, R.y, A.r, A.r * 0.55, 0, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
 // v109 磁石：赤いU字の磁石が金色に光って、上下にゆれる
 function trialDrawMagnets(T) {
   if (!T.magnets || !T.magnets.length) return;
@@ -19572,6 +19652,12 @@ const TRIAL_RIVALS = {
     masayuki: { name: "真田昌幸", title: "表裏比興の者", icon: "🎴", color: "#e0453a", skill: "rokuren", ambush: { every: 8, n: 4, r: 260 }, line: "真田の伏兵、四方より来たれ！" },
     jouun: { name: "高橋紹運", title: "岩屋城の守将", icon: "🛡️", color: "#4a9cff", skill: "fukutsu", guard: { every: 7, time: 2.5, cut: 0.3, wave: 170, mul: 1.5 }, line: "この城、一歩も退かぬ！" },
     danzo: { name: "加藤段蔵", title: "飛び加藤", icon: "🥷", color: "#a06bff", skill: "tobikato", blink: { every: 5, behind: 70 }, speed: 1.4, line: "影より参る……" },
+    // v112 追加の5人
+    obu: { name: "飯富虎昌", title: "赤備えの祖", icon: "🐎", color: "#ff3a2a", skill: "akazonae", charge: { every: 6, time: 0.45, speed: 700, mul: 1.4 }, line: "赤備え、突き崩せ！" },
+    nobuyuki: { name: "真田信之", title: "真田家の守り手", icon: "🏯", color: "#3ac0a0", skill: "inubushi", rally: { every: 6, heal: 0.06, n: 2, kind: "knight" }, line: "真田の家は、わしが守る" },
+    tamenobu: { name: "津軽為信", title: "津軽の独立者", icon: "🏹", color: "#ff9a2a", skill: "hiya", rain: { every: 7, n: 3, delay: 1.0, r: 70, mul: 1.2 }, line: "火矢を放て！" },
+    nagachika: { name: "成田長親", title: "のぼう様", icon: "🌾", color: "#c8b04a", skill: "dengaku", aura: { r: 220, cut: 0.6 }, rally: { every: 9, heal: 0, n: 5, kind: "goblin" }, line: "皆の者、頼んだぞ〜" },
+    shigenari: { name: "木村重成", title: "大坂の若武者", icon: "🗡️", color: "#e0e0ff", skill: "issen", spin: { every: 6, r: 130, mul: 1.6 }, speed: 1.2, line: "いざ、尋常に勝負！" },
   },
 };
 // 固有の技（ライバル武将を倒したとき 10%。この挑戦の間だけ。Lv はなく、攻撃スキルの枠も使わない）
@@ -19579,6 +19665,12 @@ const TRIAL_UNIQUE = {
   rokuren: { icon: "🎴", name: "六連の計", unique: true, from: "masayuki", text: "近くの敵6体に印をつけ、少しあとにまとめて爆ぜさせる（真田昌幸の固有の技）", cd: 3, n: 6, range: 300, mul: 2.2, delay: 0.4 },
   fukutsu: { icon: "🛡️", name: "不屈の陣", unique: true, from: "jouun", text: "3秒のあいだ受けるダメージ半分。まわりの敵を衝撃波で押し返す（高橋紹運の固有の技）", cd: 7, time: 3, cut: 0.5, radius: 200, mul: 1.6, push: 50 },
   tobikato: { icon: "🥷", name: "飛び加藤", unique: true, from: "danzo", text: "影が一直線に駆け抜け、通り道の敵をまとめて斬る（加藤段蔵の固有の技）", cd: 2.5, len: 380, width: 40, mul: 2.4 },
+  // v112
+  akazonae: { icon: "🐎", name: "赤備え", unique: true, from: "obu", text: "8秒ごと、4秒のあいだ主人公の与えるダメージ ×1.4（飯富虎昌の固有の技）", cd: 8, time: 4, mul: 1.4 },
+  inubushi: { icon: "🏯", name: "犬伏の誓い", unique: true, from: "nobuyuki", text: "9秒ごと、主人公と仲間の HP を最大の12%回復（真田信之の固有の技）", cd: 9, heal: 0.12 },
+  hiya: { icon: "🏹", name: "津軽の火矢", unique: true, from: "tamenobu", text: "3秒ごと、近くの敵5体へ火矢（×1.4）。当たった敵は燃える（津軽為信の固有の技）", cd: 3, n: 5, range: 320, mul: 1.4, burn: 0.3 },
+  dengaku: { icon: "🌾", name: "でくのぼう踊り", unique: true, from: "nagachika", text: "7秒ごと、まわりの敵を踊りに見とれさせて動きを遅くする（成田長親の固有の技）", cd: 7, r: 260, slow: 0.4, time: 2.5, mul: 0.6 },
+  issen: { icon: "🗡️", name: "若武者の一閃", unique: true, from: "shigenari", text: "2秒ごと、いちばん近い敵へ渾身の一閃（×5。大将・武将にもよく効く）（木村重成の固有の技）", cd: 2, mul: 5 },
 };
 // 乱入：面の時計が at 秒を過ぎたら1回だけ決める。大将がいるとき・クリア後は出さない
 function trialRivalTick(T, dt, hero, add, spec) {
@@ -19591,6 +19683,14 @@ function trialRivalTick(T, dt, hero, add, spec) {
   if (!T.rivalChecked && T.floor >= R.fromFloor && T.st >= R.at && !T.boss && !T.cleared) {
     T.rivalChecked = true;
     if (T.rng() < R.chance) trialRivalSpawn(T, hero, add, spec);
+  }
+  // v112 津軽為信の火矢（落ちる時刻になったら、輪の中の兵士に当たる。武将が倒れても、放った火矢は落ちる）
+  if (T.rivalBlasts && T.rivalBlasts.length) {
+    for (const b of T.rivalBlasts.filter((b) => T.t >= b.at)) {
+      for (const u of T.units) if (!u.dead && Math.hypot(u.x - b.x, u.y - b.y) <= b.r) trialHitUnit(u, b.dmg, true, b.src);
+      if (effects.length < 60) effects.push({ kind: "cboom", x: b.x, y: b.y - 8, ougi: true, age: 0, duration: 0.5 });
+    }
+    T.rivalBlasts = T.rivalBlasts.filter((b) => T.t < b.at);
   }
   const e = T.rival;
   if (!e) return;
@@ -19629,6 +19729,54 @@ function trialRivalTick(T, dt, hero, add, spec) {
       e.guardUntil = T.t + D.guard.time;
       if (effects.length < 60) effects.push({ kind: "ctext", x: e.x, y: e.y - 90, text: "🛡️ " + D.line, ougi: true, age: 0, duration: 1.2 });
     }
+  }
+  const fx = (o) => effects.length < 60 && effects.push(o);
+  // v112 飯富虎昌：赤備えの突撃（主人公へ一直線に駆ける。通り道の兵士に当たる）
+  if (D.charge) {
+    if (e.dash && T.t < e.dash.until) {
+      e.x += e.dash.vx * dt;
+      e.y += e.dash.vy * dt;
+      e.x = Math.max(30, Math.min(T.map.size.w - 30, e.x));
+      e.y = Math.max(30, Math.min(T.map.size.h - 30, e.y));
+      for (const u of T.units)
+        if (!u.dead && !e.dash.hit.has(u) && trialDist(u, e) < 46) e.dash.hit.add(u), trialHitUnit(u, ((e.attackConf && e.attackConf.damage) || 10) * (e.atkMul || 1) * D.charge.mul, false, e);
+    } else if ((e.skillT = (e.skillT ?? D.charge.every) - dt) <= 0) {
+      e.skillT = D.charge.every;
+      const a = Math.atan2(hero.y - e.y, hero.x - e.x);
+      e.dash = { vx: Math.cos(a) * D.charge.speed, vy: Math.sin(a) * D.charge.speed, until: T.t + D.charge.time, hit: new Set() };
+      fx({ kind: "ctext", x: e.x, y: e.y - 90, text: "🐎 " + D.line, ougi: true, age: 0, duration: 1.1 });
+      trialSfx("warn");
+    }
+  }
+  // v112 真田信之・成田長親：味方を呼ぶ（信之は自分の体力も少し戻す）
+  if (D.rally && (e.rallyT = (e.rallyT ?? D.rally.every) - dt) <= 0) {
+    e.rallyT = D.rally.every;
+    if (D.rally.heal) e.hp = Math.min(e.max, e.hp + e.max * D.rally.heal);
+    for (let k = 0; k < D.rally.n; k++) {
+      const a = (k * Math.PI * 2) / D.rally.n + T.st,
+        x = Math.max(40, Math.min(T.map.size.w - 40, e.x + Math.cos(a) * 70)),
+        y = Math.max(40, Math.min(T.map.size.h - 40, e.y + Math.sin(a) * 70));
+      if (!trialInRiver(T.map, x, y)) add(spec(D.rally.kind, { x, y }, false));
+    }
+    fx({ kind: "ctext", x: e.x, y: e.y - 90, text: D.icon + " " + D.line, ougi: true, age: 0, duration: 1.2 });
+    if (D.rally.heal) burst(e.x, e.y - 16, "#7be08a", "heal");
+  }
+  // v112 津軽為信：火矢の雨（兵士の足もとに赤い輪 → 1秒後に爆ぜる）
+  if (D.rain && (e.skillT = (e.skillT ?? D.rain.every) - dt) <= 0) {
+    e.skillT = D.rain.every;
+    T.rivalBlasts = T.rivalBlasts || [];
+    const targets = [hero, ...T.units.filter((u) => u !== hero && !u.dead)].slice(0, D.rain.n);
+    for (const u of targets) T.rivalBlasts.push({ x: u.x, y: u.y, at: T.t + D.rain.delay, r: D.rain.r, dmg: ((e.attackConf && e.attackConf.damage) || 10) * (e.atkMul || 1) * D.rain.mul, src: e });
+    fx({ kind: "ctext", x: e.x, y: e.y - 90, text: "🏹 " + D.line, ougi: true, age: 0, duration: 1.1 });
+    trialSfx("bow");
+  }
+  // v112 木村重成：回転斬り（まわりの兵士へ）
+  if (D.spin && (e.skillT = (e.skillT ?? D.spin.every) - dt) <= 0) {
+    e.skillT = D.spin.every;
+    for (const u of T.units) if (!u.dead && trialDist(u, e) <= D.spin.r) trialHitUnit(u, ((e.attackConf && e.attackConf.damage) || 10) * (e.atkMul || 1) * D.spin.mul, false, e);
+    fx({ kind: "cwave", x: e.x, y: e.y - 10, rays: [0, 1, 2, 3, 4, 5].map((k) => (k * Math.PI) / 3 + T.t * 3), len: D.spin.r, width: 18, ougi: true, age: 0, duration: 0.4 });
+    fx({ kind: "ctext", x: e.x, y: e.y - 90, text: "🗡️ " + D.line, ougi: true, age: 0, duration: 1.1 });
+    trialSfx("slash");
   }
   // 加藤段蔵：瞬間移動（主人公の背後へ）→ すぐに斬りかかる
   if (D.blink && (e.skillT = (e.skillT ?? D.blink.every) - dt) <= 0) {
@@ -20281,6 +20429,9 @@ function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
   let dmg = (raw * 30) / (30 + armor * (1 - ignore));
   if (e.leader && !pierce && !cover && !e.leader.gone && trialDist(e.leader, e) <= ENEMY_BEHAVIORS.tate.cover.radius) dmg *= ENEMY_BEHAVIORS.tate.cover.mul;
   if (e.guardUntil > trial.t) dmg *= TRIAL_RIVALS.list.jouun.guard.cut; // v111 高橋紹運の守りの構え
+  const RV = trial.rival; // v112 成田長親の人望：まわりの敵が受けるダメージを減らす（長親自身は減らない）
+  if (RV && !RV.gone && RV !== e && RV.rival === "nagachika" && trialDist(RV, e) <= TRIAL_RIVALS.list.nagachika.aura.r) dmg *= TRIAL_RIVALS.list.nagachika.aura.cut;
+  if (u.rageUntil > trial.t) dmg *= TRIAL_UNIQUE.akazonae.mul; // v112 固有の技「赤備え」
   const hp0 = e.hp;
   e.hp -= dmg;
   e.hit = 0.18;
@@ -20738,7 +20889,7 @@ function drawTrial() {
   for (const e of T.enemies) if (!e.gone) actors.push({ y: e.y, draw: () => trialDrawEnemy(e) });
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) a.draw();
-  if (T.mode === "survival") trialDrawMagnets(T); // v109 磁石は兵士・敵の上に（群れに隠れない）
+  if (T.mode === "survival") trialDrawMagnets(T), trialDrawRivalFx(T); // v109 磁石は兵士・敵の上に（群れに隠れない）。v112 火矢の輪・人望の輪
   for (const s of shots) projectile(s);
   for (const e of effects) effect(e);
   ctx.restore();
