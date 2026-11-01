@@ -3240,7 +3240,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113試作（戦場試練：暗闇の探索・村で仲間）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113.2試作（三方の関を探索に入れ替え）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -12845,7 +12845,10 @@ function chronicleWarBonusBlock(s) {
         // v113 テスト版では雇用を2500Gに（仲間は探索の村で無料で得る）。テスト版が WD_FLAGS.recruitPrice を立てる。本番の版は24Gのまま
         const recruitBasePrice = () => (window.WD_FLAGS && window.WD_FLAGS.recruitPrice) || RANDOM_RECRUIT.price;
         let recruitRng = Math.random;
-        const randomRecruitCost = () => Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire"))));
+        // v113.1 テスト版（雇用2500G）では、生きている兵士がいないときの最初の1人は無料（始めたばかりでも兵士を得られる）
+        const firstRecruitFree = () => !!(window.WD_FLAGS && window.WD_FLAGS.recruitPrice) && !soldiers.some((s) => s.alive);
+        const randomRecruitCost = () => (firstRecruitFree() ? 0 : Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire")))));
+        const recruitCostText = () => (randomRecruitCost() ? randomRecruitCost() + "G" : "無料");
         function randomRecruitSlots() {
           const slots = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads && roster(q).length < SQUAD_RULES.squadSize);
           const used = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads).length;
@@ -12885,7 +12888,7 @@ function chronicleWarBonusBlock(s) {
             return { error: "保存できなかったため、雇用と支払いを取り消しました。空き容量を確認してください。" };
           }
           zukanSync(); refreshSiege();
-          msg(SOLDIER_TYPES[type].name + (soldier.named ? "「" + soldier.name + "」" : "") + "を1人雇い、" + squadName(q) + "へ配属した（" + price + "G）。" + (q.state === "reserve" ? " 部隊ボタンを押して道をタップすると配置できます。" : ""));
+          msg(SOLDIER_TYPES[type].name + (soldier.named ? "「" + soldier.name + "」" : "") + "を1人雇い、" + squadName(q) + "へ配属した（" + (price ? price + "G" : "最初の1人は無料") + "）。" + (q.state === "reserve" ? " 部隊ボタンを押して道をタップすると配置できます。" : ""));
           toast($("msg").textContent); updateUI();
           return { soldier, squad: q, cost: price };
         }
@@ -17378,8 +17381,8 @@ function chronicleWarBonusBlock(s) {
           );
           const ds = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
           if ($("deployStat").textContent !== ds) $("deployStat").textContent = ds;
-          $("hireToggle").textContent = "＋ 雇う " + randomRecruitCost() + "G";
-          $("hireToggle").setAttribute("aria-label", "兵種ランダムで兵士を1人雇う・" + randomRecruitCost() + "G");
+          $("hireToggle").textContent = "＋ 雇う " + recruitCostText();
+          $("hireToggle").setAttribute("aria-label", "兵種ランダムで兵士を1人雇う・" + recruitCostText());
           $("hireToggle").title = randomRecruitError() || "兵種はランダム。空きのある部隊へ1人ずつ自動配属します。";
           $("hireToggle").disabled = !!randomRecruitError();
           setHtml($("squadChips"), squads.map(chipHtml).join(""));
@@ -18101,7 +18104,12 @@ function startTrial(ids, stageId = "sanpou", opts = {}) {
   if (opts.mode === "explore") {
     // v113 探索：テスト版だけ。主人公1人で出発（敵の強さは主人公で決める）
     if (!TRIAL_EXPLORE.real()) return "探索はテスト版だけで遊べます（兵士名簿・戦死に書き込むため）。";
-    const hero = units.find((u) => u.id === opts.hero) || units[0];
+    // v113.1 探索の主人公は、ゲームの主人公（👑。倒れても死なず Lv1 から再出発）。選んだ兵士を主人公にする（主人公はいつでも変えられる）
+    const hero = units.find((u) => u.id === opts.hero) || units.find((u) => isHeroSoldier(u.src)) || units[0];
+    if (!isHeroSoldier(hero.src)) {
+      const err = setHeroSoldier(hero.id);
+      if (err) return err;
+    }
     return startExplore(list, [hero], trialEnemyLevel([hero]), hero.id, opts.seed);
   }
   const queue = [],
@@ -20032,6 +20040,7 @@ function trialExploreJoin(T, v, hero) {
   const s = r.soldier;
   rec.name = soldierName(s);
   rec.id = s.id;
+  rec.named = s.named || null; // v113.2 ネームド（名のある人物）も雇用と同じ確率で出る
   if (T.units.filter((u) => !u.dead).length < E.partyMax) {
     const u = trialUnit(s, T.units.length),
       S = TRIAL_SURVIVAL,
@@ -20049,7 +20058,9 @@ function trialExploreJoin(T, v, hero) {
   }
   msg("🏘 " + v.name + "を救った！ " + SOLDIER_TYPES[v.type].name + "「" + soldierName(s) + "」が仲間に加わり、兵士名簿に入った" + (rec.joined ? "。" : "（部隊は5人いっぱいなので、陣で待つ）。"));
   if (effects.length < 60) effects.push({ kind: "ctext", x: hero.x, y: hero.y - 120, text: "👥 " + soldierName(s).replace(/^🎖/, "") + " 仲間に！", ougi: true, age: 0, duration: 1.8 });
-  combatFx.banner = { name: v.icon + " " + v.name + " を救った", who: SOLDIER_TYPES[v.type].name + "「" + soldierName(s).replace(/^🎖/, "") + "」が仲間に（無料）", age: 0, duration: 1.8 };
+  combatFx.banner = s.named
+    ? { name: "✨ 名のある人物「" + soldierName(s).replace(/^🎖/, "") + "」", who: v.name + "で出会い、仲間に加わった（無料）", age: 0, duration: 2.2 }
+    : { name: v.icon + " " + v.name + " を救った", who: SOLDIER_TYPES[v.type].name + "「" + soldierName(s).replace(/^🎖/, "") + "」が仲間に（無料）", age: 0, duration: 1.8 };
   trialSfx("rare");
 }
 // 本番の名簿に兵士を1人加える（雇用と同じ流れ。お金は取らない）。保存できなければ元に戻す
@@ -20091,8 +20102,9 @@ function trialExploreDeath(u) {
   const s = u.src,
     q = squads.find((v) => v.id === s.squadId);
   if (!s || !s.alive || !q) return;
-  T.explore.fallen.push(u.name);
-  killSoldier(s, q);
+  if (isHeroSoldier(s)) T.explore.heroFell = { name: u.name, from: s.level };
+  else T.explore.fallen.push(u.name);
+  killSoldier(s, q); // 主人公なら heroFall（死なずに Lv1 から再出発）
   saveDefenseCheckpoint();
 }
 // ===== v111 戦国ライバル武将（サバイバル・試作）：面の途中に乱入する強敵。倒すと珍しい報酬、10% で固有の技（この挑戦の間だけ） =====
@@ -21067,8 +21079,9 @@ function trialHitUnit(u, raw, ranged, e) {
       trialSyncUI();
     }
     if (trial.explore && TRIAL_EXPLORE.real()) {
-      trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）
-      msg("☠ " + u.name + " が戦死した（英霊名鑑へ）");
+      const heroFell = isHeroSoldier(u.src);
+      trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）。主人公は死なず Lv1 から再出発
+      msg(heroFell ? "👑 主人公 " + u.name + " が倒れた。Lv1から再出発（探索は終わり）" : "☠ " + u.name + " が戦死した（英霊名鑑へ）");
     } else msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
   }
 }
@@ -21143,7 +21156,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), heroFell: T.explore.heroFell || null, pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -21775,8 +21788,9 @@ function renderTrialSheet() {
       exploreHtml = X
         ? '<p class="trial-stage-sum">🌑 第' + X.region + "地まで探索（最後の地は " + X.pct + "% 探索）<br>" +
           "👥 仲間になった兵士：<b>" + X.recruits.filter((r) => r.name).length + "人</b>" +
-          (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? esc(r.name.replace(/^🎖/, "")) + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
-          (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した兵士はいません。</small>") +
+          (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? (r.named ? "✨" : "") + esc(r.name.replace(/^🎖/, "")) + (r.named ? "（名のある人物）" : "") + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
+          (X.heroFell ? '<br><span class="injured">👑 主人公 ' + esc(X.heroFell.name) + " が倒れた：Lv" + X.heroFell.from + " → Lv1 から再出発（死なない）</span>" : "") +
+          (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した仲間はいません。</small>") +
           "</p>"
         : "";
     $("trialBody").innerHTML =
@@ -21820,17 +21834,20 @@ function renderTrialSheet() {
   const list = soldiers.filter((s) => s.alive).sort((a, b) => b.level - a.level),
     n = trialPick.length,
     busy = trialBusyError(),
+    // v113.2 テスト版では「三方の関」を「探索」に入れ替える（遊び方は 探索・サバイバル の2つ。三方の関は本番の版だけ）
+    swap = TRIAL_EXPLORE.real() && (trialMode === "field" ? (trialMode = "explore") : true),
     ex = trialMode === "explore" && TRIAL_EXPLORE.real(), // v113 探索（テスト版だけ）
     sv = trialMode === "survival" || ex;
   if (!trialPick.includes(trialHero)) trialHero = trialPick[0] ?? null;
   $("trialBody").innerHTML =
     '<div class="trial-modes" role="group" aria-label="遊び方">' +
-    '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>' +
+    (swap
+      ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>暗闇で村を探し仲間を得る</small></button>'
+      : '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>') +
     '<button type="button" data-trial-mode="survival" aria-pressed="' + (sv && !ex) + '">🔥 サバイバル<small>主人公を操作</small></button>' +
-    (TRIAL_EXPLORE.real() ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>村で仲間を得る（テスト版）</small></button>' : "") +
     "</div>" +
     (ex
-      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた兵士は本当に戦死</b>し、英霊名鑑に入ります。「🚪 この地を去る」で、いつでも新しい地へ。主人公が倒れたら探索は終わり（得た仲間は残ります）。<br>' +
+      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
         "<b>テスト版の保存領域にだけ書きます。本番のデータは変わりません。</b></small></p>"
       : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
@@ -22087,7 +22104,7 @@ $("trialSheet").addEventListener("click", (ev) => {
     const err = startTrial(trialPick, "sanpou", { mode: trialMode, hero: trialHero });
     if (err) return toast(err);
     closeTrialSheet();
-    if (trialMode !== "survival") msg("⚔️ 光っている場所をタップして、兵士を1人ずつ配置しよう（「自動で並べる」も使えます）。");
+    if (trialMode === "field") msg("⚔️ 光っている場所をタップして、兵士を1人ずつ配置しよう（「自動で並べる」も使えます）。");
   } else if (d.trialAgain !== undefined) openTrialSheet("pick");
   else if (d.trialClose !== undefined) closeTrialSheet();
 });

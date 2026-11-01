@@ -62,20 +62,14 @@ try {
   await p.locator("#trialOpen").scrollIntoViewIfNeeded();
   await p.locator("#trialOpen").tap();
   await p.waitForTimeout(400);
+  // v113.2 テスト版の遊び方は「🌑 探索」と「🔥 サバイバル」（三方の関は探索に入れ替え）
+  const modes = await p.evaluate(() => [...document.querySelectorAll("[data-trial-mode]")].map((b) => b.dataset.trialMode + ":" + b.getAttribute("aria-pressed")));
   for (const name of ["試・剣神", "試・槍将", "試・弓聖", "試・銃将", "試・医王"]) await p.locator("[data-trial-pick]", { hasText: name }).tap();
   await p.locator("[data-trial-go]").tap();
-  await p.waitForTimeout(400);
-  // v108：広い戦場。配置は「🧭 自動で並べる」
-  await p.locator("#trialAuto").tap();
-  await p.locator("#trialGo").tap();
-  await p.waitForTimeout(8000);
+  await p.waitForTimeout(3000);
   const info = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  step("5 戦場試練を開始できる（8秒たって戦闘が進む）", info, /味方 \d\/5/.test(info) && /\d+秒/.test(info));
-  // 兵士の札を押して操作 → スティックを指で倒す → 全員自動
-  await p.locator("#trialUnits [data-trial-ctl]").first().tap();
-  await p.waitForTimeout(500);
-  const ctl = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, chips: document.querySelectorAll("#trialUnits [data-trial-ctl]").length, pad: document.getElementById("trialPad").offsetParent !== null }));
-  step("6 兵士の札を押すと、その兵士を操作できる", ctl, ctl.info.includes("操作中") && ctl.chips === 5 && ctl.pad);
+  step("5 探索を始められる（遊び方は探索・サバイバル。主人公1人で暗闇の第1地へ）", { modes, info }, modes.join() === "explore:true,survival:false" && /第1地/.test(info) && /試・剣神/.test(info));
+  if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
   const pad = await p.locator("#trialPad").boundingBox();
   const sy0 = await p.evaluate(() => scrollY);
   const cx = pad.x + pad.width / 2,
@@ -95,15 +89,17 @@ try {
     [cx, cy],
   );
   const sy1 = await p.evaluate(() => scrollY);
-  step("7 スティックを指で倒せる（画面はスクロールしない）", { knob, sy0, sy1 }, knob !== "none" && sy0 === sy1);
-  await p.locator("#trialAutoAll").tap();
-  await p.waitForTimeout(300);
-  const auto = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  step("8 「🤖 全員自動」で操作を外せる", auto, auto.includes("全員自動"));
+  step("6 探索：スティックを指で倒せる（画面はスクロールしない）", { knob, sy0, sy1 }, knob !== "none" && sy0 === sy1);
+  if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
+  await p.locator("#trialLeave").tap();
+  await p.waitForTimeout(400);
+  const left = await p.evaluate(() => document.getElementById("trialInfo").textContent);
+  step("7 「🚪 この地を去る」で新しい地（第2地）へ", left, /第2地/.test(left));
+  if (await p.evaluate(() => !document.getElementById("trialLevelUp").hidden)) await p.locator('[data-trial-choose="0"]').tap();
   await p.locator("#trialRetreat").tap();
   await p.waitForTimeout(800);
-  const result = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, rows: document.querySelectorAll(".trial-unit").length, text: document.querySelector(".trial-result")?.textContent }));
-  step("9 撤退すると結果の画面", result, result.open && result.rows === 5);
+  const result = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.querySelector(".trial-result")?.textContent }));
+  step("8 撤退すると探索の結果の画面", result, result.open && /探索の結果/.test(result.title) && /探索から戻った/.test(result.text || ""));
   // v108.1 サバイバル：もう一度 → 「🔥 サバイバル」→ 主人公（試・弓聖）→ 開始 → スティック → 撤退
   await p.locator("[data-trial-again]").tap();
   await p.locator('[data-trial-mode="survival"]').tap();
