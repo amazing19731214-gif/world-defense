@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113試作（戦場試練：暗闇の探索・村で仲間）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113.1試作（探索の主人公・最初の1人は無料）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -9822,7 +9822,10 @@ OFF</button>
         // v113 テスト版では雇用を2500Gに（仲間は探索の村で無料で得る）。テスト版が WD_FLAGS.recruitPrice を立てる。本番の版は24Gのまま
         const recruitBasePrice = () => (window.WD_FLAGS && window.WD_FLAGS.recruitPrice) || RANDOM_RECRUIT.price;
         let recruitRng = Math.random;
-        const randomRecruitCost = () => Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire"))));
+        // v113.1 テスト版（雇用2500G）では、生きている兵士がいないときの最初の1人は無料（始めたばかりでも兵士を得られる）
+        const firstRecruitFree = () => !!(window.WD_FLAGS && window.WD_FLAGS.recruitPrice) && !soldiers.some((s) => s.alive);
+        const randomRecruitCost = () => (firstRecruitFree() ? 0 : Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire")))));
+        const recruitCostText = () => (randomRecruitCost() ? randomRecruitCost() + "G" : "無料");
         function randomRecruitSlots() {
           const slots = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads && roster(q).length < SQUAD_RULES.squadSize);
           const used = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads).length;
@@ -9862,7 +9865,7 @@ OFF</button>
             return { error: "保存できなかったため、雇用と支払いを取り消しました。空き容量を確認してください。" };
           }
           zukanSync(); refreshSiege();
-          msg(SOLDIER_TYPES[type].name + (soldier.named ? "「" + soldier.name + "」" : "") + "を1人雇い、" + squadName(q) + "へ配属した（" + price + "G）。" + (q.state === "reserve" ? " 部隊ボタンを押して道をタップすると配置できます。" : ""));
+          msg(SOLDIER_TYPES[type].name + (soldier.named ? "「" + soldier.name + "」" : "") + "を1人雇い、" + squadName(q) + "へ配属した（" + (price ? price + "G" : "最初の1人は無料") + "）。" + (q.state === "reserve" ? " 部隊ボタンを押して道をタップすると配置できます。" : ""));
           toast($("msg").textContent); updateUI();
           return { soldier, squad: q, cost: price };
         }
@@ -14355,8 +14358,8 @@ OFF</button>
           );
           const ds = "配置 " + fieldSquads().length + "/" + SQUAD_RULES.maxDeployed;
           if ($("deployStat").textContent !== ds) $("deployStat").textContent = ds;
-          $("hireToggle").textContent = "＋ 雇う " + randomRecruitCost() + "G";
-          $("hireToggle").setAttribute("aria-label", "兵種ランダムで兵士を1人雇う・" + randomRecruitCost() + "G");
+          $("hireToggle").textContent = "＋ 雇う " + recruitCostText();
+          $("hireToggle").setAttribute("aria-label", "兵種ランダムで兵士を1人雇う・" + recruitCostText());
           $("hireToggle").title = randomRecruitError() || "兵種はランダム。空きのある部隊へ1人ずつ自動配属します。";
           $("hireToggle").disabled = !!randomRecruitError();
           setHtml($("squadChips"), squads.map(chipHtml).join(""));

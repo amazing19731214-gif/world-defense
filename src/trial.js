@@ -315,7 +315,12 @@ function startTrial(ids, stageId = "sanpou", opts = {}) {
   if (opts.mode === "explore") {
     // v113 探索：テスト版だけ。主人公1人で出発（敵の強さは主人公で決める）
     if (!TRIAL_EXPLORE.real()) return "探索はテスト版だけで遊べます（兵士名簿・戦死に書き込むため）。";
-    const hero = units.find((u) => u.id === opts.hero) || units[0];
+    // v113.1 探索の主人公は、ゲームの主人公（👑。倒れても死なず Lv1 から再出発）。選んだ兵士を主人公にする（主人公はいつでも変えられる）
+    const hero = units.find((u) => u.id === opts.hero) || units.find((u) => isHeroSoldier(u.src)) || units[0];
+    if (!isHeroSoldier(hero.src)) {
+      const err = setHeroSoldier(hero.id);
+      if (err) return err;
+    }
     return startExplore(list, [hero], trialEnemyLevel([hero]), hero.id, opts.seed);
   }
   const queue = [],
@@ -2305,8 +2310,9 @@ function trialExploreDeath(u) {
   const s = u.src,
     q = squads.find((v) => v.id === s.squadId);
   if (!s || !s.alive || !q) return;
-  T.explore.fallen.push(u.name);
-  killSoldier(s, q);
+  if (isHeroSoldier(s)) T.explore.heroFell = { name: u.name, from: s.level };
+  else T.explore.fallen.push(u.name);
+  killSoldier(s, q); // 主人公なら heroFall（死なずに Lv1 から再出発）
   saveDefenseCheckpoint();
 }
 // ===== v111 戦国ライバル武将（サバイバル・試作）：面の途中に乱入する強敵。倒すと珍しい報酬、10% で固有の技（この挑戦の間だけ） =====
@@ -3281,8 +3287,9 @@ function trialHitUnit(u, raw, ranged, e) {
       trialSyncUI();
     }
     if (trial.explore && TRIAL_EXPLORE.real()) {
-      trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）
-      msg("☠ " + u.name + " が戦死した（英霊名鑑へ）");
+      const heroFell = isHeroSoldier(u.src);
+      trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）。主人公は死なず Lv1 から再出発
+      msg(heroFell ? "👑 主人公 " + u.name + " が倒れた。Lv1から再出発（探索は終わり）" : "☠ " + u.name + " が戦死した（英霊名鑑へ）");
     } else msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
   }
 }
@@ -3357,7 +3364,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), heroFell: T.explore.heroFell || null, pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -3990,7 +3997,8 @@ function renderTrialSheet() {
         ? '<p class="trial-stage-sum">🌑 第' + X.region + "地まで探索（最後の地は " + X.pct + "% 探索）<br>" +
           "👥 仲間になった兵士：<b>" + X.recruits.filter((r) => r.name).length + "人</b>" +
           (X.recruits.length ? "<br><small>" + X.recruits.map((r) => r.icon + esc(r.village) + "：" + (r.name ? esc(r.name.replace(/^🎖/, "")) + (r.joined ? "（同行）" : "（名簿へ）") : esc(r.error || "—"))).join("<br>") + "</small>" : "") +
-          (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した兵士はいません。</small>") +
+          (X.heroFell ? '<br><span class="injured">👑 主人公 ' + esc(X.heroFell.name) + " が倒れた：Lv" + X.heroFell.from + " → Lv1 から再出発（死なない）</span>" : "") +
+          (X.fallen.length ? '<br><span class="injured">☠ 戦死（英霊名鑑へ）：' + X.fallen.map(esc).join("・") + "</span>" : "<br><small>戦死した仲間はいません。</small>") +
           "</p>"
         : "";
     $("trialBody").innerHTML =
@@ -4044,7 +4052,7 @@ function renderTrialSheet() {
     (TRIAL_EXPLORE.real() ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>村で仲間を得る（テスト版）</small></button>' : "") +
     "</div>" +
     (ex
-      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた兵士は本当に戦死</b>し、英霊名鑑に入ります。「🚪 この地を去る」で、いつでも新しい地へ。主人公が倒れたら探索は終わり（得た仲間は残ります）。<br>' +
+      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
         "<b>テスト版の保存領域にだけ書きます。本番のデータは変わりません。</b></small></p>"
       : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"

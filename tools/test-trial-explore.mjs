@@ -142,8 +142,9 @@ try {
     const L = T.live();
     WD_DEBUG.step(0.3);
     const s = T.exploreState();
-    return { err, units: L.units.length, hero: L.units[0].id, pct: s.pct, villages: s.villages.map((v) => v.state), leave: !document.getElementById("trialLeave").hidden, boss: !!L.boss };
+    return { err, units: L.units.length, hero: L.units[0].id, gameHero: JSON.parse(localStorage.getItem("worldDefense.soldiers.v1")).heroId, pct: s.pct, villages: s.villages.map((v) => v.state), leave: !document.getElementById("trialLeave").hidden, boss: !!L.boss };
   });
+  check(r.gameHero === 10, "👑 で選んだ兵士（試・剣神）がゲームの主人公になる（主人公はいつでも変えられる）", r.gameHero);
   check(!r.err && r.units === 1 && r.hero === 10 && r.pct > 0 && r.pct < 5 && r.villages.every((v) => v === "hidden") && r.leave && !r.boss, "主人公1人で出発。最初は真っ暗（見えているのは " + r.pct + "%）。村はまだ見つかっていない。「🚪 この地を去る」が出る", r);
   // 5. 歩くと見えた所が広がる。村を見つけると野盗が出て、倒すと村の兵士が仲間に（兵士名簿に入る・同行）
   r = await freeVillage(p);
@@ -227,11 +228,34 @@ try {
       while (L.choice) T.choose(0);
       WD_DEBUG.step(0.1);
     }
-    return { on: T.on(), title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent };
+    const save = JSON.parse(localStorage.getItem("worldDefense.soldiers.v1")),
+      me = save.soldiers.find((s) => s.id === 10);
+    return { on: T.on(), title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent, hero: me && { level: me.level, deaths: me.deaths }, heroId: save.heroId, fallen: (save.fallen || []).some((f) => f.id === 10) };
   });
-  check(!r.on && /探索の結果/.test(r.title) && /主人公が倒れ、探索は終わった/.test(r.text) && /仲間になった兵士/.test(r.text) && /戦死（英霊名鑑へ）/.test(r.text), "主人公が倒れると探索は終わり。結果の画面に、仲間になった兵士と戦死した兵士", r.text.slice(0, 200));
+  check(!r.on && /探索の結果/.test(r.title) && /主人公が倒れ、探索は終わった/.test(r.text) && /仲間になった兵士/.test(r.text) && /戦死（英霊名鑑へ）/.test(r.text), "主人公が倒れると探索は終わり。結果の画面に、仲間になった兵士と戦死した仲間", r.text.slice(0, 200));
+  check(r.hero && r.hero.level === 1 && r.hero.deaths >= 1 && r.heroId === 10 && !r.fallen && /Lv1 から再出発（死なない）/.test(r.text), "主人公は死なない：倒れても兵士名簿に残り、Lv1 から再出発（主人公のまま）", r);
   const rs2 = await roster(p);
   check(rs2.soldiers.length >= rs1.soldiers.length + 3, "探索で得た仲間は兵士名簿に残る（" + rs0.soldiers.length + " → " + rs2.soldiers.length + "人）", rs2.soldiers.length);
+  // 10b. v113.1 生きている兵士がいないときの最初の1人は無料（テスト版の雇用 2500G で、始めたばかりでも兵士を得られる）
+  {
+    const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } }),
+      q2 = await c2.newPage();
+    q2.on("pageerror", (e) => errors.push(e.message));
+    await q2.goto(base + "/test/?debug");
+    await q2.waitForFunction(() => window.WD_DEBUG);
+    const f = await q2.evaluate(() => {
+      const A = WD_DEBUG.recruitApi,
+        c0 = A.cost(),
+        label0 = document.getElementById("hireToggle").textContent,
+        n0 = WD_DEBUG.state().squads.reduce((n, q) => n + q.members, 0);
+      WD_DEBUG.setGold && WD_DEBUG.setGold(500);
+      const res = A.recruit();
+      WD_DEBUG.heroApi.draw();
+      return { c0, label0, err: res.error || null, c1: A.cost(), gold: WD_DEBUG.state().gold, label1: document.getElementById("hireToggle").textContent };
+    });
+    check(f.c0 === 0 && /無料/.test(f.label0) && !f.err && f.c1 === 2500, "兵士がいないときの最初の1人は無料（「＋ 雇う 無料」）。2人目からは 2500G", f);
+    await c2.close();
+  }
   // 11. iPhone縦：はみ出さない。本番の保存データは変わらない
   r = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   check(r <= 0, "iPhone縦（390px）で横にはみ出さない", r);
