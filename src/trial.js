@@ -4042,14 +4042,17 @@ function renderTrialSheet() {
   const list = soldiers.filter((s) => s.alive).sort((a, b) => b.level - a.level),
     n = trialPick.length,
     busy = trialBusyError(),
+    // v113.2 テスト版では「三方の関」を「探索」に入れ替える（遊び方は 探索・サバイバル の2つ。三方の関は本番の版だけ）
+    swap = TRIAL_EXPLORE.real() && (trialMode === "field" ? (trialMode = "explore") : true),
     ex = trialMode === "explore" && TRIAL_EXPLORE.real(), // v113 探索（テスト版だけ）
     sv = trialMode === "survival" || ex;
   if (!trialPick.includes(trialHero)) trialHero = trialPick[0] ?? null;
   $("trialBody").innerHTML =
     '<div class="trial-modes" role="group" aria-label="遊び方">' +
-    '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>' +
+    (swap
+      ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>暗闇で村を探し仲間を得る</small></button>'
+      : '<button type="button" data-trial-mode="field" aria-pressed="' + !sv + '">⚔️ 三方の関<small>配置して守る</small></button>') +
     '<button type="button" data-trial-mode="survival" aria-pressed="' + (sv && !ex) + '">🔥 サバイバル<small>主人公を操作</small></button>' +
-    (TRIAL_EXPLORE.real() ? '<button type="button" data-trial-mode="explore" aria-pressed="' + ex + '">🌑 探索<small>村で仲間を得る（テスト版）</small></button>' : "") +
     "</div>" +
     (ex
       ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
@@ -4309,7 +4312,7 @@ $("trialSheet").addEventListener("click", (ev) => {
     const err = startTrial(trialPick, "sanpou", { mode: trialMode, hero: trialHero });
     if (err) return toast(err);
     closeTrialSheet();
-    if (trialMode !== "survival") msg("⚔️ 光っている場所をタップして、兵士を1人ずつ配置しよう（「自動で並べる」も使えます）。");
+    if (trialMode === "field") msg("⚔️ 光っている場所をタップして、兵士を1人ずつ配置しよう（「自動で並べる」も使えます）。");
   } else if (d.trialAgain !== undefined) openTrialSheet("pick");
   else if (d.trialClose !== undefined) closeTrialSheet();
 });

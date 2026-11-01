@@ -95,24 +95,13 @@ try {
   await tap("#trialOpen");
   r = await p.evaluate(() => ({ rows: [...document.querySelectorAll("[data-trial-pick]")].map((b) => b.textContent), small: [...document.querySelectorAll("#trialBody button")].filter((b) => b.getBoundingClientRect().height < 40).length }));
   check(r.rows.length === 10 && r.small === 0, "戦場試練に10人が並び、ボタンは押しやすい高さ（40px以上）", r);
+  // v113.2 テスト版の遊び方は「🌑 探索」と「🔥 サバイバル」（三方の関は探索に入れ替え。本番の版は三方の関のまま）
+  r = await p.evaluate(() => [...document.querySelectorAll("[data-trial-mode]")].map((b) => b.dataset.trialMode + ":" + b.getAttribute("aria-pressed")));
+  check(r.join() === "explore:true,survival:false", "テスト版の遊び方は「🌑 探索」（はじめから選ばれている）と「🔥 サバイバル」。三方の関は出ない", r);
   for (const name of ["試・剣神", "試・槍将", "試・弓聖", "試・銃将", "試・医王"]) await p.locator("[data-trial-pick]", { hasText: name }).tap();
   await tap("[data-trial-go]");
-  const box = await p.locator("#game").boundingBox();
-  // v108：配置の間は、カメラが関の手前の広場（光っている所）を映す。広場の中を2か所タップ
-  //   v113：画面は縦長（600×960）にも横長にもなるので、広場の戦場の座標から画面の位置を求めて押す
   await p.waitForTimeout(1500);
-  //   配置の間のカメラは広場の真ん中を画面の真ん中に映すので、画面の真ん中の少し左上・右下を押す（広場は 300×320）
-  const cv = await p.locator("#gameView canvas").boundingBox(),
-    cx = cv.x + cv.width / 2,
-    cy = cv.y + cv.height / 2,
-    k = cv.width / (cv.width > cv.height ? 960 : 600); // 画面の1点（戦場の座標）が何ピクセルか
-  await p.touchscreen.tap(cx - 60 * k, cy - 60 * k);
-  await p.touchscreen.tap(cx + 60 * k, cy + 60 * k);
-  r = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  check(/あと\s*3人/.test(r), "戦場を指でタップして1人ずつ配置できる", r);
-  await tap("#trialAuto");
-  await tap("#trialGo");
-  // 本物の時間で動かす（重くならないか：1コマの間隔を測る）
+  // 本物の時間で動かす（重くならないか：1コマの間隔を測る。暗闇を描いても重くない）
   const perf = await p.evaluate(
     () =>
       new Promise((res) => {
@@ -128,14 +117,10 @@ try {
         requestAnimationFrame(f);
       }),
   );
-  check(perf.median < 34, "戦闘中の描画が極端に重くない（1コマの間隔の中央値 " + Math.round(perf.median) + "ms）", perf);
-  r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, stats: getComputedStyle(document.querySelector("header .stats")).display, overflow: document.documentElement.scrollWidth - innerWidth }));
-  check(/\d+秒/.test(r.info) && r.stats === "none" && r.overflow <= 0, "戦闘が進み、城HPなどの表示は隠れ、横にはみ出さない", r);
-  // v108：兵士の札を押して操作 → スティックを指で倒して動かす → 「全員自動」に戻す
-  await p.waitForTimeout(1000);
-  await p.locator("#trialUnits [data-trial-ctl]").first().tap();
-  r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, pad: document.getElementById("trialPad").offsetParent !== null }));
-  check(r.info.includes("操作中") && r.pad, "兵士の札を押すと、その兵士を操作できる（スティックが出る）", r);
+  check(perf.median < 34, "探索中の描画（暗闇つき）が極端に重くない（1コマの間隔の中央値 " + Math.round(perf.median) + "ms）", perf);
+  r = await p.evaluate(() => ({ info: document.getElementById("trialInfo").textContent, stats: getComputedStyle(document.querySelector("header .stats")).display, overflow: document.documentElement.scrollWidth - innerWidth, leave: document.getElementById("trialLeave").offsetParent !== null }));
+  check(/第1地/.test(r.info) && /試・剣神/.test(r.info) && /村/.test(r.info) && r.stats === "none" && r.overflow <= 0 && r.leave, "探索：主人公（試・剣神）1人で第1地へ。城HPなどの表示は隠れ、「🚪 この地を去る」が押せる", r);
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
   const pad = await p.locator("#trialPad").boundingBox();
   const scroll0 = await p.evaluate(() => scrollY);
   await p.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
@@ -145,10 +130,13 @@ try {
   r = await p.evaluate(() => getComputedStyle(document.querySelector("#trialPad .trial-knob")).transform);
   await p.mouse.up();
   const scroll1 = await p.evaluate(() => scrollY);
-  check(r !== "none" && scroll1 === scroll0, "スティックを指で倒せる（画面はスクロールしない）", { knob: r, scroll0, scroll1 });
-  await tap("#trialAutoAll");
+  check(r !== "none" && scroll1 === scroll0, "探索：スティックを指で倒せる（画面はスクロールしない）", { knob: r, scroll0, scroll1 });
+  // 「🚪 この地を去る」で第2地へ（確かめの画面は「はい」）
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
+  await tap("#trialLeave");
+  await p.waitForTimeout(300);
   r = await p.evaluate(() => document.getElementById("trialInfo").textContent);
-  check(r.includes("全員自動"), "「🤖 全員自動」で操作を外せる", r);
+  check(/第2地/.test(r), "「🚪 この地を去る」で新しい地（第2地）へ", r);
   // 画面を横にして戻しても操作できる
   await p.setViewportSize({ width: 844, height: 390 });
   await p.waitForTimeout(500);
@@ -157,11 +145,11 @@ try {
   r = await p.evaluate(() => ({ overflow: document.documentElement.scrollWidth - innerWidth, bar: !document.getElementById("trialBar").hidden, retreat: document.getElementById("trialRetreat").offsetParent !== null }));
   check(r.overflow <= 0 && r.bar && r.retreat, "画面を回転して戻しても、はみ出さず撤退ボタンを押せる", r);
   // 撤退 → 結果
+  if (await p.locator("#trialLevelUp:not([hidden])").count()) await tap('[data-trial-choose="0"]');
   await tap("#trialRetreat");
   await p.waitForTimeout(300);
-  r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialBody").textContent, rows: document.querySelectorAll(".trial-unit").length }));
-  check(r.open && r.text.includes("撤退") && r.rows === 5, "撤退すると結果の画面に兵士ごとの活躍が出る", r.text.slice(0, 60));
-  // もう一度：勝つまで（時間を早送りできないので、本物の時間で最後まで待つのはしない。ここでは結果の画面から次へ進めること）
+  r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, title: document.getElementById("trialTitle").textContent, text: document.getElementById("trialBody").textContent }));
+  check(r.open && /探索の結果/.test(r.title) && r.text.includes("探索から戻った") && r.text.includes("第2地"), "撤退すると探索の結果の画面（第2地まで）", r.text.slice(0, 80));
   await tap("[data-trial-again]");
   r = await p.evaluate(() => !document.getElementById("trialSheet").hidden && document.querySelectorAll("[data-trial-pick]").length === 10);
   check(r, "結果の画面から、もう一度兵士を選び直せる（進行不能にならない）");
