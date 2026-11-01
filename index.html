@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v114（暗闇の探索・村で仲間）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v115（兵士の成長適性S〜I）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -7327,7 +7327,7 @@ function cleanChronicle(v, s = {}) {
   );
   out.pending = out.pending.filter((id) => !out.claimed.includes(id));
   out.selected = out.honors.includes(o.selected) ? o.selected : null;
-  out.aptitude = cleanChronicleAptitude(o.aptitude);
+  out.aptitude = cleanChronicleAptitude(o.aptitude, s.level);
   out.revivalCharge = typeof o.revivalCharge === "boolean" ? o.revivalCharge : out.revivals > 0;
   return out;
 }
@@ -7918,7 +7918,9 @@ const CHRONICLE_APTITUDES = Object.freeze({
   agile: { name: "俊敏型", grow: { hp: 1, atk: 1, def: 1, heal: 1 } },
   sniper: { name: "狙撃型", grow: { hp: 1, atk: 1, def: 1, heal: 1 } },
 });
-function cleanChronicleAptitude(v) {
+const CHRONICLE_GROWTH_KEYS = Object.freeze(["hp", "atk", "def", "heal"]);
+const CHRONICLE_GROWTH_GRADES = Object.freeze(["I", "H", "G", "F", "E", "D", "C", "B", "A", "S"]);
+function cleanChronicleAptitude(v, soldierLevel) {
   if (!v || v.version !== 1 || !Object.hasOwn(CHRONICLE_APTITUDES, v.type)) return null;
   const a = {
     version: 1,
@@ -7935,14 +7937,43 @@ function cleanChronicleAptitude(v) {
       ? Math.max(-a.earned[k] * 0.1, Math.min(a.earned[k] * 0.1, v.delta[k]))
       : 0;
   }
+  if (v.ranks?.version === 1) {
+    const ceiling = intIn(soldierLevel, 1, SQUAD_RULES.maxLevel, a.level),
+      level = intIn(v.ranks.level, 1, ceiling, ceiling),
+      startAt = intIn(v.ranks.startAt, 1, level, level);
+    a.ranks = { version: 1, level, startAt, values: {}, gains: {} };
+    for (const k of CHRONICLE_GROWTH_KEYS) {
+      // 不正な抽選値は再現可能な初期値で補い、保存の読み直しを抽選に使わせない。
+      if (Number.isInteger(v.ranks.values?.[k]) && v.ranks.values[k] >= 1 && v.ranks.values[k] <= 10)
+        a.ranks.values[k] = v.ranks.values[k];
+      a.ranks.gains[k] = Number.isFinite(v.ranks.gains?.[k])
+        ? Math.max(0, Math.min((a.ranks.values[k] || 10) * (level - startAt), v.ranks.gains[k]))
+        : 0;
+    }
+    a.level = Math.min(a.level, ceiling);
+  }
   return a;
 }
+function chronicleGrowthRanks(s, a = chronicleAptitude(s), anchor = s.level) {
+  if (!a.ranks) a.ranks = { version: 1, level: anchor, startAt: anchor, values: {}, gains: {} };
+  const r = a.ranks;
+  for (const k of CHRONICLE_GROWTH_KEYS) {
+    if (!Number.isInteger(r.values[k]) || r.values[k] < 1 || r.values[k] > 10)
+      r.values[k] = 1 + (insightHash("growth-rank:v1:" + chronicleOf(s).life + ":" + k) % 10);
+    r.gains[k] = Math.max(0, Math.min(r.values[k] * (r.level - r.startAt), r.gains[k] || 0));
+  }
+  return r;
+}
+const chronicleGrade = (value) => CHRONICLE_GROWTH_GRADES[intIn(value, 1, 10, 1) - 1];
 function chronicleAptitude(s, anchor = s.level, expanded = false) {
   const c = chronicleOf(s);
-  if (c.aptitude) return c.aptitude;
+  if (c.aptitude) {
+    chronicleGrowthRanks(s, c.aptitude, anchor);
+    return c.aptitude;
+  }
   const types = Object.keys(CHRONICLE_APTITUDES).slice(0, expanded ? 6 : 4),
     type = types[insightHash("aptitude:" + (s.named ? "named:" + s.named : c.life)) % types.length];
-  return (c.aptitude = {
+  c.aptitude = {
     version: 1,
     type,
     level: anchor,
@@ -7950,62 +7981,61 @@ function chronicleAptitude(s, anchor = s.level, expanded = false) {
     delta: { hp: 0, atk: 0, def: 0, heal: 0 },
     earned: { hp: 0, atk: 0, def: 0, heal: 0 },
     secondary: 0,
-  });
+  };
+  chronicleGrowthRanks(s, c.aptitude, anchor);
+  return c.aptitude;
 }
 function chronicleGrow(s, before) {
   const a = chronicleAptitude(s, before);
   if (!(s.level > before) || a.level >= s.level) return;
   const diff = Math.max(0, SQUAD_RULES.growthLv(s.level) - SQUAD_RULES.growthLv(Math.max(before, a.level))),
     unit = unitOf(s),
-    rates = CHRONICLE_APTITUDES[a.type].grow;
-  for (const k of ["hp", "atk", "def", "heal"]) {
-    const amount = (unit.grow?.[k] || 0) * diff;
-    a.earned[k] = Math.min(1e10, a.earned[k] + amount);
-    a.delta[k] = Math.max(
-      -a.earned[k] * 0.1,
-      Math.min(a.earned[k] * 0.1, a.delta[k] + amount * (rates[k] - 1)),
-    );
-  }
+    r = chronicleGrowthRanks(s, a, before),
+    steps = Math.max(0, s.level - Math.max(before, r.level));
+  for (const k of CHRONICLE_GROWTH_KEYS) if (unit.grow?.[k] > 0) r.gains[k] += r.values[k] * steps;
+  r.level = s.level;
   a.secondary = Math.min(1e6, (a.secondary || 0) + diff);
   a.level = s.level;
 }
 function chronicleGrowthBase(s, k) {
   const c = unitOf(s),
-    base = (c[k] || 0) + (c.grow?.[k] || 0) * SQUAD_RULES.growthLv(s.level),
-    a = chronicleAptitude(s);
+    a = chronicleAptitude(s),
+    r = chronicleGrowthRanks(s, a),
+    curve = SQUAD_RULES.growthLv(Math.min(s.level, r.startAt)),
+    base = (c[k] || 0) + (c.grow?.[k] || 0) * curve;
   if (k === "heal" && !c.heal) return 0;
-  const limit = (c.grow?.[k] || 0) * SQUAD_RULES.growthLv(s.level) * 0.1;
-  return Math.max(k === "hp" ? 1 : 0, base + Math.max(-limit, Math.min(limit, a.delta[k])));
+  if (k === "atk" && !c.atk && !c.grow?.atk) return 0;
+  const limit = (c.grow?.[k] || 0) * curve * 0.1;
+  return Math.max(
+    k === "hp" ? 1 : 0,
+    base + Math.max(-limit, Math.min(limit, a.delta[k])) + (r.gains[k] || 0),
+  );
 }
 function chronicleResetGrowth(s) {
   const a = chronicleAptitude(s);
   a.level = a.startAt = 1;
   a.secondary = 0;
   for (const k of ["hp", "atk", "def", "heal"]) a.delta[k] = a.earned[k] = 0;
+  const r = chronicleGrowthRanks(s, a);
+  r.level = r.startAt = 1;
+  for (const k of CHRONICLE_GROWTH_KEYS) r.gains[k] = 0;
 }
 function chronicleAptitudeBlock(s) {
   const a = chronicleAptitude(s),
-    type = CHRONICLE_APTITUDES[a.type],
+    r = chronicleGrowthRanks(s, a),
     labels = { hp: "HP", atk: "攻撃", def: "防御", heal: "回復" };
   return (
-    '<details class="chronicle-aptitude"><summary>🌱 成長適性：' +
-    type.name +
-    "</summary><p><small>職業の成長分だけに適用。装備・書・果実はそのままです。転職・復活でも適性は変わりません。</small></p><p>" +
-    Object.entries(type.grow)
-      .map(
-        ([k, v]) =>
-          labels[k] +
-          "の伸び：" +
-          (v > 1 ? "得意（+" : v < 1 ? "控えめ（" : "普通（") +
-          Math.round((v - 1) * 100) +
-          "%）",
-      )
-      .join("<br>") +
+    '<details class="chronicle-aptitude"><summary>🌱 成長適性</summary><p><small>能力ごとの適性でレベルアップ時に成長します。S・A・B・C・D・E・F・G・H・Iの順で伸びやすく、詳しい成長値は非表示です。転職・復活でも適性は変わりません。</small></p><p>' +
+    CHRONICLE_GROWTH_KEYS.map((k) => labels[k] + "の伸び：<b>" + chronicleGrade(r.values[k]) + "</b>").join(
+      "<br>",
+    ) +
     "</p>" +
-    chronicleFinesseText(s) +
-    "<p><small>この人生ではLv" +
-    a.startAt +
-    "から適用。以前のレベル分には遡及しません。</small></p></details>"
+    (a.type === "agile"
+      ? "<p><small>特性：俊敏。成長とともに行動速度と回避が伸びます。</small></p>"
+      : a.type === "sniper"
+        ? "<p><small>特性：狙撃。遠距離攻撃職の射程が成長します。</small></p>"
+        : "") +
+    "<p><small>今までの能力は維持し、今後のレベルアップから適用します。現在の職業が使う能力が成長し、装備・書・果実の効果は別に加算します。</small></p></details>"
   );
 }
 CHRONICLE_SKILLS.in_history_revival = {
@@ -8125,13 +8155,16 @@ function chronicleResistanceText(s) {
 function chronicleSummary(s) {
   const c = chronicleOf(s),
     a = chronicleAptitude(s),
+    r = chronicleGrowthRanks(s, a),
     title = CHRONICLE_HONORS[c.selected]?.name,
     skills = insightOf(s)
       .equipped.filter((id) => INSIGHT_SKILLS[id])
       .map((id) => INSIGHT_SKILLS[id].name + (insightCompatible(s, id) ? "" : "（職業・Lv条件外）"));
   return (
     '<small class="formation-growth">🌱 ' +
-    esc(CHRONICLE_APTITUDES[a.type].name) +
+    CHRONICLE_GROWTH_KEYS.map((k, i) => ["HP", "攻", "防", "回"][i] + " " + chronicleGrade(r.values[k])).join(
+      "・",
+    ) +
     (title ? "・🏅 " + esc(title) : "") +
     "<br>💡 " +
     (skills.length ? skills.map(esc).join("／") : "有効な閃きなし") +
@@ -31226,7 +31259,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               openForge,
               openGear,
             },
-            chronicleApi: {WAR_RULES:CHRONICLE_WAR_BONUS_RULES,warBonus:chronicleWarBonus,warBlock:chronicleWarBonusBlock,GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
+            chronicleApi: {growthRanks:chronicleGrowthRanks,grade:chronicleGrade,GROWTH_GRADES:CHRONICLE_GROWTH_GRADES,WAR_RULES:CHRONICLE_WAR_BONUS_RULES,warBonus:chronicleWarBonus,warBlock:chronicleWarBonusBlock,GEAR_GROWTH:CHRONICLE_GEAR_GROWTH,gearRank:chronicleGearRank,gearBonus:chronicleGearBonus,gearText:chronicleGearText,equipmentBlock:chronicleEquipmentBlock,finesse:chronicleFinesse,cover:chronicleCover,survival:chronicleSurvivalBlock,learnUnyielding:chronicleLearnUnyielding,summary:chronicleSummary,CHRONICLE_RULES,deploy:chronicleDeploy,deployMany:chronicleDeployMany,goals:chronicleGoals,APTITUDES:CHRONICLE_APTITUDES,aptitude:chronicleAptitude,grow:chronicleGrow,base:chronicleGrowthBase,resetGrowth:chronicleResetGrowth,SKILLS:CHRONICLE_SKILLS,sync:chronicleSyncCommitted,has:chronicleHas,guard:chronicleGuard,action:chronicleAction,resistance:chronicleResistance,HONORS:CHRONICLE_HONORS,evaluate:chronicleEvaluate,claim:chronicleClaim,title:chronicleSelectTitle,open:openSoldierSheet,clean:cleanChronicle,of:chronicleOf,damage:chronicleDamage,heal:chronicleHeal,kill:chronicleKill,finish:chronicleFinish,death:chronicleDeath,key:chronicleKey},
             insightApi: {setEffectsEnabled:v=>evolutionEffectsEnabled=!!v,INSIGHT_RULES,INSIGHT_SKILLS,INSIGHT_FX,JOB_ACTIONS,EVOLUTION_JOBS,jobActionStage,evolutionAction,defenseEvolution,battleEvolution,evolutionAbsorb,evolutionShield,evolutionArmor,evolutionState,cleanInsight,cleanInsightBooks,queueInsight,flush:flushInsights,pending:()=>pendingInsights.size,setRoll:f=>insightRollOverride=f,useBook:useInsightBook,toggle:toggleInsight,compatible:insightCompatible,found:()=>[...insightFound()]},
             jobBookApi: { JOB_BOOK_RULES, ADVANCED_JOB_REQ, cleanJobBooks, cleanJobBookClaims, jobEntryText, jobEntryError, dropPool: jobDropPool, roll: rollJobBook, queue: queueJobDrop, flush: flushJobDrops, defenseDrop: defenseJobBookDrop, battleDrop: battleJobBookDrop, pending: () => pendingJobDrops.size },
             jobApi: { JOBS, JOB_RULES, JOB_UNITS, unitOf, jobStyle, profNeed, jobHitMul, yabusameExtra, jobOnKill, changeJob, jobChangeError, profLv, jobOf, jobsOf, addProf, skillHitMul, prayerTick, evadeHit, openJobSheet },

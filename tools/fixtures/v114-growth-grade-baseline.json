@@ -1,0 +1,168 @@
+{
+  "seed": {
+    "seq": 3,
+    "squadSeq": 1,
+    "squads": [
+      {
+        "id": 1,
+        "type": "spearman",
+        "slot": 0
+      }
+    ],
+    "fallen": [],
+    "soldiers": [
+      {
+        "id": 1,
+        "type": "spearman",
+        "job": "spearman",
+        "jobs": [
+          "spearman"
+        ],
+        "squadId": 1,
+        "level": 364,
+        "bestLevel": 364,
+        "name": "旧兵0",
+        "skills": [],
+        "learned": [],
+        "wavesSurvived": 37,
+        "kills": 1200,
+        "chronicle": {
+          "version": 1,
+          "life": "legacy:grade-migration:0",
+          "aptitude": {
+            "version": 1,
+            "type": "stout",
+            "level": 364,
+            "startAt": 10,
+            "delta": {
+              "hp": 10,
+              "atk": 1,
+              "def": 1,
+              "heal": 1
+            },
+            "earned": {
+              "hp": 100,
+              "atk": 10,
+              "def": 10,
+              "heal": 10
+            },
+            "secondary": 10
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "medic",
+        "job": "medic",
+        "jobs": [
+          "medic"
+        ],
+        "squadId": 1,
+        "level": 200,
+        "bestLevel": 200,
+        "name": "旧兵1",
+        "skills": [],
+        "learned": [],
+        "wavesSurvived": 37,
+        "kills": 1200,
+        "chronicle": {
+          "version": 1,
+          "life": "legacy:grade-migration:1",
+          "aptitude": {
+            "version": 1,
+            "type": "healer",
+            "level": 200,
+            "startAt": 10,
+            "delta": {
+              "hp": 10,
+              "atk": 1,
+              "def": 1,
+              "heal": 1
+            },
+            "earned": {
+              "hp": 100,
+              "atk": 10,
+              "def": 10,
+              "heal": 10
+            },
+            "secondary": 10
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "archer",
+        "job": "archer",
+        "jobs": [
+          "archer"
+        ],
+        "squadId": 1,
+        "level": 1000,
+        "bestLevel": 1000,
+        "name": "旧兵2",
+        "skills": [],
+        "learned": [],
+        "wavesSurvived": 37,
+        "kills": 1200,
+        "chronicle": {
+          "version": 1,
+          "life": "legacy:grade-migration:2",
+          "aptitude": {
+            "version": 1,
+            "type": "agile",
+            "level": 1000,
+            "startAt": 10,
+            "delta": {
+              "hp": 10,
+              "atk": 1,
+              "def": 1,
+              "heal": 1
+            },
+            "earned": {
+              "hp": 100,
+              "atk": 10,
+              "def": 10,
+              "heal": 10
+            },
+            "secondary": 10
+          }
+        }
+      }
+    ]
+  },
+  "stats": [
+    {
+      "id": 1,
+      "stats": {
+        "maxHp": 901,
+        "atk": 126.74423042781575,
+        "def": 181.19076868450523,
+        "rate": 1.1,
+        "range": 48,
+        "heal": 0
+      }
+    },
+    {
+      "id": 2,
+      "stats": {
+        "maxHp": 441,
+        "atk": 12,
+        "def": 59.04,
+        "rate": 3,
+        "range": 120,
+        "heal": 28.6
+      }
+    },
+    {
+      "id": 3,
+      "stats": {
+        "maxHp": 575,
+        "atk": 217.5,
+        "def": 60.3,
+        "rate": 1.188,
+        "range": 150,
+        "heal": 0
+      }
+    }
+  ]
+}

@@ -15,6 +15,7 @@ try {
       Q = D.squadApi;
     const types = D.state().soldiers.map((s) => A.aptitude(s).type);
     D.recruitApi.setRng(() => 0.99);
+    D.setGold(10000);
     const ids = [];
     for (const type of ["agile", "sniper"]) {
       let key;
