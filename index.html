@@ -18443,8 +18443,10 @@ const TRIAL_SKILLS = {
 const TRIAL_EVOLVES = {
   raijinken: { icon: "⚡🌪️", name: "雷神剣", from: ["thunder", "vacuum"], text: "雷をまとった十字の斬撃。当たった敵から雷が連鎖する", cd: 1.6, len: 420, width: 50, mul: 2.4, chain: 2, chainMul: 1.6, ready: true },
   guren: { icon: "🔥🌀", name: "紅蓮旋風", from: ["fireRing", "whirl"], text: "4つの大きな炎が回り、炎の旋風が周りを焼き払う", orbs: 4, radius: 110, orbMul: 1.0, gap: 0.5, cd: 1.6, whirl: 190, mul: 1.8, burn: 0.4, ready: true },
-  kagejin: { icon: "✴️🌪️", name: "影刃乱舞", from: ["shuriken", "vacuum"], text: "（準備中：データだけ）", ready: false },
-  teppeki: { icon: "🔱💥", name: "鉄壁の弾幕", from: ["spear", "musket"], text: "（準備中：データだけ）", ready: false },
+  // v110 影刃乱舞：6方向へ貫く影の刃。0.2秒あとに残像の刃がもう一度通る
+  kagejin: { icon: "✴️🌪️", name: "影刃乱舞", from: ["shuriken", "vacuum"], text: "6方向へ敵を貫く影の刃。少しあとに残像の刃がもう一度切り裂く", cd: 1.1, blades: 6, len: 420, width: 46, mul: 1.8, echo: 0.2, echoMul: 1.0, ready: true },
+  // v110 鉄壁の弾幕：まわり8方向へ槍を突き出して押し返し、12方向へ貫く一斉射撃
+  teppeki: { icon: "🔱💥", name: "鉄壁の弾幕", from: ["spear", "musket"], text: "まわり8方向に槍を突き出して敵を押し返し、12方向へ貫く一斉射撃", cd: 1.8, spears: 8, spearLen: 200, spearMul: 2.0, push: 70, shots: 12, range: 420, shotMul: 2.4, pierce: 4, ready: true },
 };
 const trialSkillDef = (k) => TRIAL_SKILLS[k] || TRIAL_EVOLVES[k];
 const trialSkillKinds = (T) => Object.keys(T.skills).filter((k) => !(TRIAL_SKILLS[k] && TRIAL_SKILLS[k].support)).length; // 攻撃スキルの数（補助スキルは数えない）
@@ -18659,6 +18661,51 @@ const TRIAL_SKILL_CAST = {
     trialFx({ kind: "cwave", x: o.x, y: o.y, rays: dirs, len: D.len, width: D.width, ougi: true, age: 0, duration: 0.5 });
     trialSfx("thunder");
     trialSfx("slash");
+  },
+  // 進化：影刃乱舞（6方向へ貫く影の刃＋少しあとの残像）
+  kagejin: (T, h, D, i, atk, foes) => {
+    const t = trialNearestN(h, foes, 1, TRIAL_SKILL_RULES.aim)[0];
+    if (!t) return false;
+    const a0 = Math.atan2(t.y - h.y, t.x - h.x),
+      dirs = Array.from({ length: D.blades }, (_, k) => a0 + (k * Math.PI * 2) / D.blades),
+      o = { x: h.x, y: h.y - 18 };
+    for (const a of dirs) {
+      const hits = trialLineHits(o, a, D.len, D.width, foes, 14);
+      T.proj.push({ t: 0.12, hits, dmg: atk * D.mul, pierce: 0.2 });
+      T.proj.push({ t: 0.12 + D.echo, hits: hits.slice(), dmg: atk * D.echoMul, pierce: 0.2 }); // 残像
+      trialShot({ x: o.x, y: o.y, tx: o.x + Math.cos(a) * D.len, ty: o.y + Math.sin(a) * D.len, type: "arrow", duration: 0.3, trail: 3, glow: "#b88cff", col: "#3a2a5a" });
+    }
+    trialFx({ kind: "cwave", x: o.x, y: o.y + 8, rays: dirs, len: D.len * 0.6, width: D.width, ougi: true, age: 0, duration: 0.45 });
+    trialSfx("bow");
+    trialSfx("slash", { vol: 0.8 });
+  },
+  // 進化：鉄壁の弾幕（8方向の槍で押し返す＋12方向へ貫く一斉射撃）
+  teppeki: (T, h, D, i, atk, foes) => {
+    if (!foes.some((e) => trialDist(e, h) < TRIAL_SKILL_RULES.aim)) return false;
+    const seen = new Set();
+    for (let k = 0; k < D.spears; k++) {
+      const a = (k * Math.PI * 2) / D.spears + T.t;
+      for (const e of trialLineHits(h, a, D.spearLen, 20, foes))
+        if (!seen.has(e)) {
+          seen.add(e);
+          trialHitEnemy(h, e, atk * D.spearMul, 0.2, true);
+          if (!e.gone && e !== T.boss) (e.x += Math.cos(a) * D.push), (e.y += Math.sin(a) * D.push), trialCollide(e);
+        }
+      trialShot({ x: h.x, y: h.y - 16, tx: h.x + Math.cos(a) * D.spearLen, ty: h.y - 16 + Math.sin(a) * D.spearLen, type: "arrow", duration: 0.12, trail: 2, glow: "#fff1a0", col: "#fff6c8" });
+    }
+    for (let k = 0; k < D.shots; k++) {
+      const a = (k * Math.PI * 2) / D.shots + T.t * 0.5,
+        hits = trialLineHits(h, a, D.range, 14, foes, D.pierce),
+        end = hits.length ? hits[hits.length - 1] : null,
+        far = end ? trialDist(end, h) : D.range,
+        dur = Math.max(0.06, Math.min(0.18, far / 1800)) + 0.1; // 槍のあとに撃つ
+      T.proj.push({ t: dur, hits, dmg: atk * D.shotMul, pierce: 0.2 });
+      trialShot({ x: h.x + Math.cos(a) * 16, y: h.y - 22, tx: h.x + Math.cos(a) * far, ty: h.y - 22 + Math.sin(a) * far, type: "magic", duration: dur, trail: 1, glow: "#ffd27a" });
+    }
+    trialFx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.55 });
+    burst(h.x, h.y - 22, "#fff0b0", "gunsmoke");
+    trialSfx("thrust");
+    trialSfx("gun");
   },
   // 進化：紅蓮旋風（炎の旋風。回る炎は trialOrbs）
   guren: (T, h, D, i, atk, foes) => {

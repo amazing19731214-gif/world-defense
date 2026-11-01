@@ -286,22 +286,32 @@ try {
     while (L.choice) T.choose(0);
     const after2 = { ...L.skills },
       learn = T.skillOptions().learn.map((x) => x.key);
-    // 影刃乱舞・鉄壁の弾幕はデータだけ（出さない）
+    // v110 影刃乱舞（手裏剣乱舞＋真空斬）・鉄壁の弾幕（槍衾＋火縄銃連射）
     L.skills = { shuriken: 5, vacuum: 5, spear: 5, musket: 5 };
     const r3 = T.roll(false);
-    return { r1, r2, after1, after2, learn, r3 };
+    L.chest = { state: "open", reward: r3 };
+    T.chestTake();
+    while (L.choice) T.choose(0);
+    const after3 = { ...L.skills },
+      r4 = T.roll(false);
+    L.chest = { state: "open", reward: r4 };
+    T.chestTake();
+    while (L.choice) T.choose(0);
+    const after4 = { ...L.skills };
+    return { r1, r2, after1, after2, learn, r3, r4, after3, after4 };
   });
   check(r.r1.evo && r.r1.key === "raijinken" && !r.after1.thunder && !r.after1.vacuum && r.after1.raijinken === 5, "雷撃Lv5＋真空斬Lv5 → 宝箱が「雷神剣」に。元の2つは1つにまとまる", r.after1);
   check(r.r2.evo && r.r2.key === "guren" && r.after2.guren === 5 && !r.after2.fireRing && !r.after2.whirl && Object.keys(r.after2).length === 4 && r.learn.length > 0, "火炎輪Lv5＋旋風斬Lv5 → 「紅蓮旋風」。枠が空いて、新しいスキルをまた習得できる", { after2: r.after2, learn: r.learn });
-  check(!r.r3.evo, "影刃乱舞・鉄壁の弾幕は、まだ準備中（条件がそろっても出さない）", r.r3);
+  check(r.r3.evo && r.r3.key === "kagejin" && r.after3.kagejin === 5 && !r.after3.shuriken && !r.after3.vacuum, "手裏剣乱舞Lv5＋真空斬Lv5 → 「影刃乱舞」", r.after3);
+  check(r.r4.evo && r.r4.key === "teppeki" && r.after4.teppeki === 5 && !r.after4.spear && !r.after4.musket && Object.keys(r.after4).length === 2, "槍衾Lv5＋火縄銃連射Lv5 → 「鉄壁の弾幕」（4つが2つにまとまる）", r.after4);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       L = T.live(),
       h = L.units[0];
     L.cleared = null; // 宝箱の試験のあと（止まったまま）を戻す
     L.chest = null;
-    L.skills = { raijinken: 5, guren: 5 };
-    L.skillCd = { raijinken: 0, guren: 0 };
+    L.skills = { raijinken: 5, guren: 5, kagejin: 5, teppeki: 5 };
+    L.skillCd = { raijinken: 0, guren: 0, kagejin: 0, teppeki: 0 };
     L.skillUse = {};
     L.st = 60;
     L.next = 0;
@@ -316,6 +326,14 @@ try {
     return { use: { ...L.skillUse }, orbs: L.orbs && L.orbs.guren ? L.orbs.guren.pos.length : 0 };
   });
   check(r.use.raijinken > 0 && r.use.guren > 0 && r.orbs === 4, "雷神剣（十字の斬撃と雷の連鎖）・紅蓮旋風（4つの炎と炎の旋風）が動く", r);
+  check(r.use.kagejin > 0 && r.use.teppeki > 0, "影刃乱舞（6方向の影の刃と残像）・鉄壁の弾幕（8方向の槍と12方向の射撃）が動く", r.use);
+  // 6a. v110 進化スキルの当たる数（主人公のまわりに40体を並べて1回だけ発動）。元の Lv5 の2つより多く当たる
+  {
+    const n = {};
+    for (const k of ["kagejin", "teppeki", "shuriken", "vacuum", "spear", "musket"]) n[k] = (await castCount(p, k, 5)).hit;
+    console.log("   1回で当たった敵：影刃乱舞 " + n.kagejin + "（手裏剣 " + n.shuriken + "・真空斬 " + n.vacuum + "）・鉄壁の弾幕 " + n.teppeki + "（槍衾 " + n.spear + "・火縄銃 " + n.musket + "）");
+    check(n.kagejin > Math.max(n.shuriken, n.vacuum) && n.teppeki > Math.max(n.spear, n.musket), "影刃乱舞・鉄壁の弾幕は、元の Lv5 のどちらよりも多くの敵に当たる", n);
+  }
   // 6b. スキル欄のアイコンが文字化けしない（進化スキルの絵文字2つ＝サロゲートペアを途中で切らない）
   r = await p.evaluate(() => {
     const L = WD_DEBUG.trial.live();
