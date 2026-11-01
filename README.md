@@ -2,7 +2,7 @@
 
 このブランチ（`trial-test-preview`）は、iPhone の Safari で「⚔️ 戦場試練」をテストプレイするための**配信専用のブランチ**です。本番のゲーム（main・GitHub Pages）とは関係ありません。
 
-- 中身：`index.html` 1つ。Draft PR #127〜#146 と v112.2（3択の自動選択）の機能を含むテスト用ビルドです（`node tools/build.mjs --test` で作成）。
+- 中身：`index.html` 1つ。Draft PR #127〜#147 と v112.3（一時停止・乱入の予告）の機能を含むテスト用ビルドです（`node tools/build.mjs --test` で作成）。
 - 開くURL：<https://raw.githack.com/amazing19731214-gif/world-defense/trial-test-preview/index.html>
   - 最初に raw.githack.com の注意の画面「External Content Notice」が出たら、「Open the page」を押してください。
   - このブランチに push するたびに、GitHub Actions「テスト配信の確認」が、このURLを iPhone 13 相当の WebKit と Chromium で開いて操作し、確かめます。
@@ -28,5 +28,6 @@
 - v112：ライバル武将が8人に（飯富虎昌・真田信之・津軽為信・成田長親・木村重成を追加）。津軽為信の火矢は、足もとの赤い輪から出れば当たりません。
 - v112.1：戦場試練の戦闘は、同じ顔ぶれ・同じ操作なら毎回同じ流れになります（遊び方は変わりません）。
 - v112.2：レベルアップの3択は、10秒選ばないといちばん上のカードを自動で選んで再開します（残り秒数を表示）。
+- v112.3：撤退の右の「⏸ 停止」で一時停止。ライバル武将が来る3秒前に「⚠ 何者かが近づいてくる…」。画面の外の武将は端の矢印と名前で分かります。
 
 **マージしないでください。** このブランチは main とつながっていない（履歴が別の）配信専用のブランチです。
