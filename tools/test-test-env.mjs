@@ -98,11 +98,16 @@ try {
   for (const name of ["試・剣神", "試・槍将", "試・弓聖", "試・銃将", "試・医王"]) await p.locator("[data-trial-pick]", { hasText: name }).tap();
   await tap("[data-trial-go]");
   const box = await p.locator("#game").boundingBox();
-  const tapMap = (x, y) => p.touchscreen.tap(box.x + (x / 960) * box.width, box.y + (y / 600) * box.height);
   // v108：配置の間は、カメラが関の手前の広場（光っている所）を映す。広場の中を2か所タップ
+  //   v113：画面は縦長（600×960）にも横長にもなるので、広場の戦場の座標から画面の位置を求めて押す
   await p.waitForTimeout(1500);
-  await tapMap(430, 260);
-  await tapMap(520, 360);
+  //   配置の間のカメラは広場の真ん中を画面の真ん中に映すので、画面の真ん中の少し左上・右下を押す（広場は 300×320）
+  const cv = await p.locator("#gameView canvas").boundingBox(),
+    cx = cv.x + cv.width / 2,
+    cy = cv.y + cv.height / 2,
+    k = cv.width / (cv.width > cv.height ? 960 : 600); // 画面の1点（戦場の座標）が何ピクセルか
+  await p.touchscreen.tap(cx - 60 * k, cy - 60 * k);
+  await p.touchscreen.tap(cx + 60 * k, cy + 60 * k);
   r = await p.evaluate(() => document.getElementById("trialInfo").textContent);
   check(/あと\s*3人/.test(r), "戦場を指でタップして1人ずつ配置できる", r);
   await tap("#trialAuto");

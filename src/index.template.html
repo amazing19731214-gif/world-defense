@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112.3試作（戦場試練：一時停止・乱入の予告）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v113試作（戦場試練：暗闇の探索・村で仲間）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -9818,9 +9818,11 @@ OFF</button>
         }
         // 兵士1人の雇用費（領土の効果「山国の兵」で安くなる）。部隊の雇用費は × hireSize
         const unitCost = (type) => Math.round(SOLDIER_TYPES[type].cost * (1 - territoryBonus("hire")));
-        const RANDOM_RECRUIT = { price: 2500 }; // v113 雇用は2500G（仲間は探索の村で無料で得る。兵種を選ぶ部隊の雇用は変えない）
+        const RANDOM_RECRUIT = { price: 24 };
+        // v113 テスト版では雇用を2500Gに（仲間は探索の村で無料で得る）。テスト版が WD_FLAGS.recruitPrice を立てる。本番の版は24Gのまま
+        const recruitBasePrice = () => (window.WD_FLAGS && window.WD_FLAGS.recruitPrice) || RANDOM_RECRUIT.price;
         let recruitRng = Math.random;
-        const randomRecruitCost = () => Math.max(1, Math.round(RANDOM_RECRUIT.price * (1 - territoryBonus("hire"))));
+        const randomRecruitCost = () => Math.max(1, Math.round(recruitBasePrice() * (1 - territoryBonus("hire"))));
         function randomRecruitSlots() {
           const slots = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads && roster(q).length < SQUAD_RULES.squadSize);
           const used = squads.filter(q => q.slot >= 0 && q.slot < SQUAD_RULES.maxSquads).length;

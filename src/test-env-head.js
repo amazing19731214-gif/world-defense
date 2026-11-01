@@ -53,5 +53,7 @@
     },
   });
   window.WD_TEST_BUILD = true;
+  // v113 テスト版だけの試作：探索（暗闇で村を探して仲間を得る）を出し、ランダム雇用を2500Gにする
+  window.WD_FLAGS = { explore: true, recruitPrice: 2500 };
   window.WD_TEST_STORAGE = { prefix: P, keys: () => (local ? keys(local) : []), raw };
 })();
