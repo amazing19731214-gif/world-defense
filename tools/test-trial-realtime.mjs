@@ -52,6 +52,25 @@ try {
   await p.waitForTimeout(2500);
   const s1 = await st();
   check(mode === "paused" && s1 - s0 > 1.5, "防衛戦が「停止」のままでも、戦場試練は本物の時間で進む（面の時計 " + s0.toFixed(1) + " → " + s1.toFixed(1) + " 秒）", { mode, s0, s1 });
+  // 演出（倒した敵の光の輪・矢・火花）も進んで消える：敵を出さないようにして、少し待つと演出と矢弾が0に（防衛戦が停止のままでも）
+  const fx = await p.evaluate(async () => {
+    const T = WD_DEBUG.trial,
+      L = T.live();
+    // 敵を倒して演出が出るまで待つ（最大20秒。主人公は倒れないように）
+    for (let i = 0; i < 80 && !(T.state().kills > 0 && T.state().fx > 0); i++) {
+      L.units[0].hp = L.units[0].max;
+      const e = L.enemies.find((x) => !x.gone);
+      if (e) Object.assign(e, { x: L.units[0].x + 90, y: L.units[0].y });
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const before = T.state();
+    L.next = 1e9;
+    for (const e of L.enemies) e.gone = true;
+    await new Promise((r) => setTimeout(r, 2500));
+    const after = T.state();
+    return { before: { fx: before.fx, shots: before.shots, kills: before.kills }, after: { fx: after.fx, shots: after.shots } };
+  });
+  check(fx.before.kills > 0 && fx.after.fx === 0 && fx.after.shots === 0, "倒した敵の光の輪・矢・火花は、少しすると消える（演出 " + fx.before.fx + " → " + fx.after.fx + "・矢弾 " + fx.before.shots + " → " + fx.after.shots + "）", fx);
   // 情報の画面を開いている間は止まる。閉じると進む
   await p.evaluate(() => document.getElementById("infoOpen") && document.getElementById("infoOpen").click());
   const opened = await p.evaluate(() => !document.getElementById("infoSheet").hidden);
