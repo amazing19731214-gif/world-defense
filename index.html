@@ -14051,7 +14051,7 @@ function chronicleWarBonusBlock(s) {
             // 戦場試練：専用の戦闘処理（防衛戦は進めない）。
             //   防衛戦の「停止」（読み込み直した直後やウェーブの合間は停止のまま）では止めない。戦場試練は自分の「⏸ 停止」で止める。
             //   情報・スキルの一覧を開いている間だけは止める
-            if (!document.hidden && !infoReturn && !guideReturn) tickTrial(gameStep(dt));
+            if (trialRunning()) tickTrial(gameStep(dt));
             return;
           }
           autoTick(dt);
@@ -15648,10 +15648,16 @@ function chronicleWarBonusBlock(s) {
                       : 0.42,
           });
         }
+        // 戦場試練が進んでいるか：防衛戦の「停止」では止めない。ページが隠れている・情報やスキルの一覧を開いている間だけ止める
+        //   （戦場試練の「⏸ 停止」は tickTrial の中で止める。演出もそのときは止める）
+        function trialRunning() {
+          return !!trial && !document.hidden && !infoReturn && !guideReturn;
+        }
         function animateVisuals(dt) {
           animateMapNews(dt);
           animateEventWin(dt);
-          if (paused || document.hidden) {
+          // 演出（倒した敵の光の輪・矢・火花）も、戦場試練の間は戦場試練と同じ条件で進める（防衛戦の「停止」で止めると、倒した跡が残り続けた）
+          if (trial ? !trialRunning() || trial.paused : paused || document.hidden) {
             if (combatFx.shake > 0) combatFx.stopShake(); // 止めている間は画面をずらしたままにしない
             return;
           }
