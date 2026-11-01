@@ -89,8 +89,8 @@ try {
       warlords = Object.values(WD_DEBUG.config.WARLORDS).map((w) => w.name);
     return { names, dup: names.filter((n) => warlords.some((w) => w && w.includes(n))), banned: names.filter((n) => /山県昌景|馬場信春/.test(n)), uniq: Object.keys(WD_DEBUG.trial.unique) };
   });
-  check(r.names.join() === "真田昌幸,高橋紹運,加藤段蔵" && r.dup.length === 0 && r.banned.length === 0, "ライバル武将は3人（真田昌幸・高橋紹運・加藤段蔵）。既存の武将と重ならず、山県昌景・馬場信春は出さない", r);
-  check(r.uniq.join() === "rokuren,fukutsu,tobikato", "固有の技は3つ（六連の計・不屈の陣・飛び加藤）", r.uniq);
+  check(r.names.join() === "真田昌幸,高橋紹運,加藤段蔵,飯富虎昌,真田信之,津軽為信,成田長親,木村重成" && r.dup.length === 0 && r.banned.length === 0, "ライバル武将は8人。既存の武将と重ならず、山県昌景・馬場信春は出さない", r.names);
+  check(r.uniq.join() === "rokuren,fukutsu,tobikato,akazonae,inubushi,hiya,dengaku,issen", "固有の技は8つ（武将ごとに1つ）", r.uniq);
   // 2. 乱入の時刻：第1面は出ない。第2面から、面の時計 75秒で1回だけ決める（確率 60%）
   await quiet(p);
   r = await p.evaluate(() => {
@@ -189,6 +189,90 @@ try {
   check(r.masayuki.added >= 3 && r.masayuki.near >= 3, "真田昌幸：伏兵が主人公のまわり四方に出る（" + r.masayuki.added + "体）", r.masayuki);
   if (r.jouun.plain) check(r.jouun.guarded > 0 && r.jouun.guarded < r.jouun.plain * 0.4, "高橋紹運：守りの構えの間は、受けるダメージが約3割（" + r.jouun.plain + " → " + r.jouun.guarded + "）", r.jouun);
   check(r.danzo.d0 >= 500 && r.danzo.d1 < 120, "加藤段蔵：遠く（" + r.danzo.d0 + "）から主人公の背後（" + r.danzo.d1 + "）へ瞬間移動", r.danzo);
+  // 4b. v112 追加の5人の動き
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0],
+      out = {};
+    L.st = 20; // 面の始まりの「攻撃を受けない3秒」のあと
+    const fresh = (key) => {
+      for (const e of L.enemies) e.gone = true;
+      L.rival = null;
+      L.rivalBlasts = [];
+      h.hp = h.max;
+      T.rivalSpawn(key);
+      return L.rival;
+    };
+    // 飯富虎昌：遠くから一直線に突撃して主人公に当たる
+    let e = fresh("obu");
+    Object.assign(e, { x: h.x + 260, y: h.y, px: h.x + 260, py: h.y, cd: 99 });
+    e.skillT = 0.01;
+    let hp0 = h.hp;
+    const d0 = Math.round(Math.hypot(e.x - h.x, e.y - h.y));
+    for (let i = 0; i < 10; i++) WD_DEBUG.step(0.05);
+    out.obu = { d0, d1: Math.round(Math.hypot(e.x - h.x, e.y - h.y)), hurt: Math.round(hp0 - h.hp) };
+    // 真田信之：守りの兵を2体呼び、自分の体力を少し戻す
+    e = fresh("nobuyuki");
+    Object.assign(e, { x: h.x + 400, y: h.y, cd: 99 });
+    e.hp = e.max * 0.5;
+    e.rallyT = 0.01;
+    let n0 = L.enemies.filter((x) => !x.gone && !x.rival).length;
+    WD_DEBUG.step(0.05);
+    out.nobuyuki = { added: L.enemies.filter((x) => !x.gone && !x.rival).length - n0, hp: Math.round((e.hp / e.max) * 100) };
+    // 津軽為信：主人公の足もとに火矢の輪 → 1秒後に当たる
+    e = fresh("tamenobu");
+    Object.assign(e, { x: h.x + 400, y: h.y, cd: 99 });
+    e.skillT = 0.01;
+    WD_DEBUG.step(0.05);
+    const marks = (L.rivalBlasts || []).length,
+      B = (L.rivalBlasts || [])[0],
+      dbg = B ? { bx: Math.round(B.x - h.x), by: Math.round(B.y - h.y), dmg: Math.round(B.dmg), at: Math.round((B.at - L.t) * 100) / 100 } : null;
+    hp0 = h.hp;
+    let struck = false;
+    for (let i = 0; i < 25; i++) {
+      h.hit = 0;
+      WD_DEBUG.step(0.05);
+      if (h.hit > 0 && !(L.rivalBlasts || []).length && i >= 18) struck = true; // 火矢が落ちたコマで当たった（強い主人公は防御で数しか減らない）
+    }
+    out.tamenobu = { marks, struck, hurt: Math.round((hp0 - h.hp) * 10) / 10, left: (L.rivalBlasts || []).length, dbg };
+    // 成田長親：まわり（220）の敵が受けるダメージ 60%
+    e = fresh("nagachika");
+    Object.assign(e, { x: h.x + 400, y: h.y, cd: 99 });
+    n0 = L.enemies.length;
+    e.rallyT = 0.01;
+    WD_DEBUG.step(0.05);
+    const guard = L.enemies.slice(n0).find((x) => !x.gone && !x.rival);
+    let near = 0,
+      far = 0;
+    if (guard) {
+      Object.assign(guard, { hp: 1e9, max: 1e9, cd: 99, x: e.x + 60, y: e.y });
+      let a = guard.hp;
+      T.hitEnemy(guard, 1000);
+      near = a - guard.hp;
+      Object.assign(guard, { x: e.x + 600 });
+      a = guard.hp;
+      T.hitEnemy(guard, 1000);
+      far = a - guard.hp;
+    }
+    out.nagachika = { rally: L.enemies.slice(n0).filter((x) => !x.gone && !x.rival).length, ratio: far ? Math.round((near / far) * 100) : null };
+    // 木村重成：まわりの兵士へ回転斬り
+    e = fresh("shigenari");
+    Object.assign(e, { x: h.x + 80, y: h.y, cd: 99 });
+    e.skillT = 0.01;
+    hp0 = h.hp;
+    WD_DEBUG.step(0.05);
+    out.shigenari = { hurt: Math.round(hp0 - h.hp) };
+    for (const x of L.enemies) x.gone = true;
+    L.rival = null;
+    h.hp = h.max;
+    return out;
+  });
+  check(r.obu.d0 >= 250 && r.obu.d1 < 120 && r.obu.hurt > 0, "飯富虎昌：赤備えの突撃（" + r.obu.d0 + " → " + r.obu.d1 + "）。通り道の主人公に当たる", r.obu);
+  check(r.nobuyuki.added === 2 && r.nobuyuki.hp === 56, "真田信之：守りの兵を2体呼び、自分の体力を6%戻す", r.nobuyuki);
+  check(r.tamenobu.marks >= 1 && (r.tamenobu.struck || r.tamenobu.hurt > 0) && r.tamenobu.left === 0, "津軽為信：火矢の輪が出て、1秒後に輪の中の主人公に当たる", r.tamenobu);
+  check(r.nagachika.rally === 5 && r.nagachika.ratio >= 55 && r.nagachika.ratio <= 65, "成田長親：農民5体を呼び、まわりの敵が受けるダメージは約6割（" + r.nagachika.ratio + "%）", r.nagachika);
+  check(r.shigenari.hurt > 0, "木村重成：まわりの兵士へ回転斬り", r.shigenari);
   // 5. 倒す：珍しい報酬が入る。固有の技は 10%（ここでは確率を 1 と 0 にして見る）。この挑戦の間だけ
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
@@ -218,26 +302,33 @@ try {
     const T = WD_DEBUG.trial,
       L = T.live(),
       h = L.units[0];
-    L.skills = { thunder: 1, fireRing: 1, shuriken: 1, vacuum: 1, spear: 1, musket: 1, rokuren: 1, fukutsu: 1, tobikato: 1 };
-    L.skillCd = { rokuren: 0, fukutsu: 0, tobikato: 0 };
+    L.skills = { thunder: 1, fireRing: 1, shuriken: 1, vacuum: 1, spear: 1, musket: 1, rokuren: 1, fukutsu: 1, tobikato: 1, akazonae: 1, inubushi: 1, hiya: 1, dengaku: 1, issen: 1 };
+    L.skillCd = { rokuren: 0, fukutsu: 0, tobikato: 0, akazonae: 0, inubushi: 0, hiya: 0, dengaku: 0, issen: 0 };
     L.skillUse = {};
     const o = T.skillOptions(),
       opts = o.up.concat(o.learn).map((x) => x.key);
     L.next = 0;
-    let guard = 0;
-    for (let i = 0; i < 120; i++) {
+    let guard = 0,
+      rage = 0,
+      slow = 0;
+    for (let i = 0; i < 200; i++) {
       h.hp = Math.max(h.hp, h.max * 0.6);
+      if (i % 40 === 0) h.hp = h.max * 0.6; // 犬伏の誓い（回復）が使えるように
       L.next = Math.min(L.next, 0.3);
       if (L.choice) T.choose(0);
       const tank = L.enemies.find((e) => !e.gone && e.tank) || L.enemies.find((e) => !e.gone && !e.rival);
       if (tank) Object.assign(tank, { tank: true, x: h.x + 120, y: h.y, hp: 1e9, max: 1e9, cd: 99 });
       WD_DEBUG.step(0.05);
       if (h.guardUntil > L.t) guard++;
+      if (h.rageUntil > L.t) rage++;
+      if (L.enemies.some((e) => !e.gone && e.evolutionSlow && e.evolutionSlow.until > L.t)) slow++;
     }
-    return { use: { ...L.skillUse }, opts, guard };
+    return { use: { ...L.skillUse }, opts, guard, rage, slow };
   });
+  // 固有の技は枠を使わない（新しい5つも候補に出ない）
   check(r.use.rokuren > 0 && r.use.fukutsu > 0 && r.use.tobikato > 0 && r.guard > 0, "固有の技（六連の計・不屈の陣・飛び加藤）が動く。不屈の陣の間は主人公の受けるダメージが半分", r);
-  check(!r.opts.some((k) => ["rokuren", "fukutsu", "tobikato"].includes(k)) && r.opts.includes("magnet"), "固有の技は攻撃スキルの枠を使わず、レベルアップの候補にも出ない", r.opts);
+  check(r.use.akazonae > 0 && r.rage > 0 && r.use.inubushi > 0 && r.use.hiya > 0 && r.use.dengaku > 0 && r.slow > 0 && r.use.issen > 0, "v112 固有の技（赤備え・犬伏の誓い・津軽の火矢・でくのぼう踊り・若武者の一閃）が動く", r);
+  check(!r.opts.some((k) => Object.keys({ rokuren: 1, fukutsu: 1, tobikato: 1, akazonae: 1, inubushi: 1, hiya: 1, dengaku: 1, issen: 1 }).includes(k)) && r.opts.includes("magnet"), "固有の技は攻撃スキルの枠を使わず、レベルアップの候補にも出ない", r.opts);
   // 7. 倒せないまま 70秒で退く。次の面ではまた乱入があるかもしれない
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
@@ -250,7 +341,11 @@ try {
     Object.assign(e, { hp: 1e12, max: 1e12, cd: 99, x: h.x + 500, y: h.y });
     L.skills = {};
     e.leaveAt = L.st + 1;
-    for (let i = 0; i < 20; i++) (h.hp = h.max), WD_DEBUG.step(0.1);
+    for (let i = 0; i < 20; i++) {
+      h.hp = h.max;
+      while (L.choice) T.choose(0); // レベルアップの選択中は戦闘が止まるので選ぶ
+      WD_DEBUG.step(0.1);
+    }
     return { gone: e.gone, rival: T.state().rival, stay: T.rivals.stay };
   });
   check(r.gone && !r.rival && r.stay === 70, "倒せないまま70秒たつと、ライバル武将は退く", r);
