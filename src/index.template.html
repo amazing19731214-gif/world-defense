@@ -1956,6 +1956,11 @@
         color: #ffe9b0;
         text-align: center;
       }
+      .trial-levelup-title small.trial-autopick {
+        margin-top: 2px;
+        color: #ffe27a;
+        font-weight: bold;
+      }
       .trial-levelup-title small {
         display: block;
         font-size: 13px;
@@ -3167,7 +3172,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112.1試作（戦場試練：戦闘の乱数を固定）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v112.2試作（戦場試練：3択の自動選択）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23440,6 +23445,8 @@ OFF</button>
                   bombKills: trial.bombKills || 0,
                   rival: trial.rival ? { key: trial.rival.rival, name: trial.rival.name, hp: trial.rival.hp, max: trial.rival.max, guard: trial.rival.guardUntil > trial.t } : null,
                   rivalsMet: trial.rivalsMet || 0,
+                  autoPicked: trial.autoPicked || 0,
+                  autoLeft: trial.choiceAutoAt ? Math.round((trial.choiceAutoAt - performance.now()) / 100) / 10 : null,
                   rivalsDown: (trial.rivalsDown || []).map((x) => ({ ...x })),
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,

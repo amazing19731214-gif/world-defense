@@ -1721,10 +1721,35 @@ function trialOpenChoice(T) {
   trialKeys.clear();
   // v108.6 3枚のカードが順に出て（0.08秒ずつ）、ドラムロール風の音のあと押せるようになる（0.45秒。動きを減らす設定では待たない）
   T.choiceReadyAt = performance.now() + (reduced ? 0 : TRIAL_LEVELUP.ready * 1000);
+  T.choiceAutoAt = TRIAL_LEVELUP.autoPick > 0 ? performance.now() + TRIAL_LEVELUP.autoPick * 1000 : 0; // v112.2
   trialSfx("roll");
   trialLevelSync();
 }
-const TRIAL_LEVELUP = { ready: 0.45, stagger: 0.08 };
+const TRIAL_LEVELUP = { ready: 0.45, stagger: 0.08, autoPick: 10 }; // v112.2 autoPick：この秒数（本物の時間）選ばなければ、いちばん上のカードを自動で選ぶ（0 で自動にしない）
+// v112.2 自動で選ぶカードの名前（いちばん上のカード）
+function trialChoiceName(T, c) {
+  if (!c) return "";
+  if (c.kind === "recruit") return "仲間を1人加入";
+  if (c.kind === "skill") return TRIAL_SKILLS[c.key].name + (c.from ? " Lv" + c.to : "");
+  return TRIAL_SURVIVAL.boons[c.key].name;
+}
+// v112.2 選ばないまま autoPick 秒たったら、いちばん上のカードを自動で選ぶ。残り秒数の表示もここで更新（戦闘は止まっていても、画面のコマごとに呼ばれる）
+function trialAutoPickTick(T) {
+  if (!T || !T.choice || !T.choiceAutoAt) return;
+  const left = T.choiceAutoAt - performance.now(),
+    el = $("trialAutoPick");
+  if (el) {
+    const sec = Math.max(0, Math.ceil(left / 1000)),
+      txt = "⏱ あと" + sec + "秒で自動で「" + trialChoiceName(T, T.choice[0]) + "」を選びます";
+    if (el.textContent !== txt) el.textContent = txt;
+  }
+  if (left > 0) return;
+  const name = trialChoiceName(T, T.choice[0]),
+    h = T.units.find((u) => u.id === T.hero);
+  T.autoPicked = (T.autoPicked || 0) + 1;
+  trialChoose(0, true);
+  if (h && effects.length < 60) effects.push({ kind: "ctext", x: h.x, y: h.y - 130, text: "⏱ 自動で「" + name + "」", ougi: false, age: 0, duration: 1.2 });
+}
 // 選ぶ：強化は主人公に足す。仲間は候補の次の1人を主人公の近くに呼ぶ。選んだら戦闘を再開
 function trialChoose(i, force) {
   const T = trial;
@@ -1744,6 +1769,7 @@ function trialChoose(i, force) {
   }
   T.lvUps--;
   T.choice = null;
+  T.choiceAutoAt = 0;
   // 決定：音と、主人公のまわりの光
   trialSfx("pick");
   if (effects.length < 64) effects.push({ kind: "cshock", x: hero.x, y: hero.y + 6, ougi: true, age: 0, duration: 0.5 });
@@ -1788,7 +1814,7 @@ function trialLevelSync() {
     // v108.6 カードは順に出る（animation-delay）。出そろうまでは押せない（disabled）
     attr = (i) => ' style="animation-delay:' + i * TRIAL_LEVELUP.stagger + 's"' + (wait > 0 ? " disabled" : "");
   box.innerHTML =
-    '<div class="trial-levelup-card' + (wait > 0 ? " arming" : " ready") + '" role="dialog" aria-label="レベルアップ"><p class="trial-levelup-title">⬆ サバイバル Lv' + T.slv + "<small>（戦闘は止まっています。1つ選ぶ）</small></p>" +
+    '<div class="trial-levelup-card' + (wait > 0 ? " arming" : " ready") + '" role="dialog" aria-label="レベルアップ"><p class="trial-levelup-title">⬆ サバイバル Lv' + T.slv + "<small>（戦闘は止まっています。1つ選ぶ）</small>" + (T.choiceAutoAt ? '<small id="trialAutoPick" class="trial-autopick">⏱ あと' + TRIAL_LEVELUP.autoPick + "秒で自動で「" + esc(trialChoiceName(T, T.choice[0])) + "」を選びます</small>" : "") + "</p>" +
     T.choice
       .map((c, i) => {
         if (c.kind === "recruit") {
@@ -2174,6 +2200,8 @@ function tickTrial(dt) {
     let s = 98765;
     T.mathRng = () => ((s = (s * 48271) % 2147483647) / 2147483647);
   }
+  trialAutoPickTick(T); // v112.2 選ばないまま10秒で自動で選ぶ（戦闘が止まっている間も見る）
+  if (!trial) return;
   const mr = Math.random;
   Math.random = T.mathRng;
   try {

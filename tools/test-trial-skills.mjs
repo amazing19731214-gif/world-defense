@@ -460,6 +460,37 @@ try {
   check(/攻撃スキル：/.test(r) && /雷撃/.test(r), "結果の画面に、使った攻撃スキルと Lv が出る", r.slice(0, 120));
   check((await storage(p)) === s1, "攻撃スキル・進化は保存データに入らない（本番の兵士・閃き・奥義・装備は変わらない）");
   await c.close();
+  // 11. v112.2 3択を10秒選ばないと、いちばん上のカードを自動で選んで再開する（本物の時間。試験では残りを短くして見る）
+  ({ c, p } = await open());
+  await quiet(p, 1);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live();
+    L.lvUps = 1;
+    L.lvAt = null;
+    for (let i = 0; i < 10 && !L.choice; i++) WD_DEBUG.step(0.05);
+    const first = L.choice ? L.choice[0] : null,
+      left = T.state().autoLeft,
+      text = (document.getElementById("trialAutoPick") || {}).textContent || "";
+    // 残り0.3秒にして、本物の時間で待つ
+    L.choiceAutoAt = performance.now() + 300;
+    return { open: !!L.choice, left, text, first: first && (first.kind + ":" + (first.key || first.unit.id)) };
+  });
+  await p.waitForTimeout(150);
+  const mid = await p.evaluate(() => (WD_DEBUG.step(0.05), { open: !!WD_DEBUG.trial.live().choice, text: document.getElementById("trialAutoPick").textContent }));
+  await p.waitForTimeout(300);
+  const after = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      t0 = L.t;
+    WD_DEBUG.step(0.05);
+    WD_DEBUG.step(0.05);
+    return { open: !!L.choice, picked: T.state().autoPicked, units: L.units.length, skills: { ...L.skills }, moved: L.t > t0, box: document.getElementById("trialLevelUp").hidden };
+  });
+  check(r.open && r.left > 9 && r.left <= 10 && /あと10秒で自動で「/.test(r.text), "3択が出ると「⏱ あと10秒で自動で「…」を選びます」（" + r.text + "）", r);
+  check(mid.open && /あと1秒/.test(mid.text), "残り秒数が数えて減る（" + mid.text + "）", mid);
+  check(!after.open && after.picked === 1 && after.moved && after.box && (r.first.startsWith("recruit") ? after.units === 2 : true), "10秒たつと、いちばん上のカード（" + r.first + "）を自動で選んで戦闘が再開する", { r, after });
+  await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);
 } finally {
