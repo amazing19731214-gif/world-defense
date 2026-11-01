@@ -3167,7 +3167,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109.1試作（戦場試練：補助スキル「吸着」）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v110試作（戦場試練：進化スキル4種・おにぎり・爆弾）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -23368,7 +23368,7 @@ OFF</button>
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
               drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
-              dropMagnet: (x, y) => trial && (trial.magnets = trial.magnets || []).push({ x, y, pull: false, pt: 0 }),
+              dropMagnet: (x, y, kind = "magnet") => trial && (trial.magnets = trial.magnets || []).push({ kind, x, y, pull: false, pt: 0 }),
               coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
@@ -23421,7 +23421,11 @@ OFF</button>
                   xpTotal: trial.xpTotal || 0,
                   dropped: trial.dropped || 0,
                   picked: trial.picked || 0,
-                  magnets: trial.magnets ? trial.magnets.length : 0,
+                  magnets: trial.magnets ? trial.magnets.filter((m) => (m.kind || "magnet") === "magnet").length : 0,
+                  items: trial.magnets ? trial.magnets.map((m) => m.kind || "magnet") : [],
+                  itemDropped: { ...(trial.itemDropped || {}) },
+                  itemPicked: { ...(trial.itemPicked || {}) },
+                  bombKills: trial.bombKills || 0,
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,
                   magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? trialMagnetR(trial, h) : null; })(),

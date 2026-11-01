@@ -400,7 +400,51 @@ try {
     return { n0, pickedMagnet: mid.magnetPicked, magnetsLeft: s.magnets, coins: s.coins, xp: s.xpTotal, time: s.coins ? null : "ok" };
   });
   check(r.n0 === 6 && r.pickedMagnet === 1 && r.magnetsLeft === 0 && r.coins === 0 && r.xp === 6, "🧲 磁石を拾うと、戦場のコイン（遠くの6枚も）を全部吸い寄せて拾う", r);
-  check((await storage(p)) === save0, "吸い寄せ範囲アップ・磁石は保存データに入らない");
+  // 14. v110 おにぎり（120体ごと）：主人公と仲間の HP を最大の25%回復。爆弾（300体ごと）：まわりのふつうの敵を倒す（大将は8%）
+  await quiet(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0],
+      I = T.survival.items;
+    h.hp = h.max * 0.4;
+    T.dropMagnet(h.x + 60, h.y, "onigiri");
+    for (let i = 0; i < 10; i++) WD_DEBUG.step(0.1);
+    const heal = Math.round((h.hp / h.max) * 100);
+    // 爆弾：敵を出してから拾う
+    L.next = 0;
+    for (let i = 0; i < 300 && L.enemies.filter((e) => !e.gone).length < 12; i++) (h.hp = h.max), (L.next = Math.min(L.next, 0.2)), WD_DEBUG.step(0.1);
+    L.next = 1e9;
+    // 出てきた敵を主人公のまわり（250）に集める
+    L.enemies.filter((e) => !e.gone).forEach((e, k) => ((e.x = h.x + Math.cos(k) * 250), (e.y = h.y + Math.sin(k) * 200), (e.cd = 99)));
+    const near = L.enemies.filter((e) => !e.gone && Math.hypot(e.x - h.x, e.y - h.y) <= I.bomb.radius).length,
+      k0 = T.state().kills;
+    T.dropMagnet(h.x - 60, h.y, "bomb");
+    for (let i = 0; i < 6; i++) WD_DEBUG.step(0.1);
+    const s = T.state();
+    return { heal, near, killed: s.kills - k0, bombKills: s.bombKills, picked: s.itemPicked, every: [I.magnet.every, I.onigiri.every, I.bomb.every], items: s.items };
+  });
+  check(r.heal === 65 && r.picked.onigiri === 1, "🍙 おにぎりを拾うと、HP が最大の25%回復（40% → " + r.heal + "%）", r);
+  check(r.near >= 8 && r.killed >= r.near && r.picked.bomb === 1 && r.bombKills >= r.near, "💣 爆弾を拾うと、まわりのふつうの敵を一掃（" + r.near + "体 → 撃破 " + r.killed + "）", r);
+  // 15. 倒した数で落ちる（乱数なし）：磁石70体・おにぎり120体・爆弾300体ごと。爆弾で倒した数は数えない
+  await quiet(p);
+  r = await p.evaluate(() => {
+    const T = WD_DEBUG.trial,
+      L = T.live(),
+      h = L.units[0];
+    for (let i = 0; i < 6000 && T.state().kills < 320; i++) {
+      h.hp = h.max;
+      L.next = Math.min(L.next, 0.2);
+      if (L.choice) T.choose(0);
+      if (L.cleared) break;
+      WD_DEBUG.step(0.1);
+    }
+    const s = T.state();
+    return { kills: s.kills, dropped: s.itemDropped, picked: s.itemPicked };
+  });
+  const dropped = (k) => (r.dropped[k] || 0) + 0;
+  check(r.kills >= 300 && dropped("onigiri") >= 2 && dropped("bomb") === 1 && dropped("magnet") >= 2, "撃破 " + r.kills + "：🧲 " + dropped("magnet") + "・🍙 " + dropped("onigiri") + "・💣 " + dropped("bomb") + " 個が落ちた（戦場に置ける数の上限まで）", r);
+  check((await storage(p)) === save0, "吸い寄せ範囲アップ・磁石・おにぎり・爆弾は保存データに入らない");
   await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);

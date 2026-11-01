@@ -3167,7 +3167,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v109.1試作（戦場試練：補助スキル「吸着」）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v110試作（戦場試練：進化スキル4種・おにぎり・爆弾）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17792,6 +17792,12 @@ const TRIAL_SURVIVAL = {
   // v109 磁石：敵をこの数だけ倒すごとに1つ落ちる（乱数は使わない）。拾うと、戦場のコインを全部吸い寄せる
   magnetEvery: 70,
   magnetMax: 2, // 戦場に置いておく磁石の数の上限
+  // v110 戦場に落ちるアイテム（磁石と同じ：倒した数で落ち、乱数は使わない。拾い方も同じ）
+  items: {
+    magnet: { icon: "🧲", glow: "#ffe27a", every: 70, max: 2 }, // コインを全部吸い寄せる（every・max は magnetEvery・magnetMax を使う）
+    onigiri: { icon: "🍙", glow: "#9be86a", every: 120, max: 2, heal: 0.25 }, // 主人公と仲間の HP を最大の25%回復
+    bomb: { icon: "💣", glow: "#ff7a5a", every: 300, max: 1, radius: 420, bossPct: 0.08 }, // 主人公のまわり（420）のふつうの敵を倒す。大将は最大HPの8%。爆弾で倒した数はアイテムの数に入れない
+  },
   // レベルアップの強化（この戦闘の主人公だけ。終わったら消える）。step は1回の上がり幅
   boons: {
     atk: { icon: "⚔️", name: "攻撃力アップ", text: "与えるダメージ・回復 +25%", step: 0.25 },
@@ -18129,8 +18135,8 @@ function startSurvival(list, units, M, D, stageId, heroId) {
 //   面ごとに敵が少しずつ強くなる（体力・攻撃・種類）。5面ごとに「鬼大将」。敵の数の上限（36体）は変えない
 const TRIAL_STAGES = {
   // v108.8 攻撃スキルで強くなる分に合わせて、面ごとに掛け算で強くする（第1面が1倍。第5面で体力 ×2.9・攻撃 ×1.7、第10面で体力 ×10.6・攻撃 ×3.5）
-  hpStep: 0.3, // 面ごとに敵の体力 ×1.3
-  atkStep: 0.15, // 面ごとに敵の攻撃 ×1.15
+  hpStep: 0.35, // 面ごとに敵の体力 ×1.35（v110：吸着・アイテム・進化で強くなる分 0.3→0.35）
+  atkStep: 0.18, // 面ごとに敵の攻撃 ×1.18（v110：0.15→0.18）
   bossExp: 0.8, // 大将の体力の伸びは、ふつうの敵より少しゆるく（第10面で ×6.6。時間切れで終わりにくく）
   poolShift: 20, // 面ごとに、強い種類の敵が20秒ずつ早く混ざる（最大90秒）
   greatEvery: 5, // この面ごとに鬼大将
@@ -18844,16 +18850,64 @@ function trialDropCoin(T, e) {
 // v109 磁石：敵を magnetEvery 体倒すごとに、倒した所に1つ落とす（乱数は使わない）
 function trialMagnetDrop(T, e) {
   const S = TRIAL_SURVIVAL;
-  T.magnetKills = (T.magnetKills || 0) + 1;
-  if (T.magnetKills < S.magnetEvery) return;
-  T.magnetKills = 0;
-  T.magnets = T.magnets || [];
-  if (T.magnets.length >= S.magnetMax) return;
-  const M = T.map,
-    ok = (x, y) => !trialInRiver(M, x, y) && !M.obstacles.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 10),
-    [x, y] = ok(e.x, e.y) ? [e.x, e.y] : [e.px != null ? e.px : e.x, e.py != null ? e.py : e.y];
-  T.magnets.push({ x, y, pull: false, pt: 0 });
-  T.magnetDropped = (T.magnetDropped || 0) + 1;
+  if (T.bombing) return; // 爆弾で倒した敵は数えない（爆弾が爆弾を呼ばない）
+  T.itemKills = T.itemKills || {};
+  T.magnets = T.magnets || []; // 戦場に落ちているアイテム（磁石・おにぎり・爆弾）{ kind, x, y, pull }
+  for (const kind of Object.keys(S.items)) {
+    const I = S.items[kind],
+      every = kind === "magnet" ? S.magnetEvery : I.every,
+      max = kind === "magnet" ? S.magnetMax : I.max;
+    T.itemKills[kind] = (T.itemKills[kind] || 0) + 1;
+    if (T.itemKills[kind] < every) continue;
+    T.itemKills[kind] = 0;
+    if (T.magnets.filter((m) => (m.kind || "magnet") === kind).length >= max) continue;
+    const M = T.map,
+      ok = (x, y) => !trialInRiver(M, x, y) && !M.obstacles.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + 10),
+      [x, y] = ok(e.x, e.y) ? [e.x, e.y] : [e.px != null ? e.px : e.x, e.py != null ? e.py : e.y];
+    T.magnets.push({ kind, x: x + (kind === "magnet" ? 0 : kind === "onigiri" ? 16 : -16), y, pull: false, pt: 0 });
+    if (kind === "magnet") T.magnetDropped = (T.magnetDropped || 0) + 1;
+    T.itemDropped = T.itemDropped || {};
+    T.itemDropped[kind] = (T.itemDropped[kind] || 0) + 1;
+  }
+}
+// v110 拾ったアイテムの効き目
+function trialItemUse(T, h, kind) {
+  const S = TRIAL_SURVIVAL,
+    I = S.items[kind];
+  T.itemPicked = T.itemPicked || {};
+  T.itemPicked[kind] = (T.itemPicked[kind] || 0) + 1;
+  const fx = (o) => effects.length < 64 && effects.push(o);
+  if (kind === "onigiri") {
+    for (const u of T.units) if (!u.dead) (u.hp = Math.min(u.max, u.hp + u.max * I.heal)), trialHealFx(u);
+    fx({ kind: "ctext", x: h.x, y: h.y - 110, text: "🍙 みんなの HP 回復！", ougi: false, age: 0, duration: 1.3 });
+    trialSfx("heal");
+    return;
+  }
+  if (kind === "bomb") {
+    let n = 0;
+    T.bombing = true;
+    for (const e of T.enemies) {
+      if (e.gone || trialDist(e, h) > I.radius) continue;
+      if (e === T.boss) trialHitEnemy(h, e, (e.max * I.bossPct * 2) / (h.atkMul || 1), 0.8, true);
+      else {
+        trialHitEnemy(h, e, ((e.hp + 1) * 60) / (h.atkMul || 1), 0.8, true);
+        if (n++ < 12) fx({ kind: "cboom", x: e.x, y: e.y - 8, ougi: true, age: -n * 0.03, duration: 0.5 });
+      }
+    }
+    T.bombing = false;
+    T.bombKills = (T.bombKills || 0) + n;
+    fx({ kind: "ctext", x: h.x, y: h.y - 110, text: "💣 まわりの敵を一掃！", ougi: true, age: 0, duration: 1.4 });
+    fx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.8 });
+    if (!reduced) (combatFx.shake = 0.35), (combatFx.shakeAmp = 6); // 画面を少しゆらす
+    trialSfx("ougi");
+    return;
+  }
+  // 磁石
+  T.magnetPicked = (T.magnetPicked || 0) + 1;
+  for (const c of T.coins) c.pull = true; // 戦場のコインを全部吸い寄せる（遠くても加速して必ず届く）
+  fx({ kind: "ctext", x: h.x, y: h.y - 110, text: "🧲 コインを全部吸い寄せ！", ougi: true, age: 0, duration: 1.4 });
+  fx({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.6 });
+  trialSfx("pick");
 }
 // 磁石もコインと同じく、吸い寄せの範囲に入ると主人公へ飛んでくる。拾うと、戦場のコインを全部吸い寄せる
 function trialMagnetTick(T, h, dt) {
@@ -18874,11 +18928,7 @@ function trialMagnetTick(T, h, dt) {
     m.y += (dy / (d || 1)) * step;
     if (d - step > S.pick) continue;
     T.magnets.splice(i, 1);
-    T.magnetPicked = (T.magnetPicked || 0) + 1;
-    for (const c of T.coins) c.pull = true; // 戦場のコインを全部吸い寄せる（遠くても加速して必ず届く）
-    if (effects.length < 64) effects.push({ kind: "ctext", x: h.x, y: h.y - 110, text: "🧲 コインを全部吸い寄せ！", ougi: true, age: 0, duration: 1.4 });
-    if (effects.length < 64) effects.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.6 });
-    trialSfx("pick");
+    trialItemUse(T, h, m.kind || "magnet");
   }
 }
 // 吸い寄せと回収：主人公だけ。近づいたコインは加速して主人公へ。拾った分をまとめて経験値に（何枚でも合計がそのまま入る）
@@ -19205,8 +19255,9 @@ function trialDrawMagnets(T) {
     const bob = reduced || m.pull ? 0 : Math.sin(visualTime * 3 + m.x) * 4,
       glow = reduced ? 0.5 : 0.4 + 0.25 * Math.sin(visualTime * 6),
       y = m.y - 14 + bob;
+    const I = TRIAL_SURVIVAL.items[m.kind || "magnet"];
     ctx.globalAlpha = glow;
-    ctx.fillStyle = "#ffe27a";
+    ctx.fillStyle = I.glow;
     ctx.beginPath();
     ctx.arc(m.x, y, 34, 0, 7);
     ctx.fill();
@@ -19219,7 +19270,7 @@ function trialDrawMagnets(T) {
     ctx.font = "40px system-ui";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🧲", m.x, y);
+    ctx.fillText(I.icon, m.x, y);
   }
   ctx.restore();
 }
@@ -20217,7 +20268,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0 } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" ? trialBest(T) : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -20633,7 +20684,7 @@ function trialMiniMap(T, V, SW) {
   }
   ctx.globalAlpha = 1;
   for (const m of T.magnets || []) {
-    ctx.fillStyle = "#ffe27a"; // v109 磁石（金）
+    ctx.fillStyle = TRIAL_SURVIVAL.items[m.kind || "magnet"].glow; // v109 磁石（金）・v110 おにぎり（緑）・爆弾（赤）
     ctx.fillRect(x0 + m.x * s - 3, y0 + m.y * s - 3, 6, 6);
   }
   for (const e of T.enemies)
@@ -20767,7 +20818,7 @@ function renderTrialSheet() {
           (R.skillList.length ? "<p><small>🗡 攻撃スキル：" + R.skillList.map((x) => x.icon + esc(x.name) + (x.evo ? "（進化）" : x.lv >= 5 ? "★" : " Lv" + x.lv)).join("・") + "</small></p>" : "") +
           (R.rewardList.length ? "<p><small>🎁 報酬：" + R.rewardList.map((x) => (x.special ? "<b>" : "") + x.icon + esc(x.name) + (x.special ? "</b>" : "")).join("・") + "</small></p>" : "") +
           "<p>サバイバル <b>Lv" + R.slv + "</b>・仲間 " + (R.units.length - 1) + "/" + (R.roster - 1) + "人が加入" +
-          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）" + (R.coins.magnets ? "・🧲 磁石 " + R.coins.magnets + "回" : "") + "</small>" : "") +
+          (R.coins ? "<br><small>💠 経験値コイン：" + R.coins.picked + "枚・EXP " + R.coins.xp + "（拾わなかった分 " + R.coins.left + "）" + (R.coins.magnets ? "・🧲 磁石 " + R.coins.magnets + "回" : "") + (R.coins.items && R.coins.items.onigiri ? "・🍙 おにぎり " + R.coins.items.onigiri + "回" : "") + (R.coins.items && R.coins.items.bomb ? "・💣 爆弾 " + R.coins.items.bomb + "回" : "") + "</small>" : "") +
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
@@ -29918,7 +29969,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               useOugi: () => trialUseOugi(),
               // 経験値コインを置く（試験用。倒した敵の代わり）
               drop: (x, y, kind = "goblin") => trial && trialDropCoin(trial, { x, y, px: x, py: y, kind }),
-              dropMagnet: (x, y) => trial && (trial.magnets = trial.magnets || []).push({ x, y, pull: false, pt: 0 }),
+              dropMagnet: (x, y, kind = "magnet") => trial && (trial.magnets = trial.magnets || []).push({ kind, x, y, pull: false, pt: 0 }),
               coinList: () => (trial && trial.coins ? trial.coins.map((c) => ({ ...c })) : null),
               // 歩く速さの「速さ」ポイント抜きの値（試験用）
               walkBase: (id) => {
@@ -29971,7 +30022,11 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                   xpTotal: trial.xpTotal || 0,
                   dropped: trial.dropped || 0,
                   picked: trial.picked || 0,
-                  magnets: trial.magnets ? trial.magnets.length : 0,
+                  magnets: trial.magnets ? trial.magnets.filter((m) => (m.kind || "magnet") === "magnet").length : 0,
+                  items: trial.magnets ? trial.magnets.map((m) => m.kind || "magnet") : [],
+                  itemDropped: { ...(trial.itemDropped || {}) },
+                  itemPicked: { ...(trial.itemPicked || {}) },
+                  bombKills: trial.bombKills || 0,
                   magnetPicked: trial.magnetPicked || 0,
                   magnetDropped: trial.magnetDropped || 0,
                   magnetR: (() => { const h = trial.units && trial.units.find((u) => u.id === trial.hero); return h ? trialMagnetR(trial, h) : null; })(),
