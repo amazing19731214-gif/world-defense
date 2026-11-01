@@ -273,18 +273,18 @@ try {
   check(r <= 0, "iPhone縦（390px）で横にはみ出さない", r);
   await p.goto(base + "/blank");
   check(JSON.stringify(prodOnly(await rawAll(p))) === JSON.stringify(prod0), "本番の保存データ（worldDefense.*）は変わらない（探索の名簿・戦死はテスト版の保存領域だけ）");
-  // 12. 本番の版では探索を始められない（出撃の画面にも出ない）
+  // 12. v114 本番の版でも探索が出て始められる。雇用は 2500G（三方の関は探索に入れ替え）
   const q = await ctx.newPage();
   q.on("pageerror", (e) => errors.push(e.message));
   await q.goto(base + "/?debug");
   await q.waitForFunction(() => window.WD_DEBUG);
   r = await q.evaluate(() => {
     document.getElementById("trialOpen").click();
-    const btn = !!document.querySelector('[data-trial-mode="explore"]');
+    const modes = [...document.querySelectorAll("[data-trial-mode]")].map((b) => b.dataset.trialMode).join();
     document.getElementById("trialClose").click();
-    return { btn, err: WD_DEBUG.trial.start([1], { mode: "explore", hero: 1 }) };
+    return { modes, cost: WD_DEBUG.recruitApi.cost() };
   });
-  check(!r.btn && /テスト版だけ/.test(r.err || ""), "本番の版では「探索」は出ず、始められない", r);
+  check(r.modes === "explore,survival" && (r.cost === 2500 || r.cost === 0), "本番の版でも遊び方は「探索・サバイバル」、ランダム雇用は 2500G（兵士がいなければ最初の1人は無料）", r);
   await ctx.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);

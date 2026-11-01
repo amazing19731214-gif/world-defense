@@ -313,8 +313,8 @@ function startTrial(ids, stageId = "sanpou", opts = {}) {
     D = trialEnemyLevel(units);
   if (opts.mode === "survival") return startSurvival(list, units, M, D, stageId, opts.hero);
   if (opts.mode === "explore") {
-    // v113 探索：テスト版だけ。主人公1人で出発（敵の強さは主人公で決める）
-    if (!TRIAL_EXPLORE.real()) return "探索はテスト版だけで遊べます（兵士名簿・戦死に書き込むため）。";
+    // v113 探索：主人公1人で出発（敵の強さは主人公で決める）。v114 本番の版でも遊べる
+    if (!TRIAL_EXPLORE.real()) return "探索はいま遊べません。";
     // v113.1 探索の主人公は、ゲームの主人公（👑。倒れても死なず Lv1 から再出発）。選んだ兵士を主人公にする（主人公はいつでも変えられる）
     const hero = units.find((u) => u.id === opts.hero) || units.find((u) => isHeroSoldier(u.src)) || units[0];
     if (!isHeroSoldier(hero.src)) {
@@ -1939,7 +1939,7 @@ function trialSpawnPoint(T, hero) {
   return null;
 }
 // サバイバルの敵の出現：時間とともに間隔が短く、数が多く、強くなる。上限あり。遠くに離れた敵は近くへ移す。最後に強敵
-// ===== v113 探索（試作・テスト版だけ）：暗闇のランダムなマップで村を探し、仲間を得る =====
+// ===== v113 探索：暗闇のランダムなマップで村を探し、仲間を得る（v114 本番の版でも遊べる） =====
 //   ・主人公1人で出発。村を見つけると野盗が襲っている → 追い払うと、その村の兵士が無料で仲間に（すぐ兵士名簿へ）
 //   ・兵士が倒れたら本当に戦死（英霊名鑑へ）。名簿・戦死の書き込みはテスト版（テスト用の保存領域）だけ
 //   ・「この地を去る」で、いつでも新しいランダムなマップへ。主人公が倒れたら探索は終わり（得た仲間は残る）
@@ -1961,7 +1961,7 @@ const TRIAL_EXPLORE = {
   findR: 170, // 村のまわりがこの距離まで見えたら「見つけた」
   roam: { every: 8, max: 22 }, // うろつく敵（間隔・同時の上限）
   partyMax: 5, // 一緒に歩く仲間（主人公を入れて）
-  real: () => !!(window.WD_FLAGS && window.WD_FLAGS.explore), // テスト版だけ探索を出す（テスト版が WD_FLAGS.explore を立てる。本番の版では出さない）
+  real: () => !(window.WD_FLAGS && window.WD_FLAGS.explore === false), // v114 本番の版でも探索を出す（WD_FLAGS.explore = false で止められる）
 };
 // ランダムなマップ（同じ seed なら同じ形）：道でつながった村・川と橋・森と岩
 function trialExploreMap(seed, region) {
@@ -2237,8 +2237,8 @@ function trialExploreJoin(T, v, hero) {
     rec = { village: v.name, icon: v.icon, type: v.type, name: null, joined: false, error: null };
   T.explore.recruits.push(rec);
   if (!E.real()) {
-    rec.error = "テスト版だけで仲間になります";
-    msg("🏘 " + v.name + "を救った（本番の版では仲間は加わりません）");
+    rec.error = "いまは仲間になりません";
+    msg("🏘 " + v.name + "を救った（探索が止められているため、仲間は加わりません）");
     return;
   }
   const r = trialExploreRecruitReal(v.type);
@@ -4058,8 +4058,8 @@ function renderTrialSheet() {
     '<button type="button" data-trial-mode="survival" aria-pressed="' + (sv && !ex) + '">🔥 サバイバル<small>主人公を操作</small></button>' +
     "</div>" +
     (ex
-      ? '<p class="muted"><small><b>🌑 探索（試作・テスト版だけ）</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
-        "<b>テスト版の保存領域にだけ書きます。本番のデータは変わりません。</b></small></p>"
+      ? '<p class="muted"><small><b>🌑 探索</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
+        "<b>仲間の加入と戦死は、すぐ保存データに書かれ、取り消せません。</b></small></p>"
       : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
