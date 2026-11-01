@@ -213,6 +213,8 @@ try {
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
     document.getElementById("trialAutoAll").click(); // 全員自動に戻して最後まで
+    // 前の試験でわざと1人倒し、ほかも傷ついているので、生きている兵士の HP を戻してから最後まで戦う（この試験は「最後まで流れる」を見る）
+    for (const u of T.live().units) if (!u.dead) u.hp = u.max;
     for (let i = 0; i < 600 && T.on(); i++) WD_DEBUG.step(1);
     const res = T.result();
     return { result: res.result, skills: res.units.map((u) => Object.keys(u.skills).length), kills: res.kills, total: res.total };

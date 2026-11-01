@@ -2164,7 +2164,25 @@ function trialBegin() {
   return null;
 }
 // ===== 戦闘処理（毎フレーム。gameStep の時間で進む） =====
+// v112.1 戦場試練の1コマのあいだは、Math.random を戦場試練だけの決まった乱数に差し替える。
+//   職業技・閃き・会心・回避などの共通の処理が Math.random を使うので、同じ顔ぶれ・同じ操作でも勝ち負けがまれに変わっていた
+//   （三方の関の試験がたまに負ける原因）。戦闘の乱数 T.rng とは別の列にする（出現の位置・種類はいままでどおり）。防衛戦・攻城戦は変えない
 function tickTrial(dt) {
+  const T = trial;
+  if (!T) return;
+  if (!T.mathRng) {
+    let s = 98765;
+    T.mathRng = () => ((s = (s * 48271) % 2147483647) / 2147483647);
+  }
+  const mr = Math.random;
+  Math.random = T.mathRng;
+  try {
+    tickTrialCore(dt);
+  } finally {
+    Math.random = mr;
+  }
+}
+function tickTrialCore(dt) {
   const T = trial;
   if (!T || T.phase !== "fight" || T.result) return;
   if (T.choice) return; // レベルアップの選択中は止まる
