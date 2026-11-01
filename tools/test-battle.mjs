@@ -66,6 +66,12 @@ async function newContext(seeds) {
     isMobile: true,
     hasTouch: true,
   });
+  // ゲーム自身の描画の繰り返し（requestAnimationFrame）は止める。戦闘は試験が WD_DEBUG.step で進めた分だけ進む。
+  // 止めないと、試験の操作の合間にも本物の時間で戦闘が進み、マシンが混んでいると（ほかの試験と同時に動かすなど）
+  // 「守備隊の前で止まって戦う」場面が見る前に終わってしまうことがあった（攻城戦の仕様は変えていない）
+  await context.addInitScript(() => {
+    window.requestAnimationFrame = () => 0;
+  });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -128,6 +134,7 @@ check("防衛のウェーブ中は出陣できない", /ウェーブ中/.test(r 
 await page.tap("#squadClose");
 await openSiegeFormation(page);
 await page.tap("#siegeGo");
+await page.evaluate(() => WD_DEBUG.step(0.05)); // 1コマ進める（描画の繰り返しは止めているので）
 r = await B(page);
 check(
   "出陣すると攻城戦が始まる（第一部隊から）",
@@ -161,7 +168,7 @@ check(
   JSON.stringify(r.groups),
 );
 check("騎兵だけの部隊は速く進む（10秒遅れて出ても距離を詰める）", r.groups[1].d > 0);
-await page.waitForTimeout(100); // 画面の状況欄は描画のたびに更新される
+await page.evaluate(() => WD_DEBUG.heroApi.draw()); // 画面の状況欄は描画のたびに更新される（描画を1回だけ行う）
 const info = await page.textContent("#battleInfo");
 check(
   "状況欄が進行に合わせて更新される（時間・出撃した部隊の人数）",
