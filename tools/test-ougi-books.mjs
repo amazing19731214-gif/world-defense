@@ -324,7 +324,7 @@ try {
     return { notSaint, a, h1, b, h2, c, h3, saved: JSON.parse(localStorage.getItem("worldDefense.ougi.v1")).heir };
   });
   check(r.notSaint.every((e) => typeof e === "string" && e.includes("剣聖だけ")), "奥義書を継承できるのは剣聖だけ", r.notSaint);
-  check(r.a === null && r.b === null && r.h2.sid === 3 && r.h2.book === 2, "別の剣聖が継承すると、前の継承者は外れる（継承者は全軍で1人）", r);
+  check(r.a === null && r.b === null && r.h2.sid === 3 && r.h2.book === 2, "奥義書を別々の兵士へ設定し、旧heir互換表示は最後の設定先を指す", r);
   check(r.c === null && r.h3.sid === 1 && r.h3.book === null && r.saved.sid === 1, "自分で閃いた剣聖も、奥義書なしで継承者になれる（有効な書は0冊）", r);
   r = await p.evaluate(() => {
     const K = WD_DEBUG.combat.ougi;
@@ -347,8 +347,8 @@ try {
       overflow: document.documentElement.scrollWidth - innerWidth,
     };
   });
-  check(r.saint && r.tag.includes("⚔ 奥義継承者") && r.spear === 3, "剣聖のカードに「⚔ 奥義」、継承者に「⚔ 奥義継承者」の印（ほかの職業には出ない）", r);
-  await p.evaluate(() => document.querySelector('#soldierList [data-ougi-for="2"]').click());
+  check(r.saint && r.tag.includes("⚔ 自動：") && r.spear === 3, "剣聖のカードに「⚔ 奥義」、有効な兵士に「⚔ 自動」の印（ほかの職業には出ない）", r);
+  await p.evaluate(() => { WD_DEBUG.combat.ougi.clearHeir(3); document.querySelector('#soldierList [data-ougi-for="2"]').click(); });
   r = await p.evaluate(() => {
     const body = document.getElementById("ougiBody");
     return {
@@ -359,61 +359,24 @@ try {
       sheetOverflow: [...body.querySelectorAll("*")].some((el) => el.getBoundingClientRect().right > innerWidth + 1),
     };
   });
-  check(r.open && r.cards.length === 2 && r.cards[0].includes("八方天翔斬") && r.cards[0].includes("初代 剣聖") && r.cards[0].includes("八方向") && r.cards[0].includes("今の継承者：なし"), "奥義書の一覧に奥義名・伝承者・効果・今の継承者", r.cards);
-  check(r.buttons.length === 2 && r.buttons[0].includes("継承する"), "剣聖の兵士の画面から奥義書を継承できる", r.buttons);
+  check(r.open && r.cards.length === 2 && r.cards[0].includes("八方天翔斬") && r.cards[0].includes("初代 剣聖") && r.cards[0].includes("八方向") && r.cards[0].includes("継承中：") && r.cards[0].includes("朧"), "奥義書の一覧に奥義名・伝承者・効果・兵士ごとの継承先", r.cards);
+  check(r.buttons.length === 1 && r.buttons[0].includes("継承する"), "剣聖の兵士の画面から奥義書を継承できる", r.buttons);
   check(r.overflow <= 0 && !r.sheetOverflow, "iPhone縦（375px）で奥義の画面がはみ出さない", r);
   await p.evaluate(() => document.querySelector('#ougiBody [data-ougi-book="2"]').click());
   r = await p.evaluate(() => ({ heir: WD_DEBUG.combat.ougi.heir(), text: document.getElementById("ougiBody").textContent }));
-  check(r.heir.sid === 2 && r.heir.book === 2 && /今の継承者：⚔ \S*朧/.test(r.text), "ボタンで継承すると、一覧の今の継承者が変わる", r.heir);
+  check(r.heir.sid === 2 && r.heir.book === 2 && /継承中：\S*朧/.test(r.text), "ボタンで継承すると、一覧の今の継承者が変わる", r.heir);
   await c.close();
 
-  // 7. 使用回数：1回の挑戦で1回。途中で再読み込みしても復活しない。挑戦が終われば次の挑戦でまた使える
+  // 7. v117：使用回数は兵士ごとの時計へ移行。旧runを読み込めても手動発動はできない。
   ({ c, p } = await open({ ougi: twoBooks }));
-  const startRun = () =>
-    p.evaluate(() => {
-      const S = WD_DEBUG.state;
-      WD_DEBUG.trainingApi.startTraining("beginner");
-      WD_DEBUG.squadApi.deployReserve(S().squads[0], 620, 300);
-      for (const s of S().soldiers) s.cd = 1e9;
-      document.getElementById("start").click();
-      WD_DEBUG.stopSpawning();
-      S().enemies.length = 0;
-      WD_DEBUG.addEnemy({ d: 600, hp: 9e5, speed: 0, unitCd: 1e9 });
-      WD_DEBUG.step(0.05);
-      return WD_DEBUG.combat.ougi.state();
-    });
-  await p.evaluate(() => WD_DEBUG.combat.ougi.setHeir(1, { book: 1 }));
-  r = await startRun();
-  const runA = await p.evaluate(() => WD_DEBUG.combat.ougi.run());
-  const used = await p.evaluate(() => ({ use: WD_DEBUG.combat.ougi.use(), again: WD_DEBUG.combat.ougi.use(), err: WD_DEBUG.combat.ougi.error(), run: WD_DEBUG.combat.ougi.save().run }));
-  check(r.heirId === 1 && r.used === false && used.use && !used.again && used.err.includes("もう使いました"), "新しい挑戦では1回使える。同じ挑戦では2回発動できない", used);
-  check(used.run && used.run.id === runA && used.run.used && /^ougi-run:/.test(runA), "使用記録は挑戦IDといっしょに保存する", used.run);
-  r = await p.evaluate((id) => ({ same: WD_DEBUG.combat.ougi.runStart(id).used, other: WD_DEBUG.combat.ougi.runStart("ougi-run:other").used }), runA);
-  check(r.same === true && r.other === false, "同じ挑戦IDなら使用済みを戻せる（将来の途中再開の用意）。別の挑戦IDなら戻さない", r);
+  r=await p.evaluate(()=>{
+    const D=WD_DEBUG,K=D.combat.ougi,s=D.state().soldiers[0];
+    K.setHeir(1,{book:1});
+    return {choice:D.autoOugiApi.choice(s),left:D.autoOugiApi.timer(s).left,use:K.use(),error:K.error()};
+  });
+  check(r.choice?.book===1&&r.left===60&&!r.use&&r.error.includes("自動"),"旧奥義書から個人の自動設定へ移行し、手動発動しない",r);
   await reload(p);
-  r = await startRun();
-  const runB = await p.evaluate(() => WD_DEBUG.combat.ougi.run());
-  const why = await p.evaluate(() => ({ err: WD_DEBUG.combat.ougi.error(), use: WD_DEBUG.combat.ougi.use() }));
-  check(runB !== runA && r.used === false && why.err === null && why.use, "再読み込みのあと、新しく始めた挑戦は不当に使用済みにならない（新しい挑戦ID・1回使える）", { runA, runB, r, why });
-  r = await p.evaluate(() => {
-    const again = WD_DEBUG.combat.ougi.use();
-    WD_DEBUG.trainingApi.endTraining("retreat");
-    return { again, run: WD_DEBUG.combat.ougi.save().run };
-  });
-  const next = await startRun();
-  check(!r.again && r.run.id === runB && r.run.used && r.run.ended && next.used === false, "挑戦が終わると使用記録を確定し、次の挑戦（新しいID）でまた1回使える", { r, next });
-  // 戦死しても使用回数は戻らない
-  r = await p.evaluate(() => {
-    const K = WD_DEBUG.combat.ougi,
-      S = WD_DEBUG.state,
-      use = K.use(),
-      s = S().soldiers.find((x) => x.id === 1),
-      q = S().squads[0];
-    s.hp = 0;
-    WD_DEBUG.squadApi.killSoldier(s, q);
-    return { use, state: K.state(), heir: K.heir(), books: K.save().books.length, err: K.error() };
-  });
-  check(r.use && r.state.used && r.heir === null && r.books === 2, "継承者が戦死すると指定は外れ、奥義書は倉庫に残る。使用回数は戻らない", r);
+  check(await p.evaluate(()=>WD_DEBUG.autoOugiApi.choice(WD_DEBUG.state().soldiers[0]).book===1),"個人の自動奥義設定を再読込後も維持");
   await c.close();
 
   // 8. 戦死と復活の書：名前のある兵士の奥義の知識は、復活すると戻る（継承者には自動で戻らない）。名前のない兵士の知識は失われる
@@ -437,10 +400,10 @@ try {
     const craft = D.gemApi.craftScroll("revive"),
       err = D.gemApi.reviveFallen(2, q),
       back = S().soldiers.find((x) => x.alive && x.chronicle.life === "soldier:life2");
-    return { afterDeath, craft, err, backId: back && back.id, known: back && K.known(back.id), heir: K.heir() };
+    return { afterDeath, craft, err, backId: back && back.id, known: back && K.known(back.id), heir: K.heir(), auto: back && D.autoOugiApi.choice(back) };
   });
   check(r.afterDeath.heir === null && r.afterDeath.known.join() === "soldier:life2", "戦死：継承者の指定を外す。英霊名鑑に載らない兵士（名前なし）の奥義は失われる", r.afterDeath);
-  check(!r.err && r.backId && r.known.join() === "tenkenRanbu" && r.heir === null, "復活の書で戻ると奥義の知識は戻るが、継承者には自動で戻らない", r);
+  check(!r.err && r.backId && r.known.join() === "tenkenRanbu" && r.heir === null && r.auto?.k === "tenkenRanbu", "復活の書で戻ると知識と個人の自動奥義が戻り、旧heir指定は解除されている", r);
   await reload(p);
   r = await p.evaluate(() => ({ known: Object.keys(WD_DEBUG.combat.ougi.save().known), heir: WD_DEBUG.combat.ougi.heir() }));
   check(r.known.join() === "soldier:life2" && r.heir === null, "再読み込みしても戦死・復活の結果は変わらない（データが矛盾しない）", r);

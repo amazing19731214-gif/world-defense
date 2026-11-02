@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v116（探索・サバイバルの持ち帰り経験値）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v117（全モードの自動奥義）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3393,7 +3393,7 @@ OFF</button>
     <div id="ougiSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ougiTitle">
         <div class="panel-head hg-head">
-          <strong id="ougiTitle">⚔ 伝説の奥義（試作）</strong
+          <strong id="ougiTitle">⚔ 奥義書・自動奥義</strong
           ><button id="ougiClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="ougiBody"></div>
@@ -10818,7 +10818,7 @@ function chronicleWarBonusBlock(s) {
           });
         }
         // 兵士の試作の技：兵種の戦い方で型を選ぶ。通常の攻撃3回ごとに技（修練場の試作だけ）
-        // v106.1：奥義ゲージ（攻撃でたまって自動で奥義）は廃止。奥義は継承者1人が手動で、1回の挑戦に1回だけ（下の伝説の奥義）
+        // v106.1：奥義ゲージは廃止。奥義は兵士ごとの60秒・30%の自動抽選（auto-ougi）
         const PROTO_SKILL = { every: 3 };
         function protoPatternOf(s) {
           const c = unitOf(s);
@@ -10833,10 +10833,10 @@ function chronicleWarBonusBlock(s) {
           if (s.protoHits % PROTO_SKILL.every === 0) applyPattern(id, q, target, dmg, { s, q, h: heroOnSquad(q) });
         }
         const protoCombatOn = () => !!(training && training.proto && !battle);
-        // ===== 伝説の奥義（v106.1試作）：修練場の「新しい戦い（試作）」だけ =====
-        // 使えるのは全軍で1人の奥義継承者だけ。発動は手動（ボタンは1つ）で、1回の挑戦（修練場の開始から終了まで）に全軍で1回だけ。
-        // 対象がいなければ使った回数にしない。継承者・使った記録は戦闘中だけ持ち、保存データには入れない。
-        // 将来：job で弓聖・忍頭・銃将などの固有奥義を足す。正式な奥義書（伝承の秘伝書とは別管理）・閃き・引退はまだ作らない。
+        // ===== 伝説の奥義：定義・知識・奥義書（v117で全モード自動発動へ） =====
+        // 発動・時計・演出はauto-ougiで共通管理。兵士ごとに有効な奥義を1つ選ぶ。
+        // 従来のheir/runは旧セーブ互換用。新しい選択と時計は同じ保存内のautoへ。
+        // 現在の奥義は剣聖の3種。入手条件・奥義書・引退は従来どおり。
         //   kind pattern：攻撃の型（ATTACK_PATTERNS）をそのまま使う / single：強敵1体へ1撃 / flurry：範囲へ連続の斬撃
         //   mul：継承者の攻撃力の何倍か（1体・1撃あたり）
         const LEGEND_OUGI = {
@@ -10844,6 +10844,349 @@ function chronicleWarBonusBlock(s) {
           mumyouIssen: { name: "無明一閃", job: "sword_saint", kind: "single", reach: 560, mul: 14, text: "強敵1体へ強烈な一閃（大将・中ボス・体力の多い敵を狙う）" },
           tenkenRanbu: { name: "天剣乱舞", job: "sword_saint", kind: "flurry", radius: 300, hits: 6, gap: 0.2, perHit: 10, mul: 0.9, text: "周りの広い範囲へ6回の連続斬撃" },
         };
+        // 自動奥義：時計は兵士の一生ごと。戦場の写し・WAVE・モードを切り替えても再抽選しない。
+const AUTO_OUGI_RULES = Object.freeze({ interval: 60, rate: 0.3, saveEvery: 5, fxGap: 0.9 });
+function cleanAutoOugi(value) {
+  const o = value && typeof value === "object" ? value : {},
+    picks = {},
+    timers = {};
+  const lifeOk = (life) => typeof life === "string" && /^[\w:-]{1,100}$/.test(life);
+  for (const [life, p] of Object.entries(o.picks || {}).slice(0, 1024)) {
+    if (!lifeOk(life) || !p || typeof p !== "object") continue;
+    if (p.off) picks[life] = { off: true };
+    else if (LEGEND_OUGI[p.k])
+      picks[life] = { k: p.k, book: Number.isInteger(p.book) && p.book > 0 ? p.book : null };
+  }
+  for (const [life, t] of Object.entries(o.timers || {}).slice(0, 1024)) {
+    if (!lifeOk(life) || !t || typeof t !== "object") continue;
+    timers[life] = {
+      left: Number.isFinite(t.left) ? Math.max(0, Math.min(60, t.left)) : 60,
+      rolls: Number.isInteger(t.rolls) ? Math.max(0, Math.min(1e9, t.rolls)) : 0,
+    };
+  }
+  return { version: 1, picks, timers };
+}
+function autoOugiChoice(s) {
+  if (!s?.alive) return null;
+  const life = ougiLife(s),
+    pick = ougiSave.auto.picks[life];
+  if (pick?.off) return null;
+  const p = pick ||
+    (ougiSave.heir?.sid === s.id ? ougiSave.heir : null) || {
+      k: ougiKnownOf(s).find((k) => LEGEND_OUGI[k].job === jobOf(s)),
+      book: null,
+    };
+  if (!LEGEND_OUGI[p.k] || jobOf(s) !== LEGEND_OUGI[p.k].job) return null;
+  if (p.book != null ? ougiBook(p.book)?.k !== p.k : !ougiKnownOf(s).includes(p.k)) return null;
+  return { k: p.k, book: p.book ?? null };
+}
+function autoOugiBookOwner(uid) {
+  return (
+    soldiers.find(
+      (s) =>
+        s.alive &&
+        (ougiSave.auto.picks[ougiLife(s)]?.book === uid ||
+          (!Object.hasOwn(ougiSave.auto.picks, ougiLife(s)) &&
+            ougiSave.heir?.sid === s.id &&
+            ougiSave.heir.book === uid)),
+    ) || null
+  );
+}
+function autoOugiTimer(s) {
+  const life = ougiLife(s);
+  return (ougiSave.auto.timers[life] ||= { left: 60, rolls: 0 });
+}
+let autoOugiQueue = [],
+  autoOugiFlurries = [],
+  autoOugiContext = null,
+  autoOugiGap = 0,
+  autoOugiDirty = false,
+  autoOugiSaveClock = 0,
+  autoOugiRetry = 0,
+  autoOugiWarned = false,
+  autoOugiRollOverride = null;
+const autoOugiStats = { attempts: 0, casts: 0, hits: 0 };
+const sameAutoOugiContext = (a, b) =>
+  !!a && !!b && a.mode === b.mode && a.session === b.session && a.segment === b.segment;
+function autoOugiContextFor(mode) {
+  let actors = [],
+    targets,
+    session,
+    segment,
+    hit;
+  if (mode === "trial") {
+    const T = trial;
+    if (!T || T.phase !== "fight" || T.result || T.paused || T.choice || T.cleared) return null;
+    session = T;
+    segment = T.floor + ":" + (T.explore?.region || 0);
+    actors = T.units
+      .filter((u) => !u.dead && u.placed)
+      .map((u) => ({
+        s: u.src,
+        pos: u,
+        stats: () => soldierStats(u.sh, true),
+        mul: () => (u.atkMul || 1) * (u.id === T.hero ? T.ougiMul || 1 : 1),
+        valid: () => trial === T && !u.dead && u.src.alive,
+        unit: u,
+      }));
+    targets = () => T.enemies.filter((e) => !e.gone && e.hp > 0);
+    hit = (a, e, raw) => {
+      const before = !e.gone;
+      trialHitEnemy(a.unit, e, raw, 0, true);
+      if (a.record) {
+        a.record.hits++;
+        if (before && e.gone) a.record.kills++;
+      }
+    };
+  } else if (mode === "battle") {
+    const B = battle;
+    if (!B || B.result || paused) return null;
+    session = B;
+    segment = 0;
+    actors = B.groups.filter(groupActive).flatMap((g) =>
+      groupAlive(g).map((s) => ({
+        s,
+        pos: g,
+        stats: () => battleStats(g, s),
+        mul: () => 1,
+        valid: () => battle === B && groupActive(g) && groupAlive(g).includes(s),
+      })),
+    );
+    const structures = B.towers.map((t) => ({
+      structure: true,
+      tower: t,
+      x: t.x,
+      y: t.y,
+      r: 25,
+      get hp() {
+        return t.destroyed ? 0 : t.hp;
+      },
+    }));
+    if (!B.boss)
+      structures.push({
+        structure: true,
+        x: SIEGE_BATTLE.castle.x,
+        y: SIEGE_BATTLE.castle.y,
+        r: 40,
+        get hp() {
+          return B.castleHp;
+        },
+      });
+    targets = () => [...B.garrison.filter((e) => !e.dead && e.hp > 0), ...structures.filter((e) => e.hp > 0)];
+    hit = (a, e, raw) => {
+      if (e.structure) {
+        if (e.tower) battleHitTower(e.tower, raw);
+        else B.castleHp = Math.max(0, B.castleHp - raw);
+        return;
+      }
+      if (battleHitGarrison(e, raw, a.s)) {
+        a.s.kills++;
+        gearOnKill(a.s, a.stats(), B.t);
+        jobOnKill(a.s, B.t);
+        gainXp(a.s, SQUAD_RULES.xpPerKill + Math.round((e.reward || 0) / 2));
+      }
+    };
+  } else {
+    if (!playing || paused || over || battle || trial) return null;
+    session = training || runId;
+    segment = wave;
+    actors = squads
+      .filter((q) => q.state === "deployed")
+      .flatMap((q) =>
+        members(q)
+          .filter((s) => s.alive && !s.out && !s.heroFell)
+          .map((s) => ({
+            s,
+            pos: q,
+            stats: () => soldierStats(s),
+            mul: () => 1,
+            valid: () => playing && q.state === "deployed" && s.alive && !s.out && !s.heroFell,
+          })),
+      );
+    targets = aliveEnemies;
+    hit = (a, e, raw) =>
+      dealEnemyDamage(
+        e,
+        raw,
+        { s: a.s, q: a.pos, h: heroOnSquad(a.pos) },
+        { normal: false, pierceCover: true },
+      );
+  }
+  return { mode, session, segment, actors: actors.filter((a) => autoOugiChoice(a.s)), targets, hit };
+}
+function autoOugiAim(ctx, a, k) {
+  const O = LEGEND_OUGI[k],
+    list = ctx.targets(),
+    origin = { x: a.pos.x, y: a.pos.y - 18 };
+  const distance = (e) => Math.hypot(e.x - a.pos.x, e.y - a.pos.y);
+  if (O.kind === "pattern") {
+    const near = list
+      .slice()
+      .sort(
+        (a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y),
+      )[0];
+    if (!near) return null;
+    const rays = resolvePattern(
+      origin,
+      Math.atan2(near.y - origin.y, near.x - origin.x),
+      ATTACK_PATTERNS[O.pattern],
+      list,
+    );
+    return rays.some((r) => r.hits.length) ? { origin, rays } : null;
+  }
+  const candidates = list.filter((e) => distance(e) <= (O.reach || O.radius));
+  const rank = (e) =>
+    (e.boss || e.kind === "boss" || e.role === "boss" ? 2e12 : e.role === "mid" ? 1e12 : 0) + e.hp;
+  candidates.sort((a, b) => (O.kind === "single" ? rank(b) - rank(a) : distance(a) - distance(b)));
+  return candidates.length ? { origin, target: candidates[0] } : null;
+}
+function autoOugiCast(ctx, a, k, aim) {
+  const O = LEGEND_OUGI[k],
+    atk = a.stats().atk * a.mul();
+  autoOugiStats.casts++;
+  combatFx.ougi("奥義・" + O.name, "⚔ " + soldierName(a.s));
+  if (ctx.mode === "trial") {
+    trialSfx("ougi");
+    a.record = { key: k, at: trial.t, hits: 0, kills: 0 };
+    trial.ougiUsed = a.record;
+  }
+  if (O.kind === "pattern") {
+    const P = ATTACK_PATTERNS[O.pattern];
+    for (const r of aim.rays)
+      for (const e of r.hits)
+        if (e.hp > 0) {
+          ctx.hit(a, e, atk * P.mul);
+          autoOugiStats.hits++;
+        }
+    combatFx.pattern(P, aim.origin, aim.rays);
+  } else if (O.kind === "single") {
+    ctx.hit(a, aim.target, atk * O.mul);
+    autoOugiStats.hits++;
+    combatFx.issen(aim.origin, aim.target);
+  } else {
+    autoOugiFlurries.push({ ctx, a, k, atk, left: O.hits, wait: 0 });
+    combatFx.push({ kind: "cshock", x: a.pos.x, y: a.pos.y, ougi: true, age: 0, duration: 0.7 });
+  }
+}
+function tickAutoOugiFlurries(ctx, dt) {
+  autoOugiFlurries = autoOugiFlurries.filter(
+    (F) => sameAutoOugiContext(F.ctx, ctx) && F.a.valid() && autoOugiChoice(F.a.s)?.k === F.k && F.left > 0,
+  );
+  for (const F of autoOugiFlurries) {
+    F.wait -= dt;
+    const O = LEGEND_OUGI[F.k];
+    while (F.wait <= 1e-8 && F.left > 0) {
+      F.wait += O.gap;
+      F.left--;
+      ctx
+        .targets()
+        .filter((e) => Math.hypot(e.x - F.a.pos.x, e.y - F.a.pos.y) <= O.radius)
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - F.a.pos.x, a.y - F.a.pos.y) - Math.hypot(b.x - F.a.pos.x, b.y - F.a.pos.y),
+        )
+        .slice(0, O.perHit)
+        .forEach((e) => {
+          ctx.hit(F.a, e, F.atk * O.mul);
+          autoOugiStats.hits++;
+          combatFx.push({
+            kind: "cslash",
+            x: e.x,
+            y: e.y - 14,
+            a: Math.random() * Math.PI,
+            ougi: true,
+            age: 0,
+            duration: 0.35,
+          });
+        });
+      combatFx.push({
+        kind: "cwave",
+        x: F.a.pos.x,
+        y: F.a.pos.y - 10,
+        rays: [0, 1, 2, 3].map((k) => (k * Math.PI) / 2 + F.left * 0.4),
+        len: O.radius,
+        width: 30,
+        ougi: true,
+        age: 0,
+        duration: 0.5,
+      });
+    }
+  }
+}
+function tickAutoOugi(mode, dt) {
+  if (!(dt > 0) || document.hidden || document.querySelector(".sheet-back:not([hidden])")) return;
+  const ctx = autoOugiContextFor(mode);
+  if (!ctx) return;
+  if (!sameAutoOugiContext(autoOugiContext, ctx)) {
+    autoOugiQueue = [];
+    autoOugiFlurries = [];
+    autoOugiGap = 0;
+    autoOugiContext = ctx;
+  }
+  tickAutoOugiFlurries(ctx, dt);
+  autoOugiGap = Math.max(0, autoOugiGap - dt);
+  autoOugiRetry = Math.max(0, autoOugiRetry - dt);
+  const seen = new Set();
+  for (const a of ctx.actors) {
+    const life = ougiLife(a.s);
+    if (seen.has(life)) continue;
+    seen.add(life);
+    const t = autoOugiTimer(a.s);
+    t.left = Math.max(0, t.left - dt);
+    autoOugiDirty = true;
+    if (t.left <= 1e-8 && !autoOugiQueue.some((e) => e.life === life)) autoOugiQueue.push({ life });
+  }
+  autoOugiQueue = autoOugiQueue.filter((e) => seen.has(e.life));
+  if (!autoOugiRetry && autoOugiGap <= 0) {
+    const ready = autoOugiQueue.splice(0);
+    for (const entry of ready) {
+      if (autoOugiGap > 0) {
+        autoOugiQueue.push(entry);
+        continue;
+      }
+      const a = ctx.actors.find((a) => ougiLife(a.s) === entry.life),
+        choice = a && autoOugiChoice(a.s),
+        aim = choice && autoOugiAim(ctx, a, choice.k);
+      if (!a?.valid() || !aim) continue; // 対象が来るまで、0秒で待つ。抽選しない。
+      const t = autoOugiTimer(a.s),
+        roll = autoOugiRollOverride
+          ? autoOugiRollOverride(a.s, t.rolls)
+          : insightHash(insightOf(a.s).seed + ":auto-ougi:" + t.rolls) / 4294967296;
+      const ok = ougiCommit((S) => {
+        const saved = S.auto.timers[entry.life];
+        saved.left = 60;
+        saved.rolls = Math.min(1e9, saved.rolls + 1);
+      });
+      if (!ok) {
+        autoOugiRetry = 5;
+        if (!autoOugiWarned) {
+          mapToast("⚠ 奥義の抽選を保存できません。保存できるまで自動発動を待ちます。");
+          autoOugiWarned = true;
+        }
+        break;
+      }
+      autoOugiWarned = false;
+      autoOugiStats.attempts++;
+      if (roll < AUTO_OUGI_RULES.rate) {
+        autoOugiCast(ctx, a, choice.k, aim);
+        autoOugiGap = AUTO_OUGI_RULES.fxGap;
+      }
+    }
+  }
+  autoOugiSaveClock += dt;
+  if (autoOugiDirty && autoOugiSaveClock >= AUTO_OUGI_RULES.saveEvery) {
+    autoOugiSaveClock = 0;
+    if (persistOugi()) autoOugiDirty = false;
+  }
+}
+function autoOugiPrune(lives, fallen) {
+  for (const table of [ougiSave.auto.picks, ougiSave.auto.timers])
+    for (const life of Object.keys(table)) if (!lives.has(life) && !fallen.has(life)) delete table[life];
+}
+window.addEventListener("pagehide", () => {
+  if (autoOugiDirty) persistOugi();
+});
+
         let ougiFlurry = null; // 天剣乱舞の残りの斬撃（戦闘を止めずに、時間をずらして当てる）
         const ougiState = () => (protoCombatOn() && training.ougi) || null;
         // ===== 奥義書・奥義継承者・奥義の閃き（v106.2試作） =====
@@ -10904,18 +11247,23 @@ function chronicleWarBonusBlock(s) {
             heir = h && Number.isInteger(h.sid) && LEGEND_OUGI[h.k] ? { sid: h.sid, k: h.k, book: Number.isInteger(h.book) ? h.book : null } : null;
           // 挑戦IDのない使用記録（v106.2）は、どの挑戦にも当たらないので読み捨てる
           const run = o.run && typeof o.run.id === "string" && /^[\w:-]{1,100}$/.test(o.run.id) ? { id: o.run.id, used: o.run.used === true, at: num(o.run.at), by: str(o.run.by, 40), ended: o.run.ended === true } : null;
-          return { version: 1, seq: Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...books.map((b) => b.uid), 0), books, known, rolls, fails, heir, run };
+          return { auto: cleanAutoOugi(o.auto), version: 1, seq: Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...books.map((b) => b.uid), 0), books, known, rolls, fails, heir, run };
         }
+        let ougiObservedRaw = null;
         let ougiSave = (() => {
           try {
-            return cleanOugiSave(JSON.parse(localStorage.getItem(OUGI_KEY) || "null"));
+            ougiObservedRaw = localStorage.getItem(OUGI_KEY);
+            return cleanOugiSave(JSON.parse(ougiObservedRaw || "null"));
           } catch (err) {
             return cleanOugiSave(null);
           }
         })();
         function persistOugi() {
           try {
-            localStorage.setItem(OUGI_KEY, JSON.stringify(ougiSave));
+            if (localStorage.getItem(OUGI_KEY) !== ougiObservedRaw) return false;
+            const raw = JSON.stringify(ougiSave);
+            localStorage.setItem(OUGI_KEY, raw);
+            ougiObservedRaw = raw;
             return true;
           } catch (err) {
             return false;
@@ -10954,6 +11302,7 @@ function chronicleWarBonusBlock(s) {
           const k = choice && choice.book != null ? ougiBook(choice.book)?.k : choice && choice.k;
           if (!k || !LEGEND_OUGI[k]) return "その奥義書・奥義はありません。";
           if (jobOf(s) !== LEGEND_OUGI[k].job) return "この奥義を継承できるのは" + JOBS[LEGEND_OUGI[k].job].name + "だけです。";
+          if (choice.book != null) { const owner = autoOugiBookOwner(choice.book); if(owner && owner.id !== s.id) return "この奥義書は" + soldierName(owner) + "が継承中です。先に自動奥義を解除してください。"; }
           if (choice.book == null && !ougiKnownOf(s).includes(k)) return "この兵士はその奥義を閃いていません。";
           return null;
         }
@@ -10963,18 +11312,23 @@ function chronicleWarBonusBlock(s) {
           if (err) return err;
           const book = choice.book != null ? choice.book : null,
             k = book != null ? ougiBook(book).k : choice.k;
-          return ougiCommit((S) => (S.heir = { sid, k, book })) ? null : "保存できなかったため、継承者を変えませんでした。";
+          return ougiCommit((S) => {
+            const old = S.heir && soldierById(S.heir.sid);
+            if(old && !Object.hasOwn(S.auto.picks,ougiLife(old))) S.auto.picks[ougiLife(old)]={k:S.heir.k,book:S.heir.book};
+            S.heir = { sid, k, book }; S.auto.picks[ougiLife(s)] = {k,book};
+          }) ? null : "保存できなかったため、継承者を変えませんでした。";
         }
-        function clearOugiHeir() {
+        function clearOugiHeir(sid = ougiSave.heir?.sid) {
           const busy = legendBusyError();
           if (busy) return "奥義継承者は戦闘の前（ウェーブの合間）にだけ変えられます。" + busy;
-          return ougiCommit((S) => (S.heir = null)) ? null : "保存できませんでした。";
+          return ougiCommit((S) => { const s = soldierById(sid); if(s) S.auto.picks[ougiLife(s)]={off:true}; if(S.heir?.sid===sid)S.heir=null; }) ? null : "保存できませんでした。";
         }
         // 戦死：継承者なら指定を外す（奥義書は倉庫に残る）。英霊名鑑に載らない兵士の知識はここで失われる
         function ougiOnDeath(s) {
           const life = ougiLife(s);
           ougiCommit((S) => {
             if (S.heir && S.heir.sid === s.id) S.heir = null;
+            if(S.auto.picks[life]?.book != null)delete S.auto.picks[life];
             if (!s.name) {
               delete S.known[life];
               delete S.rolls[life];
@@ -11020,6 +11374,7 @@ function chronicleWarBonusBlock(s) {
           const h = S.heir,
             v = h && live.get(h.sid);
           if (h && (!v || (v.job && JOBS[v.job] ? v.job : v.type) !== LEGEND_OUGI[h.k].job || (h.book != null ? !S.books.some((b) => b.uid === h.book && b.pending == null) : !(S.known[lifeOfSaved(v)] || { list: [] }).list.some((x) => x.k === h.k)))) S.heir = null;
+          autoOugiPrune(lives,fallen);
           if (JSON.stringify(S) !== before) persistOugi();
         }
         // 奥義の閃き：剣聖・Lv150・熟練度10・強敵への最後の一撃10回。修練場（試作）の強敵撃破・クリアで1回ずつ抽選
@@ -11057,7 +11412,7 @@ function chronicleWarBonusBlock(s) {
           const q = squadById(s.squadId);
           if (q) evolutionFx({ pos: q }, "⚔", "bulb", [], true);
           eventNotice("insight", soldierName(s) + "：伝説の奥義「" + O.name + "」");
-          msg("⚔ " + soldierName(s) + " が伝説の奥義「" + O.name + "」を閃いた！（兵士名簿の ⚔ 奥義 から継承者に）");
+          msg("⚔ " + soldierName(s) + " が伝説の奥義「" + O.name + "」を閃いた！（兵士名簿の ⚔ 奥義 で自動発動の設定を確認できます）");
           return k;
         }
         // 指導員の引退：奥義を閃いた兵士は、選んだ奥義を奥義書として残す（伝承の秘伝書とは別に1冊）
@@ -11080,7 +11435,7 @@ function chronicleWarBonusBlock(s) {
         function deleteOugiBookError(uid) {
           const b = ougiBook(uid);
           if (!b) return "その奥義書はありません。";
-          if (ougiSave.heir && ougiSave.heir.book === uid) return "継承中の奥義書は処分できません（先に継承をやめてください）。";
+          if (autoOugiBookOwner(uid)) return "継承中の奥義書は処分できません（先に継承をやめてください）。";
           return null;
         }
         function deleteOugiBook(uid) {
@@ -11104,6 +11459,7 @@ function chronicleWarBonusBlock(s) {
             delete S.known[life];
             delete S.rolls[life];
             delete S.fails[life];
+            delete S.auto.picks[life]; delete S.auto.timers[life];
             if (S.heir && S.heir.sid === s.id) S.heir = null;
           });
         }
@@ -11116,89 +11472,9 @@ function chronicleWarBonusBlock(s) {
           return { runId, key: ok ? H.h.k : null, heirId: ok ? H.s.id : null, book: ok ? H.h.book : null, used: !!(R && R.id === runId && R.used) };
         }
         // 使えない理由（使えるなら null）。対象の有無は押したときに確かめる（いなければ回数を減らさない）
-        function ougiError() {
-          const U = ougiState();
-          if (!U) return "奥義は修練場の「新しい戦い（試作）」でだけ使えます。";
-          if (U.used || (ougiSave.run && ougiSave.run.id === U.runId && ougiSave.run.used)) return "この挑戦ではもう使いました（1回の挑戦で全軍1回）。";
-          const s = U.heirId != null ? soldiers.find((x) => x.id === U.heirId) : null;
-          if (!s) return "奥義継承者がいません（兵士名簿の剣聖の「⚔ 奥義」で指定）。";
-          const O = LEGEND_OUGI[U.key];
-          if (!s.alive) return "奥義継承者が戦死しました。";
-          if (jobOf(s) !== O.job) return "奥義継承者が" + JOBS[O.job].name + "ではありません。";
-          const q = squadById(s.squadId);
-          if (!q || q.state !== "deployed" || s.out || !members(q).includes(s)) return "奥義継承者が戦場にいません（部隊を道に出すと使えます）。";
-          if (!playing) return "ウェーブ中に使えます。";
-          return null;
-        }
-        // 奥義を使う。使えたら true（対象がいないときは回数を減らさず false）
-        function useOugi() {
-          const err = ougiError();
-          if (err) return (msg(err), toast(err), updateUI(), false);
-          const U = ougiState(),
-            O = LEGEND_OUGI[U.key],
-            s = soldiers.find((x) => x.id === U.heirId),
-            q = squadById(s.squadId),
-            src = { s, q, h: heroOnSquad(q) },
-            atk = soldierStats(s).atk,
-            list = aliveEnemies(),
-            origin = { x: q.x, y: q.y - 18 };
-          let target = null;
-          if (O.kind === "pattern") {
-            const near = list.slice().sort((a, b) => dist(a, q) - dist(b, q))[0];
-            if (near && resolvePattern(origin, Math.atan2(near.y - origin.y, near.x - origin.x), ATTACK_PATTERNS[O.pattern], list).some((r) => r.hits.length)) target = near;
-          } else if (O.kind === "single") {
-            // 強敵を優先：大将 → 中ボス → 体力の多い敵
-            const rank = (e) => (e.kind === "boss" || e.role === "boss" ? 2e9 : e.role === "mid" ? 1e9 : 0) + e.hp;
-            target = list.filter((e) => dist(e, q) <= O.reach).sort((a, b) => rank(b) - rank(a))[0] || null;
-          } else target = list.find((e) => dist(e, q) <= O.radius) || null;
-          if (!target) {
-            const t = "範囲内に敵がいません。奥義の使用回数は減っていません。";
-            msg(t);
-            toast(t);
-            return false;
-          }
-          if (!ougiCommit((S) => (S.run = { id: U.runId, used: true, at: Date.now(), by: soldierName(s), ended: false }))) {
-            const t = "保存できないため、奥義を使えませんでした（使用回数は減っていません）。";
-            msg(t);
-            toast(t);
-            return false;
-          }
-          U.used = true;
-          U.usedBy = soldierName(s);
-          protoStats.ougi++;
-          combatFx.ougi("奥義・" + O.name, "⚔ 奥義継承者 " + soldierName(s));
-          if (O.kind === "pattern") applyPattern(O.pattern, q, target, atk, src);
-          else if (O.kind === "single") {
-            dealEnemyDamage(target, atk * O.mul, src, { normal: false, pierceCover: true });
-            combatFx.issen(origin, target);
-          } else {
-            combatFx.push({ kind: "cshock", x: q.x, y: q.y + 6, ougi: true, age: 0, duration: 0.7 });
-            ougiFlurry = { s, q, src, atk, O, left: O.hits, wait: 0 };
-          }
-          msg("⚔ 奥義「" + O.name + "」！ " + soldierName(s));
-          updateUI();
-          return true;
-        }
-        // 天剣乱舞：gap 秒ごとに1回、継承者のまわりの敵へ斬撃（継承者が倒れた・挑戦が終わったら止める）
-        function tickOugiFlurry(dt) {
-          const F = ougiFlurry;
-          if (!F || (F.wait -= dt) > 0) return;
-          if (!protoCombatOn() || !F.s.alive || F.left <= 0) return (ougiFlurry = null);
-          F.wait += F.O.gap;
-          F.left--;
-          const killed = [];
-          aliveEnemies()
-            .filter((e) => dist(e, F.q) <= F.O.radius)
-            .sort((a, b) => dist(a, F.q) - dist(b, F.q))
-            .slice(0, F.O.perHit)
-            .forEach((e, i) => {
-              dealEnemyDamage(e, F.atk * F.O.mul, F.src, { normal: false, pierceCover: true });
-              if (e.hp <= 0) killed.push(e);
-              combatFx.push({ kind: "cslash", x: e.x, y: e.y - 14, a: Math.random() * Math.PI, ougi: true, age: -i * 0.03, duration: 0.42 });
-            });
-          combatFx.push({ kind: "cwave", x: F.q.x, y: F.q.y - 10, rays: [0, 1, 2, 3].map((k) => (k * Math.PI) / 2 + F.left * 0.4), len: F.O.radius, width: 30, ougi: true, age: 0, duration: 0.5 });
-          if (killed.length >= 2) combatFx.multiKill(killed, true);
-        }
+        function ougiError() { return "奥義は戦闘中、兵士ごとに60秒間隔・30％で自動発動します。"; }
+        function useOugi() { return false; }
+        function tickOugiFlurry() {} // 旧デバッグAPIとの互換用。連続斬撃はauto-ougiで管理する。
         function createEnemy() {
           if (training && training.proto && spawned % 6 === 3 && spawned + 2 < spawnTotal) {
             // 試作：6体ごとに、盾兵が前・鉄砲足軽が後ろの連携部隊（3体で3体分を数える）
@@ -11553,7 +11829,7 @@ function chronicleWarBonusBlock(s) {
               .join("") +
             "</div>" +
             '<label class="tr-proto"><input type="checkbox" id="trProto"' + (protoCombatPick ? " checked" : "") + '> 🧪 新しい戦い（試作）</label>' +
-            '<p class="muted tr-proto-note">鉄砲足軽（射程で止まって撃つ）と、盾兵が前・鉄砲足軽が後ろの連携部隊が出ます。兵士は3回の攻撃ごとに技（弓：三方撃ち・鉄砲：貫通弾・近接：八方斬撃）。伝説の奥義は、奥義継承者（剣聖・兵士名簿の ⚔ 奥義 で指定）がボタンで1回だけ使えます。盾兵に守られた敵には、貫通弾と八方斬撃が効きます。通常の防衛戦・攻城戦には出ません。</p>' +
+            '<p class="muted tr-proto-note">鉄砲足軽（射程で止まって撃つ）と、盾兵が前・鉄砲足軽が後ろの連携部隊が出ます。兵士は3回の攻撃ごとに技（弓：三方撃ち・鉄砲：貫通弾・近接：八方斬撃）。伝説の奥義は、習得した剣聖が60秒間隔・30％で自動発動します（全モード共通）。盾兵に守られた敵には、貫通弾と八方斬撃が効きます。この試作の敵と3回ごとの技は、通常の防衛戦・攻城戦には出ません。</p>' +
             (protoCombatPick ? ougiPickHtml() : "") +
             '<button id="trStart" class="tr-start">⚔️ ' +
             TRAINING.diffs[trainPick].name +
@@ -11561,15 +11837,8 @@ function chronicleWarBonusBlock(s) {
         }
         // 修練場の画面：今の奥義継承者（兵士名簿の「⚔ 奥義」で指定。ここでは見るだけ）
         function ougiPickHtml() {
-          const H = ougiHeirNow(),
-            O = H && LEGEND_OUGI[H.h.k];
-          return (
-            '<div class="tr-ougi"><b>⚔ 伝説の奥義（試作）</b><p>' +
-            (H && !H.why ? "奥義継承者：" + esc(soldierName(H.s)) + "・奥義「" + O.name + "」" + (H.h.book != null ? "（奥義書）" : "（自分で閃いた）") : "奥義継承者：なし" + (H && H.why ? "（" + esc(H.why) + "）" : "")) +
-            '</p><p class="muted">ボタンで使い、1回の挑戦で全軍1回だけ。' +
-            "新しく始めるたびに、また1回使えます。" +
-            '</p><button type="button" data-ougi-open>⚔ 奥義書・継承者</button></div>'
-          );
+          const active = soldiers.filter(s=>autoOugiChoice(s));
+          return '<div class="tr-ougi"><b>⚔ 自動奥義</b><p>有効 '+active.length+'人。全モード共通・兵士ごとに60秒間隔で30％の抽選。</p><button type="button" data-ougi-open>⚔ 奥義書・自動発動設定</button></div>';
         }
         function openTraining() {
           renderTrainingSheet();
@@ -11645,22 +11914,7 @@ function chronicleWarBonusBlock(s) {
           );
         }
         // 伝説の奥義（試作）のボタン：全軍で1つ。使えないときは押せず、理由を出す（対象がいないかは押したときに確かめる）
-        function renderOugiBtn() {
-          const b = $("ougiBtn"),
-            U = ougiState();
-          b.hidden = !U;
-          if (!U) return;
-          const O = LEGEND_OUGI[U.key],
-            s = U.heirId != null ? soldiers.find((x) => x.id === U.heirId) : null,
-            err = ougiError();
-          const name = (O ? "⚔ 奥義「" + O.name + "」" : "⚔ 奥義（継承者なし）") + (U.used ? " 使用済み" : ""),
-            why = err || "継承者：" + soldierName(s) + "（全軍で1回だけ）";
-          // 毎フレーム呼ぶので、変わったときだけ書き換える
-          if ($("ougiName").textContent !== name) $("ougiName").textContent = name;
-          if ($("ougiWhy").textContent !== why) $("ougiWhy").textContent = why;
-          if (b.disabled !== !!err) b.disabled = !!err;
-          b.classList.toggle("ready", !err);
-        }
+        function renderOugiBtn() { $("ougiBtn").hidden = true; }
         $("ougiBtn").onclick = () => useOugi();
         function showTrainingResult(T) {
           const title =
@@ -14146,6 +14400,7 @@ function chronicleWarBonusBlock(s) {
           }
           tickHeroes(dt);
           if (ougiFlurry) tickOugiFlurry(dt); // 伝説の奥義（試作）：天剣乱舞の連続斬撃
+          tickAutoOugi("defense",dt);
           tickSquads(dt);
           for (const t of towers) {
             if (t.destroyed || activeKind(heroOn(t), "rest")) continue; // 破壊・休息中は攻撃しない
@@ -20424,6 +20679,7 @@ function tickTrialCore(dt) {
   if (!T || T.phase !== "fight" || T.result) return;
   if (T.choice) return; // レベルアップの選択中は止まる
   if (T.cleared) return; // v108.7 大将を倒したあと（宝箱・次の面へ）は止まる
+  tickAutoOugi("trial",dt);
   T.t += dt;
   const surv = T.mode === "survival";
   if (surv) {
@@ -20657,104 +20913,20 @@ function trialSkillFx(u, target, fx, event) {
 //   使えるのは、主人公が奥義継承者（兵士名簿の剣聖の「⚔ 奥義」で指定）のときだけ。サバイバル1回の戦闘を「1回の挑戦」として1回。
 //   使った記録は戦闘の中だけに持ち、本編の使用記録（ougiSave.run）・奥義書・閃きには書かない。対象がいなければ使った回数にしない
 function trialOugiInfo(T) {
-  if (!T || T.mode !== "survival") return null;
-  const H = typeof ougiHeirNow === "function" ? ougiHeirNow() : null;
-  if (!H || H.why || !H.s || H.s.id !== T.hero) return { key: null, why: H && !H.why ? "奥義継承者（" + soldierName(H.s) + "）が主人公ではありません" : "主人公は奥義を習得していません（奥義継承者だけ）" };
-  return { key: H.h.k, O: LEGEND_OUGI[H.h.k], why: T.ougiUsed ? "この戦闘ではもう使いました" : null };
+  const u=T?.units.find(u=>u.id===T.hero), p=u&&autoOugiChoice(u.src);
+  return p ? {key:p.k,O:LEGEND_OUGI[p.k],why:null} : {key:null,why:"自動奥義を習得していません"};
 }
-function trialUseOugi() {
-  const T = trial;
-  if (!T || T.mode !== "survival" || T.phase !== "fight" || T.result) return "サバイバルの戦闘中に使えます。";
-  if (T.choice) return "レベルアップの選択のあとに使えます。";
-  const I = trialOugiInfo(T);
-  if (!I.key) return I.why;
-  if (I.why) return I.why;
-  const O = I.O,
-    h = T.units.find((u) => u.id === T.hero),
-    atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1), // v108.7 奥義の秘伝書（この挑戦の間だけ）
-    list = T.enemies.filter((e) => !e.gone),
-    origin = { x: h.x, y: h.y - 18 };
-  let target = null,
-    rays = null;
-  if (O.kind === "pattern") {
-    const near = trialNearest(h, list);
-    if (near) {
-      rays = resolvePattern(origin, Math.atan2(near.y - origin.y, near.x - origin.x), ATTACK_PATTERNS[O.pattern], list);
-      if (rays.some((r) => r.hits.length)) target = near;
-    }
-  } else if (O.kind === "single") {
-    // 強敵を優先：大将 → 中ボス → 体力の多い敵
-    const rank = (e) => (e.kind === "boss" || e.role === "boss" ? 2e9 : e.role === "mid" ? 1e9 : 0) + e.hp;
-    target = list.filter((e) => trialDist(e, h) <= O.reach).sort((a, b) => rank(b) - rank(a))[0] || null;
-  } else target = list.find((e) => trialDist(e, h) <= O.radius) || null;
-  if (!target) return "範囲内に敵がいません。奥義の使用回数は減っていません。";
-  T.ougiUsed = { key: I.key, at: T.t, hits: 0, kills: 0 };
-  combatFx.ougi("奥義・" + O.name, "👑 " + h.name);
-  trialSfx("ougi");
-  const before = T.kills;
-  if (O.kind === "pattern") {
-    const P = ATTACK_PATTERNS[O.pattern],
-      killed = [];
-    for (const r of rays)
-      for (const e of r.hits) {
-        const alive = !e.gone;
-        trialHitEnemy(h, e, atk * P.mul, 0, !!P.cover);
-        T.ougiUsed.hits++;
-        if (alive && e.gone) killed.push(e);
-      }
-    combatFx.pattern(P, origin, rays);
-    if (killed.length >= 2) combatFx.multiKill(killed, true);
-  } else if (O.kind === "single") {
-    trialHitEnemy(h, target, atk * O.mul, 0, true);
-    T.ougiUsed.hits = 1;
-    combatFx.issen(origin, target);
-  } else {
-    combatFx.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.7 });
-    T.flurry = { left: O.hits, wait: 0 };
-  }
-  T.ougiUsed.kills = T.kills - before;
-  msg("⚔ 奥義「" + O.name + "」！ " + h.name + "（この戦闘で1回。本編の使用記録・奥義書は変わらない）");
-  trialOugiSync(true);
-  return null;
-}
-// 天剣乱舞：gap 秒ごとに1回、主人公のまわりの敵へ斬撃（主人公が倒れたら止める。レベルアップの選択中は止まる）
-function trialFlurryTick(T, dt) {
-  const F = T.flurry;
-  if (!F || (F.wait -= dt) > 0) return;
-  const h = T.units.find((u) => u.id === T.hero),
-    O = LEGEND_OUGI[T.ougiUsed.key];
-  if (!h || h.dead || F.left <= 0) return (T.flurry = null);
-  F.wait += O.gap;
-  F.left--;
-  const atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1),
-    killed = [];
-  T.enemies
-    .filter((e) => !e.gone && trialDist(e, h) <= O.radius)
-    .sort((a, b) => trialDist(a, h) - trialDist(b, h))
-    .slice(0, O.perHit)
-    .forEach((e, i) => {
-      trialHitEnemy(h, e, atk * O.mul, 0, true);
-      T.ougiUsed.hits++;
-      if (e.gone) killed.push(e), T.ougiUsed.kills++;
-      combatFx.push({ kind: "cslash", x: e.x, y: e.y - 14, a: Math.random() * Math.PI, ougi: true, age: -i * 0.03, duration: 0.42 });
-    });
-  combatFx.push({ kind: "cwave", x: h.x, y: h.y - 10, rays: [0, 1, 2, 3].map((k) => (k * Math.PI) / 2 + F.left * 0.4), len: O.radius, width: 30, ougi: true, age: 0, duration: 0.5 });
-  if (killed.length >= 2) combatFx.multiKill(killed, true);
-}
-// 奥義のボタン（右下）：使える奥義の名前。使えないときは理由（未習得・使用済み）を小さく
+function trialUseOugi() { return "奥義は60秒間隔・30％で自動発動します。"; }
+function trialFlurryTick() {} // 自動奥義の連続斬撃はtickAutoOugiで進める。
 let trialOugiKey = "";
-function trialOugiSync(force) {
-  const T = trial,
-    box = $("trialAction");
-  if (!box) return;
-  const I = T && T.phase === "fight" ? trialOugiInfo(T) : null,
-    key = I ? (I.key || "") + "|" + (I.why || "") : "";
-  if (!force && key === trialOugiKey) return;
-  trialOugiKey = key;
-  box.hidden = !I;
-  if (!I) return (box.innerHTML = "");
-  box.innerHTML =
-    '<button type="button" id="trialOugiBtn" class="trial-ougi' + (I.key && !I.why ? " ready" : "") + '"' + (I.key && !I.why ? "" : " disabled") + ">⚔️ 奥義<b>" + (I.key ? esc(I.O.name) : "未習得") + "</b><small>" + esc(I.why || "1回だけ・押すと発動") + "</small></button>";
+function trialOugiSync() {
+  const T=trial, box=$("trialAction");
+  if(!box)return;
+  const users=T?.units.filter(u=>!u.dead&&autoOugiChoice(u.src))||[], key=users.map(u=>u.id+":"+autoOugiChoice(u.src).k).join(",");
+  box.hidden=!users.length;
+  if(trialOugiKey===key)return;
+  trialOugiKey=key;
+  box.innerHTML=users.length ? '<small>⚔ 自動奥義 '+users.length+'人<br>60秒間隔・30％</small>' : '';
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
 // v108：操作している兵士（trial.control）は、スティックの向きにだけ動く（AI は動かさない）。攻撃・回復・職業技は自動のまま
@@ -24910,9 +25082,8 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
         }
         // 奥義継承者の印と、閃いた奥義（兵士名簿のカード）
         function ougiCardTag(s) {
-          const H = ougiHeirNow(),
-            known = ougiKnownOf(s);
-          return (H && !H.why && H.s === s ? ' <span class="ougi-heir-tag">⚔ 奥義継承者</span>' : "") + (known.length ? ' <small class="ougi-heir-tag">（奥義：' + known.map((k) => LEGEND_OUGI[k].name).join("・") + "）</small>" : "");
+          const p=autoOugiChoice(s), known=ougiKnownOf(s);
+          return (p ? ' <span class="ougi-heir-tag">⚔ 自動：'+LEGEND_OUGI[p.k].name+'</span>' : '')+(known.length ? ' <small class="ougi-heir-tag">（習得 '+known.length+'）</small>' : '');
         }
         function soldierCard(s) {
           const max = s.level >= SQUAD_RULES.maxLevel,
@@ -25178,58 +25349,28 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           return '<div class="ougi-card"><p><b>⚔ ' + O.name + "</b> <small>（" + JOBS[O.job].name + "）</small></p><p><small>" + esc(O.text) + "</small></p>" + extra + "</div>";
         }
         function renderOugiSheet() {
-          const s = ougiSheetFor != null ? soldierById(ougiSheetFor) : null,
-            H = ougiHeirNow(),
-            busy = legendBusyError();
-          let html = "<p><b>奥義継承者（全軍で1人）</b><br>";
-          if (H && !H.why) {
-            const b = H.h.book != null ? ougiBook(H.h.book) : null;
-            html += '<span class="ougi-heir-tag">⚔ ' + esc(soldierName(H.s)) + "</span>・奥義「" + LEGEND_OUGI[H.h.k].name + "」" + (b ? "（奥義書：" + esc(b.from) + "）" : "（自分で閃いた）");
-            html += '</p><div class="card-actions"><button data-ougi-clear' + (busy ? " disabled" : "") + ">継承をやめる</button></div>";
-          } else html += "なし" + (H && H.why ? "（" + esc(H.why) + "）" : "") + "</p>";
-          html += '<p class="muted"><small>奥義は修練場の「新しい戦い（試作）」で、継承者がボタンで使います（1回の挑戦で全軍1回）。継承者を変えられるのは戦闘の前だけ。奥義を継承できるのは剣聖だけです。</small></p>';
-          if (busy) html += '<p class="injured">' + esc(busy) + "</p>";
-          // この兵士が自分で閃いた奥義
-          if (s) {
-            const known = ougiKnownOf(s),
-              isHeir = H && !H.why && H.s === s;
-            html += "<h4>" + esc(soldierName(s)) + "（" + JOBS[jobOf(s)].icon + jobName(s) + "・Lv" + s.level + "）</h4>";
-            if (jobOf(s) !== "sword_saint") html += '<p class="muted">剣聖ではないので、奥義を継承できません。</p>';
-            if (known.length)
-              html += known
-                .map((k) =>
-                  ougiCardHtml(
-                    k,
-                    "<p><small>自分で閃いた奥義</small></p>" +
-                      (isHeir && H.h.book == null && H.h.k === k ? '<p class="ougi-heir-tag">⚔ 継承中</p>' : '<button data-ougi-self="' + k + '"' + (ougiHeirError(s, { k }) ? " disabled" : "") + ">この奥義で継承者になる</button>"),
-                  ),
-                )
-                .join("");
-            else if (jobOf(s) === "sword_saint")
-              html +=
-                '<p class="muted"><small>まだ奥義を閃いていません。閃きの条件：剣聖・Lv' + OUGI_RULES.level + "以上・剣聖の熟練度" + OUGI_RULES.prof + "・強敵への最後の一撃" + OUGI_RULES.bossKills + "回（今 " + (chronicleOf(s).bossKills || 0) + "回）。修練場（試作）で強敵を倒したとき・クリアしたときに、ごくまれに閃きます。</small></p>";
+          const s=ougiSheetFor!=null?soldierById(ougiSheetFor):null, choice=s&&autoOugiChoice(s), busy=legendBusyError();
+          const active=soldiers.filter(s=>autoOugiChoice(s));
+          let html='<p><b>⚔ 兵士ごとの自動奥義</b></p><p>戦場にいる兵士が、戦闘中の60秒ごとに30％で自動発動します。外れたら次の60秒後。WAVE・モード切替でも待ち時間は引き継ぎ、停止・メニュー中は進みません。対象がいなければ抽選を待ちます。</p><p><small>各兵士は有効な奥義を1つ選べます。複数の兵士が使用でき、演出は少しずつずらします。現在の職業が剣聖のときに使えます。</small></p>';
+          if(active.length) html+='<p>有効：'+active.map(x=>esc(soldierName(x))+'「'+LEGEND_OUGI[autoOugiChoice(x).k].name+'」').join('／')+'</p>';
+          if(busy)html+='<p class="injured">'+esc(busy)+'</p>';
+          if(s){
+            html+='<h4>'+esc(soldierName(s))+'（'+jobName(s)+'）</h4><p>自動奥義：'+(choice?LEGEND_OUGI[choice.k].name:'なし')+'</p>';
+            if(choice)html+='<button data-ougi-clear="'+s.id+'"'+(busy?' disabled':'')+'>この兵士の自動奥義を解除</button>';
+            const known=ougiKnownOf(s);
+            html+=known.map(k=>ougiCardHtml(k,'<p><small>自分で閃いた奥義</small></p>'+(choice?.k===k&&choice.book==null?'<p>✅ 自動発動中</p>':'<button data-ougi-self="'+k+'"'+(ougiHeirError(s,{k})?' disabled':'')+'>この奥義を自動発動する</button>'))).join('');
+            if(!known.length)html+='<p><small>閃きの条件：剣聖・Lv150以上・剣聖熟練10・強敵への最後の一撃10回以上。修練場の「新しい戦い（試作）」で、強敵撃破・挑戦クリア時にごくまれに閃きます。</small></p>';
           }
-          // 奥義書の一覧（倉庫）
-          const books = ougiBooks();
-          html += "<h4>奥義書（" + books.length + "/" + OUGI_RULES.books + "冊・消費しない・有効にできるのは全軍で1冊）</h4>";
-          if (ougiBooksFull()) html += '<p class="injured">倉庫がいっぱいです。奥義を閃いた剣聖が引退するには、不要な奥義書を処分してください。</p>';
-          if (!books.length) html += '<p class="muted">奥義書はまだありません。奥義を閃いた剣聖が指導員として引退すると、1冊残します。</p>';
-          for (const b of books) {
-            const active = H && !H.why && H.h.book === b.uid;
-            html += ougiCardHtml(
-              b.k,
-              "<p><small>伝承者：" + esc(b.from) + "（" + (JOBS[b.job] ? JOBS[b.job].name : "") + "・Lv" + b.level + "）" + (b.at ? "・" + new Date(b.at).toLocaleDateString("ja-JP") : "") + "</small></p><p><small>今の継承者：" +
-                (active ? '<span class="ougi-heir-tag">⚔ ' + esc(soldierName(H.s)) + "</span>" : "なし") +
-                "</small></p>" +
-                (s && !active ? '<button data-ougi-book="' + b.uid + '"' + (ougiHeirError(s, { book: b.uid }) ? " disabled" : "") + ">" + esc(soldierName(s)) + " が継承する</button>" : "") +
-                (active
-                  ? '<p class="muted"><small>継承中の奥義書は処分できません（継承をやめると処分できます）。</small></p>'
-                  : ougiDelPick === b.uid
-                    ? '<div class="forge-confirm"><p><b>この奥義書を処分しますか？</b><br>処分した奥義書は戻せません（兵士の能力・伝承の秘伝書は変わりません）。</p><div class="card-actions"><button data-ougi-del-go="' + b.uid + '">🗑 処分する</button><button data-ougi-del-cancel>やめる</button></div></div>'
-                    : '<button data-ougi-del="' + b.uid + '">🗑 処分…</button>'),
-            );
+          const books=ougiBooks();
+          html+='<h4>奥義書 '+books.length+'/'+OUGI_RULES.books+'冊</h4><p><small>消費しません。1冊につき同時に1人が継承できます。習得した剣聖の指導員引退で1冊残せます。</small></p>';
+          if(!books.length)html+='<p>奥義書はまだありません。</p>';
+          for(const book of books){
+            const owner=autoOugiBookOwner(book.uid);
+            html+=ougiCardHtml(book.k,'<p>伝承者：'+esc(book.from)+'</p><p>継承中：'+(owner?esc(soldierName(owner)):'なし')+'</p>'+
+              (owner?'<p><small>継承中の奥義書は処分できません。先に継承を解除してください。</small></p><button data-ougi-clear="'+owner.id+'"'+(busy?' disabled':'')+'>この継承を解除</button>':(s?'<button data-ougi-book="'+book.uid+'"'+(ougiHeirError(s,{book:book.uid})?' disabled':'')+'>この兵士が継承する</button>':''))+
+              (owner?'':ougiDelPick===book.uid?'<div class="forge-confirm"><p>この奥義書を処分しますか？</p><button data-ougi-del-go="'+book.uid+'">処分する</button><button data-ougi-del-cancel>やめる</button></div>':'<button data-ougi-del="'+book.uid+'">処分…</button>'));
           }
-          $("ougiBody").innerHTML = html;
+          $('ougiBody').innerHTML=html;
         }
         function openOugiSheet(sid) {
           ougiSheetFor = sid;
@@ -25252,9 +25393,9 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           const d = b.dataset;
           let err = null,
             done = "";
-          if (d.ougiSelf) (err = setOugiHeir(ougiSheetFor, { k: d.ougiSelf })), (done = "⚔ " + soldierName(soldierById(ougiSheetFor)) + " が奥義継承者になった（" + LEGEND_OUGI[d.ougiSelf].name + "）。");
+          if (d.ougiSelf) (err = setOugiHeir(ougiSheetFor, { k: d.ougiSelf })), (done = "⚔ " + soldierName(soldierById(ougiSheetFor)) + " の自動奥義を設定した（" + LEGEND_OUGI[d.ougiSelf].name + "）。");
           else if (d.ougiBook) (err = setOugiHeir(ougiSheetFor, { book: +d.ougiBook })), (done = "⚔ " + soldierName(soldierById(ougiSheetFor)) + " が奥義書を継承した。");
-          else if (d.ougiClear !== undefined) (err = clearOugiHeir()), (done = "奥義継承者の指定を外した（奥義書は倉庫に戻る）。");
+          else if (d.ougiClear !== undefined) (err = clearOugiHeir(+d.ougiClear || ougiSheetFor)), (done = "この兵士の自動奥義を解除しました。");
           else if (d.ougiDel) return (ougiDelPick = +d.ougiDel), renderOugiSheet();
           else if (d.ougiDelCancel !== undefined) return (ougiDelPick = null), renderOugiSheet();
           else if (d.ougiDelGo) {
@@ -28918,6 +29059,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                 if (s.hp > floor) s.hp = Math.max(floor, s.hp - max * SIEGE_HAZARD.cold.drain * dt);
               }
             }
+          tickAutoOugi("battle",dt);
           // 味方の攻撃・回復（兵士1人ずつ。間隔は防衛戦と同じく余りを持ち越す）
           for (const g of B.groups) {
             if (!groupActive(g)) continue;
@@ -30980,6 +31122,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           window.WD_DEBUG = {
             reorderSoldier: (id, target) => reorderSoldier(id, target),
             // 戦場試練（v107試作）
+            autoOugiApi: {rules:AUTO_OUGI_RULES,choice:autoOugiChoice,timer:autoOugiTimer,stats:autoOugiStats,context:autoOugiContextFor,aim:autoOugiAim,tick:tickAutoOugi,setRoll:f=>{autoOugiRollOverride=f||null;}},
             trial: {carryXp:trialCarryXp,saveCarryXp:trialSaveCarryXp,gainXp:trialGainXp,hitUnit:trialHitUnit,
               rules: TRIAL_RULES,
               maps: TRIAL_MAPS,
@@ -31127,7 +31270,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                 use: () => useOugi(),
                 save: () => JSON.parse(JSON.stringify(ougiSave)),
                 setHeir: (sid, choice) => setOugiHeir(sid, choice),
-                clearHeir: () => clearOugiHeir(),
+                clearHeir: (sid) => clearOugiHeir(sid),
                 heir: () => {
                   const H = ougiHeirNow();
                   return H && { ...H.h, valid: !H.why, why: H.why };
