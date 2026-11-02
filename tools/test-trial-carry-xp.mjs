@@ -75,10 +75,10 @@ try {
   await gain(p, 15);
   r = await retire(p);
   check(
-    r.carryXp.saved && r.carryXp.awards.map((a) => a.amount).join() === "4,1",
-    "主役は全回収分、途中加入は加入後の分の10%・端数切捨て",
+    r.carryXp.saved && r.carryXp.awards.map((a) => a.amount).join() === "40,15",
+    "主役は全回収分、途中加入は加入後に回収したEXPを全額付与",
   );
-  check((await xp(p)).join() === "4,1,0", "同行した2人だけに配布し、未加入の待機候補は対象外");
+  check((await xp(p)).join() === "40,15,0", "同行した2人だけに配布し、未加入の待機候補は対象外");
   check(
     await p.evaluate(
       (expected) =>
@@ -88,14 +88,14 @@ try {
     "経験値の持ち帰りで防衛のWAVE・HP・配置・軍資金を変更しない",
   );
   check(
-    await p.evaluate(() => WD_DEBUG.state().soldiers[0].prof.ashigaru === 4),
+    await p.evaluate(() => WD_DEBUG.state().soldiers[0].prof.ashigaru === 40),
     "持ち帰りEXPは通常の職業熟練度にも反映",
   );
   await retire(p);
   await p.evaluate(() => WD_DEBUG.trial.saveCarryXp(WD_DEBUG.trial.result().carryXp));
-  check((await xp(p)).join() === "4,1,0", "終了の重複呼出し・保存の再試行で二重加算しない");
+  check((await xp(p)).join() === "40,15,0", "終了の重複呼出し・保存の再試行で二重加算しない");
   await p.reload();
-  check((await xp(p)).join() === "4,1,0", "再読み込み後も配布済み経験値を維持");
+  check((await xp(p)).join() === "40,15,0", "再読み込み後も配布済み経験値を維持");
   await c.close();
 
   ({ p, c } = await H.setup(seed()));
@@ -113,7 +113,7 @@ try {
   });
   await gain(p, 20);
   r = await retire(p);
-  check((await xp(p)).join() === "6,2,0", "サバイバルの仮の戦死では倒れるまでの参加分だけ残る");
+  check((await xp(p)).join() === "60,20,0", "サバイバルの仮の戦死では倒れるまでの参加分だけ残る");
   check(
     await p.evaluate(() => WD_DEBUG.state().soldiers.every((s) => s.alive)),
     "サバイバルでは兵士を実際に戦死させない",
@@ -134,11 +134,11 @@ try {
   await gain(p, 20);
   r = await retire(p);
   check(
-    r.carryXp.awards.map((a) => a.amount).join() === "6,2",
+    r.carryXp.awards.map((a) => a.amount).join() === "60,20",
     "探索で村から加わった兵士は加入後の回収分だけ受け取る",
   );
   check(
-    await p.evaluate((id) => WD_DEBUG.state().soldiers.find((s) => s.id === id).xp === 2, id),
+    await p.evaluate((id) => WD_DEBUG.state().soldiers.find((s) => s.id === id).xp === 20, id),
     "探索の仲間の経験値も本番名簿に残る",
   );
   check((await xp(p)).slice(1, 3).join() === "0,0", "探索に選んだだけで連れていない兵士は対象外");
@@ -194,7 +194,7 @@ try {
   await p.evaluate(() => {
     const D = WD_DEBUG,
       s = D.state().soldiers[0];
-    s.xp = 29;
+    s.xp = 20;
     s.hp = 10;
     D.squadApi.saveRoster();
   });
@@ -233,7 +233,7 @@ try {
   check(!r.carryXp.saved && r.carryXp.applied, "ログを保存できなければ保存待ちと表示");
   check(await p.locator("[data-trial-xp-save]").isVisible(), "保存失敗時に結果画面へ再試行ボタンを表示");
   await p.locator("[data-trial-xp-save]").click();
-  check((await xp(p))[0] === 10, "連続した保存失敗でも経験値を二重加算しない");
+  check((await xp(p))[0] === 100, "連続した保存失敗でも経験値を二重加算しない");
   await p.evaluate(() => (Storage.prototype.setItem = window.oldSet));
   await p.locator("[data-trial-xp-save]").click();
   check(
@@ -244,7 +244,7 @@ try {
     "再試行成功後は保存済みと表示",
   );
   await p.reload();
-  check((await xp(p))[0] === 10, "失敗からの再試行・再読込でも正確に一度だけ取得");
+  check((await xp(p))[0] === 100, "失敗からの再試行・再読込でも正確に一度だけ取得");
   await c.close();
 
   for (const key of ["worldDefense.soldiers.v1", "worldDefense.warlords.v1"]) {
@@ -261,7 +261,7 @@ try {
     r = await retire(p);
     check(r.carryXp.saved, "確定ログ後の転記失敗も保存成功として扱う：" + key);
     await p.reload();
-    check((await xp(p))[0] === 10, "確定ログから経験値を一度だけ復旧：" + key);
+    check((await xp(p))[0] === 100, "確定ログから経験値を一度だけ復旧：" + key);
     await c.close();
   }
   ({ p, c } = await H.setup(seed()));
@@ -275,10 +275,47 @@ try {
   await gain(p, 9);
   r = await retire(p);
   check(
-    r.carryXp.saved && !r.carryXp.awards.length && (await xp(p))[0] === 0,
-    "10EXP未満の端数だけでは持ち帰り経験値なし",
+    r.carryXp.saved &&
+      r.carryXp.awards.length === 1 &&
+      r.carryXp.awards[0].amount === 9 &&
+      (await xp(p))[0] === 9,
+    "10EXP未満の少量も、そのまま全額持ち帰る",
   );
   await c.close();
+  ({ p, c } = await H.setup(seed()));
+  await start(p);
+  await gain(p, 0.25);
+  await gain(p, 0.5);
+  r = await retire(p);
+  check(
+    r.carryXp.awards[0].amount === 0.75 && (await xp(p))[0] === 0.75,
+    "小数の共通EXPも切り捨てず同じ量を持ち帰る",
+  );
+  await p.reload();
+  check((await xp(p))[0] === 0.75, "小数の持ち帰りEXPも再読込後に維持");
+  await c.close();
+
+  ({ p, c } = await H.setup(seed(1)));
+  await p.evaluate(() => {
+    const D = WD_DEBUG,
+      s = D.state().soldiers[0];
+    s.xp = 29.75;
+    D.squadApi.saveRoster();
+  });
+  await p.reload();
+  check((await xp(p))[0] === 29.75, "次のLv直前の小数EXPも読み込みで減らさない");
+  await start(p);
+  await gain(p, 0.25);
+  await retire(p);
+  check(
+    await p.evaluate(() => {
+      const s = WD_DEBUG.state().soldiers[0];
+      return s.level === 2 && s.xp === 0;
+    }),
+    "小数EXPを加えて正しい境界でレベルアップ",
+  );
+  await c.close();
+
   ({ p, c } = await H.setup(seed()));
   await start(p);
   await gain(p, 100);
