@@ -1,6 +1,7 @@
 // 戦場試練 v111：戦国ライバル武将（面の途中に乱入・倒すと珍しい報酬・10% で固有の技）
 //   node tools/test-trial-rivals.mjs
 import assert from "node:assert/strict";
+import { trialAssetsPreserved } from "./trial-save-test-utils.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -54,6 +55,7 @@ async function open({ width = 390, height = 844, query = "?debug", ougi = null }
   p.on("dialog", (d) => d.accept());
   await p.goto(base + query);
   await p.waitForFunction(() => window.WD_DEBUG);
+  await p.evaluate(() => WD_DEBUG.squadApi.saveRoster()); // 旧形式のfixtureを現行の名簿形式で保存してから比較
   return { c, p };
 }
 const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]))));
@@ -375,7 +377,7 @@ try {
   });
   check(r.bars.length === 2 && r.bars.some((t) => /真田昌幸/.test(t)), "大将とライバル武将が同時にいると、HP の棒が2段（" + r.bars.join(" ｜ ") + "）", r.bars);
   check(/討ち取ったライバル武将：真田昌幸（第2面・✨六連の計）/.test(r.result) && /六連の計（固有）/.test(r.result), "結果の画面に、討ち取ったライバル武将と固有の技が出る", r.result.slice(0, 200));
-  check((await storage(p)) === save0, "ライバル武将・固有の技は保存データに入らない（本番の兵士・武将・奥義は変わらない）");
+  check(await trialAssetsPreserved(p, save0), "持ち帰り経験値以外の兵士・武将・奥義を維持し、ライバルの固有技は保存しない");
   await c.close();
   // 9. v112.3 乱入の予告（3秒前に「⚠ 何者かが近づいてくる…」）・画面の外のライバル武将を指す矢印・一時停止
   ({ c, p } = await open());

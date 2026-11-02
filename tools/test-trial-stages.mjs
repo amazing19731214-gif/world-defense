@@ -1,6 +1,7 @@
 // 戦場試練 v108.7：サバイバルの無限の面（大将 → 宝箱 → 次の面へ）・難易度・鬼大将・報酬・引き継ぎ・10面の連続プレイ
 //   node tools/test-trial-stages.mjs
 import assert from "node:assert/strict";
+import { trialAssetsPreserved } from "./trial-save-test-utils.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -54,6 +55,7 @@ async function open({ width = 390, height = 844, query = "?debug", ougi = null }
   p.on("dialog", (d) => d.accept());
   await p.goto(base + query);
   await p.waitForFunction(() => window.WD_DEBUG);
+  await p.evaluate(() => WD_DEBUG.squadApi.saveRoster()); // 旧形式のfixtureを現行の名簿形式で保存してから比較
   return { c, p };
 }
 const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]))));
@@ -455,7 +457,7 @@ try {
     T.nextStage();
     T.retreat();
   });
-  check((await storage(p)) === save1, "面・宝箱・報酬・最高到達面は、本番の版の保存データに入らない（兵士・経験値・奥義なども変わらない）");
+  check(await trialAssetsPreserved(p, save1), "持ち帰り経験値以外の兵士・資産を維持し、面・宝箱・挑戦限定の報酬は保存しない");
   await c.close();
   check(errors.length === 0, "ページのエラーなし", errors);
   console.log(`\n${n} 件すべて成功`);

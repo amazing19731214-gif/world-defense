@@ -3178,7 +3178,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v115（兵士の成長適性S〜I）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v116（探索・サバイバルの持ち帰り経験値）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17770,10 +17770,10 @@ function formationGroupHtml(q, list, stats, moving, bulk) {
         // ===== 戦場試練（v107試作・v107.1で戦闘を進化）：少人数の個人戦 =====
 // tools/build.mjs が本体スクリプトへ埋め込む。防衛戦（tick）・攻城戦（tickBattle）とは別の戦闘処理。
 //   ・マップ（TRIAL_MAPS）と戦闘処理（tickTrial）を分ける。ほかのステージ・洞窟は、マップのデータを足して同じ処理で動かす
-//   ・兵士は1人ずつの「試練の兵」（trial.units）。本番の兵士は読むだけ。戦闘中の値（HP・技の待ち・盾など）は
-//     本番の兵士を元にした「写し」（Object.create）に書くので、本番の兵士・保存データは変わらない
+//   ・兵士は1人ずつの「試練の兵」（trial.units）。戦闘中の値（HP・技の待ち・盾など）は
+//     本番の兵士を元にした「写し」（Object.create）に書く。探索・サバイバルの持ち帰りEXPだけ終了時に本番へ反映
 //   ・職業技・閃きは、防衛戦・攻城戦と同じ evolutionAction を、戦場試練用のつなぎ（trialEvolution）で使う（技の中身・待ち時間は既存のまま）
-//   ・試作：戦死は仮（本番の兵士・英霊名鑑・保存データは変えない）。報酬・経験値・熟練度もなし。伝説の奥義・3回ごとの技は使わない
+//   ・試作：戦死は仮（本番の兵士・英霊名鑑・保存データは変えない）。三方の関は報酬・経験値・熟練度なし。探索は加入・戦死を保存し、探索・サバイバルは少量のEXPを持ち帰る
 //   将来の本番：endTrial の結果（trial.units の dead）を、本番の戦死処理（recordDeath）へ渡す入口を1か所に置く（TRIAL_RULES.real）
 const TRIAL_RULES = {
   maxUnits: 5, // 出撃できる人数
@@ -17837,7 +17837,7 @@ const TRIAL_SURVIVAL = {
   atkGrow: 0.6,
   bossHp: 0.6, // 強敵の体力（倍。大将の表に掛ける。5人で20〜30秒ほど）
   bossAtk: 1,
-  // v108.2 主人公1人から始まる。敵を倒すと、この戦闘だけの経験値（本番の兵士の経験値・Lv には入らない）
+  // 主人公1人から開始。コインは共通のサバイバルEXPになり、参加中の回収分の一部を終了時に兵士へ持ち帰る
   xp: { goblin: 1, wolf: 1, knight: 2, dragon: 2, boss: 0 }, // 敵1体の経験値
   need: (lv) => 4 + 8 * (lv - 1), // サバイバルLv lv から次へ上がるのに要る経験値（4・12・20・28…）。v109：敵が増えた分、3分で7〜9回（以前は 4 + 5×(lv−1)）
   recruitMax: 4, // 加入できる仲間（出撃の前に選んだ候補）の数
@@ -18968,7 +18968,10 @@ function trialBoonInit(u) {
   Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1, magnetMul: 1 });
 }
 // 経験値：だれが倒しても入る（部隊の経験値）。必要な量に届いたらレベルアップ（選ぶまで戦闘を止める）
+const TRIAL_CARRY_XP = { divisor: 10 }; // 参加中に回収した共通EXPの10%。小数は挑戦内で合算し、終了時に切り捨てる。
 function trialGainXp(T, amount) {
+  if (!Number.isFinite(amount) || amount <= 0 || T.result) return;
+  for (const u of T.units) if (!u.dead) u.carryCoins = (u.carryCoins || 0) + amount;
   const S = TRIAL_SURVIVAL;
   T.xp += amount;
   T.xpTotal = (T.xpTotal || 0) + amount;
@@ -21107,13 +21110,63 @@ function trialSeparateBetween(us, es) {
       e.y -= (dy / d) * push;
     }
 }
+// 持ち帰りEXPは本物の兵士へ一度だけ適用。保存失敗時は同じ確定ログを再試行し、gainXpを繰り返さない。
+function trialCarryXp(T) {
+  if (T.mode !== "survival") return null;
+  return {
+    applied: false,
+    saved: false,
+    awards: T.units.map((u) => ({
+      id: u.id,
+      life: chronicleOf(u.src).life,
+      name: u.name,
+      amount: Math.floor((u.carryCoins || 0) / TRIAL_CARRY_XP.divisor),
+      eligible: !!u.src.alive && !(T.explore && u.dead),
+    })).filter((a) => a.eligible && a.amount > 0),
+  };
+}
+function trialSaveCarryXp(reward) {
+  if (!reward || reward.saved) return true;
+  if (playing || training || battle || trial?.phase === "fight") return false;
+  if (!reward.applied) {
+    if (gameSaveBatchActive || (gameSaveBatch && !commitGameSaveBatch())) return false;
+    beginGameSaveBatch();
+    for (const a of reward.awards) {
+      const s = soldierById(a.id);
+      if (!s?.alive || chronicleOf(s).life !== a.life || s.level >= SQUAD_RULES.maxLevel) {
+        a.amount = 0;
+        continue;
+      }
+      a.before = s.level;
+      gainXp(s, a.amount, true);
+      a.after = s.level;
+    }
+    reward.applied = true;
+  }
+  // 防衛の進行・HP・配置は変更せず、名簿とLvアップによる装備/図鑑等を同じログで確定する。
+  beginGameSaveBatch();
+  saveRoster();
+  persistHeroes();
+  reward.saved = commitGameSaveBatch();
+  return reward.saved;
+}
+function trialCarryXpHtml(reward) {
+  if (!reward) return "";
+  const rows = reward.awards.filter((a) => a.amount > 0);
+  return '<div class="trial-carry-xp"><p><b>📚 持ち帰り経験値</b>（参加中に回収した共通EXPの10％・端数切捨て）</p>' +
+    (rows.length ? rows.map((a) => '<p>' + esc(a.name) + '：EXP +' + a.amount + (a.after > a.before ? '・Lv' + a.before + ' → ' + a.after : '') + '</p>').join("") : '<p>今回は対象の経験値がありません。</p>') +
+    (!rows.length || reward.saved ? '<p><small>' + (rows.length ? '兵士の経験値・熟練度を保存しました。' : '待機候補・探索での戦死や主人公の再出発は対象外です。') + '</small></p>' : '<p role="status">⚠ 経験値は保存待ちです。再読み込み前に保存してください。</p><button type="button" data-trial-xp-save>💾 経験値を保存する</button>') + '</div>';
+}
 // 戦闘の終わり：win（全滅させた）・lose（味方が全滅）・retreat（撤退）・timeout（時間切れ）
-// 試作では本番の兵士・保存データに何も書かない。本番にするときは、ここで TRIAL_RULES.real を見て recordDeath へ渡す
+// 探索・サバイバルは参加中の共通EXPの一部を持ち帰る。探索の実際の戦死処理はtrialExploreDeathで行う。
 function endTrial(result) {
   const T = trial;
   if (!T || T.result) return;
   T.result = result;
   T.phase = "end";
+  const carryXp = trialCarryXp(T);
+  if (carryXp && !carryXp.awards.length) carryXp.saved = true;
+  else if (carryXp) trialSaveCarryXp(carryXp);
   const units = T.units.map((u) => ({
     id: u.id,
     name: u.name,
@@ -21136,7 +21189,7 @@ function endTrial(result) {
   if (best && score(best) > 0) best.mvp = true;
   trialStick = { x: 0, y: 0 };
   trialKeys.clear();
-  trialResultView = { stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), heroFell: T.explore.heroFell || null, pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
+  trialResultView = { carryXp, stage: T.map.name, mode: T.mode, result, time: T.t, level: T.level, power: T.power, kills: T.kills, total: T.total, units, real: T.explore ? TRIAL_EXPLORE.real() : TRIAL_RULES.real, fxMax: T.fxMax, floor: T.mode === "survival" ? T.floor : null, bosses: T.bosses || 0, rewardList: T.rewards ? T.rewards.slice() : [], rivals: (T.rivalsDown || []).slice(), rivalsMet: T.rivalsMet || 0, skillList: T.skills ? Object.keys(T.skills).map((k) => ({ key: k, icon: trialSkillDef(k).icon, name: trialSkillDef(k).name, lv: T.skills[k], evo: !!TRIAL_EVOLVES[k], uni: !!TRIAL_UNIQUE[k], used: (T.skillUse || {})[k] || 0 })) : [], best: T.mode === "survival" && !T.explore ? trialBest(T) : null, explore: T.explore ? { region: T.explore.region, recruits: T.explore.recruits.slice(), fallen: T.explore.fallen.slice(), heroFell: T.explore.heroFell || null, pct: trialExplorePct(T) } : null, ougi: T.ougiUsed ? { name: LEGEND_OUGI[T.ougiUsed.key].name, hits: T.ougiUsed.hits, kills: T.ougiUsed.kills } : null, boss: T.mode === "survival" ? (T.boss ? (T.boss.gone ? "撃破" : "健在") : "未出現") : null, spawned: T.spawned, coins: T.coins ? { picked: T.picked || 0, xp: T.xpTotal || 0, dropped: T.dropped || 0, left: T.coins.reduce((n, c) => n + c.xp, 0), magnets: T.magnetPicked || 0, items: { ...(T.itemPicked || {}) } } : null, slv: T.slv || null, boons: T.boons ? { ...T.boons } : null, waiting: (T.reserve || []).map((u) => u.name), roster: T.mode === "survival" ? T.units.length + (T.reserve || []).length : null };
   trial = null;
   shots = [];
   effects.length = 0;
@@ -21774,7 +21827,7 @@ function renderTrialSheet() {
           "</p>"
         : "";
     $("trialBody").innerHTML =
-      exploreHtml +
+      exploreHtml + trialCarryXpHtml(R.carryXp) +
       '<p class="trial-result"><b>' + (X ? { lose: "主人公が倒れ、探索は終わった", retreat: "↩ 探索から戻った", win: "探索を終えた", timeout: "探索を終えた" }[R.result] : sv ? { win: "🏆 勝利！ 大将を倒した", lose: "第" + R.floor + "面で力尽きた（主人公が倒れた）", retreat: "↩ 第" + R.floor + "面で撤退", timeout: "⌛ 第" + R.floor + "面で時間切れ（大将を倒せなかった）" }[R.result] : title) + "</b></p>" +
       (sv && !X
         ? '<p class="trial-stage-sum">🏯 到達 <b>第' + R.floor + "面</b>・👑 大将を倒した数 <b>" + R.bosses + "</b>" + (R.best ? "・🏅 最高 第" + Math.max(R.best, 1) + "面クリア" : "") + "<br>撃破 <b>" + R.kills + "</b>・獲得 EXP <b>" + ((R.coins && R.coins.xp) || 0) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time / 60) + "分" + (Math.floor(R.time) % 60) + "秒</p>" +
@@ -21786,7 +21839,7 @@ function renderTrialSheet() {
           (R.boons && Object.keys(R.boons).length ? "<br><small>強化：" + Object.entries(R.boons).map(([k, n]) => TRIAL_SURVIVAL.boons[k].icon + TRIAL_SURVIVAL.boons[k].name + "×" + n).join("・") + "</small>" : "") +
           (R.ougi ? "<br>⚔️ 奥義「" + esc(R.ougi.name) + "」：" + R.ougi.hits + "回命中・" + R.ougi.kills + "体撃破" : "") +
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
-          '<br><small class="muted">サバイバルLv・強化・加入は、この戦闘だけのものです（兵士のLv・経験値には入りません）。</small></p>'
+          '<br><small class="muted">サバイバルLv・強化・加入は、この戦闘だけのものです。持ち帰り経験値は別に兵士へ入ります。</small></p>'
         : "<p>撃破 <b>" + R.kills + (X ? "" : "/" + R.total) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time) + "秒" + (X ? "・サバイバルLv" + R.slv : "") + "</p>") +
       "<p>生存 " + alive.length + "人・戦死 " + dead.length + "人" + (dead.length && !R.real ? '<br><small class="muted">試作のため戦死は仮です。本番の兵士は失われず、英霊名鑑にも載りません。</small>' : "") + "</p>" +
       '<div class="trial-units">' +
@@ -21806,7 +21859,7 @@ function renderTrialSheet() {
         })
         .join("") +
       "</div>" +
-      '<p class="muted"><small>試作のため、報酬・経験値・熟練度・戦歴はありません。</small></p>' +
+      '<p class="muted"><small>' + (R.carryXp ? '持ち帰り経験値以外の報酬・戦歴は追加されません。' : '試作のため、報酬・経験値・熟練度・戦歴はありません。') + '</small></p>' +
       '<div class="card-actions"><button data-trial-again>もう一度（兵士を選ぶ）</button><button data-trial-close>閉じる</button></div>';
     return;
   }
@@ -21828,12 +21881,12 @@ function renderTrialSheet() {
     "</div>" +
     (ex
       ? '<p class="muted"><small><b>🌑 探索</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
-        "<b>仲間の加入と戦死は、すぐ保存データに書かれ、取り消せません。</b></small></p>"
+        "<b>仲間の加入と戦死は、すぐ保存データに書かれ、取り消せません。</b><br>参加中に回収した共通EXPの10％を終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。途中加入は加入後の分だけ。戦死した仲間・Lv1に戻った主人公は対象外です。終了前に閉じると持ち帰れません。</small></p>"
       : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
         '<p class="muted"><small>育てた兵士を最大' + TRIAL_RULES.maxUnits + "人まで選び、1人ずつ配置します。戦闘が始まると、兵士はそれぞれ自分で敵を探して戦い、職業技・閃きも使います（衛生兵は味方を回復）。敵の強さは、出撃する兵士のLv・職業・装備から決まります。<br>") +
-    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。報酬・経験値もありません。</b>修練場はこれまでどおり育成の場所です。</small></p>") +
+    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。</b>" + (sv ? "参加中に回収した共通EXPの10％を終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。待機候補は対象外。倒れた兵士は倒れる前の分だけ。終了前に閉じると持ち帰れません。" : "報酬・経験値はありません。") + "修練場はこれまでどおり育成の場所です。</small></p>") +
     (sv && n
       ? '<p>👑 主人公：</p><div class="trial-heroes">' +
         trialPick
@@ -22085,6 +22138,9 @@ $("trialSheet").addEventListener("click", (ev) => {
     if (err) return toast(err);
     closeTrialSheet();
     if (trialMode === "field") msg("⚔️ 光っている場所をタップして、兵士を1人ずつ配置しよう（「自動で並べる」も使えます）。");
+  } else if (d.trialXpSave !== undefined) {
+    trialSaveCarryXp(trialResultView?.carryXp);
+    openTrialSheet("result");
   } else if (d.trialAgain !== undefined) openTrialSheet("pick");
   else if (d.trialClose !== undefined) closeTrialSheet();
 });
@@ -30924,7 +30980,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           window.WD_DEBUG = {
             reorderSoldier: (id, target) => reorderSoldier(id, target),
             // 戦場試練（v107試作）
-            trial: {
+            trial: {carryXp:trialCarryXp,saveCarryXp:trialSaveCarryXp,gainXp:trialGainXp,hitUnit:trialHitUnit,
               rules: TRIAL_RULES,
               maps: TRIAL_MAPS,
               start: (ids, opts) => startTrial(ids, "sanpou", opts),

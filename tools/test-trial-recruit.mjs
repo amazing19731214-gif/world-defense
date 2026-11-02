@@ -1,6 +1,7 @@
 // 戦場試練 v108.2：サバイバルの成長（主人公1人で開始・この戦闘だけの経験値とサバイバルLv・レベルアップの選択・一時強化・仲間の加入）
 //   node tools/test-trial-recruit.mjs
 import assert from "node:assert/strict";
+import { trialAssetsPreserved } from "./trial-save-test-utils.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -53,6 +54,7 @@ async function open({ width = 390, height = 844, query = "?debug" } = {}) {
   p.on("dialog", (d) => d.accept());
   await p.goto(base + query);
   await p.waitForFunction(() => window.WD_DEBUG);
+  await p.evaluate(() => WD_DEBUG.squadApi.saveRoster()); // 旧形式のfixtureを現行の名簿形式で保存してから比較
   return { c, p };
 }
 const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]))));
@@ -205,7 +207,7 @@ try {
   });
   check(r.result === "win" && r.units === 5 && r.slv >= 5, "大将を倒すと面のクリア（サバイバルLv" + r.slv + "・" + r.time + "秒・撃破 " + r.kills + "）", { result: r.result, slv: r.slv, time: r.time });
   check(/サバイバル Lv\d+/.test(r.text) && /4\/4人が加入/.test(r.text) && /強化：/.test(r.text) && /この戦闘だけ/.test(r.text), "結果の画面：サバイバルLv・加入した仲間の数・取った強化（この戦闘だけと明記）", r.text.slice(0, 120));
-  check((await storage(p)) === save0, "サバイバルLv・強化・加入は保存データに入らない（経験値・Lv・熟練度も変わらない）");
+  check(await trialAssetsPreserved(p, save0), "持ち帰り経験値・熟練度以外の兵士・資産を維持し、挑戦限定の成長は保存しない");
   // 7. 次の戦闘では、強化もサバイバルLv も元に戻る（その戦闘だけ）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
@@ -241,7 +243,7 @@ try {
     return T.result().result;
   });
   check(r === "lose", "主人公が倒れたら敗北", r);
-  check((await storage(p)) === save0, "敗北・撤退のあとも保存データは変わらない");
+  check(await trialAssetsPreserved(p, save0), "敗北・撤退後も持ち帰り経験値以外の兵士・資産を維持");
   // 大将が画面の外にいるとき：矢印を描く（エラーにならない）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
