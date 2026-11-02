@@ -121,9 +121,11 @@ async function expected(p, key, asc = false, slot = null) {
           value:
             key === "growth"
               ? Object.values(D.chronicleApi.growthRanks(s).values).reduce((a, b) => a + b, 0)
-              : key === "level"
-                ? s.level
-                : D.squadApi.soldierStats(s)[key === "hp" ? "maxHp" : key],
+              : key === "proficiency"
+                ? D.jobApi.profLv(s)
+                : key === "level"
+                  ? s.level
+                  : D.squadApi.soldierStats(s)[key === "hp" ? "maxHp" : key],
           slot: D.state().squads.find((q) => q.id === s.squadId).slot,
         }))
         .sort((a, b) => (asc ? 1 : -1) * (a.value - b.value) || a.slot - b.slot || a.id - b.id)
@@ -141,10 +143,10 @@ try {
       "旧設定は部隊順で全16人を表示",
     );
     check(
-      (await p.locator("#formationSort option").count()) === 7,
-      "部隊順・最大HP・攻撃力・防御力・射程・Lv・総合成長性を選択可能",
+      (await p.locator("#formationSort option").count()) === 8,
+      "部隊順・最大HP・攻撃力・防御力・射程・Lv・総合成長性・現在職の熟練度を選択可能",
     );
-    for (const key of ["growth", "hp", "atk", "def", "range", "level"]) {
+    for (const key of ["proficiency", "growth", "hp", "atk", "def", "range", "level"]) {
       await p.selectOption("#formationSort", key);
       check(
         (await ids(p)).join() === (await expected(p, key)).join(),
@@ -349,27 +351,25 @@ try {
         [5, 5, 5, 5],
         [1, 1, 9, 10],
       ];
-      save.soldiers = save.soldiers
-        .slice(0, 5)
-        .map((s, i) => ({
-          ...s,
-          chronicle: {
-            life: "growth-sort:" + s.id,
-            aptitude: {
+      save.soldiers = save.soldiers.slice(0, 5).map((s, i) => ({
+        ...s,
+        chronicle: {
+          life: "growth-sort:" + s.id,
+          aptitude: {
+            version: 1,
+            type: "balanced",
+            level: s.level,
+            startAt: s.level,
+            ranks: {
               version: 1,
-              type: "balanced",
               level: s.level,
               startAt: s.level,
-              ranks: {
-                version: 1,
-                level: s.level,
-                startAt: s.level,
-                values: Object.fromEntries(["hp", "atk", "def", "heal"].map((k, n) => [k, profiles[i][n]])),
-                gains: {},
-              },
+              values: Object.fromEntries(["hp", "atk", "def", "heal"].map((k, n) => [k, profiles[i][n]])),
+              gains: {},
             },
           },
-        }));
+        },
+      }));
       localStorage.setItem(S, JSON.stringify(save));
     }, S);
     await p.reload();
@@ -401,9 +401,87 @@ try {
     );
     await c.close();
   }
+  {
+    const { p, c } = await setup();
+    await p.locator("#squadClose").click();
+    await p.evaluate((S) => {
+      const D = WD_DEBUG,
+        save = JSON.parse(localStorage.getItem(S));
+      const profiles = [
+        ["samurai", 10],
+        ["spearman", 0],
+        ["akazonae", 8],
+        ["cavalry", 9],
+        ["medic", 5],
+        ["archer", 10],
+        ["akazonae", 10],
+      ];
+      save.soldiers = save.soldiers.slice(0, 7).map((s, i) => {
+        const [job, level] = profiles[i],
+          type = D.jobApi.JOBS[job].base;
+        return {
+          ...s,
+          type,
+          job,
+          jobs: [type, job],
+          prof: {
+            [type]: 0,
+            [job]: D.jobApi.profNeed(job, level),
+            ...(i === 1 ? { samurai: D.jobApi.profNeed("samurai", 10) } : {}),
+          },
+        };
+      });
+      localStorage.setItem(S, JSON.stringify(save));
+    }, S);
+    await p.reload();
+    await p.locator("#organize").click();
+    const before = await snapshot(p);
+    await p.selectOption("#formationSort", "proficiency");
+    check(
+      (await ids(p)).join() === "1,6,7,4,3,5,2",
+      "現在職10/10を最上位に表示し、過去職10/10や職業別の必要経験値倍率に惑わされない",
+    );
+    check(
+      (await p.locator('[data-formation-row="3"] .formation-job').innerText()).includes("8/10"),
+      "赤備えの熟練度8/10の表示と順位が一致",
+    );
+    await filter(p, "1");
+    check((await ids(p)).join() === "4,3", "部隊内でも熟練度順（Lvの低い9/10を8/10より先に）");
+    await filter(p, "all");
+    await p.locator("#formationSortDirection").click();
+    check((await ids(p)).join() === "2,5,3,4,1,6,7", "現在職の熟練度を低い順にも表示できる");
+    await p.reload();
+    await p.locator("#organize").click();
+    check(
+      (await p.inputValue("#formationSort")) === "proficiency" && (await ids(p)).join() === "2,5,3,4,1,6,7",
+      "再読込後も熟練度順と方向を保持",
+    );
+    check(
+      JSON.stringify(await snapshot(p)) === JSON.stringify(before),
+      "熟練度順の表示操作で熟練経験値・所属・成長適性・保存を変更しない",
+    );
+    await p.locator("#formationSortDirection").click();
+    await p.locator('[data-formation-soldier="1"]').click();
+    await p.locator('[data-job-open="1"]').click();
+    await p.locator('[data-job-to="spearman"]').click();
+    await p.locator("#jobClose").click();
+    await p.locator("#soldierClose").click();
+    check(
+      (await ids(p)).join() === "6,7,4,3,5,1,2",
+      "編成から実際に転職すると、新しい現在職の熟練度で順位を更新",
+    );
+    check(
+      (await p.locator('[data-formation-row="1"] .formation-job').innerText()).includes("0/10"),
+      "転職後の熟練度表示を更新",
+    );
+    await p.reload();
+    await p.locator("#organize").click();
+    check((await ids(p)).join() === "6,7,4,3,5,1,2", "転職後の順位と熟練度は再読込後も保持");
+    await c.close();
+  }
   for (const width of [375, 390, 430, 1280]) {
     const { p, c } = await setup({ width, debug: false });
-    await p.selectOption("#formationSort", "growth");
+    await p.selectOption("#formationSort", "proficiency");
     const before = await p.locator(".formation-head").evaluate((e) => e.getBoundingClientRect().height);
     const r = await p.evaluate(() => ({
       fit: document.documentElement.scrollWidth <= innerWidth,

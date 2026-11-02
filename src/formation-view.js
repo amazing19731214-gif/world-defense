@@ -19,9 +19,11 @@ function sortFormationSoldiers(list, stats, key) {
   const value = (s) =>
     key === "growth"
       ? growth.get(s.id)
-      : key === "level"
-        ? s.level
-        : stats.get(s.id)?.[key === "hp" ? "maxHp" : key] || 0;
+      : key === "proficiency"
+        ? profLv(s)
+        : key === "level"
+          ? s.level
+          : stats.get(s.id)?.[key === "hp" ? "maxHp" : key] || 0;
   const slot = (s) => {
     const q = squadById(s.squadId);
     return q?.slot >= 0 ? q.slot : SQUAD_RULES.maxDeployed + (q?.id || 0);
@@ -62,7 +64,9 @@ function renderFormationViewControls() {
       ? "移籍・交代中は部隊順で表示します"
       : settings.formation.sort === "growth"
         ? "HP・攻撃・防御・回復の成長適性を同じ重みで合計します。Lv・職業・装備は順位に影響しません"
-        : "HPは最大HPを比較します";
+        : settings.formation.sort === "proficiency"
+          ? "現在の職業の熟練度で比較します。高い順なら10/10の兵士が先頭に並びます"
+          : "HPは最大HPを比較します";
   const asc = candidate || settings.formation.direction === "asc";
   $("formationSortDirection").textContent = asc ? "↑ 低い順" : "↓ 高い順";
   $("formationSortDirection").disabled = candidate || editing || settings.formation.sort === "squad";
