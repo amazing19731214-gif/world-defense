@@ -1,6 +1,7 @@
 // 戦場試練 v108.8：サバイバルの攻撃スキル（8種類・Lv1〜5・6枠・3択・進化・引き継ぎ・リセット・重さ）
 //   node tools/test-trial-skills.mjs
 import assert from "node:assert/strict";
+import { trialAssetsPreserved } from "./trial-save-test-utils.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -54,6 +55,7 @@ async function open({ width = 390, height = 844, query = "?debug", ougi = null }
   p.on("dialog", (d) => d.accept());
   await p.goto(base + query);
   await p.waitForFunction(() => window.WD_DEBUG);
+  await p.evaluate(() => WD_DEBUG.squadApi.saveRoster()); // 旧形式のfixtureを現行の名簿形式で保存してから比較
   return { c, p };
 }
 const storage = (p) => p.evaluate(() => JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]))));
@@ -458,7 +460,7 @@ try {
   });
   r = await p.evaluate(() => document.getElementById("trialBody").textContent);
   check(/攻撃スキル：/.test(r) && /雷撃/.test(r), "結果の画面に、使った攻撃スキルと Lv が出る", r.slice(0, 120));
-  check((await storage(p)) === s1, "攻撃スキル・進化は保存データに入らない（本番の兵士・閃き・奥義・装備は変わらない）");
+  check(await trialAssetsPreserved(p, s1), "持ち帰り経験値以外の兵士・閃き・奥義・装備を維持し、挑戦限定の攻撃スキルは保存しない");
   await c.close();
   // 11. v112.2 3択を10秒選ばないと、いちばん上のカードを自動で選んで再開する（本物の時間。試験では残りを短くして見る）
   ({ c, p } = await open());

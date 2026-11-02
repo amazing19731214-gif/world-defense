@@ -248,7 +248,12 @@ try {
   check(hero && hero.id === 3 && r.res.kills >= 60, "結果の画面に主人公（👑）と撃破数が出る", { hero: hero && hero.name, kills: r.res.kills });
   r = await p.evaluate(() => ({ open: !document.getElementById("trialSheet").hidden, text: document.getElementById("trialBody").textContent }));
   check(r.open && /大将を倒した数 1/.test(r.text) && r.text.includes("👑"), "結果の画面（大将を倒した数・主人公の👑）", r.text.slice(0, 80));
-  check((await storage(p)) === save0, "サバイバルの前後で保存データは変わらない（経験値・熟練度・閃き・装備・戦死）");
+  check(await p.evaluate(() => {
+    const D=WD_DEBUG,R=D.trial.result(),save=JSON.parse(localStorage.getItem("worldDefense.soldiers.v1"));
+    return R.carryXp.saved && R.carryXp.awards.some(a=>a.amount>0) &&
+      save.soldiers.every(s=>s.level===300 && s.xp===(R.carryXp.awards.find(a=>a.id===s.id)?.amount||0)) &&
+      save.fallen.length===0;
+  }), "サバイバルの持ち帰り経験値だけを配布し、Lv300の名簿・仮戦死を維持");
   await c.close();
 
   // 6. 時間とともに敵が増える（最初の30秒と、強敵の前の30秒の出現数）・上限を超えない・遠くに溜まらない
@@ -360,7 +365,14 @@ try {
     return { mode: s.mode, phase: s.phase };
   });
   check(r.mode === "field" && r.phase === "deploy", "三方の関（いままでの遊び方）はそのまま（配置から始まる）", r);
-  check((await storage(p)) === save0, "敗北・撤退でも保存データは変わらない（仮の戦死だけ）");
+  check(await p.evaluate(() => {
+    const D=WD_DEBUG,save=JSON.parse(localStorage.getItem("worldDefense.soldiers.v1")),
+      heroes=JSON.parse(localStorage.getItem("worldDefense.warlords.v1"));
+    return save.soldiers.length===5 && save.fallen.length===0 &&
+      save.soldiers.every(s=>s.level===300) && save.soldiers.some(s=>s.xp>0) &&
+      heroes.tickets===3 && heroes.forge.items.length===5 &&
+      heroes.forge.items.every((g,i)=>g.uid===i+1 && g.owner===i+1 && g.lock);
+  }), "敗北・撤退でも持ち帰り経験値は残り、兵士・装備・券・仮戦死の仕様は維持");
   await c.close();
 
   // 8. iPhone縦（375px・390px）：画面のタップと指のスティックだけで遊ぶ
