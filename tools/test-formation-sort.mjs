@@ -118,7 +118,12 @@ async function expected(p, key, asc = false, slot = null) {
         )
         .map((s) => ({
           id: s.id,
-          value: key === "level" ? s.level : D.squadApi.soldierStats(s)[key === "hp" ? "maxHp" : key],
+          value:
+            key === "growth"
+              ? Object.values(D.chronicleApi.growthRanks(s).values).reduce((a, b) => a + b, 0)
+              : key === "level"
+                ? s.level
+                : D.squadApi.soldierStats(s)[key === "hp" ? "maxHp" : key],
           slot: D.state().squads.find((q) => q.id === s.squadId).slot,
         }))
         .sort((a, b) => (asc ? 1 : -1) * (a.value - b.value) || a.slot - b.slot || a.id - b.id)
@@ -136,10 +141,10 @@ try {
       "旧設定は部隊順で全16人を表示",
     );
     check(
-      (await p.locator("#formationSort option").count()) === 6,
-      "部隊順・最大HP・攻撃力・防御力・射程・Lvを選択可能",
+      (await p.locator("#formationSort option").count()) === 7,
+      "部隊順・最大HP・攻撃力・防御力・射程・Lv・総合成長性を選択可能",
     );
-    for (const key of ["hp", "atk", "def", "range", "level"]) {
+    for (const key of ["growth", "hp", "atk", "def", "range", "level"]) {
       await p.selectOption("#formationSort", key);
       check(
         (await ids(p)).join() === (await expected(p, key)).join(),
@@ -332,9 +337,73 @@ try {
     );
     await z.c.close();
   }
+  {
+    const { p, c } = await setup();
+    await p.locator("#squadClose").click();
+    await p.evaluate((S) => {
+      const save = JSON.parse(localStorage.getItem(S));
+      const profiles = [
+        [10, 10, 10, 10],
+        [1, 1, 1, 1],
+        [10, 9, 1, 1],
+        [5, 5, 5, 5],
+        [1, 1, 9, 10],
+      ];
+      save.soldiers = save.soldiers
+        .slice(0, 5)
+        .map((s, i) => ({
+          ...s,
+          chronicle: {
+            life: "growth-sort:" + s.id,
+            aptitude: {
+              version: 1,
+              type: "balanced",
+              level: s.level,
+              startAt: s.level,
+              ranks: {
+                version: 1,
+                level: s.level,
+                startAt: s.level,
+                values: Object.fromEntries(["hp", "atk", "def", "heal"].map((k, n) => [k, profiles[i][n]])),
+                gains: {},
+              },
+            },
+          },
+        }));
+      localStorage.setItem(S, JSON.stringify(save));
+    }, S);
+    await p.reload();
+    await p.locator("#organize").click();
+    const before = await snapshot(p);
+    await p.selectOption("#formationSort", "growth");
+    check(
+      (await ids(p)).join() === "1,3,5,4,2",
+      "総合成長性は全4項目を等しく評価し、同点は部隊順・ID順（Lv・職業・装備に依存しない）",
+    );
+    check(
+      !/40|21/.test(await p.locator("#squadList .formation-growth").first().innerText()),
+      "適性の内部数値・合計点は表示しない",
+    );
+    await filter(p, "1");
+    check((await ids(p)).join() === "3,4", "総合成長性を部隊内でも比較できる");
+    await filter(p, "all");
+    await p.locator("#formationSortDirection").click();
+    check((await ids(p)).join() === "2,4,3,5,1", "総合成長性の低い順でも同点順序を保持");
+    await p.reload();
+    await p.locator("#organize").click();
+    check(
+      (await p.inputValue("#formationSort")) === "growth" && (await ids(p)).join() === "2,4,3,5,1",
+      "再読込後も総合成長性と方向を保持",
+    );
+    check(
+      JSON.stringify(await snapshot(p)) === JSON.stringify(before),
+      "総合成長性の比較で兵士の能力・所属・成長適性・保存を変更しない",
+    );
+    await c.close();
+  }
   for (const width of [375, 390, 430, 1280]) {
     const { p, c } = await setup({ width, debug: false });
-    await p.selectOption("#formationSort", "range");
+    await p.selectOption("#formationSort", "growth");
     const before = await p.locator(".formation-head").evaluate((e) => e.getBoundingClientRect().height);
     const r = await p.evaluate(() => ({
       fit: document.documentElement.scrollWidth <= innerWidth,
