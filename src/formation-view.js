@@ -7,7 +7,21 @@ function formationEffectiveSort() {
 function sortFormationSoldiers(list, stats, key) {
   const copy = list.slice();
   if (key === "squad") return copy;
-  const value = (s) => (key === "level" ? s.level : stats.get(s.id)?.[key === "hp" ? "maxHp" : key] || 0);
+  const growth =
+    key === "growth"
+      ? new Map(
+          list.map((s) => {
+            const ranks = chronicleGrowthRanks(s).values;
+            return [s.id, CHRONICLE_GROWTH_KEYS.reduce((sum, k) => sum + ranks[k], 0)];
+          }),
+        )
+      : null;
+  const value = (s) =>
+    key === "growth"
+      ? growth.get(s.id)
+      : key === "level"
+        ? s.level
+        : stats.get(s.id)?.[key === "hp" ? "maxHp" : key] || 0;
   const slot = (s) => {
     const q = squadById(s.squadId);
     return q?.slot >= 0 ? q.slot : SQUAD_RULES.maxDeployed + (q?.id || 0);
@@ -46,7 +60,9 @@ function renderFormationViewControls() {
     ? "指導員候補はLvの低い順です"
     : editing
       ? "移籍・交代中は部隊順で表示します"
-      : "HPは最大HPを比較します";
+      : settings.formation.sort === "growth"
+        ? "HP・攻撃・防御・回復の成長適性を同じ重みで合計します。Lv・職業・装備は順位に影響しません"
+        : "HPは最大HPを比較します";
   const asc = candidate || settings.formation.direction === "asc";
   $("formationSortDirection").textContent = asc ? "↑ 低い順" : "↓ 高い順";
   $("formationSortDirection").disabled = candidate || editing || settings.formation.sort === "squad";
