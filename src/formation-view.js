@@ -113,6 +113,17 @@ function formationSquadActions(q, list, moving, bulk) {
   }
   return acts;
 }
+function formationJobSummary(s) {
+  return (
+    '<small class="formation-job"><span>職業：' +
+    esc(jobName(s)) +
+    "</span><span>熟練度：" +
+    profLv(s) +
+    "/" +
+    JOB_RULES.profMax +
+    "</span></small>"
+  );
+}
 function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
   const heal = !!unitOf(s).heal;
   const metric =
@@ -171,6 +182,7 @@ function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
     s.level +
     " " +
     titleText(s) +
+    formationJobSummary(s) +
     metric +
     chronicleSummary(s) +
     '<small class="formation-record">' +

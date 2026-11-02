@@ -2889,6 +2889,7 @@
       .formation-tab-drawer.collapsed { grid-template-rows: 0fr; }
       .formation-tab-inner { min-height: 0; overflow: hidden; }
       .formation-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 6px; line-height: 1.4; }
+      .formation-job { display: flex; flex-wrap: wrap; column-gap: 10px; line-height: 1.4; }
       .formation-record { display: block; opacity: .85; }
       .formation-group-controls summary { cursor: pointer; padding: 8px 0; min-height: 34px; }
       .formation-group-controls { margin: 8px 0; }
@@ -3200,7 +3201,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v118（戦場試練・全額EXP・目標WAVE案内）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v119（編成の職業・熟練度表示）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -17953,6 +17954,17 @@ function formationSquadActions(q, list, moving, bulk) {
   }
   return acts;
 }
+function formationJobSummary(s) {
+  return (
+    '<small class="formation-job"><span>職業：' +
+    esc(jobName(s)) +
+    "</span><span>熟練度：" +
+    profLv(s) +
+    "/" +
+    JOB_RULES.profMax +
+    "</span></small>"
+  );
+}
 function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
   const heal = !!unitOf(s).heal;
   const metric =
@@ -18011,6 +18023,7 @@ function formationSoldierRow(s, q, st, moving, bulk, showSquad, order = null) {
     s.level +
     " " +
     titleText(s) +
+    formationJobSummary(s) +
     metric +
     chronicleSummary(s) +
     '<small class="formation-record">' +
@@ -22400,7 +22413,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           $("squadHint").textContent = "指導員候補 " + list.length + "人。Lv" + LEGEND.retireLevel + "以上（主人公を除く）をレベルの低い順に表示。同じLvは兵士ID順です。引退には確認と継承する書の選択が必要です。";
           $("squadList").innerHTML = list.length ? list.map(s => {
             const error = retireError(s);
-            return '<div class="soldier-row" data-mentor-candidate="' + s.id + '" data-candidate-level="' + s.level + '"><span><b>' + esc(soldierName(s)) + '</b> Lv' + s.level + '<br><small>' + esc(squadName(squadById(s.squadId))) + '・' + esc(jobName(s)) + '</small>' + (error ? '<br><small class="injured">' + esc(error) + '</small>' : '') + '</span><div class="formation-soldier-actions"><button data-formation-retire="' + s.id + '"' + (error ? ' disabled title="' + esc(error) + '"' : '') + '>🎓 指導員に</button><button data-formation-soldier="' + s.id + '">詳細・育成</button></div></div>';
+            return '<div class="soldier-row" data-mentor-candidate="' + s.id + '" data-candidate-level="' + s.level + '"><span><b>' + esc(soldierName(s)) + '</b> Lv' + s.level + '<br><small>' + esc(squadName(squadById(s.squadId))) + '</small>' + formationJobSummary(s) + (error ? '<br><small class="injured">' + esc(error) + '</small>' : '') + '</span><div class="formation-soldier-actions"><button data-formation-retire="' + s.id + '"' + (error ? ' disabled title="' + esc(error) + '"' : '') + '>🎓 指導員に</button><button data-formation-soldier="' + s.id + '">詳細・育成</button></div></div>';
           }).join("") : '<p class="muted">指導員候補はいません。主人公以外の兵士をLv' + LEGEND.retireLevel + '以上に育てると表示されます。</p>';
         }
         let movingSoldierId = null,
