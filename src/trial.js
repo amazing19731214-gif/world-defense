@@ -2655,6 +2655,7 @@ function tickTrialCore(dt) {
   if (!T || T.phase !== "fight" || T.result) return;
   if (T.choice) return; // レベルアップの選択中は止まる
   if (T.cleared) return; // v108.7 大将を倒したあと（宝箱・次の面へ）は止まる
+  tickAutoOugi("trial",dt);
   T.t += dt;
   const surv = T.mode === "survival";
   if (surv) {
@@ -2888,104 +2889,20 @@ function trialSkillFx(u, target, fx, event) {
 //   使えるのは、主人公が奥義継承者（兵士名簿の剣聖の「⚔ 奥義」で指定）のときだけ。サバイバル1回の戦闘を「1回の挑戦」として1回。
 //   使った記録は戦闘の中だけに持ち、本編の使用記録（ougiSave.run）・奥義書・閃きには書かない。対象がいなければ使った回数にしない
 function trialOugiInfo(T) {
-  if (!T || T.mode !== "survival") return null;
-  const H = typeof ougiHeirNow === "function" ? ougiHeirNow() : null;
-  if (!H || H.why || !H.s || H.s.id !== T.hero) return { key: null, why: H && !H.why ? "奥義継承者（" + soldierName(H.s) + "）が主人公ではありません" : "主人公は奥義を習得していません（奥義継承者だけ）" };
-  return { key: H.h.k, O: LEGEND_OUGI[H.h.k], why: T.ougiUsed ? "この戦闘ではもう使いました" : null };
+  const u=T?.units.find(u=>u.id===T.hero), p=u&&autoOugiChoice(u.src);
+  return p ? {key:p.k,O:LEGEND_OUGI[p.k],why:null} : {key:null,why:"自動奥義を習得していません"};
 }
-function trialUseOugi() {
-  const T = trial;
-  if (!T || T.mode !== "survival" || T.phase !== "fight" || T.result) return "サバイバルの戦闘中に使えます。";
-  if (T.choice) return "レベルアップの選択のあとに使えます。";
-  const I = trialOugiInfo(T);
-  if (!I.key) return I.why;
-  if (I.why) return I.why;
-  const O = I.O,
-    h = T.units.find((u) => u.id === T.hero),
-    atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1), // v108.7 奥義の秘伝書（この挑戦の間だけ）
-    list = T.enemies.filter((e) => !e.gone),
-    origin = { x: h.x, y: h.y - 18 };
-  let target = null,
-    rays = null;
-  if (O.kind === "pattern") {
-    const near = trialNearest(h, list);
-    if (near) {
-      rays = resolvePattern(origin, Math.atan2(near.y - origin.y, near.x - origin.x), ATTACK_PATTERNS[O.pattern], list);
-      if (rays.some((r) => r.hits.length)) target = near;
-    }
-  } else if (O.kind === "single") {
-    // 強敵を優先：大将 → 中ボス → 体力の多い敵
-    const rank = (e) => (e.kind === "boss" || e.role === "boss" ? 2e9 : e.role === "mid" ? 1e9 : 0) + e.hp;
-    target = list.filter((e) => trialDist(e, h) <= O.reach).sort((a, b) => rank(b) - rank(a))[0] || null;
-  } else target = list.find((e) => trialDist(e, h) <= O.radius) || null;
-  if (!target) return "範囲内に敵がいません。奥義の使用回数は減っていません。";
-  T.ougiUsed = { key: I.key, at: T.t, hits: 0, kills: 0 };
-  combatFx.ougi("奥義・" + O.name, "👑 " + h.name);
-  trialSfx("ougi");
-  const before = T.kills;
-  if (O.kind === "pattern") {
-    const P = ATTACK_PATTERNS[O.pattern],
-      killed = [];
-    for (const r of rays)
-      for (const e of r.hits) {
-        const alive = !e.gone;
-        trialHitEnemy(h, e, atk * P.mul, 0, !!P.cover);
-        T.ougiUsed.hits++;
-        if (alive && e.gone) killed.push(e);
-      }
-    combatFx.pattern(P, origin, rays);
-    if (killed.length >= 2) combatFx.multiKill(killed, true);
-  } else if (O.kind === "single") {
-    trialHitEnemy(h, target, atk * O.mul, 0, true);
-    T.ougiUsed.hits = 1;
-    combatFx.issen(origin, target);
-  } else {
-    combatFx.push({ kind: "cshock", x: h.x, y: h.y + 6, ougi: true, age: 0, duration: 0.7 });
-    T.flurry = { left: O.hits, wait: 0 };
-  }
-  T.ougiUsed.kills = T.kills - before;
-  msg("⚔ 奥義「" + O.name + "」！ " + h.name + "（この戦闘で1回。本編の使用記録・奥義書は変わらない）");
-  trialOugiSync(true);
-  return null;
-}
-// 天剣乱舞：gap 秒ごとに1回、主人公のまわりの敵へ斬撃（主人公が倒れたら止める。レベルアップの選択中は止まる）
-function trialFlurryTick(T, dt) {
-  const F = T.flurry;
-  if (!F || (F.wait -= dt) > 0) return;
-  const h = T.units.find((u) => u.id === T.hero),
-    O = LEGEND_OUGI[T.ougiUsed.key];
-  if (!h || h.dead || F.left <= 0) return (T.flurry = null);
-  F.wait += O.gap;
-  F.left--;
-  const atk = soldierStats(h.sh, true).atk * (T.ougiMul || 1),
-    killed = [];
-  T.enemies
-    .filter((e) => !e.gone && trialDist(e, h) <= O.radius)
-    .sort((a, b) => trialDist(a, h) - trialDist(b, h))
-    .slice(0, O.perHit)
-    .forEach((e, i) => {
-      trialHitEnemy(h, e, atk * O.mul, 0, true);
-      T.ougiUsed.hits++;
-      if (e.gone) killed.push(e), T.ougiUsed.kills++;
-      combatFx.push({ kind: "cslash", x: e.x, y: e.y - 14, a: Math.random() * Math.PI, ougi: true, age: -i * 0.03, duration: 0.42 });
-    });
-  combatFx.push({ kind: "cwave", x: h.x, y: h.y - 10, rays: [0, 1, 2, 3].map((k) => (k * Math.PI) / 2 + F.left * 0.4), len: O.radius, width: 30, ougi: true, age: 0, duration: 0.5 });
-  if (killed.length >= 2) combatFx.multiKill(killed, true);
-}
-// 奥義のボタン（右下）：使える奥義の名前。使えないときは理由（未習得・使用済み）を小さく
+function trialUseOugi() { return "奥義は60秒間隔・30％で自動発動します。"; }
+function trialFlurryTick() {} // 自動奥義の連続斬撃はtickAutoOugiで進める。
 let trialOugiKey = "";
-function trialOugiSync(force) {
-  const T = trial,
-    box = $("trialAction");
-  if (!box) return;
-  const I = T && T.phase === "fight" ? trialOugiInfo(T) : null,
-    key = I ? (I.key || "") + "|" + (I.why || "") : "";
-  if (!force && key === trialOugiKey) return;
-  trialOugiKey = key;
-  box.hidden = !I;
-  if (!I) return (box.innerHTML = "");
-  box.innerHTML =
-    '<button type="button" id="trialOugiBtn" class="trial-ougi' + (I.key && !I.why ? " ready" : "") + '"' + (I.key && !I.why ? "" : " disabled") + ">⚔️ 奥義<b>" + (I.key ? esc(I.O.name) : "未習得") + "</b><small>" + esc(I.why || "1回だけ・押すと発動") + "</small></button>";
+function trialOugiSync() {
+  const T=trial, box=$("trialAction");
+  if(!box)return;
+  const users=T?.units.filter(u=>!u.dead&&autoOugiChoice(u.src))||[], key=users.map(u=>u.id+":"+autoOugiChoice(u.src).k).join(",");
+  box.hidden=!users.length;
+  if(trialOugiKey===key)return;
+  trialOugiKey=key;
+  box.innerHTML=users.length ? '<small>⚔ 自動奥義 '+users.length+'人<br>60秒間隔・30％</small>' : '';
 }
 // 兵士1人の行動：衛生兵は傷ついた味方を回復、近接は近づいて斬る、遠距離は射程を保って撃つ
 // v108：操作している兵士（trial.control）は、スティックの向きにだけ動く（AI は動かさない）。攻撃・回復・職業技は自動のまま
