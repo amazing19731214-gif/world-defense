@@ -3201,7 +3201,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v120（編成の総合成長性ランキング）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v121（編成の現在職熟練度順）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3294,7 +3294,7 @@ OFF</button>
             <div class="formation-view-controls">
               <button id="formationTabsToggle" aria-controls="squadTabDrawer" aria-expanded="true">部隊：全隊 ▾</button>
               <label for="formationSort" class="formation-sr-only">兵士の並べ替え</label>
-              <select id="formationSort" aria-label="兵士の並べ替え"><option value="squad">部隊順</option><option value="hp">最大HP</option><option value="atk">攻撃力</option><option value="def">防御力</option><option value="range">射程</option><option value="level">Lv</option><option value="growth">総合成長性</option></select>
+              <select id="formationSort" aria-label="兵士の並べ替え"><option value="squad">部隊順</option><option value="hp">最大HP</option><option value="atk">攻撃力</option><option value="def">防御力</option><option value="range">射程</option><option value="level">Lv</option><option value="growth">総合成長性</option><option value="proficiency">現在職の熟練度</option></select>
               <button id="formationSortDirection" aria-label="並び順を切り替え">↓ 高い順</button>
             </div>
             <div id="squadTabDrawer" class="formation-tab-drawer"><div class="formation-tab-inner"><div id="squadRosterTabs" role="tablist" aria-label="部隊・指導員候補の表示（左右にスワイプ）"></div></div></div>
@@ -13761,7 +13761,7 @@ OFF</button>
         // 一時停止中・ほかの画面（シート）を開いている間は数えない。目標ウェーブのクリア後・ゲームオーバー・攻城戦・討伐戦では始めない。
         // 修練場では、終わる（クリア・撤退・敗北）まで続ける（無限なら負けるか撤退するまで）
         const SETTINGS_KEY = "worldDefense.settings.v1";
-        const FORMATION_SORTS = { squad: "部隊順", hp: "最大HP", atk: "攻撃力", def: "防御力", range: "射程", level: "Lv", growth: "総合成長性" };
+        const FORMATION_SORTS = { squad: "部隊順", hp: "最大HP", atk: "攻撃力", def: "防御力", range: "射程", level: "Lv", growth: "総合成長性", proficiency: "現在職の熟練度" };
         const AUTO_DELAY = 5;
         function loadSettings() {
           let d = null;
