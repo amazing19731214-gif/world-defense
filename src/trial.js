@@ -1199,7 +1199,7 @@ function trialBoonInit(u) {
   Object.assign(u, { atkMul: 1, rateMul: 1, defMul: 1, reachMul: 1, magnetMul: 1 });
 }
 // 経験値：だれが倒しても入る（部隊の経験値）。必要な量に届いたらレベルアップ（選ぶまで戦闘を止める）
-const TRIAL_CARRY_XP = { divisor: 10 }; // 参加中に回収した共通EXPの10%。小数は挑戦内で合算し、終了時に切り捨てる。
+// 参加中に回収した共通EXPを、そのまま兵士本人へ持ち帰る。途中加入は加入後だけ。
 function trialGainXp(T, amount) {
   if (!Number.isFinite(amount) || amount <= 0 || T.result) return;
   for (const u of T.units) if (!u.dead) u.carryCoins = (u.carryCoins || 0) + amount;
@@ -3268,7 +3268,7 @@ function trialCarryXp(T) {
       id: u.id,
       life: chronicleOf(u.src).life,
       name: u.name,
-      amount: Math.floor((u.carryCoins || 0) / TRIAL_CARRY_XP.divisor),
+      amount: u.carryCoins || 0,
       eligible: !!u.src.alive && !(T.explore && u.dead),
     })).filter((a) => a.eligible && a.amount > 0),
   };
@@ -3301,12 +3301,12 @@ function trialSaveCarryXp(reward) {
 function trialCarryXpHtml(reward) {
   if (!reward) return "";
   const rows = reward.awards.filter((a) => a.amount > 0);
-  return '<div class="trial-carry-xp"><p><b>📚 持ち帰り経験値</b>（参加中に回収した共通EXPの10％・端数切捨て）</p>' +
+  return '<div class="trial-carry-xp"><p><b>📚 持ち帰り経験値</b>（参加中に回収した共通EXPと同じ量）</p>' +
     (rows.length ? rows.map((a) => '<p>' + esc(a.name) + '：EXP +' + a.amount + (a.after > a.before ? '・Lv' + a.before + ' → ' + a.after : '') + '</p>').join("") : '<p>今回は対象の経験値がありません。</p>') +
     (!rows.length || reward.saved ? '<p><small>' + (rows.length ? '兵士の経験値・熟練度を保存しました。' : '待機候補・探索での戦死や主人公の再出発は対象外です。') + '</small></p>' : '<p role="status">⚠ 経験値は保存待ちです。再読み込み前に保存してください。</p><button type="button" data-trial-xp-save>💾 経験値を保存する</button>') + '</div>';
 }
 // 戦闘の終わり：win（全滅させた）・lose（味方が全滅）・retreat（撤退）・timeout（時間切れ）
-// 探索・サバイバルは参加中の共通EXPの一部を持ち帰る。探索の実際の戦死処理はtrialExploreDeathで行う。
+// 探索・サバイバルは参加中の共通EXPをそのまま持ち帰る。探索の実際の戦死処理はtrialExploreDeathで行う。
 function endTrial(result) {
   const T = trial;
   if (!T || T.result) return;
@@ -4029,12 +4029,12 @@ function renderTrialSheet() {
     "</div>" +
     (ex
       ? '<p class="muted"><small><b>🌑 探索</b>：選んだ兵士の中から<b>👑 主人公1人</b>で出発します（ほかに選んだ兵士は連れて行きません）。👑 で選んだ兵士が<b>ゲームの主人公</b>になります（主人公はいつでも変えられます）。マップは毎回ランダムで、最初は真っ暗。歩いた所が見えるようになります。<b>村</b>を見つけると野盗が襲っているので、追い払うとその村の兵士が<b>無料で仲間</b>になり、<b>兵士名簿に入ります</b>（一緒に歩けるのは5人まで）。<b>倒れた仲間は本当に戦死</b>し、英霊名鑑に入ります。<b>主人公は死なず、倒れたら Lv1 から再出発</b>（そこで探索は終わり。得た仲間は残ります）。「🚪 この地を去る」で、いつでも新しい地へ。<br>' +
-        "<b>仲間の加入と戦死は、すぐ保存データに書かれ、取り消せません。</b><br>参加中に回収した共通EXPの10％を終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。途中加入は加入後の分だけ。戦死した仲間・Lv1に戻った主人公は対象外です。終了前に閉じると持ち帰れません。</small></p>"
+        "<b>仲間の加入と戦死は、すぐ保存データに書かれ、取り消せません。</b><br>参加中に回収した共通EXPを全額、終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。途中加入は加入後の分だけ。戦死した仲間・Lv1に戻った主人公は対象外です。終了前に閉じると持ち帰れません。</small></p>"
       : sv
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
         '<p class="muted"><small>育てた兵士を最大' + TRIAL_RULES.maxUnits + "人まで選び、1人ずつ配置します。戦闘が始まると、兵士はそれぞれ自分で敵を探して戦い、職業技・閃きも使います（衛生兵は味方を回復）。敵の強さは、出撃する兵士のLv・職業・装備から決まります。<br>") +
-    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。</b>" + (sv ? "参加中に回収した共通EXPの10％を終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。待機候補は対象外。倒れた兵士は倒れる前の分だけ。終了前に閉じると持ち帰れません。" : "報酬・経験値はありません。") + "修練場はこれまでどおり育成の場所です。</small></p>") +
+    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。</b>" + (sv ? "参加中に回収した共通EXPを全額、終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。待機候補は対象外。倒れた兵士は倒れる前の分だけ。終了前に閉じると持ち帰れません。" : "報酬・経験値はありません。") + "修練場はこれまでどおり育成の場所です。</small></p>") +
     (sv && n
       ? '<p>👑 主人公：</p><div class="trial-heroes">' +
         trialPick
