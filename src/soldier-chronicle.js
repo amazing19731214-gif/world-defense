@@ -20,6 +20,7 @@ const CHRONICLE_COUNTERS = [
   "revivals",
   "covered",
   "coverWins",
+  "ougiRescues", "ougiControlKills", "ougiBlockWins", "ougiGuardWins", "ougiBossContrib",
 ];
 function cleanChronicle(v, s = {}) {
   const o = v && typeof v === "object" ? v : {};
@@ -47,6 +48,13 @@ function cleanChronicle(v, s = {}) {
           melee: Math.min(5, Math.max(0, Number(o.segment.melee) || 0)),
           ranged: Math.min(5, Math.max(0, Number(o.segment.ranged) || 0)),
           covers: intIn(o.segment.covers, 0, 1000, 0),
+          ougi: o.segment.ougi && typeof o.segment.ougi === "object" ? {
+            active: o.segment.ougi.active === true, healed: intIn(o.segment.ougi.healed,0,1e12,0),
+            blocked: o.segment.ougi.blocked === true, guarded: o.segment.ougi.guarded === true,
+            rescuers: [...new Set((Array.isArray(o.segment.ougi.rescuers)?o.segment.ougi.rescuers:[]).filter(v=>typeof v==="string"&&/^[\w:-]{1,100}$/.test(v)))].slice(0,80),
+            done: o.segment.ougi.done === true,
+            rollJob: typeof o.segment.ougi.rollJob === "string" ? o.segment.ougi.rollJob : null,
+          } : null,
         }
       : null;
   const honorIds = Object.keys(CHRONICLE_HONORS);
@@ -84,6 +92,7 @@ function chronicleLog(s, text) {
   c.log = c.log.slice(-CHRONICLE_RULES.logs);
 }
 function chronicleKey() {
+  if (trial) return "trial:" + (trial.ougiRunId ||= newJobDropRunId()) + ":" + (trial.floor||0) + ":" + (trial.explore?.region||0);
   if (battle) return "battle:" + (battle.jobDropRunId ||= newJobDropRunId());
   if (training) return "training:" + (training.jobDropRunId ||= newJobDropRunId()) + ":" + wave;
   return "defense:" + runId + ":" + wave;
@@ -128,6 +137,7 @@ function chronicleHeal(s, target, before, max) {
   const c = chronicleOf(s);
   chronicleTouch(s);
   chronicleAdd(c, "healed", amount);
+  ultimateOugiHeal(s,target,before,max);
   if (before / max < 0.3) target._chronicleRescueReady = true;
   if (target._chronicleRescueReady && target.hp / max >= 0.5) {
     chronicleAdd(c, "rescues");
@@ -137,6 +147,7 @@ function chronicleHeal(s, target, before, max) {
 function chronicleKill(s, e) {
   if (e._chronicleCredited) return;
   e._chronicleCredited = true;
+  ultimateOugiKill(s,e);
   const c = s?.alive ? chronicleOf(s) : null;
   if (c) {
     chronicleTouch(s);
@@ -149,7 +160,7 @@ function chronicleKill(s, e) {
       chronicleLog(s, "強敵に最後の一撃");
     }
     const key = chronicleKey();
-    for (const m of soldiers)
+    for (const m of (trial ? trial.units.filter(u=>u.placed).map(u=>u.sh) : soldiers))
       if (m !== s && m.alive && m.chronicle?.segment?.key === key && !m.chronicle.segment.dead)
         chronicleAdd(m.chronicle, "bossAssists");
   }
@@ -515,6 +526,7 @@ Object.assign(INSIGHT_STYLE_NAMES, { any: "全職業", attack: "攻撃する職�
 const chronicleCommitted = new Map();
 const chronicleLearnedConfirmed = new Set();
 function chronicleSyncCommitted() {
+  scheduleUltimateOugiRolls();
   let d;
   try {
     d = JSON.parse(currentGameSave(SOLDIER_SAVE_KEY) || "{}");

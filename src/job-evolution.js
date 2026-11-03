@@ -621,13 +621,14 @@ function evolutionState(s) {
   }
   return s.evolution;
 }
-function evolutionShield(s, max, fraction, now, duration) {
+function evolutionShield(s, max, fraction, now, duration, source = null) {
   if (!s.alive || s.out || s.siegeOut) return;
   evolutionState(s);
   const old = s.evolutionShield && s.evolutionShield.until > now ? s.evolutionShield.amount : 0;
-  s.evolutionShield = { amount: Math.min(max * 0.15, Math.max(old, max * fraction)), until: now + duration };
+  s.evolutionShield = { amount: Math.min(max * 0.15, Math.max(old, max * fraction)), until: now + duration, owner: old >= max*fraction ? s.evolutionShield?.owner : source ? ougiLife(source) : null };
 }
 function evolutionAbsorb(s, damage, ranged, enemy, now) {
+  damage=ultimateOugiAbsorb(s,damage);
   const st = evolutionState(s);
   st.hurt = true;
   if (ranged) st.rangedEnemy = enemy;
@@ -647,6 +648,7 @@ function evolutionAbsorb(s, damage, ranged, enemy, now) {
     const n = Math.min(damage, shield.amount);
     damage -= n;
     shield.amount -= n;
+    if(n)ultimateOugiProtected(shield.owner,s);
   }
   return damage;
 }
@@ -656,10 +658,11 @@ function evolutionArmor(e, armor, now) {
 function evolutionBoss(e) {
   return !!(e.boss || e.intruder || e.kind === "boss");
 }
-function evolutionSlow(e, value, seconds, now) {
+function evolutionSlow(e, value, seconds, now, source = null) {
   if (!e || evolutionBoss(e) || e.structure) return;
   const old = e.evolutionSlow?.until > now ? e.evolutionSlow.value : 0;
   e.evolutionSlow = { value: Math.min(0.35, Math.max(old, value)), until: now + seconds };
+  if(source)ultimateOugiControl(source,e);
 }
 function evolutionFx(c, name, fx, targets, insight = false) {
   if (effects.filter((e) => e.kind === "evolution").length >= 24 || effects.length >= 80) return;
@@ -679,6 +682,7 @@ function evolutionFx(c, name, fx, targets, insight = false) {
 function evolutionAction(s, c, event = "attack") {
   if (!evolutionEffectsEnabled) return;
   if (!s.alive || s.out || s.siegeOut) return;
+  ultimateOugiActivity(s,c,event);
   const now = c.now,
     u = unitOf(s),
     state = evolutionState(s),
@@ -718,7 +722,7 @@ function evolutionAction(s, c, event = "attack") {
       .sort((a, b) => a.s.hp / a.max - b.s.hp / b.max || a.s.id - b.s.id);
   const self = () => c.friends.find((m) => m.s === s);
   const shields = (ms, p, sec) => {
-    for (const m of ms) evolutionShield(m.s, m.max, p, now, sec);
+    for (const m of ms) evolutionShield(m.s, m.max, p, now, sec,s);
     return ms;
   };
   const near = (t, r, n) =>
@@ -759,7 +763,7 @@ function evolutionAction(s, c, event = "attack") {
     return ms;
   };
   const slow = (ts) => {
-    for (const t of ts) evolutionSlow(t, 0.2, 2, now);
+    for (const t of ts) evolutionSlow(t, 0.2, 2, now,s);
     return ts;
   };
   const cast = (key, cd, name, fx, fn, insight = false) => {
@@ -852,7 +856,7 @@ function evolutionAction(s, c, event = "attack") {
               if (inRange().length < 2) return null;
               {
                 const ts = hit(near(a, 50, 3), 0.35);
-                for (const t of ts) evolutionSlow(t, 0.35, 3, now);
+                for (const t of ts) evolutionSlow(t, 0.35, 3, now,s);
                 return ts;
               }
             case "spear_commander":
@@ -948,7 +952,7 @@ function evolutionAction(s, c, event = "attack") {
         return hit([a], p);
       case "ninja": {
         const ts = hit(upper ? near(a, 40, 2) : [a], p);
-        for (const t of ts) evolutionSlow(t, upper ? 0.25 : 0.2, 2, now);
+        for (const t of ts) evolutionSlow(t, upper ? 0.25 : 0.2, 2, now,s);
         return ts;
       }
       case "kensei":
@@ -994,7 +998,7 @@ function evolutionAction(s, c, event = "attack") {
         );
       case "shinobi_head": {
         const ts = hit(upper ? near(a, 45, 3) : [a], p);
-        for (const t of ts) evolutionSlow(t, upper ? 0.3 : 0.25, 3, now);
+        for (const t of ts) evolutionSlow(t, upper ? 0.3 : 0.25, 3, now,s);
         return ts;
       }
       case "spear_commander":

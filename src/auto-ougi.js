@@ -84,9 +84,10 @@ function autoOugiContextFor(mode) {
         unit: u,
       }));
     targets = () => T.enemies.filter((e) => !e.gone && e.hp > 0);
-    hit = (a, e, raw) => {
+    hit = (a, e, raw, pierce = 0) => {
       const before = !e.gone;
-      trialHitEnemy(a.unit, e, raw, 0, true);
+      // 発動側で一度掛けた試練の攻撃倍率を、通常の命中処理で二重に掛けない。
+      trialHitEnemy(a.unit, e, raw / (a.unit.atkMul || 1), pierce, true);
       if (a.record) {
         a.record.hits++;
         if (before && e.gone) a.record.kills++;
@@ -127,13 +128,13 @@ function autoOugiContextFor(mode) {
         },
       });
     targets = () => [...B.garrison.filter((e) => !e.dead && e.hp > 0), ...structures.filter((e) => e.hp > 0)];
-    hit = (a, e, raw) => {
+    hit = (a, e, raw, pierce = 0) => {
       if (e.structure) {
         if (e.tower) battleHitTower(e.tower, raw);
         else B.castleHp = Math.max(0, B.castleHp - raw);
         return;
       }
-      if (battleHitGarrison(e, raw, a.s)) {
+      if (battleHitGarrison(e, raw, a.s, pierce)) {
         a.s.kills++;
         gearOnKill(a.s, a.stats(), B.t);
         jobOnKill(a.s, B.t);
@@ -158,17 +159,31 @@ function autoOugiContextFor(mode) {
           })),
       );
     targets = aliveEnemies;
-    hit = (a, e, raw) =>
+    hit = (a, e, raw, pierce = 0) =>
       dealEnemyDamage(
         e,
         raw,
         { s: a.s, q: a.pos, h: heroOnSquad(a.pos) },
-        { normal: false, pierceCover: true },
+        {
+          normal: false,
+          pierceCover: true,
+          ignoreArmor: Math.min(0.8, skillSum(a.s, "armorPierce") + pierce),
+        },
       );
   }
-  return { mode, session, segment, actors: actors.filter((a) => autoOugiChoice(a.s)), targets, hit };
+  return {
+    mode,
+    session,
+    segment,
+    now: mode === "trial" ? trial.t : mode === "battle" ? battle.t : combatClock,
+    friends: actors,
+    actors: actors.filter((a) => autoOugiChoice(a.s)),
+    targets,
+    hit,
+  };
 }
 function autoOugiAim(ctx, a, k) {
+  if (LEGEND_OUGI[k].kind === "ultimate") return ultimateOugiAim(ctx, a, k);
   const O = LEGEND_OUGI[k],
     list = ctx.targets(),
     origin = { x: a.pos.x, y: a.pos.y - 18 };
@@ -204,7 +219,9 @@ function autoOugiCast(ctx, a, k, aim) {
     a.record = { key: k, at: trial.t, hits: 0, kills: 0 };
     trial.ougiUsed = a.record;
   }
-  if (O.kind === "pattern") {
+  if (O.kind === "ultimate") {
+    ultimateOugiCast(ctx, a, k, aim);
+  } else if (O.kind === "pattern") {
     const P = ATTACK_PATTERNS[O.pattern];
     for (const r of aim.rays)
       for (const e of r.hits)
@@ -277,6 +294,7 @@ function tickAutoOugi(mode, dt) {
     autoOugiGap = 0;
     autoOugiContext = ctx;
   }
+  ultimateOugiTick(ctx, dt);
   tickAutoOugiFlurries(ctx, dt);
   autoOugiGap = Math.max(0, autoOugiGap - dt);
   autoOugiRetry = Math.max(0, autoOugiRetry - dt);
@@ -334,7 +352,7 @@ function tickAutoOugi(mode, dt) {
   }
 }
 function autoOugiPrune(lives, fallen) {
-  for (const table of [ougiSave.auto.picks, ougiSave.auto.timers])
+  for (const table of [ougiSave.auto.picks, ougiSave.auto.timers, ougiSave.claims])
     for (const life of Object.keys(table)) if (!lives.has(life) && !fallen.has(life)) delete table[life];
 }
 window.addEventListener("pagehide", () => {

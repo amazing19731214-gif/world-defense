@@ -3201,7 +3201,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v122（成長適性の実・回復の実）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v123（最上級7職の奥義・奥義書）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -6580,7 +6580,7 @@ OFF</button>
           if (!e || e.gone || e.hp <= 0 || raw <= 0) return 0;
           const { h, q, t, s } = source;
           const normal = options.normal !== false;
-          if(s)chronicleTouch(s);
+          if(s){chronicleTouch(s);const o=ultimateOugiSegment(s);o.active=true;if(jobOf(s)==="spear_commander"&&e.blockedBy===q)o.blocked=true;}
           let damage = raw * (s && e.kind === "boss" && chronicleHas(s,"in_history_bossHunter") ? 1.05 : 1), ignore = options.ignoreArmor || 0;
           if (normal && h) {
             const token = (s ? "s" + s.id : "tower") + ":" + enemyToken(e), fresh = !seenTarget(h, token);
@@ -7875,15 +7875,22 @@ OFF</button>
         // ===== 伝説の奥義：定義・知識・奥義書（v117で全モード自動発動へ） =====
         // 発動・時計・演出はauto-ougiで共通管理。兵士ごとに有効な奥義を1つ選ぶ。
         // 従来のheir/runは旧セーブ互換用。新しい選択と時計は同じ保存内のautoへ。
-        // 現在の奥義は剣聖の3種。入手条件・奥義書・引退は従来どおり。
+        // 剣聖3種と、ほかの最上級職6種の専用奥義。習得と奥義書の継承は同じ保存へ。
         //   kind pattern：攻撃の型（ATTACK_PATTERNS）をそのまま使う / single：強敵1体へ1撃 / flurry：範囲へ連続の斬撃
         //   mul：継承者の攻撃力の何倍か（1体・1撃あたり）
         const LEGEND_OUGI = {
           happouTenshou: { name: "八方天翔斬", job: "sword_saint", kind: "pattern", pattern: "eightSlashOugi", text: "周りへ巨大な八方向の斬撃波（画面の端まで届く）" },
           mumyouIssen: { name: "無明一閃", job: "sword_saint", kind: "single", reach: 560, mul: 14, text: "強敵1体へ強烈な一閃（大将・中ボス・体力の多い敵を狙う）" },
           tenkenRanbu: { name: "天剣乱舞", job: "sword_saint", kind: "flurry", radius: 300, hits: 6, gap: 0.2, perHit: 10, mul: 0.9, text: "周りの広い範囲へ6回の連続斬撃" },
+          hyakkiYagyou: { name: "影縫い・百鬼夜行", job: "shinobi_head", kind: "ultimate", role: "ninja", reach: 220, maxTargets: 5, mul: 2, fx: "net", text: "周囲220の最大5体へ攻撃力200%。通常敵を3秒停止、強敵は8秒攻撃15%低下（完全停止なし）" },
+          senbonYari: { name: "不動・千本槍陣", job: "spear_commander", kind: "ultimate", role: "spear", reach: 180, maxTargets: 6, mul: 3, fx: "wall", text: "前方180の直線上・最大6体へ攻撃力300%。自身に最大HP20%の盾と8秒間35%軽減。TDの部隊足止め上限+1" },
+          ryuuseiu: { name: "天弓・流星雨", job: "bow_saint", kind: "ultimate", role: "bow", maxTargets: 6, mul: 1.8, fx: "highbow", text: "現在の射程内・最大6体へ各3連射、1発攻撃力180%。同じ敵は3発まで" },
+          kunikuzushi: { name: "轟砲・国崩し", job: "gun_commander", kind: "ultimate", role: "gun", reach: 300, maxTargets: 6, mul: 5, pierce: .35, fx: "shell", text: "射程300・着弾点から100の最大6体へ攻撃力500%、装甲35%追加無視（合計80%まで）。構造物へ威力1.3倍" },
+          shugoKijin: { name: "鉄壁・守護騎陣", job: "iron_cavalry", kind: "ultimate", role: "guard", reach: 220, fx: "iron", text: "同部隊の味方最大3人へ最大HP25%の盾。8秒間、受ける攻撃の30%を肩代わり。自身へ最大HP15%の盾と20%軽減" },
+          saiseiSeiiki: { name: "命脈・再生の聖域", job: "healing_master", kind: "ultimate", role: "heal", reach: 240, fx: "pulse", text: "生存する負傷兵最大3人へ通常回復量200%の治療と最大HP10%の盾。8秒間、毎秒通常回復量20%で継続治療。蘇生・城ハート回復なし" },
         };
         /*@@AUTO_OUGI@@*/
+        /*@@ULTIMATE_OUGI@@*/
         let ougiFlurry = null; // 天剣乱舞の残りの斬撃（戦闘を止めずに、時間をずらして当てる）
         const ougiState = () => (protoCombatOn() && training.ougi) || null;
         // ===== 奥義書・奥義継承者・奥義の閃き（v106.2試作） =====
@@ -7944,7 +7951,7 @@ OFF</button>
             heir = h && Number.isInteger(h.sid) && LEGEND_OUGI[h.k] ? { sid: h.sid, k: h.k, book: Number.isInteger(h.book) ? h.book : null } : null;
           // 挑戦IDのない使用記録（v106.2）は、どの挑戦にも当たらないので読み捨てる
           const run = o.run && typeof o.run.id === "string" && /^[\w:-]{1,100}$/.test(o.run.id) ? { id: o.run.id, used: o.run.used === true, at: num(o.run.at), by: str(o.run.by, 40), ended: o.run.ended === true } : null;
-          return { auto: cleanAutoOugi(o.auto), version: 1, seq: Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...books.map((b) => b.uid), 0), books, known, rolls, fails, heir, run };
+          return { claims: cleanUltimateOugiClaims(o.claims), auto: cleanAutoOugi(o.auto), version: 1, seq: Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...books.map((b) => b.uid), 0), books, known, rolls, fails, heir, run };
         }
         let ougiObservedRaw = null;
         let ougiSave = (() => {
@@ -8077,13 +8084,14 @@ OFF</button>
         // 奥義の閃き：剣聖・Lv150・熟練度10・強敵への最後の一撃10回。修練場（試作）の強敵撃破・クリアで1回ずつ抽選
         const ougiCandidates = (s) => ougiForJob(jobOf(s)).filter((k) => !ougiKnownOf(s).includes(k));
         function ougiEligible(s) {
-          return !!(s && s.alive && jobOf(s) === "sword_saint" && s.level >= OUGI_RULES.level && profLv(s, "sword_saint") >= OUGI_RULES.prof && (chronicleOf(s).bossKills || 0) >= OUGI_RULES.bossKills && ougiCandidates(s).length);
+          return !!(s && s.alive && s.level >= OUGI_RULES.level && profLv(s) >= OUGI_RULES.prof && ougiCandidates(s).length && (jobOf(s) === "sword_saint" ? (chronicleOf(s).bossKills || 0) >= OUGI_RULES.bossKills : ultimateOugiEligible(s)));
         }
         // 次の抽選で閃く確率：続けて外れた回数で上がる（最大 rateMax）
         const ougiRateFor = (fails) => Math.min(OUGI_RULES.rateMax, OUGI_RULES.rate + Math.floor(Math.max(0, fails) / OUGI_RULES.rateEvery) * OUGI_RULES.rateStep);
         const ougiRateOf = (s) => ougiRateFor(ougiSave.fails[ougiLife(s)] || 0);
-        function ougiInsightRoll(s, why) {
-          if (!protoCombatOn() || !ougiEligible(s) || !savedSoldier(s.id)) return null;
+        function ougiInsightRoll(s, why, claim = null, evidence = s) {
+          if (!s || (jobOf(s) === "sword_saint" ? !protoCombatOn() : !claim) || !ougiEligible(evidence) || !savedSoldier(s.id)) return null;
+          if (claim && ougiSave.claims[ougiLife(s)] === claim) return null;
           const life = ougiLife(s),
             n = ougiSave.rolls[life] || 0,
             seed = insightOf(s).seed + ":legend-ougi:" + n,
@@ -8094,12 +8102,15 @@ OFF</button>
           // 回数と結果を一緒に保存する（保存できなければ引かなかったことにして、次の機会に同じ番号で引き直す＝結果は同じ）
           const ok = ougiCommit((S) => {
             S.rolls[life] = n + 1;
+            if (claim) S.claims[life] = claim;
             if (k) delete S.fails[life]; // 閃いたら外れた回数を0に
             else S.fails[life] = (S.fails[life] || 0) + 1;
             if (k) {
               const e = S.known[life] || (S.known[life] = { list: [], name: "" });
               e.list.push({ k, at: Date.now() });
               e.name = soldierName(s);
+              const pick=S.auto.picks[life];
+              if(pick && !pick.off && LEGEND_OUGI[pick.k]?.job !== jobOf(s))S.auto.picks[life]={k,book:null};
             }
           });
           if (!ok || !k) return null;
@@ -8526,7 +8537,7 @@ OFF</button>
               .join("") +
             "</div>" +
             '<label class="tr-proto"><input type="checkbox" id="trProto"' + (protoCombatPick ? " checked" : "") + '> 🧪 新しい戦い（試作）</label>' +
-            '<p class="muted tr-proto-note">鉄砲足軽（射程で止まって撃つ）と、盾兵が前・鉄砲足軽が後ろの連携部隊が出ます。兵士は3回の攻撃ごとに技（弓：三方撃ち・鉄砲：貫通弾・近接：八方斬撃）。伝説の奥義は、習得した剣聖が60秒間隔・30％で自動発動します（全モード共通）。盾兵に守られた敵には、貫通弾と八方斬撃が効きます。この試作の敵と3回ごとの技は、通常の防衛戦・攻城戦には出ません。</p>' +
+            '<p class="muted tr-proto-note">鉄砲足軽（射程で止まって撃つ）と、盾兵が前・鉄砲足軽が後ろの連携部隊が出ます。兵士は3回の攻撃ごとに技（弓：三方撃ち・鉄砲：貫通弾・近接：八方斬撃）。伝説の奥義は、対応する最上級職の習得者が60秒間隔・30％で自動発動します（全モード共通）。盾兵に守られた敵には、貫通弾と八方斬撃が効きます。この試作の敵と3回ごとの技は、通常の防衛戦・攻城戦には出ません。</p>' +
             (protoCombatPick ? ougiPickHtml() : "") +
             '<button id="trStart" class="tr-start">⚔️ ' +
             TRAINING.diffs[trainPick].name +
@@ -9882,7 +9893,7 @@ OFF</button>
           // 部隊は、生きている兵士の兵種の中で一番多い足止め数（槍兵が全員倒れると減る）
           const base = Math.max(0, ...list.map((s) => unitOf(s).block || 0));
           const boost = base > 0 ? squadPassive(q).extraBlock || 0 : 0;
-          return Math.min(base + extra + boost, list.length);
+          return Math.min(base + extra + boost + (list.some(s=>jobOf(s)==="spear_commander"&&s.ultimateWard?.block&&ultimateOugiWardValid(s.ultimateWard))?1:0), list.length);
         };
         const blockCount = (q) => enemies.reduce((n, e) => n + (e.blockedBy === q ? 1 : 0), 0);
         // 足止めの解除。撤退・全滅・リセットのときに必ず呼ぶ
@@ -9932,6 +9943,7 @@ OFF</button>
           const front = who || members(q)[0];
           if (!front) return;
           if (evadeHit(front, combatClock)) return; // 回避術
+          if(!redirected)raw=ultimateOugiCover(front,members(q),raw,(s,part)=>damageSquad(q,part,ranged,kind,enemy,s,true));
           if(!redirected)raw=chronicleCover(front,members(q),raw,ranged,kind,(s,part)=>damageSquad(q,part,ranged,kind,enemy,s,true));
           const st = soldierStats(front),
             weak = unitOf(front).spearWeak,
@@ -10312,6 +10324,7 @@ OFF</button>
         // 生存ボーナスはウェーブごとに1回だけ（xpClaim で二重取得を防ぐ）。終了後に兵士を保存する
         function squadsWaveEnd() {
           const claim = runId + ":" + wave;
+          ultimateOugiFinish(soldiers.filter(s=>s.inWave),true);
           for (const s of soldiers) {
             if (!s.alive) continue;
             if (s.inWave && s.xpClaim !== claim) {
@@ -11092,7 +11105,7 @@ OFF</button>
               e.siegeDone = true;
             }
             if (e.behavior && enemyHolds(e, dt)) continue; // 試作の敵：射程で止まって撃つ・盾兵の後ろで待つ
-            e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1, e.evolutionSlow?.until>combatClock?1-e.evolutionSlow.value:1) * dt;
+            e.d += e.speed * Math.min(e.slow > 0 ? 0.48 : 1, e.heroSlowLeft > 0 ? e.heroSlow : 1, e.evolutionSlow?.until>combatClock?1-e.evolutionSlow.value:1,e.ultimateStunUntil>combatClock?0:1) * dt;
             Object.assign(e, pathAt(e.path, e.d));
             if (e.x >= 960 && !e.gone) {
               if (e.rare) {
@@ -17282,7 +17295,7 @@ OFF</button>
           if (!isHeroSoldier(s)) act += '<button data-make-hero="' + s.id + '">👑 主人公にする</button>';
           act += '<button data-job-open="' + s.id + '">🔄 転職</button>';
           act += '<button data-gear-open="' + s.id + '">🎒 装備</button>';
-          if (jobOf(s) === "sword_saint" || ougiKnownOf(s).length) act += '<button data-ougi-for="' + s.id + '">⚔ 奥義</button>'; // 伝説の奥義（試作）
+          if (ougiForJob(jobOf(s)).length || ougiKnownOf(s).length) act += '<button data-ougi-for="' + s.id + '">⚔ 奥義</button>'; // 伝説の奥義（試作）
           // 指導員として引退：Lv100から（主人公は引退できない）。Lv99以下は押せないボタンで条件を見せる
           if (!isHeroSoldier(s))
             act +=
@@ -17532,18 +17545,19 @@ OFF</button>
         function renderOugiSheet() {
           const s=ougiSheetFor!=null?soldierById(ougiSheetFor):null, choice=s&&autoOugiChoice(s), busy=legendBusyError();
           const active=soldiers.filter(s=>autoOugiChoice(s));
-          let html='<p><b>⚔ 兵士ごとの自動奥義</b></p><p>戦場にいる兵士が、戦闘中の60秒ごとに30％で自動発動します。外れたら次の60秒後。WAVE・モード切替でも待ち時間は引き継ぎ、停止・メニュー中は進みません。対象がいなければ抽選を待ちます。</p><p><small>各兵士は有効な奥義を1つ選べます。複数の兵士が使用でき、演出は少しずつずらします。現在の職業が剣聖のときに使えます。</small></p>';
+          let html='<p><b>⚔ 兵士ごとの自動奥義</b></p><p>戦場にいる兵士が、戦闘中の60秒ごとに30％で自動発動します。外れたら次の60秒後。WAVE・モード切替でも待ち時間は引き継ぎ、停止・メニュー中は進みません。対象がいなければ抽選を待ちます。</p><p><small>各兵士は有効な奥義を1つ選べます。複数の兵士が使用でき、演出は少しずつずらします。現在の職業に対応する奥義を使えます。</small></p>';
           if(active.length) html+='<p>有効：'+active.map(x=>esc(soldierName(x))+'「'+LEGEND_OUGI[autoOugiChoice(x).k].name+'」').join('／')+'</p>';
           if(busy)html+='<p class="injured">'+esc(busy)+'</p>';
           if(s){
             html+='<h4>'+esc(soldierName(s))+'（'+jobName(s)+'）</h4><p>自動奥義：'+(choice?LEGEND_OUGI[choice.k].name:'なし')+'</p>';
+            html+=ultimateOugiRequirement(s);
             if(choice)html+='<button data-ougi-clear="'+s.id+'"'+(busy?' disabled':'')+'>この兵士の自動奥義を解除</button>';
             const known=ougiKnownOf(s);
             html+=known.map(k=>ougiCardHtml(k,'<p><small>自分で閃いた奥義</small></p>'+(choice?.k===k&&choice.book==null?'<p>✅ 自動発動中</p>':'<button data-ougi-self="'+k+'"'+(ougiHeirError(s,{k})?' disabled':'')+'>この奥義を自動発動する</button>'))).join('');
-            if(!known.length)html+='<p><small>閃きの条件：剣聖・Lv150以上・剣聖熟練10・強敵への最後の一撃10回以上。修練場の「新しい戦い（試作）」で、強敵撃破・挑戦クリア時にごくまれに閃きます。</small></p>';
+            if(!known.length && jobOf(s)==="sword_saint")html+='<p><small>閃きの条件：剣聖・Lv150以上・剣聖熟練10・強敵への最後の一撃10回以上。修練場の「新しい戦い（試作）」で、強敵撃破・挑戦クリア時にごくまれに閃きます。</small></p>';
           }
           const books=ougiBooks();
-          html+='<h4>奥義書 '+books.length+'/'+OUGI_RULES.books+'冊</h4><p><small>消費しません。1冊につき同時に1人が継承できます。習得した剣聖の指導員引退で1冊残せます。</small></p>';
+          html+='<h4>奥義書 '+books.length+'/'+OUGI_RULES.books+'冊</h4><p><small>消費しません。1冊につき同時に1人が継承できます。自分で奥義を習得した兵士の指導員引退で1冊残せます。</small></p>';
           if(!books.length)html+='<p>奥義書はまだありません。</p>';
           for(const book of books){
             const owner=autoOugiBookOwner(book.uid);
@@ -17698,7 +17712,7 @@ OFF</button>
               );
               if (retireBonus) toast("🌟 超秘伝書「" + LEGEND.abil[retireBonus.k].name + "」を手に入れた！");
               if (retireOugiBook) {
-                msg("⚔ " + name + " が奥義書「" + LEGEND_OUGI[retireOugiBook.k].name + "」を残しました（兵士名簿の剣聖の ⚔ 奥義 から継承）。");
+                msg("⚔ " + name + " が奥義書「" + LEGEND_OUGI[retireOugiBook.k].name + "」を残しました（兵士名簿の対応する最上級職の ⚔ 奥義 から継承）。");
                 toast("⚔ 奥義書「" + LEGEND_OUGI[retireOugiBook.k].name + "」（伝承者：" + retireOugiBook.from + "）");
               }
               closeRetire();
@@ -20342,7 +20356,7 @@ OFF</button>
         const bossDown = (B) => !!(B && B.boss && !bossOf(B));
         // 範囲攻撃：部隊の兵士全員へ（守りの陣・防御・回避・装備がそれぞれ効く）
         function bossBlast(g, raw, kind) {
-          for (const s of groupAlive(g)) if (groupActive(g)) battleHurt(g, raw, true, kind, s);
+          for (const s of groupAlive(g)) if (groupActive(g)) battleHurt(g, raw, true, kind, s, bossOf(battle));
         }
         const activeGroups = (B) => B.groups.filter(groupActive);
         // 一番人数の多い部隊（落雷・砲撃の狙い）
@@ -20373,7 +20387,7 @@ OFF</button>
             if (shots.length >= 160) shots.shift();
             shots.push({ x: e.x, y: e.y - 30, tx: g.x, ty: g.y - 16, type: "magic", age: 0, duration: 0.25, col: BOSSES[e.boss].color });
           }
-          battleHurt(g, raw, ranged, kind);
+          battleHurt(g, raw, ranged, kind, undefined, e);
         }
         // ボスが受けるダメージ：天魔機神は装甲（装甲無視で減らせる）、八岐は攻撃中の頭も傷つく
         function bossTakeDamage(e, dmg, s, extraPierce=0) {
@@ -21074,7 +21088,7 @@ OFF</button>
         // 守備兵・NPCの塔へのダメージ（兵士の攻撃と必殺技で共通）
         function battleHitGarrison(e, dmg, s, extraPierce=0) {
           dmg = e.boss ? bossTakeDamage(e, dmg, s, extraPierce) : siegeArmorDamage(e, dmg, s, extraPierce);
-          if(s && dmg>0)chronicleTouch(s);
+          if(s && dmg>0){chronicleTouch(s);ultimateOugiSegment(s).active=true;}
           if(s && (e.kind === "boss" || e.boss) && chronicleHas(s,"in_history_bossHunter"))dmg*=1.05;
           e.hp -= dmg;
           e.hit = 0.18;
@@ -21109,6 +21123,7 @@ OFF</button>
             s = who || alive[0];
           if (!s) return;
           if (evadeHit(s, battle.t)) return; // 回避術
+          if(!redirected)raw=ultimateOugiCover(s,alive,raw,(protector,part)=>battleHurt(g,part,ranged,kind,protector,enemy,true));
           if(!redirected)raw=chronicleCover(s,alive,raw,ranged,kind,(protector,part)=>battleHurt(g,part,ranged,kind,protector,enemy,true));
           const st = battleStats(g, s),
             weak = unitOf(s).spearWeak,
@@ -21496,6 +21511,7 @@ OFF</button>
           persistHeroes();
           B.castleHp = Math.max(0, B.castleHp);
           const report = [];
+          ultimateOugiFinish(B.groups.filter(g=>g.state!=="wait"&&g.state!=="empty").flatMap(g=>g.list),result === "win");
           for (const g of B.groups) {
             const launched = g.state !== "wait" && g.state !== "empty";
             const out = { name: g.name, launched, total: g.list.length, alive: 0, dead: [], hero: g.hero };
@@ -23308,6 +23324,7 @@ OFF</button>
           window.WD_DEBUG = {
             reorderSoldier: (id, target) => reorderSoldier(id, target),
             // 戦場試練（v107試作）
+            ultimateOugiApi: {rules:ULTIMATE_OUGI_RULES,finish:ultimateOugiFinish,flush:flushUltimateOugiRolls,heal:ultimateOugiHeal,activity:ultimateOugiActivity,control:ultimateOugiControl,kill:ultimateOugiKill,segment:ultimateOugiSegment,trialFinish:ultimateOugiTrialFinish,absorb:ultimateOugiAbsorb,cover:ultimateOugiCover},
             autoOugiApi: {rules:AUTO_OUGI_RULES,choice:autoOugiChoice,timer:autoOugiTimer,stats:autoOugiStats,context:autoOugiContextFor,aim:autoOugiAim,tick:tickAutoOugi,setRoll:f=>{autoOugiRollOverride=f||null;}},
             trial: {carryXp:trialCarryXp,saveCarryXp:trialSaveCarryXp,gainXp:trialGainXp,hitUnit:trialHitUnit,
               rules: TRIAL_RULES,

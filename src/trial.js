@@ -196,7 +196,7 @@ function trialBusyError() {
 // 試練の写し：本番の兵士を読み、戦闘中の値だけを自分に持つ（本番の兵士へは書き込まない）。経験値も入らない（trialShadow）
 function trialShadow(s, hp) {
   const sh = Object.create(s);
-  Object.assign(sh, { trialShadow: true, alive: true, out: false, siegeOut: false, hp, evolution: null, evolutionShield: null, evolutionGuard: null });
+  Object.assign(sh, { chronicle: JSON.parse(JSON.stringify(chronicleOf(s))), ultimateWard:null, trialShadow: true, alive: true, out: false, siegeOut: false, hp, evolution: null, evolutionShield: null, evolutionGuard: null });
   return sh;
 }
 // 兵士の強さ（比べるための目安）：1秒あたりの攻撃（回復）× 耐久（HP と防御）。武将の配属は戦場試練では使わない
@@ -242,6 +242,7 @@ function trialUnit(s, i) {
     kills: 0,
     dealt: 0,
     healed: 0,
+    ougiBaseline: Object.fromEntries(["healed",...ULTIMATE_OUGI_COUNTERS].map(k=>[k,chronicleOf(sh)[k]||0])),
     skills: {}, // 使った職業技・閃き { 技名: 回数 }
     dead: false,
     walk: 0,
@@ -536,6 +537,7 @@ function trialRaijinTick(T, dt) {
 }
 // 大将を倒した：敵と時間を止め、残りのコインは全部経験値に。宝箱を出す
 function trialStageClear(T) {
+  ultimateOugiTrialFinish(T,true);
   const great = !!T.boss.great,
     h = T.units.find((u) => u.id === T.hero);
   T.bosses++;
@@ -2831,6 +2833,7 @@ function trialEvolution(u, target, event = "attack", beforeRatio = null) {
       m.s.hp = Math.min(m.max, m.s.hp + amount * healTakenMul(m.s));
       const got = Math.max(0, m.s.hp - before);
       u.healed += got;
+      chronicleHeal(s,m.s,before,m.max);
       return got;
     },
   };
@@ -2985,6 +2988,7 @@ function trialUnitAct(u, foes, live, dt) {
     const hp0 = best.hp;
     best.hp = Math.min(best.max, best.hp + amount * healTakenMul(best.sh));
     u.healed += best.hp - hp0;
+    chronicleHeal(s,best.sh,hp0,best.max);
     u.atk = 0.18;
     trialHealFx(best);
     trialSfx("heal");
@@ -3066,10 +3070,12 @@ function trialHitEnemy(u, e, raw, pierce = 0, cover = false) {
   if (u.rageUntil > trial.t) dmg *= TRIAL_UNIQUE.akazonae.mul; // v112 固有の技「赤備え」
   const hp0 = e.hp;
   e.hp -= dmg;
+  ultimateOugiSegment(u.sh).active=true;
   e.hit = 0.18;
   u.dealt += Math.min(dmg, Math.max(0, hp0));
   if (e.hp <= 0 && !e.gone) {
     e.gone = true;
+    chronicleKill(u.sh,e);
     u.kills++;
     trial.kills++;
     if (trial.mode === "survival") trialDropCoin(trial, e), trialMagnetDrop(trial, e);
@@ -3084,7 +3090,7 @@ function trialEnemyAct(e, live, dt) {
   e.retarget -= dt;
   const a = e.attackConf,
     range = a.ranged || 0,
-    slow = e.evolutionSlow && e.evolutionSlow.until > T_now() ? 1 - e.evolutionSlow.value : 1,
+    slow = e.ultimateStunUntil > T_now() ? 0 : e.evolutionSlow && e.evolutionSlow.until > T_now() ? 1 - e.evolutionSlow.value : 1,
     speed = e.speed * slow;
   if (e.target && (e.target.dead || (!e.joined && trialDist(e, e.target) > TRIAL_RULES.aggro + 80))) e.target = null;
   if (!e.target || e.retarget <= 0) {
@@ -3166,7 +3172,8 @@ function trialUnstick(e, dt) {
   }
 }
 // 敵の攻撃のダメージ：兵士の防御・受けるダメージ軽減のスキル・職業技の盾（防衛戦と同じ式）。一撃は最大HPの6割まで
-function trialHitUnit(u, raw, ranged, e) {
+function trialHitUnit(u, raw, ranged, e, redirected = false) {
+  if(!redirected)raw=ultimateOugiCover(u.sh,trial.units.filter(v=>v.placed&&!v.dead).map(v=>v.sh),raw,(body,part)=>{const other=trial.units.find(v=>v.sh===body);if(other)trialHitUnit(other,part,ranged,e,true);});
   if (trial.mode === "survival" && trial.st < TRIAL_STAGES.grace) return; // v108.7 面の始まりは攻撃を受けない
   const s = u.sh,
     st = soldierStats(s, true),
@@ -3312,6 +3319,7 @@ function endTrial(result) {
   if (!T || T.result) return;
   T.result = result;
   T.phase = "end";
+  ultimateOugiTrialFinish(T,result === "win" || !!((T.explore || T.cleared) && result === "retreat"));
   const carryXp = trialCarryXp(T);
   if (carryXp && !carryXp.awards.length) carryXp.saved = true;
   else if (carryXp) trialSaveCarryXp(carryXp);
