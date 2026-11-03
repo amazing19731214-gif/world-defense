@@ -3201,7 +3201,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v121（編成の現在職熟練度順）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v122（成長適性の実・回復の実）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -8691,13 +8691,14 @@ function chronicleWarBonusBlock(s) {
         const legendStatText = (st) => LEGEND.stats[st.k].name + " +" + st.v + LEGEND.stats[st.k].unit;
         const legendAbilName = (a) => LEGEND.abil[a.k].icon + LEGEND.abil[a.k].name + "（" + lpct(a.v) + "）";
         // 最大HPに伝説の能力値（有効なもの）を足す
-        // ===== 小判の商店：能力の実（使うと、その兵士の能力がずっと 1 上がる）と、書の売値 =====
+        // ===== 小判の商店：成長適性の実・射程の実と、書の売値 =====
         const SHOP = {
           fruits: {
-            // up：実1個で上がる量
-            atk: { name: "攻撃の実", icon: "🍎", stat: "攻撃", up: 1 },
-            def: { name: "防御の実", icon: "🍐", stat: "防御", up: 1 },
-            hp: { name: "体力の実", icon: "🍑", stat: "最大HP", up: 10 },
+            // growth：今後の成長適性を1ランク上げる。upは以前食べた実の能力補正を維持するために残す。
+            atk: { name: "攻撃の実", icon: "🍎", stat: "攻撃", up: 1, growth: "atk" },
+            def: { name: "防御の実", icon: "🍐", stat: "防御", up: 1, growth: "def" },
+            hp: { name: "体力の実", icon: "🍑", stat: "HP", up: 10, growth: "hp" },
+            heal: { name: "回復の実", icon: "🍒", stat: "回復", up: 0, growth: "heal" },
             rng: { name: "射程の実", icon: "🍇", stat: "射程", up: 1 },
           },
           fruitPrice: 5000, // 実の値段（両）
@@ -8721,6 +8722,7 @@ function chronicleWarBonusBlock(s) {
         const GEM_MAX = 99; // 1種類の玉を持てる数
         const fruitOf = (s, k) => (s && s.fruit && s.fruit[k]) || 0;
         const fruitUp = (s, k) => fruitOf(s, k) * SHOP.fruits[k].up; // 食べた実で上がった量
+        const fruitEffectText = (f) => f.growth ? f.stat + "の成長適性 +1ランク（Sまで）" : f.stat + " +" + f.up;
         const legendHp = (s, hp) =>
           Math.round(hp * (1 + legendStatVal(s, "hpPct") / 100) + legendStatVal(s, "hpFlat") + fruitUp(s, "hp")) + chronicleWarBonus(s).hp;
         function rollLegend() {
@@ -12893,28 +12895,43 @@ window.addEventListener("pagehide", () => {
           if (!((F.fruits || {})[k] > 0)) return SHOP.fruits[k].name + "を持っていません。";
           if (!s || !s.alive) return "その兵士には使えません。";
           if (!savedSoldier(s.id)) return "雇ったばかりの兵士は、ウェーブをクリアしてから使えます。";
-          if (fruitOf(s, k) >= SHOP.maxEat) return "これ以上は食べられません。";
+          const f = SHOP.fruits[k];
+          if (f.growth && chronicleGrowthRanks(s).values[f.growth] >= 10) return f.stat + "の成長適性はSです。これ以上は上がりません（実は消費しません）。";
+          if (!f.growth && fruitOf(s, k) >= SHOP.maxEat) return "これ以上は食べられません。";
           return legendBusyError();
         }
-        // 能力の実を兵士に使う：その兵士の能力がずっと 1 上がる（実は1個減る）。兵士と倉庫を同じ保存で確定する
+        // 成長適性は今後のレベルアップに適用。過去の成長・旧仕様の実の補正は変えない。兵士と倉庫を同時確定する。
         function useFruit(s, k) {
           const err = useFruitError(s, k);
           if (err) return err;
           const F = forgeSave(),
+            f = SHOP.fruits[k],
             saved = savedSoldier(s.id),
-            before = { fruit: s.fruit ? Object.assign({}, s.fruit) : null, saved: saved.fruit, stock: F.fruits[k] };
-          s.fruit = Object.assign({}, s.fruit, { [k]: fruitOf(s, k) + 1 });
-          saved.fruit = Object.assign({}, s.fruit);
+            before = { fruit: s.fruit, saved: saved.fruit, chronicle: s.chronicle ? JSON.parse(JSON.stringify(s.chronicle)) : null, savedChronicle: saved.chronicle, stock: F.fruits[k], batch: gameSaveBatch, active: gameSaveBatchActive };
+          let effect = fruitEffectText(f);
+          if (f.growth) {
+            const ranks = chronicleGrowthRanks(s), old = ranks.values[f.growth];
+            ranks.values[f.growth] = old + 1;
+            // 保存済みの戦歴だけを写し、敗北・撤退などで未確定の戦歴や経験値を一緒に確定しない。
+            saved.chronicle = saved.chronicle ? JSON.parse(JSON.stringify(saved.chronicle)) : cleanChronicle(null, saved);
+            chronicleGrowthRanks(saved).values[f.growth] = old + 1;
+            effect = f.stat + "の成長適性 " + chronicleGrade(old) + " → " + chronicleGrade(old + 1);
+          } else {
+            s.fruit = Object.assign({}, s.fruit, { [k]: fruitOf(s, k) + 1 });
+            saved.fruit = Object.assign({}, s.fruit);
+          }
           if (--F.fruits[k] <= 0) delete F.fruits[k];
           if (!commitLegend()) {
             s.fruit = before.fruit;
             saved.fruit = before.saved;
+            s.chronicle = before.chronicle;
+            saved.chronicle = before.savedChronicle;
             F.fruits[k] = before.stock;
-            gameSaveBatch = null;
-            gameSaveBatchActive = false;
+            gameSaveBatch = before.batch;
+            gameSaveBatchActive = before.active;
             return "保存できなかったので使いませんでした（実は残っています）。";
           }
-          logHistory(s, SHOP.fruits[k].name + "を食べた（" + SHOP.fruits[k].stat + " +" + SHOP.fruits[k].up + "）");
+          logHistory(s, f.name + "を食べた（" + effect + "）");
           return null;
         }
         // 並び替え・絞り込み（攻撃・防御は装備の「攻撃 +％」「防御 +％」の値で比べる。特殊効果は数えない。同じなら手に入れた順）
@@ -23312,7 +23329,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
               ? "<br>能力の実：" +
                 Object.entries(SHOP.fruits)
                   .filter(([k]) => fruitOf(s, k))
-                  .map(([k, f]) => f.icon + f.stat + " +" + fruitUp(s, k))
+                  .map(([k, f]) => f.icon + (k === "hp" ? "最大HP" : f.stat) + " +" + fruitUp(s, k))
                   .join("・")
               : "") +
             "</small></p>" +
@@ -23454,6 +23471,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                       jobName(s) +
                       " Lv" +
                       s.level +
+                      (attr === "fruit-to" && SHOP.fruits[val]?.growth ? "・" + SHOP.fruits[val].stat + "適性 " + chronicleGrade(chronicleGrowthRanks(s).values[SHOP.fruits[val].growth]) + " → " + chronicleGrade(chronicleGrowthRanks(s).values[SHOP.fruits[val].growth] + 1) : "") +
                       "</small></button>",
                   )
                   .join("")
@@ -23638,7 +23656,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
             const st = F.fruits || {};
             html += bossLureHtml();
             html +=
-              '<p class="muted"><small>能力の実：兵士に使うと、その兵士の能力がずっと上がります（攻撃・防御・射程は +1、最大HPは +10。何個でも・転職しても消えない）。1個 ' +
+              '<p class="muted"><small>能力の実：攻撃・防御・体力・回復は対応する成長適性を1ランク上げます（Sには使えず、消費しません）。今後のレベルアップから反映し、転職・復活でも適性は残ります。射程の実は射程 +1。以前食べた実の能力補正も残ります。1個 ' +
               kobanText(SHOP.fruitPrice) +
               "。買った実は倉庫に入り、ここから兵士に使えます。</small></p>" +
               '<div class="gear-list">' +
@@ -23650,9 +23668,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
                     '</span><span class="gr-main"><span class="gr-name">' +
                     f.name +
                     "</span><small>" +
-                    f.stat +
-                    " +" +
-                    f.up +
+                    fruitEffectText(f) +
                     "・" +
                     kobanText(SHOP.fruitPrice) +
                     "・持っている数 " +
@@ -24055,7 +24071,7 @@ for (const type of ["pointerdown", "pointermove", "pointerup", "click"])
           else if (d.fruitTo) {
             const s = soldierById(+d.to);
             err = useFruit(s, d.fruitTo);
-            if (!err) gearNote = soldierName(s) + " は" + SHOP.fruits[d.fruitTo].name + "を食べた（" + SHOP.fruits[d.fruitTo].stat + " +" + SHOP.fruits[d.fruitTo].up + "）。";
+            if (!err) gearNote = soldierName(s) + " は" + SHOP.fruits[d.fruitTo].name + "を食べた（" + fruitEffectText(SHOP.fruits[d.fruitTo]) + "）。";
             gearPickFruit = null;
           } else if (d.bookSell) {
             if (!confirm("「" + SOLDIER_SKILLS[d.bookSell].name + "」の書を1冊、" + kobanText(SHOP.bookSell.skill) + "で売りますか？（元に戻せません）")) return;
