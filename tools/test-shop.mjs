@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 小判の商店：能力の実（攻撃・防御・体力・射程。1個5,000両・使うとその兵士の能力がずっと +1（最大HPは +10））と、書の売却
+// 小判の商店：能力の実（攻撃・防御・体力・回復は成長適性+1ランク、射程は+1。1個5,000両）と、書の売却
 // （スキルの書150両・伝承の秘伝書500両・🌟超秘伝書3,000両・装備中は売れない）・保存（失敗したら取り消す）・画面
 //   node tools/test-shop.mjs
 import { createRequire } from "node:module";
@@ -46,7 +46,24 @@ const save = {
   fallen: [],
 };
 for (let k = 0; k < 10; k++)
-  save.soldiers.push({ id: k + 1, type: "archer", squadId: 1, level: 40, skills: [], learned: [] });
+  save.soldiers.push({
+    id: k + 1,
+    type: "archer",
+    squadId: 1,
+    level: 40,
+    skills: [],
+    learned: [],
+    chronicle: {
+      life: "shop-test:" + (k + 1),
+      aptitude: {
+        version: 1,
+        type: "balanced",
+        level: 40,
+        startAt: 40,
+        ranks: { version: 1, level: 40, startAt: 40, values: { hp: 5, atk: 5, def: 5, heal: 5 }, gains: {} },
+      },
+    },
+  });
 const forge = {
   version: 1,
   owned: {},
@@ -55,7 +72,7 @@ const forge = {
   forge: {
     items: [],
     seq: 0,
-    koban: 22000,
+    koban: 27000,
     books: { shingan: 2 },
     legendBooks: [
       { uid: 1, type: "stat", k: "atkFlat", v: 2, from: "騎兵 #200" },
@@ -111,7 +128,7 @@ console.log("■ 能力の実を買う");
 let r = await ev(() => {
   const L = WD_DEBUG.legendApi,
     F = WD_DEBUG.forgeApi;
-  const e = [L.buyFruit("atk"), L.buyFruit("hp"), L.buyFruit("def"), L.buyFruit("rng")];
+  const e = [L.buyFruit("atk"), L.buyFruit("hp"), L.buyFruit("def"), L.buyFruit("rng"), L.buyFruit("heal")];
   return {
     price: L.SHOP.fruitPrice,
     e,
@@ -122,10 +139,10 @@ let r = await ev(() => {
 });
 check("1個5,000両", r.price === 5000);
 check(
-  "小判で買える（22,000 → 4個で2,000両）・倉庫に入る・保存される",
+  "小判で買える（27,000 → 5個で2,000両）・倉庫に入る・保存される",
   r.e.every((e) => e === null) &&
     r.koban === 2000 &&
-    JSON.stringify(r.stock) === '{"atk":1,"hp":1,"def":1,"rng":1}' &&
+    JSON.stringify(r.stock) === '{"atk":1,"hp":1,"def":1,"rng":1,"heal":1}' &&
     JSON.stringify(r.saved) === JSON.stringify(r.stock),
   JSON.stringify(r),
 );
@@ -138,7 +155,7 @@ r = await ev(() => {
     a = WD_DEBUG.squadApi,
     s = WD_DEBUG.state().soldiers.find((x) => x.id === 1),
     before = a.soldierStats(s);
-  const e = ["atk", "def", "hp", "rng"].map((k) => L.useFruit(s, k));
+  const e = ["atk", "def", "hp", "rng", "heal"].map((k) => L.useFruit(s, k));
   const after = a.soldierStats(s);
   return {
     e,
@@ -147,18 +164,23 @@ r = await ev(() => {
     hp: after.maxHp - before.maxHp,
     range: after.range - before.range,
     fruit: s.fruit,
+    ranks: WD_DEBUG.chronicleApi.growthRanks(s).values,
     stock: WD_DEBUG.forgeApi.save().fruits,
     again: L.useFruit(s, "atk"),
   };
 });
 check(
-  "4種類とも使える",
+  "5種類とも使える",
   r.e.every((e) => e === null),
   JSON.stringify(r.e),
 );
 check(
-  "その兵士の攻撃・防御・射程は +1、最大HPは +10",
-  Math.abs(r.atk - 1) < 1e-6 && Math.abs(r.def - 1) < 1e-6 && r.hp === 10 && Math.abs(r.range - 1) < 1e-6,
+  "成長適性4項目が1ランク上がり、現在の能力は維持。射程だけ+1",
+  r.atk === 0 &&
+    r.def === 0 &&
+    r.hp === 0 &&
+    Math.abs(r.range - 1) < 1e-6 &&
+    Object.values(r.ranks).every((v) => v === 6),
   JSON.stringify(r),
 );
 check(
@@ -171,10 +193,12 @@ r = await ev(() => ({
   fruit: WD_DEBUG.state().soldiers.find((x) => x.id === 1).fruit,
   saved: JSON.parse(localStorage.getItem("worldDefense.soldiers.v1")).soldiers.find((x) => x.id === 1).fruit,
   stock: WD_DEBUG.forgeApi.save().fruits,
+  ranks: WD_DEBUG.chronicleApi.growthRanks(WD_DEBUG.state().soldiers.find((x) => x.id === 1)).values,
 }));
 check(
   "再読み込みしても、食べた実は残る（実はなくなったまま）",
-  JSON.stringify(r.fruit) === '{"atk":1,"def":1,"hp":1,"rng":1}' &&
+  JSON.stringify(r.fruit) === '{"rng":1}' &&
+    Object.values(r.ranks).every((v) => v === 6) &&
     JSON.stringify(r.saved) === JSON.stringify(r.fruit) &&
     JSON.stringify(r.stock) === "{}",
   JSON.stringify(r),
@@ -255,11 +279,13 @@ await page.tap("#gearOpen");
 await page.tap('[data-gear-tab="shop"]');
 let text = await page.textContent("#gearBody");
 check(
-  "🏪 商店に4種類の実・値段・持っている数・書の売値",
+  "🏪 商店に5種類の実・値段・持っている数・書の売値",
   /攻撃の実/.test(text) &&
     /防御の実/.test(text) &&
     /体力の実/.test(text) &&
     /射程の実/.test(text) &&
+    /回復の実/.test(text) &&
+    /成長適性/.test(text) &&
     /5,000両/.test(text) &&
     /書の売値/.test(text),
   text.slice(0, 300),
@@ -267,15 +293,11 @@ check(
 await page.tap('[data-fruit-pick="atk"]');
 await page.tap('[data-fruit-to="atk"][data-to="4"]');
 r = await ev(() => ({
-  fruit: WD_DEBUG.state().soldiers.find((x) => x.id === 4).fruit,
+  rank: WD_DEBUG.chronicleApi.growthRanks(WD_DEBUG.state().soldiers.find((x) => x.id === 4)).values.atk,
   note: document.querySelector("#gearBody .saved").textContent,
   h: document.documentElement.scrollWidth > innerWidth,
 }));
-check(
-  "画面から兵士に使える",
-  r.fruit && r.fruit.atk === 1 && /攻撃の実を食べた/.test(r.note) && !r.h,
-  JSON.stringify(r),
-);
+check("画面から兵士に使える", r.rank === 6 && /攻撃の実を食べた/.test(r.note) && !r.h, JSON.stringify(r));
 await page.tap('[data-gear-tab="books"]');
 const k0 = await ev(() => WD_DEBUG.forgeApi.koban());
 await page.tap('[data-book-sell="shingan"]');
