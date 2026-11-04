@@ -2890,6 +2890,7 @@
       .formation-tab-inner { min-height: 0; overflow: hidden; }
       .formation-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 6px; line-height: 1.4; }
       .formation-job { display: flex; flex-wrap: wrap; column-gap: 10px; line-height: 1.4; }
+      #ougiSheet .panel-head { position: sticky; top: -12px; z-index: 3; background: #12343c; padding: 6px 0; }
       .formation-record { display: block; opacity: .85; }
       .formation-group-controls summary { cursor: pointer; padding: 8px 0; min-height: 34px; }
       .formation-group-controls { margin: 8px 0; }
@@ -3201,7 +3202,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v123（最上級7職の奥義・奥義書）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v124（奥義の習得率・50回天井・抽選状況）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -7910,12 +7911,13 @@ OFF</button>
           level: 150, // 奥義の閃き：剣聖の Lv
           prof: 10, // 剣聖の熟練度
           bossKills: 10, // 戦歴「強敵への最後の一撃」の回数
-          // 閃く確率（v106.3）：初めは0.1%。続けて外れた回数10回ごとに +0.1ポイント、最大2%。閃いたら外れた回数を0に戻す。
+          // 習得率：初期2%、連続不発10回ごと+1ポイント・最大10%。50回目は確定。既存の不発回数を引き継ぐ。
           // 抽選は中ボス・大将への最後の一撃と、修練場の挑戦クリア（雑魚の撃破・通常攻撃では引かない）
-          rate: 0.001,
-          rateStep: 0.001,
+          rate: 0.02,
+          rateStep: 0.01,
           rateEvery: 10,
-          rateMax: 0.02,
+          rateMax: 0.10,
+          pity: 50,
           books: 500, // 奥義書の倉庫（伝承の秘伝書の200冊とは別）
         };
         let ougiRollOverride = null; // 試験用：閃きの抽選の結果を差し替える
@@ -8098,7 +8100,8 @@ OFF</button>
             r = ougiRollOverride ? ougiRollOverride(s, n, why) : insightHash(seed) / 4294967296,
             list = ougiCandidates(s),
             rate = ougiRateOf(s),
-            k = r < rate ? list[insightHash(seed + ":pick") % list.length] : null;
+            guaranteed = (ougiSave.fails[life] || 0) >= OUGI_RULES.pity - 1,
+            k = guaranteed || r < rate ? list[insightHash(seed + ":pick") % list.length] : null;
           // 回数と結果を一緒に保存する（保存できなければ引かなかったことにして、次の機会に同じ番号で引き直す＝結果は同じ）
           const ok = ougiCommit((S) => {
             S.rolls[life] = n + 1;

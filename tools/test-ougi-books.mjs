@@ -409,24 +409,24 @@ try {
   check(r.known.join() === "soldier:life2" && r.heir === null, "再読み込みしても戦死・復活の結果は変わらない（データが矛盾しない）", r);
   await c.close();
 
-  // 10. 閃きの確率：0.1%から、続けて外れた10回ごとに +0.1ポイント、最大2%。閃いたら外れた回数を0に。3つ覚えたら引かない
+  // 10. 閃きの確率：初期2%・10回ごと+1ポイント・最大10%。天井は専用テストで検証。習得後は不発回数を0へ。
   ({ c, p } = await open());
   r = await p.evaluate(() => {
     const K = WD_DEBUG.combat.ougi;
     return [0, 9, 10, 19, 20, 29, 50, 59, 100, 109, 189, 190, 500, 1e6].map((f) => Math.round(K.rateFor(f) * 1e4) / 1e4);
   });
-  check(r.join() === "0.001,0.001,0.002,0.002,0.003,0.003,0.006,0.006,0.011,0.011,0.019,0.02,0.02,0.02", "確率：外れ0〜9回 0.1%・10〜19回 0.2%・20回台 0.3%・50回台 0.6%・100回台 1.1%・190回以上 2%（2%を超えない）", r);
+  check(r.join() === "0.02,0.02,0.03,0.03,0.04,0.04,0.07,0.07,0.1,0.1,0.1,0.1,0.1,0.1", "確率：初期2%・10回ごと+1ポイント・通常上限10%", r);
   r = await p.evaluate(() => {
     const K = WD_DEBUG.combat.ougi,
       life = "soldier:life2",
       fails = () => K.save().fails[life] || 0;
     WD_DEBUG.trainingApi.startTraining("beginner");
-    K.setRoll(() => 0.0015); // 0.1%では外れ、0.2%なら当たる値
+    K.setRoll(() => 0.025); // 2%では外れ、3%なら当たる値
     const out = [];
     for (let i = 0; i < 10; i++) out.push(K.roll(2));
     const f10 = fails(),
       rate10 = K.rate(2);
-    const hit = K.roll(2); // 外れ10回 → 0.2% なので当たる
+    const hit = K.roll(2); // 外れ10回 → 3%なので当たる
     const after = { fails: fails(), rate: K.rate(2), known: K.known(2) };
     K.setRoll(() => 0);
     K.roll(2);
@@ -438,8 +438,8 @@ try {
     K.setRoll(null);
     return { misses: out.every((v) => v === null), f10, rate10, hit, after, all, none, rolls, rolls2, eligible: K.eligible(2) };
   });
-  check(r.misses && r.f10 === 10 && r.rate10 === 0.002, "外れるたびに外れた回数を数え、10回で確率が0.2%に上がる", r);
-  check(r.hit && r.after.fails === 0 && r.after.rate === 0.001 && r.after.known.length === 1, "閃くと外れた回数を0に戻し、確率も0.1%に戻る", r.after);
+  check(r.misses && r.f10 === 10 && r.rate10 === 0.03, "外れるたびに外れた回数を数え、10回で確率が3%に上がる", r);
+  check(r.hit && r.after.fails === 0 && r.after.rate === 0.02 && r.after.known.length === 1, "閃くと外れた回数を0に戻し、確率も2%に戻る", r.after);
   check(r.all === 3 && r.none === null && r.rolls === r.rolls2 && r.eligible === false, "3つすべて覚えたら、もう抽選しない（回数も増えない）", r);
   await reload(p);
   r = await p.evaluate(() => ({ fails: WD_DEBUG.combat.ougi.save().fails, rolls: WD_DEBUG.combat.ougi.save().rolls["soldier:life2"] }));

@@ -199,11 +199,58 @@ function ultimateOugiRequirement(s) {
     esc(JOBS[j].name) +
     "・Lv150以上・熟練10/10<br>" +
     esc(progress) +
-    "<br><small>最初0.1%、連続失敗10回ごとに+0.1ポイント、最大2%。" +
+    "<br><small>初期2%、連続不発10回ごとに+1ポイント、最大10%。50回目の対象抽選では確定習得。" +
     (j === "sword_saint"
       ? ""
       : "回復・攻撃・防御に貢献して勝利したWAVE／戦闘で1回抽選。戦場試練は勝利・面クリア・探索の正常帰還で確定。") +
-    "</small></p>"
+    "</small></p>" +
+    ougiLearningStatus(s)
+  );
+}
+function ougiLearningStatus(s) {
+  const life = ougiLife(s),
+    j = jobOf(s),
+    rolls = ougiSave.rolls[life] || 0,
+    fails = ougiSave.fails[life] || 0,
+    prof = profLv(s),
+    remaining = Math.max(1, OUGI_RULES.pity - fails),
+    complete = ougiCandidates(s).length === 0,
+    missing = [];
+  if (s.level < OUGI_RULES.level) missing.push("Lv" + OUGI_RULES.level + "未満");
+  if (prof < OUGI_RULES.prof) missing.push("現在職の熟練度が10/10未満");
+  if (j === "sword_saint" ? chronicleOf(s).bossKills < OUGI_RULES.bossKills : !ultimateOugiEligible(s))
+    missing.push("職業別の戦歴条件が未達成");
+  const status = complete
+    ? "✅ この職業の奥義はすべて習得済み"
+    : missing.length
+      ? "🔒 抽選条件未達成：" + missing.join("・")
+      : "✅ 能力・実績の抽選条件を達成しています";
+  const where =
+    j === "sword_saint"
+      ? "剣聖の習得抽選は、修練場の「新しい戦い（試作）」での強敵撃破・挑戦クリア時のみです。通常防衛やサバイバルでは習得抽選しません。習得した奥義の使用は全モード共通です。"
+      : "攻撃・回復・防御に貢献して生還した勝利結果で、1回だけ習得抽選します。";
+  const next =
+    remaining === 1
+      ? "次の対象抽選で確定習得"
+      : "次回の習得率：" + Math.round(ougiRateOf(s) * 100) + "%・確定まであと" + remaining + "回以内";
+  return (
+    '<div class="ougi-learning-status"><p><b>本人の現在値・習得抽選</b><br>現在Lv' +
+    s.level +
+    "・" +
+    esc(JOBS[j].name) +
+    "熟練度 " +
+    prof +
+    "/10<br>" +
+    esc(status) +
+    "</p><p>実際の習得抽選：" +
+    rolls +
+    "回<br>連続不発：" +
+    fails +
+    "回" +
+    (complete ? "" : "<br>" + esc(next)) +
+    "</p><p><small>回数はこの兵士の全職業合計です。討伐・支援回数や、戦闘中の30%の発動抽選とは別です。習得すると連続不発回数は0に戻ります。</small></p><p><small>" +
+    esc(where) +
+    "</small></p></div>"
   );
 }
 // 写しで戦う試練では戦歴も分離する。成功した区間の必要な戦歴だけを本物へ一度だけ持ち帰る。
