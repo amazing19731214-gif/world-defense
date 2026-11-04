@@ -207,7 +207,7 @@ try {
   });
   check(r.result === "win" && r.units === 5 && r.slv >= 5, "大将を倒すと面のクリア（サバイバルLv" + r.slv + "・" + r.time + "秒・撃破 " + r.kills + "）", { result: r.result, slv: r.slv, time: r.time });
   check(/サバイバル Lv\d+/.test(r.text) && /4\/4人が加入/.test(r.text) && /強化：/.test(r.text) && /この戦闘だけ/.test(r.text), "結果の画面：サバイバルLv・加入した仲間の数・取った強化（この戦闘だけと明記）", r.text.slice(0, 120));
-  check(await trialAssetsPreserved(p, save0), "持ち帰り経験値・熟練度以外の兵士・資産を維持し、挑戦限定の成長は保存しない");
+  check(await trialAssetsPreserved(p, save0), "持ち帰り経験値・熟練度・確定戦歴を反映し、挑戦限定の成長は保存しない");
   // 7. 次の戦闘では、強化もサバイバルLv も元に戻る（その戦闘だけ）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;
@@ -243,7 +243,7 @@ try {
     return T.result().result;
   });
   check(r === "lose", "主人公が倒れたら敗北", r);
-  check(await trialAssetsPreserved(p, save0), "敗北・撤退後も持ち帰り経験値以外の兵士・資産を維持");
+  check(await trialAssetsPreserved(p, save0), "敗北・撤退後も持ち帰り経験値・確定戦歴以外の兵士・資産を維持");
   // 大将が画面の外にいるとき：矢印を描く（エラーにならない）
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial;

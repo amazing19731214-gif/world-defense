@@ -345,6 +345,14 @@
       .next-goal { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: #2a3a2ccc; color: #f3e6b8; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
       .next-goal span { flex: 1; min-width: 0; }
       .next-goal button { flex: none; min-height: 44px; font-size: 14px; }
+      .next-goal.first-play { flex-wrap: wrap; border: 1px solid #d5b65c; }
+      .first-play .goal-text { flex: 1 1 160px; }
+      .first-play .goal-detail { flex: 1 1 190px; font-size: 12px; color: #e0e9de; }
+      .first-play #firstGuideDismiss { min-height: 36px; padding: 4px 8px; font-size: 12px; background: transparent; }
+      .guide-target { outline: 3px solid #ffd769 !important; outline-offset: 2px; }
+      #firstPlayHelp { margin-top: 12px; padding: 10px; border: 1px solid #82aa8d; border-radius: 10px; font-size: 14px; line-height: 1.6; }
+      #firstPlayHelp summary { cursor: pointer; min-height: 44px; font-weight: bold; }
+      #firstPlayHelp li { margin: 8px 0; }
       .tools.menu-tools button.feature-new { box-shadow: 0 0 0 3px #f2c14e; }
       .tools.menu-tools #showAllFeatures { font-size: 13px; }
       /* いちばん使う「ウェーブ開始」はマップのすぐ下の左に大きく */
@@ -3202,7 +3210,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v125（ネームド兵士の成長適性B以上）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v126（はじめての操作ガイド）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3221,6 +3229,21 @@ OFF</button>
           <button id="towerGrowthOpen" class="info-entry" aria-haspopup="dialog" aria-controls="towerGrowthSheet"><b>🏯 塔の育成</b><span id="infoTowerSummary"></span><small>種類別レベル・経験値・育成効果</small></button>
           <button id="skillGuideOpen" class="info-entry" aria-haspopup="dialog" aria-expanded="false" aria-controls="skillGuideSheet"><b>📖 スキル一覧</b><small>全武将・兵士・職業のスキルを調べる</small></button>
         </div>
+        <details id="firstPlayHelp">
+          <summary>🔰 はじめての遊び方・保存について</summary>
+          <p>道を進む敵から、城のハートを守るゲームです。攻撃は自動。準備ができたら「ウェーブ開始」を押しましょう。</p>
+          <ol>
+            <li>「建設」で塔を選び、道のそばの草地をタップ。最初は弓の塔がおすすめです。塔は全種類合わせて6基まで。</li>
+            <li>「部隊」→「＋ 雇う」で兵士を雇います。最初の1人は無料、以降は基本2,500G。兵種はランダムです。領土による割引後の料金は雇用ボタンに表示されます。仲間は「戦場試練 → 探索」の村でも増やせます。</li>
+            <li>部隊のボタンを押してから道をタップすると配置できます。最大8部隊、1部隊10人。準備中は配置した塔・部隊をドラッグして移動できます。</li>
+            <li>「ウェーブ開始」で戦闘。終了後は「全回復」で兵士と塔を治療できます（料金がかかります）。WAVE 3で「世界」が開き、城攻めへ進めます。</li>
+          </ol>
+          <p>WAVEクリア時は自動保存されます。メニューの「途中保存」も使えます。戦闘中に閉じると、最後に保存した準備状態から再開します。</p>
+          <p>セーブはこのブラウザに保存されます。別の端末・ブラウザには自動で移りません。ブラウザのサイトデータを消すと失われます。</p>
+          <p>「最初から」は防衛のWAVEをやり直します。育成などの記録をすべて消す「データ消去」とは別です。</p>
+          <button id="firstGuideOpen" type="button">🔰 操作ガイドを表示</button>
+          <p id="firstGuideDone" hidden>最初の防衛はクリア済みです。「次の目標」から続きを遊べます。操作はこの説明でいつでも確認できます。</p>
+        </details>
       </section>
     </div>
     <div id="towerGrowthSheet" class="sheet-back" hidden>
@@ -13577,6 +13600,7 @@ OFF</button>
           for (const s of shots) projectile(s);
           for (const e of effects) effect(e);
           drawDrag();
+          if (firstPlayReady) drawFirstPlayHint();
           screenSpace(drawCombatOverlay); // 試作：奥義の技名・閃光
           screenSpace(drawCutin);
         }
@@ -18892,6 +18916,7 @@ OFF</button>
         };
         var dockReady = false; // コンパクト表示の準備ができたか（var：起動の途中のupdateUIでも参照できる）
         var onboardReady = false; // 段階開放の準備ができたか（var：起動の途中のupdateUIでも参照できる）
+        var firstPlayReady = false;
         var territoryReady = false; // 領土のデータの準備ができたか（var：起動の途中でも参照できる）
         // 領土の効果（国の特産）。領土にした国の効果が防衛戦に効く（同じ種類は足し合わせる）
         //   waveGold … ウェーブクリアのゴールド（割合）、startGold … 開始ゴールド、repair … 塔の修理費の割引、hire … 兵士の雇用・補充費の割引
@@ -19862,6 +19887,7 @@ OFF</button>
             art: ok && (d.art === "classic" || d.art === "pixel") ? d.art : ok && d.gfx === "pixel" ? "pixel" : undefined, // 絵：自分で選んだときだけ（v105.3）
             combatProto: ok && d.combatProto === true ? true : undefined, // 修練場の「新しい戦い（試作）」（v106試作）
             all: ok ? d.all === true : !UI_FRESH_START, // 記録がなく他の保存データがあれば既存のプレイヤー
+            firstGuideHidden: ok ? (typeof d.firstGuideHidden === "boolean" ? d.firstGuideHidden : d.all === true) : !UI_FRESH_START,
             maxWave: ok && Number.isInteger(d.maxWave) && d.maxWave > 0 ? d.maxWave : 0,
             seen,
             fresh,
@@ -19926,7 +19952,9 @@ OFF</button>
             persistUi();
             if (onboardShown) toast("🔓 " + opened.map((id) => $(id).textContent.replace(/\(\d+\)$/, "")).join("・") + " が使えるようになりました");
           }
-          const goal = battle || training ? null : nextGoal(s);
+          const intro = firstPlayReady ? firstPlayGoal(s) : null;
+          if (firstPlayReady) renderFirstPlayTargets(intro);
+          const goal = battle || training || trial ? null : intro || nextGoal(s);
           const key = JSON.stringify([uiSave, goal]);
           if (key === onboardKey) return;
           onboardKey = key;
@@ -19942,15 +19970,27 @@ OFF</button>
           $("showAllFeatures").textContent = "🔓 全機能を表示（あと" + locked + "）";
           const el = $("nextGoal");
           el.hidden = !goal;
+          el.classList.toggle("first-play", !!goal?.intro);
           if (!goal) return;
           const span = document.createElement("span");
+          span.className = "goal-text";
           span.textContent = "🎯 次の目標：" + goal.text;
           el.replaceChildren(span);
           if (goal.act) {
             const b = document.createElement("button");
             b.dataset.goalAct = goal.act;
-            b.textContent = goal.act === "map" ? "🌏 開く" : "🎴 開く";
+            b.textContent = goal.label || (goal.act === "map" ? "🌏 開く" : "🎴 開く");
             el.append(b);
+          }
+          if (goal.intro) {
+            const detail = document.createElement("span"), dismiss = document.createElement("button");
+            detail.className = "goal-detail";
+            detail.textContent = goal.detail;
+            dismiss.id = "firstGuideDismiss";
+            dismiss.type = "button";
+            dismiss.textContent = "案内を終了";
+            dismiss.onclick = () => { uiSave.firstGuideHidden = true; persistUi(); renderOnboarding(); };
+            el.append(detail, dismiss);
           }
         }
         for (const F of ONBOARD_FEATURES)
@@ -19968,7 +20008,8 @@ OFF</button>
         };
         $("nextGoal").addEventListener("click", (ev) => {
           const act = ev.target.closest("[data-goal-act]")?.dataset.goalAct;
-          if (act) $(act === "map" ? "mapOpen" : "gacha").click();
+          if (act === "map" || act === "gacha") $(act === "map" ? "mapOpen" : "gacha").click();
+          else if (act && firstPlayReady) firstPlayAction(act);
         });
         onboardReady = true;
         renderOnboarding();
@@ -20120,6 +20161,7 @@ OFF</button>
         }
         dockReady = true;
         renderDock();
+        /*@@FIRST_PLAY@@*/
         const unseenSecrets = () => Object.keys(SECRETS).filter((id) => conquestMeta.secrets[id] && !conquestMeta.secretSeen[id]);
         function markSecretsSeen(ids) {
           for (const id of ids) conquestMeta.secretSeen[id] = true;
