@@ -3210,7 +3210,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v126（はじめての操作ガイド）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v127（戦場試練の表示整理）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -3435,7 +3435,7 @@ OFF</button>
     <div id="trialSheet" class="sheet-back" hidden>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="trialTitle">
         <div class="panel-head hg-head">
-          <strong id="trialTitle">⚔️ 戦場試練（試作）</strong
+          <strong id="trialTitle">⚔️ 戦場試練</strong
           ><button id="trialClose" class="icon-btn" aria-label="閉じる">✕ 閉じる</button>
         </div>
         <div id="trialBody"></div>
@@ -21881,7 +21881,7 @@ function trialHitUnit(u, raw, ranged, e, redirected = false) {
       const heroFell = isHeroSoldier(u.src);
       trialExploreDeath(u); // v113 探索：本当に戦死（英霊名鑑へ。テスト版の保存領域）。主人公は死なず Lv1 から再出発
       msg(heroFell ? "👑 主人公 " + u.name + " が倒れた。Lv1から再出発（探索は終わり）" : "☠ " + u.name + " が戦死した（英霊名鑑へ）");
-    } else msg("☠ " + u.name + " が倒れた（戦場試練・試作のため本番の兵士は無事）");
+    } else msg("☠ " + u.name + " が倒れた（このモードでは兵士は失われません）");
   }
 }
 // ===== 演出（控えめ。技名は職業技・閃きの演出が出す。数の上限つき） =====
@@ -22658,7 +22658,7 @@ function renderTrialSheet() {
           (R.waiting.length ? '<br><small class="muted">加入しなかった候補：' + R.waiting.map(esc).join("・") + "</small>" : "") +
           '<br><small class="muted">サバイバルLv・強化・加入は、この戦闘だけのものです。持ち帰り経験値は別に兵士へ入ります。</small></p>'
         : "<p>撃破 <b>" + R.kills + (X ? "" : "/" + R.total) + "</b>・敵Lv " + R.level + "・" + Math.floor(R.time) + "秒" + (X ? "・サバイバルLv" + R.slv : "") + "</p>") +
-      "<p>生存 " + alive.length + "人・戦死 " + dead.length + "人" + (dead.length && !R.real ? '<br><small class="muted">試作のため戦死は仮です。本番の兵士は失われず、英霊名鑑にも載りません。</small>' : "") + "</p>" +
+      "<p>生存 " + alive.length + "人・戦死 " + dead.length + "人" + (dead.length && !R.real ? '<br><small class="muted">このモードでの戦死は仮です。兵士は失われず、英霊名鑑にも載りません。</small>' : "") + "</p>" +
       '<div class="trial-units">' +
       R.units
         .map((u) => {
@@ -22676,11 +22676,11 @@ function renderTrialSheet() {
         })
         .join("") +
       "</div>" +
-      '<p class="muted"><small>' + (R.carryXp ? '持ち帰り経験値以外の報酬・戦歴は追加されません。' : '試作のため、報酬・経験値・熟練度・戦歴はありません。') + '</small></p>' +
+      '<p class="muted"><small>' + (R.carryXp ? '持ち帰り経験値以外の報酬・戦歴は追加されません。' : 'このモードでは、報酬・経験値・熟練度・戦歴はありません。') + '</small></p>' +
       '<div class="card-actions"><button data-trial-again>もう一度（兵士を選ぶ）</button><button data-trial-close>閉じる</button></div>';
     return;
   }
-  $("trialTitle").textContent = "⚔️ 戦場試練（試作）";
+  $("trialTitle").textContent = "⚔️ 戦場試練";
   const list = soldiers.filter((s) => s.alive).sort((a, b) => b.level - a.level),
     n = trialPick.length,
     busy = trialBusyError(),
@@ -22703,7 +22703,7 @@ function renderTrialSheet() {
       ? '<p class="muted"><small>選んだ兵士の中から<b>主人公</b>を1人決めます（どの職業でも）。<b>戦場に出るのは主人公1人だけ</b>。ほかの兵士（最大4人）は<b>仲間候補</b>で、敵を倒してレベルアップしたときに「👥 仲間を1人加入」を選ぶと、選んだ順に1人ずつ駆けつけます。主人公はスティックで動かし、攻撃と技は自動。約' + Math.round((TRIAL_SURVIVAL.bossAt / 60) * 10) / 10 + "分で大将が現れ、倒すと宝箱（その挑戦だけの報酬）→ 次の面へ。面が進むほど敵は強くなり、5面ごとに鬼大将。<b>どこまで進めるか挑戦</b>。<b>主人公が倒れたら敗北</b>。サバイバルLv・強化・加入は、その戦闘だけのものです。<br>"
       : "<p><b>ステージ：" + M.name + "</b><br><small>" + esc(M.text) + "</small></p>" +
         '<p class="muted"><small>育てた兵士を最大' + TRIAL_RULES.maxUnits + "人まで選び、1人ずつ配置します。戦闘が始まると、兵士はそれぞれ自分で敵を探して戦い、職業技・閃きも使います（衛生兵は味方を回復）。敵の強さは、出撃する兵士のLv・職業・装備から決まります。<br>") +
-    (ex ? "" : "<b>試作のため、戦死は仮です（本番の兵士は失われません）。</b>" + (sv ? "参加中に回収した共通EXPを全額、終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。待機候補は対象外。倒れた兵士は倒れる前の分だけ。終了前に閉じると持ち帰れません。" : "報酬・経験値はありません。") + "修練場はこれまでどおり育成の場所です。</small></p>") +
+    (ex ? "" : "<b>このモードでの戦死は仮です（兵士は失われません）。</b>" + (sv ? "参加中に回収した共通EXPを全額、終了・撤退時に持ち帰り、兵士の経験値・熟練度へ加えます。待機候補は対象外。倒れた兵士は倒れる前の分だけ。終了前に閉じると持ち帰れません。" : "報酬・経験値はありません。") + "修練場はこれまでどおり育成の場所です。</small></p>") +
     (sv && n
       ? '<p>👑 主人公：</p><div class="trial-heroes">' +
         trialPick
@@ -22751,7 +22751,7 @@ function trialHudSync() {
     return;
   }
   const html =
-    "<b>⚔️ " + T.map.name + "</b>（試作）　味方 <b>" + alive + "/" + T.units.length + "</b>　敵 <b>" + left + "</b>" + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "") + "<br>" +
+    "<b>⚔️ " + T.map.name + "</b>　味方 <b>" + alive + "/" + T.units.length + "</b>　敵 <b>" + left + "</b>" + (T.phase === "fight" ? "　" + Math.floor(T.t) + "秒" : "") + "<br>" +
     (T.phase === "deploy"
       ? rest
         ? "配置：あと <b>" + rest + "人</b>（光っている場所をタップ）次は " + esc(T.units.find((u) => !u.placed).name)
