@@ -3202,7 +3202,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v124（奥義の習得率・50回天井・抽選状況）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v125（ネームド兵士の成長適性B以上）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -8004,6 +8004,8 @@ function chronicleGrowthRanks(s, a = chronicleAptitude(s), anchor = s.level) {
   for (const k of CHRONICLE_GROWTH_KEYS) {
     if (!Number.isInteger(r.values[k]) || r.values[k] < 1 || r.values[k] > 10)
       r.values[k] = 1 + (insightHash("growth-rank:v1:" + chronicleOf(s).life + ":" + k) % 10);
+    // ネームドは全能力B以上。既得の成長分は増やさず、今後のレベルアップから使う。
+    if (s.named && Object.hasOwn(NAMED_SOLDIERS, s.named)) r.values[k] = Math.max(8, r.values[k]);
     r.gains[k] = Math.max(0, Math.min(r.values[k] * (r.level - r.startAt), r.gains[k] || 0));
   }
   return r;
@@ -8074,6 +8076,9 @@ function chronicleAptitudeBlock(s) {
       "<br>",
     ) +
     "</p>" +
+    (s.named && Object.hasOwn(NAMED_SOLDIERS, s.named)
+      ? "<p><small>ネームド兵士の成長適性は、すべてB以上です。</small></p>"
+      : "") +
     (a.type === "agile"
       ? "<p><small>特性：俊敏。成長とともに行動速度と回避が伸びます。</small></p>"
       : a.type === "sniper"
@@ -14658,6 +14663,8 @@ function ultimateOugiCast(ctx, a, k, aim) {
                   .map((h) => h.slice(0, 80))
                   .slice(-10),
               });
+              // 人物の検証後、保存側にも最低Bを反映する。過去の成長・戦歴は再計算しない。
+              if (list.at(-1).named) chronicleAptitude(list.at(-1));
             }
             const fallen = (Array.isArray(d.fallen) ? d.fallen : [])
               .map(cleanFallen)
