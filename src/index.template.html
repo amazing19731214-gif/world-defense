@@ -3202,7 +3202,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v124（奥義の習得率・50回天井・抽選状況）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v125（ネームド兵士の成長適性B以上）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -10814,6 +10814,8 @@ OFF</button>
                   .map((h) => h.slice(0, 80))
                   .slice(-10),
               });
+              // 人物の検証後、保存側にも最低Bを反映する。過去の成長・戦歴は再計算しない。
+              if (list.at(-1).named) chronicleAptitude(list.at(-1));
             }
             const fallen = (Array.isArray(d.fallen) ? d.fallen : [])
               .map(cleanFallen)

@@ -704,6 +704,8 @@ function chronicleGrowthRanks(s, a = chronicleAptitude(s), anchor = s.level) {
   for (const k of CHRONICLE_GROWTH_KEYS) {
     if (!Number.isInteger(r.values[k]) || r.values[k] < 1 || r.values[k] > 10)
       r.values[k] = 1 + (insightHash("growth-rank:v1:" + chronicleOf(s).life + ":" + k) % 10);
+    // ネームドは全能力B以上。既得の成長分は増やさず、今後のレベルアップから使う。
+    if (s.named && Object.hasOwn(NAMED_SOLDIERS, s.named)) r.values[k] = Math.max(8, r.values[k]);
     r.gains[k] = Math.max(0, Math.min(r.values[k] * (r.level - r.startAt), r.gains[k] || 0));
   }
   return r;
@@ -774,6 +776,9 @@ function chronicleAptitudeBlock(s) {
       "<br>",
     ) +
     "</p>" +
+    (s.named && Object.hasOwn(NAMED_SOLDIERS, s.named)
+      ? "<p><small>ネームド兵士の成長適性は、すべてB以上です。</small></p>"
+      : "") +
     (a.type === "agile"
       ? "<p><small>特性：俊敏。成長とともに行動速度と回避が伸びます。</small></p>"
       : a.type === "sniper"
