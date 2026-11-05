@@ -1,4 +1,4 @@
-// 戦場試練 v108.7：サバイバルの無限の面（大将 → 宝箱 → 次の面へ）・難易度・鬼大将・報酬・引き継ぎ・10面の連続プレイ
+// 戦場試練 v108.7：サバイバルの無限の面（大将 → 宝箱 → 次の面へ）・難易度・巨大ボス・報酬・引き継ぎ・10面の連続プレイ
 //   node tools/test-trial-stages.mjs
 import assert from "node:assert/strict";
 import { trialAssetsPreserved } from "./trial-save-test-utils.mjs";
@@ -213,7 +213,7 @@ try {
   check(r.kinds.length >= 3, "面が進むと、強い種類の敵が早くから混ざる（第5面のはじめ：" + r.kinds.join("・") + "）", r.kinds);
   await c.close();
 
-  // 6. 5面ごとの鬼大将：体力・攻撃が多く、紫の輪・別の音・別の名前。ふつうの大将は金の輪
+  // 6. 3面ごとの巨大ボス：体力・攻撃が多く、紫の輪・別の音・別の名前。ふつうの大将は金の輪
   ({ c, p } = await open());
   await p.evaluate(() => {
     document.getElementById("trialSheet").hidden = true;
@@ -236,19 +236,19 @@ try {
         return { great: !!b.great, name: b.name, max: b.max / (1 + G.hpStep * (stage - 1)), atk: b.atkMul / (1 + G.atkStep * (stage - 1)), r: b.r, sfx: T.sfx.stats().played, banner: WD_DEBUG.combat.fx().banner && WD_DEBUG.combat.fx().banner.name };
       };
     const b4 = boss(4),
-      b5 = boss(5),
-      b10 = boss(10);
-    return { b4, b5, b10 };
+      b3 = boss(3),
+      b6 = boss(6);
+    return { b4, b3, b6 };
   });
   check(!r.b4.great && r.b4.name === "大将" && r.b4.sfx.boss === 1 && /大将 出現/.test(r.b4.banner), "ふつうの面の大将：警告の帯と角笛のような音（第4面）", r.b4);
-  check(r.b5.great && r.b10.great && r.b5.name === "鬼大将" && r.b5.sfx.bossGreat === 1 && r.b5.max / r.b4.max > 2.5 && r.b5.atk / r.b4.atk > 1.3 && r.b5.r > r.b4.r && /鬼大将 出現/.test(r.b5.banner), "5面ごと（第5面・第10面）は鬼大将：体力 ×2.6・攻撃 ×1.35・大きい・紫の輪・重い音", { b4: r.b4.max, b5: r.b5.max, great: [r.b5.great, r.b10.great] });
+  check(r.b3.great && r.b6.great && r.b3.name === "赤備えの鬼将" && r.b6.name === "百矢の梟将" && r.b3.sfx.bossGreat === 1 && r.b3.max > r.b4.max && r.b3.r > r.b4.r && /赤備えの鬼将 出現/.test(r.b3.banner), "3面ごと（第3面・第6面）に異なる大ボス：強化体力・大きい姿・重い音", { b4: r.b4.max, b3: r.b3.max, great: [r.b3.great, r.b6.great] });
   // 大将の HP の棒（画面の下）と、画面の外なら矢印（描くだけ：エラーにならない）
   r = await p.evaluate(() => {
     WD_DEBUG.heroApi.draw();
     const s = WD_DEBUG.trial.state();
     return { boss: s.boss && s.boss.hp > 0 };
   });
-  check(r.boss, "大将の HP は画面の下の横長の棒に出る（鬼大将は紫）", r);
+  check(r.boss, "大将の HP は画面の下の横長の棒に出る（巨大ボスは紫）", r);
   await c.close();
 
   // 7. 報酬：6種類と、珍しい報酬（雷神の勾玉・不死鳥の羽・奥義の秘伝書）。確率は設定で変えられる
@@ -270,7 +270,7 @@ try {
       b = cnt(true);
     return { a, b, chance: T.rewards.specialChance, great: T.rewards.specialChanceGreat };
   });
-  check(Math.abs(r.a.special / 3000 - r.chance) < 0.03 && Math.abs(r.b.special / 3000 - r.great) < 0.05 && ["atk", "rate", "hp", "heal", "move", "range", "raijin", "phoenix", "hiden"].every((k) => r.a.keys[k] > 0), "報酬は6種類＋珍しい報酬3種類。珍しい報酬は約" + Math.round((r.a.special / 3000) * 100) + "%（鬼大将の宝箱は約" + Math.round((r.b.special / 3000) * 100) + "%）", r);
+  check(Math.abs(r.a.special / 3000 - r.chance) < 0.03 && Math.abs(r.b.special / 3000 - r.great) < 0.05 && ["atk", "rate", "hp", "heal", "move", "range", "raijin", "phoenix", "hiden"].every((k) => r.a.keys[k] > 0), "報酬は6種類＋珍しい報酬3種類。珍しい報酬は約" + Math.round((r.a.special / 3000) * 100) + "%（巨大ボスの宝箱は約" + Math.round((r.b.special / 3000) * 100) + "%）", r);
   r = await p.evaluate(() => {
     const T = WD_DEBUG.trial,
       L = T.live(),
@@ -369,7 +369,7 @@ try {
     return { stage: s.stage, bosses: R.bosses, log, great, maxE, maxC, maxFx, maxShots, maxList, maxVoices, ms, time: Math.round(R.time), kills: R.kills, exp: R.coins.xp, slv: R.slv, rewards: R.rewardList.length, rivals: (R.rivals || []).length, text: document.getElementById("trialBody").textContent };
   });
   console.log("   10面：" + r.log.join(" "));
-  check(r.bosses === 10 && r.stage === 11 && r.great.join() === "5,10", "10面を続けてクリアできる（大将10体・鬼大将は第5面と第10面。合計 " + Math.floor(r.time / 60) + "分・撃破 " + r.kills + "・サバイバルLv" + r.slv + "）", { bosses: r.bosses, stage: r.stage, great: r.great });
+  check(r.bosses === 10 && r.stage === 11 && r.great.join() === "3,6,9", "10面を続けてクリアできる（大将10体・大ボスは第3面・第6面・第9面。合計 " + Math.floor(r.time / 60) + "分・撃破 " + r.kills + "・サバイバルLv" + r.slv + "）", { bosses: r.bosses, stage: r.stage, great: r.great });
   check(r.maxE <= 62 && r.maxC <= 50 && r.maxFx <= 80 && r.maxShots <= 160 && r.maxList <= 130 && r.maxVoices <= 8, "面を重ねても溜まらない（敵 最大" + r.maxE + "・コイン " + r.maxC + "・演出 " + r.maxFx + "・矢弾 " + r.maxShots + "・敵の記録 " + r.maxList + "）", r);
   check(r.rewards === 10 + r.rivals && /到達 第11面/.test(r.text) && /大将を倒した数 10/.test(r.text) && /獲得 EXP/.test(r.text) && /報酬：/.test(r.text), "結果の画面：到達した面・倒した大将の数・撃破・獲得 EXP・報酬（宝箱10＋ライバル武将 " + r.rivals + "）", r.text.slice(0, 160));
   await c.close();
