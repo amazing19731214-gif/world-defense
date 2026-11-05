@@ -3210,7 +3210,7 @@ OFF</button>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <p id="msg">塔を選び、草地をタップして建設しよう。上下に分かれる道を守ろう！</p>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
-      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v127（戦場試練の表示整理）</small>
+      <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v128（サバイバル・十種の大ボス）</small>
     </main>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
@@ -14563,6 +14563,7 @@ OFF</button>
         };
         // 編成画面（部隊一覧・配置・補充・移籍・戦没者）
         /*@@FORMATION_VIEW@@*/
+        /*@@SURVIVAL_BOSSES@@*/
         /*@@TRIAL@@*/
         let squadRosterFilter = "all", formationRetireReturn = null, bulkSwapMode = false;
         const squadFilterValues = () => ["all", ...SQUAD_RULES.slotNames.map((_, i) => String(i)), "candidates"];
@@ -23373,6 +23374,7 @@ OFF</button>
             // 戦場試練（v107試作）
             ultimateOugiApi: {rules:ULTIMATE_OUGI_RULES,finish:ultimateOugiFinish,flush:flushUltimateOugiRolls,heal:ultimateOugiHeal,activity:ultimateOugiActivity,control:ultimateOugiControl,kill:ultimateOugiKill,segment:ultimateOugiSegment,trialFinish:ultimateOugiTrialFinish,absorb:ultimateOugiAbsorb,cover:ultimateOugiCover},
             autoOugiApi: {rules:AUTO_OUGI_RULES,choice:autoOugiChoice,timer:autoOugiTimer,stats:autoOugiStats,context:autoOugiContextFor,aim:autoOugiAim,tick:tickAutoOugi,setRoll:f=>{autoOugiRollOverride=f||null;}},
+            survivalBossApi: { rules:SURVIVAL_BOSS_RULES,list:SURVIVAL_BOSSES,forFloor:survivalBossForFloor,apply:survivalBossApply,tick:survivalBossTick,damageMul:survivalBossDamageMul,moveMul:survivalBossMoveMul,stageMul:survivalStageMultiplier },
             trial: {carryXp:trialCarryXp,saveCarryXp:trialSaveCarryXp,gainXp:trialGainXp,hitUnit:trialHitUnit,
               rules: TRIAL_RULES,
               maps: TRIAL_MAPS,
