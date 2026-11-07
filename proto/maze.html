@@ -49,7 +49,7 @@
 <div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
-  上の⛩️門から敵が入り、下の🏯城をめざします。<br>
+  上の⛩️門から敵が入ってきます。敵は<b>兵士を全滅させるつもり</b>で、立っている兵士・武将を近い者から狙って襲いかかり、群がって斬りかかります。守り手がみな倒れると🏯城へ向かいます。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
   兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあり、敵を倒すと<b>レベルが上がって</b>強くなります。<br>
   <b>兵士と武将</b>は自分で動いて戦います。置いた場所が<b>持ち場</b>になり、持ち場のまわり（点線の円）に入った敵を追いかけて戦い、敵がいなくなると持ち場へ戻ります。<br>
@@ -134,7 +134,7 @@ const ENEMIES = {
 };
 function waveList(n) {
   // 第n波の敵。だんだん数・硬さ・種類が増える。5波ごとに鎧武者の群れ
-  const list = [], count = 6 + n * 2;
+  const list = [], count = 8 + n * 3;
   for (let i = 0; i < count; i++) {
     let t = "ashigaru";
     if (n >= 2 && i % 4 === 3) t = "cavalry";
@@ -144,7 +144,7 @@ function waveList(n) {
   }
   return list;
 }
-const baseHp = (n) => Math.round(24 * Math.pow(1.2, n - 1));
+const baseHp = (n) => Math.round(26 * Math.pow(1.22, n - 1));
 const enemyAtk = (e) => Math.round(ENEMIES[e.type].atk * Math.pow(1.1, wave - 1));
 // ===== 武将（名前・色・得意な兵種・技の名前は本番のゲームの武将から） =====
 // [ID, 名前, 稀少度, 一文字, 色, 得意な兵種, 役割, 技]
@@ -207,6 +207,7 @@ const heroIcon = (id) => img("heroes/" + id + "_icon.webp");
 
 // ===== 状態 =====
 let pickedNamed = null; // いま置こうとしているネームド兵士のID
+let downs = 0; // 退却した回数（試験用）
 let grid, units, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
 const $ = (id) => document.getElementById(id);
 function reset() {
@@ -347,7 +348,24 @@ function startWave() {
 function spawn(type) {
   const E = ENEMIES[type], hp = Math.round(baseHp(wave) * E.hp);
   const n = nextCell(GATE.c, GATE.r, distMap, [0, 1]);
-  enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.2, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, stun: 0, cd: 0, face: 1, anim: Math.random() * 4, blocker: null });
+  enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.2, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, stun: 0, cd: 0, face: 1, anim: Math.random() * 4, blocker: null, hunt: null, think: 0 });
+}
+// 敵が狙う兵士：倒れていない兵士・武将のうち、いちばん近い者（柵の向こうは回り道の分だけ遠い）
+function huntTarget(e) {
+  let best = null, bd = Infinity;
+  for (const u of units) {
+    if (u.down > 0) continue;
+    let d = dist(u, e);
+    if (!clearLine(e.x, e.y, u.x, u.y)) {
+      const key = Math.floor(u.x) + "," + Math.floor(u.y);
+      if (!bfsCache.has(key)) bfsCache.set(key, bfs(grid, Math.floor(u.x), Math.floor(u.y)));
+      const g = bfsCache.get(key)[Math.floor(e.y)]?.[Math.floor(e.x)];
+      if (g === undefined || g === Infinity) continue;
+      d = g;
+    }
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
 }
 // 足止めの割り当て（毎フレーム）。
 // ・近接の兵士・武将は、戦っている敵（と近くの敵）を BLOCK.cap 人まで止める
@@ -362,7 +380,8 @@ function assignBlockers() {
     for (const u of units) {
       if (u.down > 0) continue;
       const d = dist(u, e), used = load.get(u) || 0;
-      const ok = u.st.melee ? d <= BLOCK.reach && used < BLOCK.cap(u) : d <= BLOCK.notice && used < 1;
+      // 自分が狙っている兵士にたどり着いた敵は、何人でも群がって斬りかかる
+      const ok = e.hunt === u ? d <= BLOCK.notice : u.st.melee ? d <= BLOCK.reach && used < BLOCK.cap(u) : d <= BLOCK.notice && used < 1;
       if (ok && d < bd) { bd = d; best = u; }
     }
     if (best) { e.blocker = best; load.set(best, (load.get(best) || 0) + 1); }
@@ -372,12 +391,27 @@ function stepEnemy(e, dt) {
   e.slow = Math.max(0, e.slow - dt);
   if (e.stun > 0) { e.stun -= dt; return; }
   if (e.blocker) {
-    // 足止め：その兵士と戦う
+    // 組みついた兵士と斬り合う
     e.cd -= dt; e.face = e.blocker.x < e.x ? -1 : 1;
     if (e.cd <= 0) { e.cd = 1; e.swing = 0.25; hurtUnit(e.blocker, enemyAtk(e)); }
     return;
   }
-  let move = ENEMIES[e.type].speed * (e.slow > 0 ? 0.55 : 1) * dt;
+  const spd = ENEMIES[e.type].speed * (e.slow > 0 ? 0.55 : 1);
+  // 兵士を全滅させるつもりで来る：立っている兵士・武将がいれば、近い者から狙って追いかける
+  e.think -= dt;
+  if (e.think <= 0 || (e.hunt && (e.hunt.down > 0 || !units.includes(e.hunt)))) { e.think = 0.4; e.hunt = huntTarget(e); }
+  if (e.hunt) {
+    const bx = e.x, by = e.y;
+    moveToward(e, e.hunt.x, e.hunt.y, dt, spd);
+    e.anim += Math.hypot(e.x - bx, e.y - by) * 4;
+    e.c = e.tc = Math.floor(e.x); e.r = e.tr = Math.floor(e.y); e.offRoad = true;
+    return;
+  }
+  if (e.offRoad) {
+    // 兵士がいなくなったら、いまいるマスから城への道へ戻る
+    e.offRoad = false; e.c = e.tc = Math.floor(e.x); e.r = e.tr = Math.floor(e.y); e.prev = null;
+  }
+  let move = spd * dt;
   e.anim += move * 4;
   while (move > 0) {
     const tx = e.tc + 0.5, ty = e.tr + 0.5, dx = tx - e.x, dy = ty - e.y, l = Math.hypot(dx, dy);
@@ -420,7 +454,7 @@ function hurtUnit(u, dmg) {
   dmg *= 1 - (u.st.guard || 0);
   u.hp -= dmg; u.flash = 0.12;
   if (u.hp <= 0) {
-    u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null;
+    u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null; downs++;
     effects.push({ kind: "down", x: u.x, y: u.y, t: 0.9, text: u.st.name + " 退却" });
     if (selected === u) selected = null;
   }
@@ -434,8 +468,8 @@ function clearLine(ax, ay, bx, by) {
   return true;
 }
 let bfsCache = new Map();
-function moveToward(u, tx, ty, dt) {
-  let step = u.st.speed * dt, gx = tx, gy = ty;
+function moveToward(u, tx, ty, dt, speed = u.st.speed) {
+  let step = speed * dt, gx = tx, gy = ty;
   if (!clearLine(u.x, u.y, tx, ty)) {
     // 柵があるときは、マス目で回り道を探す
     const tc = Math.floor(tx), tr = Math.floor(ty), key = tc + "," + tr;
@@ -884,7 +918,7 @@ function frame(now) {
 }
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
-  state: () => ({ gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
+  state: () => ({ downs, gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
     units: units.map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
   select: (t) => { tool = t; selected = null; ui(); },
   place: (c, r) => place(c, r),
@@ -895,6 +929,7 @@ window.MAZE = {
   setGold: (g) => { gold = g; ui(); },
   pick: (id) => pickWarlord(id),
   pickNamed: (id) => pickNamed(id),
+  enemyPos: () => enemies.map((e) => ({ x: e.x, y: e.y, hunt: e.hunt ? e.hunt.uid : 0 })),
   config: { COLS, ROWS, GATE, CASTLE, TOOLS, SOLDIERS },
 };
 buildTools();

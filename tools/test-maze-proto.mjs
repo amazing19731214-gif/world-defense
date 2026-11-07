@@ -71,6 +71,19 @@ const hold = await p.evaluate(() => {
 check(hold.some((h) => h.hp < 60 || h.down > 0), "道に立つ兵士は敵と斬り合ってHPが減る（左近 " + hold.map((h) => Math.round(h.hp)).join("→") + "）");
 check(hold.every((h) => h.heart === 20), "兵士が止めている間、敵は城へ届かない");
 
+// ■ 敵は兵士を全滅させるつもりで来る：道から外れた兵士にも向かい、群がって斬りかかる。守り手がいなくなると城へ
+await fresh();
+const hunt = await p.evaluate(() => {
+  MAZE.setGold(9999); MAZE.pickNamed("hanzo"); MAZE.place(0, 8); // 道から離れた左端
+  MAZE.start(); let near = 0, maxOff = 0;
+  for (let i = 0; i < 40; i++) { MAZE.step(0.5); const s = MAZE.state(); const u = s.units[0]; maxOff = Math.max(maxOff, ...MAZE.enemyPos().map((e) => Math.abs(e.x - 5.5))); if (u.hp < 85) near++; }
+  return { near, maxOff, downs: MAZE.state().downs };
+});
+check(hunt.maxOff > 3.5, "敵が道を外れて、端にいる兵士へ向かってくる");
+check(hunt.near > 0 && hunt.downs >= 1, "敵が群がって兵士を倒す（退却 " + hunt.downs + "回）");
+const after = await p.evaluate(() => { MAZE.step(60); return MAZE.state(); });
+check(after.heart < 20 || !after.playing, "守り手が倒れている間は、敵が城へ向かう");
+
 // ■ 武将：何人でも置ける・同じ武将は1人まで・技
 await fresh();
 await p.click('#tools [data-tool="warlord"]');
