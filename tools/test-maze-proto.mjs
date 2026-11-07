@@ -41,7 +41,7 @@ const mid = await S();
 check(mid.units.some((u) => Math.hypot(u.x - (u.home.c + 0.5), u.y - (u.home.r + 0.5)) > 0.3), "戦闘中は兵士が持ち場を離れて敵を追う");
 check(await p.evaluate(() => { const s = MAZE.state(); return s.enemies > 0; }), "敵が入ってくる");
 const end = await p.evaluate(() => { MAZE.step(150); return MAZE.state(); });
-check(!end.playing && end.heart > 0, "第1波をしのげる（❤️" + end.heart + "）");
+check(!end.playing && !end.over && end.hero.hp > 0, "第1波をしのげる（殿のHP " + Math.round(end.hero.hp) + "）");
 await p.evaluate(() => MAZE.step(4));
 const home = await S();
 check(home.units.every((u) => Math.hypot(u.x - (u.home.c + 0.5), u.y - (u.home.r + 0.5)) < 0.2 && u.hp > 0), "波が終わると回復して持ち場へ戻る");
@@ -53,25 +53,25 @@ const block = await p.evaluate(() => {
   MAZE.setGold(9999); MAZE.pickNamed("motoharu"); MAZE.place(5, 3);
   MAZE.start(); MAZE.step(4);
   const s = MAZE.state();
-  return { units: s.units, heart: s.heart };
+  return { units: s.units };
 });
 const ash = block.units[0];
 check(ash.hp < 85 || ash.down > 0, "足軽（吉川元春）が敵の前に立って戦う（敵から攻撃を受ける）");
 const fall = await p.evaluate(() => { MAZE.step(200); return MAZE.state(); });
 check(fall.units[0].down >= 0, "兵士は倒れても消えない（城で起き上がる）");
 
-// ■ 道の上の兵士は敵を止めて斬り合う（HPが減る）。止めている間、敵は城へ進めない
+// ■ 道の上の兵士は敵を止めて斬り合う（HPが減る）。止めている間、敵は殿へ届かない
 await fresh();
 const hold = await p.evaluate(() => {
   MAZE.setGold(9999); MAZE.pickNamed("sakon"); MAZE.place(5, 6); MAZE.pickNamed("takakage"); MAZE.place(4, 9);
   MAZE.start(); const log = [];
-  for (let i = 0; i < 5; i++) { MAZE.step(1.6); const s = MAZE.state(); log.push({ hp: s.units[0].hp, down: s.units[0].down, heart: s.heart }); }
+  for (let i = 0; i < 5; i++) { MAZE.step(1.6); const s = MAZE.state(); log.push({ hp: s.units[0].hp, down: s.units[0].down, hero: s.hero.hp }); }
   return log;
 });
 check(hold.some((h) => h.hp < 60 || h.down > 0), "道に立つ兵士は敵と斬り合ってHPが減る（左近 " + hold.map((h) => Math.round(h.hp)).join("→") + "）");
-check(hold.every((h) => h.heart === 20), "兵士が止めている間、敵は城へ届かない");
+check(hold.every((h) => h.hero >= 320), "兵士が止めている間、敵は殿へ届かない");
 
-// ■ 敵は兵士を全滅させるつもりで来る：道から外れた兵士にも向かい、群がって斬りかかる。守り手がいなくなると城へ
+// ■ 敵は兵士を全滅させるつもりで来る：道から外れた兵士にも向かい、群がって斬りかかる。ほかの守り手が倒れると殿へ
 await fresh();
 const hunt = await p.evaluate(() => {
   MAZE.setGold(9999); MAZE.pickNamed("hanzo"); MAZE.place(0, 8); // 道から離れた左端
@@ -81,8 +81,8 @@ const hunt = await p.evaluate(() => {
 });
 check(hunt.maxOff > 3.5, "敵が道を外れて、端にいる兵士へ向かってくる");
 check(hunt.near > 0 && hunt.downs >= 1, "敵が群がって兵士を倒す（退却 " + hunt.downs + "回）");
-const after = await p.evaluate(() => { MAZE.step(60); return MAZE.state(); });
-check(after.heart < 20 || !after.playing, "守り手が倒れている間は、敵が城へ向かう");
+const after = await p.evaluate(() => { let hit = false; for (let i = 0; i < 120; i++) { MAZE.step(0.5); const s = MAZE.state(); if (s.hero.hp < s.hero.max) hit = true; } return { hit, over: MAZE.state().over }; });
+check(after.hit || after.over, "兵士が倒れている間は、敵が殿に襲いかかる");
 
 // ■ 武将：何人でも置ける・同じ武将は1人まで・技
 await fresh();
@@ -103,7 +103,7 @@ await p.waitForTimeout(200);
 await shot("maze-warlord.png");
 check(fight.some((u) => u.kind === "warlord" && u.scd > 5), "武将が技を使う");
 const fin = await p.evaluate(() => { MAZE.step(150); return MAZE.state(); });
-check(!fin.playing && fin.heart > 0, "武将と兵士で第1波をしのげる（❤️" + fin.heart + "）");
+check(!fin.playing && !fin.over, "武将と兵士で第1波をしのげる（殿のHP " + Math.round(fin.hero.hp) + "）");
 const sold = await p.evaluate(() => { const g = MAZE.state().gold, u = MAZE.state().units.find((o) => o.id === "nobunaga"); MAZE.select("sell"); MAZE.place(u.home.c, u.home.r); return { d: MAZE.state().gold - g, list: MAZE.state().units.map((o) => o.id) }; });
 check(sold.d === 220 && !sold.list.includes("nobunaga"), "撤去すると武将が戻り代金も戻る");
 
@@ -114,10 +114,22 @@ check(await p.locator('#pickList [data-n="kotaro"]').isDisabled(), "出陣中の
 await shot("maze-named.png");
 await p.click("#pickClose");
 
-// ■ 守りがないと落城
+// ■ 殿：撤去できない・持ち場を移せる・倒れたら負け
 await fresh();
-const lose = await p.evaluate(() => { for (let i = 0; i < 12 && !MAZE.state().over; i++) { MAZE.start(); MAZE.step(150); } return MAZE.state(); });
-check(lose.over && (await p.locator("#over").isVisible()), "守りがないと落城の画面が出る（第" + lose.wave + "波）");
+check(/撤去できません/.test(await p.evaluate(() => { MAZE.select("sell"); MAZE.place(5, 16); return document.getElementById("msg").textContent; })), "殿は撤去できない");
+check((await p.locator("#heart").textContent()).includes("殿"), "上の表示に殿のHP");
+await p.evaluate(() => MAZE.select("fence"));
+await p.mouse.click(box.x + cs * 5.5, box.y + cs * 16.5);
+await p.mouse.click(box.x + cs * 5.5, box.y + cs * 13.5);
+await p.evaluate(() => MAZE.step(3));
+const hm = (await S()).hero;
+check(Math.abs(hm.y - 13.5) < 0.1, "殿もタップで選んで持ち場を移せる");
+
+// ■ 守りがないと殿が討ち死にして負け
+await fresh();
+const lose = await p.evaluate(() => { for (let i = 0; i < 30 && !MAZE.state().over; i++) { MAZE.start(); MAZE.step(150); } return MAZE.state(); });
+await p.waitForTimeout(800);
+check(lose.over && lose.hero.hp <= 0 && (await p.locator("#over").isVisible()) && (await p.locator("#overTitle").textContent()).includes("殿"), "殿が倒れると負けの画面が出る（第" + lose.wave + "波）");
 check(errs.length === 0, "エラーなし " + errs.join("|"));
 console.log("結果: " + ok + " 件成功");
 await b.close();

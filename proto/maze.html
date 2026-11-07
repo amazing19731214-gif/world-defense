@@ -12,7 +12,7 @@
   #hud { width: 100%; max-width: 560px; display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 12px 4px; font-weight: 700; font-size: 15px; }
   #hud span { white-space: nowrap; }
   #gold { color: var(--gold); }
-  #heart { color: #ff8a7a; }
+  #heart { color: #ffd75e; }
   #msg { width: 100%; max-width: 560px; min-height: 36px; padding: 0 12px; font-size: 13px; line-height: 1.35; color: #d9c7a6; }
   #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
   canvas { display: block; touch-action: none; border-radius: 6px; }
@@ -42,20 +42,21 @@
 </style>
 </head>
 <body>
-<div id="hud"><span>⚔️ 第<b id="wave">0</b>波</span><span id="gold">💰 0G</span><span id="heart">❤️ 20</span><span id="route">道 0マス</span></div>
+<div id="hud"><span>⚔️ 第<b id="wave">0</b>波</span><span id="gold">💰 0G</span><span id="heart">👑 殿 300</span></div>
 <div id="msg"></div>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <div id="tools"></div>
 <div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
-  上の⛩️門から敵が入ってきます。敵は<b>兵士を全滅させるつもり</b>で、立っている兵士・武将を近い者から狙って襲いかかり、群がって斬りかかります。守り手がみな倒れると🏯城へ向かいます。<br>
+  <b>👑殿（主人公）を守りぬく</b>戦いです。<b>殿が倒れたら負け</b>。殿は下の🏯本陣から始まり、自分でも戦います（タップで選んで持ち場を移せます）。<br>
+  上の⛩️門から敵が入ってきます。敵は<b>兵士を全滅させるつもり</b>で、殿・兵士・武将のうち近い者から狙って襲いかかり、群がって斬りかかります。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
   兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあり、敵を倒すと<b>レベルが上がって</b>強くなります。<br>
   <b>兵士と武将</b>は自分で動いて戦います。置いた場所が<b>持ち場</b>になり、持ち場のまわり（点線の円）に入った敵を追いかけて戦い、敵がいなくなると持ち場へ戻ります。<br>
   ・足軽・槍兵・騎兵・近接の武将は、敵の前に立って<b>足止め</b>します。弓兵・鉄砲兵は離れて撃ち、衛生兵は近くの味方を治します。<br>
   ・兵士や武将を<b>タップで選んで、別のマスをタップ</b>すると持ち場を移せます（指で引きずってもOK）。戦闘中も動かせます。<br>
-  ・倒れた兵士は少しすると🏯城で起き上がり、持ち場へ走って戻ります。<br>
+  ・倒れた兵士は少しすると🏯本陣で起き上がり、持ち場へ走って戻ります（殿は起き上がれません）。<br>
   ・兵士も武将も何人でも置けます（同じ人物は1人まで）。武将はゲージがたまると<b>技</b>を自動で使います。<br>
   ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
@@ -68,7 +69,7 @@
   <button id="pickClose">閉じる</button>
 </div></div>
 <div id="over" class="sheet" hidden><div>
-  <h2 id="overTitle">落城</h2>
+  <h2 id="overTitle">殿、討ち死に…</h2>
   <div id="overText"></div>
   <button id="again">もう一度</button>
 </div></div>
@@ -77,7 +78,9 @@
 // ===== 盤面（数値はここで調整） =====
 const COLS = 11, ROWS = 17;
 const GATE = { c: 5, r: 0 }, CASTLE = { c: 5, r: ROWS - 1 };
-const START = { gold: 300, heart: 20 };
+const START = { gold: 300 };
+// ===== 主人公（殿）。倒れたら負け。本陣（下の🏯）から始まり、ほかの兵士と同じように持ち場を移せる =====
+const HERO = { name: "殿", img: "units/cavalry.png", hp: 320, atk: 12, range: 0.95, rate: 0.8, speed: 1.6, leash: 2, melee: true, regen: 3 };
 const ASSET = "../assets/";
 // ===== 兵士（動き回って戦う守り手）。leash＝持ち場から追いかける距離（マス） =====
 // 兵種ごとの基本の強さ。兵士はすべてネームド兵士（下の一覧）で、この兵種で戦う
@@ -189,7 +192,7 @@ const STYLES = {
   spearman: { label: "槍", hp: 150, atk: 13, range: 0.95, rate: 0.75, speed: 1.9, melee: true, sweep: true, skill: "sweep", text: "前に立って周りをまとめて突く／技：大なぎ払い" },
   ashigaru: { label: "足軽", hp: 190, atk: 9, range: 0.8, rate: 0.7, speed: 1.9, melee: true, sweep: true, skill: "hold", text: "とても打たれ強い／技：周りの敵を足止め" },
   cavalry: { label: "騎馬", hp: 140, atk: 14, range: 0.9, rate: 0.55, speed: 2.8, melee: true, skill: "charge", text: "速く走って斬りこむ／技：先頭の敵へ突撃" },
-  medic: { label: "衛生", hp: 100, atk: 5, range: 2.2, rate: 0.7, speed: 1.8, shot: "arrow", heal: 6, skill: "aid", text: "近くの味方を治す／技：味方を大回復・城の❤️+1" },
+  medic: { label: "衛生", hp: 100, atk: 5, range: 2.2, rate: 0.7, speed: 1.8, shot: "arrow", heal: 6, skill: "aid", text: "近くの味方を治す／技：まわりの味方を大回復" },
   "": { label: "軍師", hp: 90, atk: 6, range: 2.6, rate: 0.6, speed: 1.8, shot: "arrow", skill: "order", text: "攻撃は弱い／技：盤面の敵をすべて遅くする" },
 };
 const wStyle = (w) => STYLES[w.fav] || STYLES[""];
@@ -208,17 +211,18 @@ const heroIcon = (id) => img("heroes/" + id + "_icon.webp");
 // ===== 状態 =====
 let pickedNamed = null; // いま置こうとしているネームド兵士のID
 let downs = 0; // 退却した回数（試験用）
-let grid, units, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
+let grid, units, hero, gold, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
 const $ = (id) => document.getElementById(id);
 function reset() {
   grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); // null | {kind:"fence", spent}
-  units = [];
-  gold = START.gold; heart = START.heart; wave = 0; playing = false; over = false;
+  hero = { uid: -1, kind: "hero", id: "hero", st: { ...HERO }, x: CASTLE.c + 0.5, y: CASTLE.r + 0.5, home: { c: CASTLE.c, r: CASTLE.r }, hp: HERO.hp, cd: 0, scd: 0, target: null, down: 0, face: 1, swing: 0, spent: 0, healCd: 1, lv: 1, xp: 0 };
+  units = [hero];
+  gold = START.gold; wave = 0; playing = false; over = false;
   enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
   tool = tool === "sell" ? tool : "fence"; picked = null; pickedNamed = null; selected = null; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
-  say("柵で迷路を作り、兵士や武将を置いて ▶ 出陣。兵士は持ち場のまわりを動いて戦います。");
+  say("👑殿を守りぬけ！ 柵で迷路を作り、兵士や武将を置いて ▶ 出陣。殿が倒れたら負け。");
   ui();
 }
 const inside = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
@@ -272,7 +276,7 @@ const unitCell = (u) => [Math.floor(u.x), Math.floor(u.y)];
 function placeError(c, r, kind) {
   if (!inside(c, r)) return " ";
   if (kind === "sell") return "";
-  if (isGate(c, r) || isCastle(c, r)) return "門と城には置けません。";
+  if (isGate(c, r) || isCastle(c, r)) return "門と本陣には置けません。";
   if (grid[r][c]) return "そこには柵があります。";
   if (kind === "warlord" && !picked) return "先に🎌武将のボタンで武将を選んでね。";
   if (kind === "warlord" && placedWarlord(picked)) return WARLORDS[picked].name + "はもう出陣しています。";
@@ -303,18 +307,19 @@ function place(c, r) {
   if (tool === "fence") {
     gold -= cost; grid[r][c] = { kind: "fence", spent: cost }; distMap = flow(grid);
     effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
-    say("🪵 柵を置いた。道は" + (routeCells().length - 1) + "マス。");
+    say("🪵 柵を置いた。");
   } else {
     const u = newUnit(tool, tool === "warlord" ? picked : pickedNamed, c, r);
     gold -= cost; units.push(u);
     effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
-    say((tool === "warlord" ? "🎌 " : "⭐ ") + u.st.name + "が出陣。" + (playing ? "城から持ち場へ走っていく。" : "タップで選ぶと持ち場を移せる。"));
+    say((tool === "warlord" ? "🎌 " : "⭐ ") + u.st.name + "が出陣。" + (playing ? "本陣から持ち場へ走っていく。" : "タップで選ぶと持ち場を移せる。"));
     picked = pickedNamed = null; tool = "fence"; // 同じ人物は1人まで。次は選び直す
   }
   ui();
 }
 function removeAt(c, r) {
   const u = unitAt(c + 0.5, r + 0.5, 0.75);
+  if (u && u.kind === "hero") return say("殿は撤去できません。", true);
   if (u) {
     const back = playing ? Math.floor(u.spent / 2) : u.spent;
     gold += back; units = units.filter((o) => o !== u); if (selected === u) selected = null;
@@ -419,7 +424,7 @@ function stepEnemy(e, dt) {
     if (l > move) { e.x += (dx / l) * move; e.y += (dy / l) * move; return; }
     e.x = tx; e.y = ty; move -= l;
     e.prev = [e.tc - e.c, e.tr - e.r]; e.c = e.tc; e.r = e.tr;
-    if (isCastle(e.c, e.r)) { e.reached = true; return; }
+    if (isCastle(e.c, e.r)) { e.hunt = hero; e.think = 0.4; return; } // 本陣に着いたら殿を狙う
     const n = nextCell(e.c, e.r, distMap, e.prev);
     if (!n) return;
     e.tc = n[0]; e.tr = n[1];
@@ -440,19 +445,30 @@ function hurt(e, dmg, src) {
 }
 // ネームド兵士は敵を倒すと経験値。レベルが上がると強くなる（波の間も保たれる）
 function gainXp(u) {
-  if (u.kind !== "named" || u.lv >= LEVEL.max) return;
+  if ((u.kind !== "named" && u.kind !== "hero") || u.lv >= LEVEL.max) return;
   u.xp++;
   if (u.xp >= LEVEL.need(u.lv)) {
     u.xp = 0; u.lv++;
-    const old = u.st.hp; u.st = namedStat(u.id, u.lv); u.hp += u.st.hp - old;
-    effects.push({ kind: "skill", x: u.x, y: u.y, t: 1, text: NAMED[u.id].short + " Lv" + u.lv + "！", col: NAMED[u.id].color });
+    const old = u.st.hp;
+    if (u.kind === "hero") { const g = 1 + LEVEL.grow * (u.lv - 1); u.st = { ...HERO, hp: Math.round(HERO.hp * g), atk: HERO.atk * g }; }
+    else u.st = namedStat(u.id, u.lv);
+    u.hp += u.st.hp - old;
+    effects.push({ kind: "skill", x: u.x, y: u.y, t: 1, text: (u.kind === "hero" ? "殿" : NAMED[u.id].short) + " Lv" + u.lv + "！", col: u.kind === "hero" ? "#b8862a" : NAMED[u.id].color });
   }
+}
+function heroFell() {
+  playing = false; over = true;
+  effects.push({ kind: "down", x: hero.x, y: hero.y, t: 2, text: "殿、討ち死に…" });
+  $("overTitle").textContent = "殿、討ち死に…";
+  $("overText").innerHTML = "第" + wave + "波で殿が倒れました。<br>倒した敵：" + kills + "人";
+  setTimeout(() => ($("over").hidden = false), 600);
 }
 function hurtUnit(u, dmg) {
   if (u.down > 0) return;
   if (u.st.evade && Math.random() < u.st.evade) { effects.push({ kind: "down", x: u.x, y: u.y, t: 0.5, text: "かわした" }); return; }
   dmg *= 1 - (u.st.guard || 0);
   u.hp -= dmg; u.flash = 0.12;
+  if (u.hp <= 0 && u.kind === "hero") { u.hp = 0; u.down = 999; heroFell(); return; }
   if (u.hp <= 0) {
     u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null; downs++;
     effects.push({ kind: "down", x: u.x, y: u.y, t: 0.9, text: u.st.name + " 退却" });
@@ -509,6 +525,7 @@ function unitTick(u, dt) {
     return;
   }
   u.cd -= dt;
+  if (u.kind === "hero" && u.hp < u.st.hp) u.hp = Math.min(u.st.hp, u.hp + u.st.regen * dt); // 殿は少しずつ回復
   const w = u.kind === "warlord" ? WARLORDS[u.id] : null;
   if (w) {
     u.scd -= dt;
@@ -525,7 +542,7 @@ function unitTick(u, dt) {
     }
   }
   const t = (u.target = pickTarget(u));
-  if (w && u.scd <= 0 && (t || (wStyle(w).skill === "aid" && (heart < START.heart || units.some((o) => o.down === 0 && o.hp < o.st.hp * 0.6))))) { u.scd = u.st.skillCd; skill(u, w, t); }
+  if (w && u.scd <= 0 && (t || (wStyle(w).skill === "aid" && (units.some((o) => o.down === 0 && o.hp < o.st.hp * 0.6))))) { u.scd = u.st.skillCd; skill(u, w, t); }
   if (t) {
     const d = dist(u, t);
     if (d > (u.st.melee ? Math.min(u.st.range, 0.6) : u.st.range)) moveToward(u, t.x, t.y, dt); // 近接は敵に組みつくまで近づく
@@ -567,7 +584,6 @@ function skill(u, w, t) {
   }
   else if (S.skill === "aid") {
     for (const o of units) if (o.down === 0 && dist(o, u) < 3.5) o.hp = Math.min(o.st.hp, o.hp + Math.round(o.st.hp * 0.5));
-    if (heart < START.heart) { heart++; effects.push({ kind: "coin", x: CASTLE.c + 0.5, y: CASTLE.r + 0.2, t: 0.9, text: "❤️+1" }); }
     effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3.5, col: "#7ddf64" });
   }
   else if (S.skill === "order") for (const e of enemies) e.slow = Math.max(e.slow, 3);
@@ -596,10 +612,6 @@ function update(dt) {
   if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.8; }
   assignBlockers();
   for (const e of enemies) if (!e.dead) stepEnemy(e, dt);
-  for (const e of enemies) if (e.reached && !e.dead) {
-    e.dead = true; heart -= e.type === "samurai" ? 3 : 1;
-    effects.push({ kind: "hit", x: CASTLE.c + 0.5, y: CASTLE.r + 0.5, t: 0.4 });
-  }
   for (const u of units) unitTick(u, dt);
   separate();
   for (const s of shots) {
@@ -609,18 +621,14 @@ function update(dt) {
   }
   shots = shots.filter((s) => !s.done);
   enemies = enemies.filter((e) => !e.dead);
-  if (heart <= 0) {
-    heart = 0; playing = false; over = true;
-    $("overTitle").textContent = "落城…";
-    $("overText").innerHTML = "第" + wave + "波で城が落ちました。<br>倒した敵：" + kills + "人";
-    $("over").hidden = false;
-  } else if (!spawnQueue.length && !enemies.length) {
+  if (over) { /* 殿が倒れた */ }
+  else if (!spawnQueue.length && !enemies.length) {
     playing = false;
     const bonus = 30 + wave * 8;
     gold += bonus;
     // 波の終わりに全員が回復して起き上がる
     for (const u of units) { if (u.down > 0) { u.down = 0; u.x = CASTLE.c + 0.5; u.y = CASTLE.r + 0.5; } u.hp = u.st.hp; u.target = null; }
-    say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。兵士は回復して持ち場へ戻る。");
+    say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。殿と兵士は回復して持ち場へ戻る。");
   }
   ui();
 }
@@ -710,7 +718,17 @@ function drawUnit(u) {
   ctx.fillStyle = sel ? "rgba(255,230,120,.75)" : "rgba(70,150,255,.6)"; // 味方は青い足元
   ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.3, s * 0.11, 0, 0, Math.PI * 2); ctx.fill();
   const bob = u.swing > 0 ? -s * 0.06 : Math.sin((u.walk || 0) * 9) * s * 0.03;
-  if (u.kind === "warlord") {
+  if (u.kind === "hero") {
+    const im = img(HERO.img);
+    ctx.strokeStyle = "#ffd75e"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.36, s * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+    if (!sprite(im, x + (u.swing > 0 ? u.face * s * 0.08 : 0), y + s * 0.35 + bob, s * 1.1, u.face, u.flash > 0 ? 0.55 : 1)) { ctx.fillStyle = "#b8862a"; ctx.beginPath(); ctx.arc(x, y, s * 0.32, 0, Math.PI * 2); ctx.fill(); }
+    const label = "👑殿" + (u.lv > 1 ? u.lv : ""), ty = y - s * 0.85;
+    ctx.font = "bold 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const tw = ctx.measureText(label).width + 8;
+    ctx.fillStyle = "#b8862a"; ctx.fillRect(x - tw / 2, ty - 7, tw, 14); ctx.strokeStyle = "#ffd75e"; ctx.lineWidth = 1; ctx.strokeRect(x - tw / 2, ty - 7, tw, 14);
+    ctx.fillStyle = "#fff"; ctx.fillText(label, x, ty + 0.5);
+    bar(x, ty + 8, Math.max(tw, s * 0.7), u.hp / u.st.hp, u.hp / u.st.hp > 0.35 ? "#7ddf64" : "#ff6b5a");
+  } else if (u.kind === "warlord") {
     const w = WARLORDS[u.id], im = heroIcon(u.id), r = s * 0.42;
     ctx.save(); ctx.translate(x + (u.swing > 0 ? u.face * s * 0.08 : 0), y - s * 0.05 + bob);
     ctx.fillStyle = w.color; ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI * 2); ctx.fill();
@@ -783,7 +801,6 @@ function drawHover() {
 function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   drawGround();
-  drawRoute();
   drawGateCastle();
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c]) drawFence(c, r);
   drawHover();
@@ -887,8 +904,7 @@ let lastWarlordIcon = null;
 function ui() {
   $("wave").textContent = wave;
   $("gold").textContent = "💰 " + gold + "G";
-  $("heart").textContent = "❤️ " + heart;
-  $("route").textContent = "道 " + (routeCells().length - 1) + "マス";
+  $("heart").textContent = "👑 殿 " + Math.ceil(hero.hp) + "/" + hero.st.hp;
   $("start").disabled = playing || over;
   $("start").textContent = playing ? "戦闘中…" : "▶ 第" + (wave + 1) + "波 出陣";
   if (lastWarlordIcon !== picked + "/" + pickedNamed) {
@@ -918,8 +934,8 @@ function frame(now) {
 }
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
-  state: () => ({ downs, gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
-    units: units.map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
+  state: () => ({ downs, gold, hero: { hp: hero.hp, max: hero.st.hp, x: hero.x, y: hero.y, lv: hero.lv }, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
+    units: units.filter((u) => u.kind !== "hero").map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
   select: (t) => { tool = t; selected = null; ui(); },
   place: (c, r) => place(c, r),
   error: (c, r, k = tool) => placeError(c, r, k),
