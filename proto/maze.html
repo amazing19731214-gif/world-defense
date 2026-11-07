@@ -16,9 +16,19 @@
   #msg { width: 100%; max-width: 560px; min-height: 22px; padding: 0 12px; font-size: 13px; color: #d9c7a6; }
   #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
   canvas { display: block; touch-action: none; border-radius: 6px; }
-  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; padding: 6px 8px 4px; }
+  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px 8px 4px; }
   #tools button, #ctrl button { font: inherit; color: var(--text); background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2; }
-  #tools button b { display: block; font-size: 20px; }
+  #tools button b { display: block; font-size: 20px; height: 24px; }
+  #tools button b img { width: 24px; height: 24px; border-radius: 4px; image-rendering: pixelated; }
+  #pick > div { max-height: 86vh; overflow-y: auto; }
+  #pickList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #pickList button { font: inherit; margin: 0; padding: 6px 2px; border-radius: 8px; border: 2px solid var(--line); background: #3a3128; color: var(--text); font-size: 12px; line-height: 1.3; }
+  #pickList button img { width: 44px; height: 44px; display: block; margin: 0 auto 2px; image-rendering: pixelated; border-radius: 6px; }
+  #pickList button small { color: #d9c7a6; }
+  #pickList button .r { color: var(--gold); font-weight: 700; }
+  #pickList button:disabled { opacity: .35; }
+  #pick[hidden] { display: none; }
+  #pickClose { border-color: var(--line) !important; background: #3a3128 !important; }
   #tools button small { color: var(--gold); }
   #tools button.sel { border-color: var(--gold); background: #4a3b22; }
   #tools button:disabled { opacity: .45; }
@@ -45,10 +55,17 @@
   <b>柵🪵</b>と<b>塔</b>をマス目に置いて道をふさぐと、敵は残った道を探して回り道をします。長い迷路を作るほど、塔が長く攻撃できます。<br>
   ・道を<b>完全にふさぐ置き方はできません</b>（どこか1本は城まで通じている必要があります）。<br>
   ・点線は、いま敵が通る一番の近道です。<br>
-  ・<b>撤去</b>で柵や塔を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
+  ・<b>武将🎌</b>は何人でも置けます（同じ武将は1人ずつ）。得意な兵種で戦い方が変わり、ときどき<b>技</b>を自動で使います。武将も道をふさぎます。<br>
+  ・<b>撤去</b>で柵や塔・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   ・敵が城に着くと❤️が減り、0で落城です。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
+</div></div>
+<div id="pick" class="sheet" hidden><div>
+  <h2>武将を選ぶ</h2>
+  <div style="font-size:12px;margin-bottom:8px">選んでからマスをタップすると置けます。置いている武将は選べません（撤去すると戻ります）。</div>
+  <div id="pickList"></div>
+  <button id="pickClose">閉じる</button>
 </div></div>
 <div id="over" class="sheet" hidden><div>
   <h2 id="overTitle">落城</h2>
@@ -67,8 +84,63 @@ const TOOLS = {
   cannon: { name: "大砲", icon: "💣", cost: 110, range: 2.1, dmg: 26, rate: 1.6, splash: 0.9, col: "#56616d" },
   gun: { name: "鉄砲", icon: "💥", cost: 140, range: 3.4, dmg: 34, rate: 1.4, col: "#5a4632" },
   water: { name: "水攻め", icon: "🌊", cost: 80, range: 2.3, dmg: 3, rate: 0.8, slow: 0.45, slowTime: 1.6, col: "#3f8fcf" },
+  warlord: { name: "武将", icon: "🎌", cost: 0 },
   sell: { name: "撤去", icon: "🧹", cost: 0 },
 };
+// ===== 武将（名前・色・得意な兵種・技の名前は本番のゲームの武将から） =====
+// [ID, 名前, 稀少度, 一文字, 色, 得意な兵種, 役割, 技]
+const WARLORD_LIST = [
+  ["nobunaga","織田信長","SSR","信","#9c2f2a","gunner","連続射撃","三段撃ち"],
+  ["shingen","武田信玄","SSR","玄","#a8432f","spearman","集団戦","風林火山"],
+  ["kenshin","上杉謙信","SSR","謙","#3c5f9e","spearman","前線維持","車懸りの陣"],
+  ["motoyasu","松平元康","SSR","康","#6a7a2a","ashigaru","生存タンク","三河の底力"],
+  ["hideyoshi","羽柴秀吉","SSR","秀","#b8862a","medic","範囲ヒーラー","天下人の大救護"],
+  ["yukimura","真田幸村","SR","幸","#c0392b","ashigaru","赤備えのタンク","日本一の兵"],
+  ["kanetsugu","直江兼続","SR","兼","#4a7d5c","medic","主力ヒーラー","愛の救護陣"],
+  ["masamune","伊達政宗","SR","政","#2f4a6e","cavalry","突撃・突破","独眼竜の突撃"],
+  ["tadakatsu","本多忠勝","SR","忠","#5a4a3a","spearman","重装タンク","不動の守護"],
+  ["mitsuhide","明智光秀","SR","光","#6a4a9a","gunner","狙撃","穿つ一弾"],
+  ["mitsunari","石田三成","SR","成","#a8332e","","同時攻撃","大一大万大吉"],
+  ["yoshihiro","島津義弘","SR","島","#2f4a6e","gunner","接近迎撃","釣り野伏せ"],
+  ["motochika","長宗我部元親","SR","親","#2a5a9a","archer","制圧","土佐の制圧陣"],
+  ["kiyomasa","加藤清正","SR","清","#8a6a1a","spearman","前線整理","片鎌槍"],
+  ["hanbei","竹中半兵衛","SR","半","#6a4a8a","medic","緊急救護","応急の一策"],
+  ["muneshige","立花宗茂","SR","茂","#3a5a8a","cavalry","救援","西国無双"],
+  ["kanbei","黒田官兵衛","R","官","#55606e","","標的指定","軍略・集中砲火"],
+  ["motonari","毛利元就","R","元","#3f7a6d","archer","連携","三本の矢"],
+  ["keiji","前田慶次","R","慶","#8a5a2b","cavalry","単独行動","傾奇者"],
+  ["ujiyasu","北条氏康","R","氏","#2f4a7e","spearman","盾と足止め","小田原の盾"],
+  ["masanori","福島正則","R","則","#a8332e","ashigaru","先手","賤ヶ岳の七本槍"],
+  ["kansuke","山本勘助","R","勘","#5a3a7a","","罠","啄木鳥戦法"],
+  ["yoshiaki","最上義光","R","最","#4a5a6a","archer","漏れ対策","羽州の狐"],
+  ["yoshikage","朝倉義景","R","朝","#b8532e","medic","休息回復","一乗谷の休息"],
+  ["dosan","斎藤道三","R","道","#5a3a6a","","継続ダメージ","美濃の蝮"],
+  ["yoshikata","六角義賢","R","六","#5a4a7a","archer","射撃対策","観音寺の守り"],
+  ["haruhisa","尼子晴久","R","尼","#2f4a7e","ashigaru","突破後の迎撃","山陰の封鎖"],
+  ["sorin","大友宗麟","R","宗","#b8532e","gunner","貫通","国崩し"],
+  ["takanobu","龍造寺隆信","R","龍","#9c2f2a","cavalry","威圧","肥前の熊"],
+  ["terumoto","毛利輝元","R","輝","#8a6a2a","medic","持久戦・経済","西軍の兵站"]
+];
+const WARLORDS = Object.fromEntries(WARLORD_LIST.map(([id, name, rarity, short, color, fav, role, skill]) => [id, { id, name, rarity, short, color, fav, role, skill }]));
+// 稀少度ごとの値段・強さ・技の間隔（秒）
+const RARITY = { SSR: { cost: 220, mul: 1.6, skillCd: 10 }, SR: { cost: 160, mul: 1.3, skillCd: 12 }, R: { cost: 110, mul: 1, skillCd: 14 } };
+// 得意な兵種ごとの戦い方。sweep は周りの敵をまとめて攻撃。skill は技の効き方
+const STYLES = {
+  gunner: { label: "鉄砲", range: 3.2, dmg: 24, rate: 1.2, shot: "gun", skill: "snipe", text: "遠くの敵を撃つ／技：先頭の敵へ強烈な3連射" },
+  archer: { label: "弓", range: 2.8, dmg: 8, rate: 0.45, shot: "arrow", skill: "rain", text: "弓で速く射る／技：射程の中へ矢の雨" },
+  spearman: { label: "槍", range: 1.6, dmg: 12, rate: 0.7, sweep: true, skill: "sweep", text: "周りの敵をまとめて突く／技：大なぎ払い" },
+  ashigaru: { label: "足軽", range: 1.5, dmg: 10, rate: 0.6, sweep: true, skill: "hold", text: "周りの敵をまとめて攻撃／技：周りの敵を足止め" },
+  cavalry: { label: "騎馬", range: 2.2, dmg: 14, rate: 0.5, shot: "arrow", skill: "charge", text: "すばやく攻撃／技：射程の中へ突撃" },
+  medic: { label: "衛生", range: 2.2, dmg: 6, rate: 0.6, shot: "arrow", skill: "aid", text: "攻撃は弱い／技：城の❤️を1回復" },
+  "": { label: "軍師", range: 2.6, dmg: 7, rate: 0.6, shot: "arrow", skill: "order", text: "攻撃は弱い／技：盤面の敵をすべて遅くする" },
+};
+const wStyle = (w) => STYLES[w.fav] || STYLES[""];
+const wStat = (w) => { const S = wStyle(w), R = RARITY[w.rarity]; return { range: S.range, dmg: Math.round(S.dmg * R.mul), rate: S.rate, cost: R.cost, skillCd: R.skillCd }; };
+const ICONS = {};
+function wIcon(id) {
+  if (!ICONS[id]) { const im = new Image(); im.src = "../assets/heroes/" + id + "_icon.webp"; ICONS[id] = im; }
+  return ICONS[id];
+}
 const ENEMIES = {
   ashigaru: { name: "足軽", icon: "👺", hp: 1, speed: 1.15, gold: 4, col: "#c9493b" },
   cavalry: { name: "騎馬", icon: "🐎", hp: 0.8, speed: 2.0, gold: 5, col: "#8a5a2b" },
@@ -89,12 +161,13 @@ function waveList(n) {
 const baseHp = (n) => Math.round(22 * Math.pow(1.2, n - 1));
 
 // ===== 状態 =====
+let picked = null; // いま置こうとしている武将のID
 let grid, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, speed, paused, over, seq, kills, time;
 function reset() {
   grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); // null | {kind, cd, spent}
   gold = START.gold; heart = START.heart; wave = 0; playing = false; over = false;
   enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
-  tool = tool || "fence"; speed = speed || 1; paused = false;
+  picked = null; tool = tool === "warlord" ? "fence" : tool || "fence"; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
   say("柵と塔で迷路を作って、▶ 出陣を押してね。");
@@ -140,12 +213,16 @@ function routeCells(d = distMap) {
   }
   return cells;
 }
+const placedWarlord = (id) => grid.some((row) => row.some((o) => o && o.kind === "warlord" && o.id === id));
+const costOf = (kind) => (kind === "warlord" ? (picked ? wStat(WARLORDS[picked]).cost : 0) : TOOLS[kind].cost);
 // 置けるか。理由の文を返す（置けるなら ""）
 function placeError(c, r, kind) {
   if (!inside(c, r)) return " ";
   if (isGate(c, r) || isCastle(c, r)) return "門と城には置けません。";
   if (grid[r][c]) return "もう置いてあります。";
-  if (gold < TOOLS[kind].cost) return "お金が足りません。";
+  if (kind === "warlord" && !picked) return "先に🎌武将のボタンで武将を選んでね。";
+  if (kind === "warlord" && placedWarlord(picked)) return WARLORDS[picked].name + "はもう出陣しています。";
+  if (gold < costOf(kind)) return "お金が足りません。";
   for (const e of enemies) if ((e.c === c && e.r === r) || (e.tc === c && e.tr === r)) return "敵がいるマスには置けません。";
   const g = grid.map((row) => row.slice()); g[r][c] = { kind };
   const d = flow(g);
@@ -158,19 +235,21 @@ function place(c, r) {
   if (tool === "sell") return removeAt(c, r);
   const err = placeError(c, r, tool);
   if (err) return err.trim() && say(err, true);
-  const t = TOOLS[tool];
-  gold -= t.cost;
-  grid[r][c] = { kind: tool, cd: 0, spent: t.cost };
+  const t = TOOLS[tool], cost = costOf(tool);
+  gold -= cost;
+  grid[r][c] = { kind: tool, cd: 0, spent: cost };
+  if (tool === "warlord") { const w = WARLORDS[picked]; Object.assign(grid[r][c], { id: picked, scd: wStat(w).skillCd * 0.5 }); }
   distMap = flow(grid);
   effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
-  say(t.icon + " " + t.name + "を置いた。道は" + (routeCells().length - 1) + "マス。");
+  say((tool === "warlord" ? "🎌 " + WARLORDS[picked].name : t.icon + " " + t.name) + "を置いた。道は" + (routeCells().length - 1) + "マス。");
+  if (tool === "warlord") picked = null; // 同じ武将は1人まで。次は選び直す
   ui();
 }
 function removeAt(c, r) {
-  if (!inside(c, r) || !grid[r][c]) return say("撤去する柵や塔をタップしてね。");
+  if (!inside(c, r) || !grid[r][c]) return say("撤去する柵や塔・武将をタップしてね。");
   const o = grid[r][c], back = playing ? Math.floor(o.spent / 2) : o.spent;
   gold += back; grid[r][c] = null; distMap = flow(grid);
-  say("🧹 " + TOOLS[o.kind].name + "を撤去（+" + back + "G）");
+  say("🧹 " + (o.kind === "warlord" ? WARLORDS[o.id].name : TOOLS[o.kind].name) + "を撤去（+" + back + "G）");
   ui();
 }
 
@@ -191,6 +270,7 @@ function stepEnemy(e, dt) {
   const E = ENEMIES[e.type];
   let move = E.speed * (e.slow > 0 ? 1 - TOOLS.water.slow : 1) * dt;
   e.slow = Math.max(0, e.slow - dt);
+  if (e.stun > 0) { e.stun -= dt; return; }
   while (move > 0) {
     const tx = e.tc + 0.5, ty = e.tr + 0.5, dx = tx - e.x, dy = ty - e.y, l = Math.hypot(dx, dy);
     if (l > move) { e.x += (dx / l) * move; e.y += (dy / l) * move; e.walked += move; return; }
@@ -228,7 +308,38 @@ function towerTick(c, r, o, dt) {
   o.aim = Math.atan2(target.y - y, target.x - x);
   shots.push({ kind: o.kind, x, y, e: target, tx: target.x, ty: target.y, t: 0, dur: o.kind === "gun" ? 0.08 : o.kind === "cannon" ? 0.35 : 0.18 });
 }
+const nearEnemies = (x, y, range) => enemies.filter((e) => !e.dead && Math.hypot(e.x - x, e.y - y) <= range);
+const byFront = (a, b) => distMap[a.tr][a.tc] - distMap[b.tr][b.tc]; // 城に近い順
+function warlordTick(c, r, o, dt) {
+  const w = WARLORDS[o.id], S = wStyle(w), st = wStat(w), x = c + 0.5, y = r + 0.5;
+  o.cd -= dt; o.scd -= dt;
+  const near = nearEnemies(x, y, st.range).sort(byFront);
+  if (o.scd <= 0 && (near.length || S.skill === "aid" && heart < START.heart)) {
+    o.scd = st.skillCd;
+    skill(o, w, S, st, x, y, near);
+  }
+  if (o.cd > 0 || !near.length) return;
+  o.cd = st.rate;
+  if (S.sweep) {
+    for (const e of near) hurt(e, st.dmg);
+    effects.push({ kind: "slash", x, y, t: 0.25, r: st.range, col: w.color });
+  } else {
+    const e = near[0];
+    shots.push({ kind: S.shot, x, y, e, tx: e.x, ty: e.y, t: 0, dur: S.shot === "gun" ? 0.08 : 0.18, dmg: st.dmg });
+  }
+}
+function skill(o, w, S, st, x, y, near) {
+  effects.push({ kind: "skill", x, y, t: 1.1, text: w.skill, col: w.color });
+  if (S.skill === "snipe") near.slice(0, 3).forEach((e, i) => shots.push({ kind: "gun", x, y, e, tx: e.x, ty: e.y, t: -i * 0.15, dur: 0.08, dmg: st.dmg * 3 }));
+  else if (S.skill === "rain") { for (const e of nearEnemies(x, y, st.range * 1.3)) hurt(e, st.dmg * 3); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.3, col: "#f5e1b0" }); }
+  else if (S.skill === "sweep") { for (const e of nearEnemies(x, y, st.range * 1.4)) hurt(e, st.dmg * 4); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.4, col: w.color }); }
+  else if (S.skill === "hold") { for (const e of nearEnemies(x, y, st.range * 1.5)) e.stun = 2.5; effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.5, col: "#ffe08a" }); }
+  else if (S.skill === "charge") { for (const e of near) hurt(e, st.dmg * 3); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range, col: w.color }); }
+  else if (S.skill === "aid") { heart = Math.min(START.heart, heart + 1); effects.push({ kind: "coin", x: CASTLE.c + 0.5, y: CASTLE.r + 0.2, t: 0.9, text: "❤️+1" }); }
+  else if (S.skill === "order") for (const e of enemies) e.slow = Math.max(e.slow, 2.5);
+}
 function landShot(s) {
+  if (s.dmg) { hurt(s.e, s.dmg); return; } // 武将の攻撃
   const T = TOOLS[s.kind];
   if (s.kind === "cannon") {
     for (const e of enemies) if (Math.hypot(e.x - s.tx, e.y - s.ty) <= T.splash) hurt(e, T.dmg);
@@ -250,11 +361,13 @@ function update(dt) {
     }
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const o = grid[r][c];
-      if (o && o.kind !== "fence") towerTick(c, r, o, dt);
+      if (o && o.kind === "warlord") warlordTick(c, r, o, dt);
+      else if (o && o.kind !== "fence") towerTick(c, r, o, dt);
     }
     for (const s of shots) {
       if (!s.e.dead) { s.tx = s.e.x; s.ty = s.e.y; }
       s.t += dt;
+      if (s.t < 0) continue;
       if (s.t >= s.dur && !s.done) { s.done = true; landShot(s); }
     }
     shots = shots.filter((s) => !s.done);
@@ -333,6 +446,18 @@ function drawTower(c, r, o) {
   ctx.font = Math.round(s * 0.5) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(T.icon, x + s / 2, y + s * 0.53);
 }
+function drawWarlord(c, r, o) {
+  const w = WARLORDS[o.id], x = c * cell, y = r * cell, s = cell, im = wIcon(o.id);
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.fillRect(x + s * 0.1, y + s * 0.14, s * 0.86, s * 0.86);
+  ctx.fillStyle = w.color; ctx.fillRect(x + s * 0.04, y + s * 0.04, s * 0.92, s * 0.92);
+  ctx.fillStyle = "#f3e7d0"; ctx.fillRect(x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8);
+  if (im.complete && im.naturalWidth) { ctx.imageSmoothingEnabled = false; ctx.drawImage(im, x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8); }
+  else { ctx.fillStyle = w.color; ctx.font = "bold " + Math.round(s * 0.5) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(w.short, x + s / 2, y + s * 0.53); }
+  // 技のたまり具合
+  const k = Math.max(0, Math.min(1, 1 - o.scd / wStat(w).skillCd));
+  ctx.fillStyle = "#000a"; ctx.fillRect(x + s * 0.1, y + s * 0.86, s * 0.8, 4);
+  ctx.fillStyle = k >= 1 ? "#ffd75e" : "#7fc3ff"; ctx.fillRect(x + s * 0.1, y + s * 0.86, s * 0.8 * k, 4);
+}
 function drawGateCastle() {
   ctx.font = Math.round(cell * 0.75) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#3a2b1c"; ctx.fillRect(GATE.c * cell + 2, GATE.r * cell + 2, cell - 4, cell - 4);
@@ -345,6 +470,7 @@ function drawEnemy(e) {
   ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.28, s * 0.26, s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = E.col; ctx.beginPath(); ctx.arc(x, y, s * (e.type === "samurai" ? 0.34 : 0.28), 0, Math.PI * 2); ctx.fill();
   if (e.slow > 0) { ctx.strokeStyle = "#8fd3ff"; ctx.lineWidth = 2; ctx.stroke(); }
+  if (e.stun > 0) { ctx.strokeStyle = "#ffe08a"; ctx.lineWidth = 2; ctx.stroke(); }
   ctx.font = Math.round(s * 0.42) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(E.icon, x, y + 1);
   const w = s * 0.6;
@@ -366,6 +492,14 @@ function drawEffects() {
     if (f.kind === "boom") { ctx.fillStyle = "rgba(255,170,60," + f.t * 2 + ")"; ctx.beginPath(); ctx.arc(x, y, TOOLS.cannon.splash * cell * (1.2 - f.t * 2), 0, Math.PI * 2); ctx.fill(); }
     if (f.kind === "puff") { ctx.strokeStyle = "rgba(255,255,255," + f.t * 2 + ")"; ctx.lineWidth = 2; ctx.strokeRect(x - cell / 2, y - cell / 2, cell, cell); }
     if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60," + f.t + ")"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "slash") { ctx.strokeStyle = f.col; ctx.globalAlpha = Math.min(1, f.t * 3); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, f.r * cell, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    if (f.kind === "skill") {
+      ctx.font = "bold 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const ty = y - cell * 0.7 - (1.1 - f.t) * 14, tw = ctx.measureText(f.text).width + 14;
+      ctx.globalAlpha = Math.min(1, f.t * 3);
+      ctx.fillStyle = f.col; ctx.fillRect(x - tw / 2, ty - 11, tw, 22);
+      ctx.fillStyle = "#fff"; ctx.fillText(f.text, x, ty + 1); ctx.globalAlpha = 1;
+    }
     if (f.kind === "coin") { ctx.fillStyle = "#ffd75e"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.fillText(f.text, x, y - (0.7 - f.t) * 30); }
   }
 }
@@ -377,7 +511,7 @@ function drawHover() {
   const bad = tool === "sell" ? !grid[r][c] : !!placeError(c, r, tool);
   ctx.fillStyle = bad ? "rgba(224,90,74,.35)" : "rgba(242,193,78,.35)";
   ctx.fillRect(c * cell, r * cell, cell, cell);
-  const T = TOOLS[tool];
+  const T = tool === "warlord" && picked ? wStat(WARLORDS[picked]) : TOOLS[tool];
   if (T.range) { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, T.range * cell, 0, Math.PI * 2); ctx.stroke(); }
 }
 function draw() {
@@ -387,7 +521,7 @@ function draw() {
   drawGateCastle();
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const o = grid[r][c];
-    if (o) o.kind === "fence" ? drawFence(c, r) : drawTower(c, r, o);
+    if (o) o.kind === "fence" ? drawFence(c, r) : o.kind === "warlord" ? drawWarlord(c, r, o) : drawTower(c, r, o);
   }
   drawHover();
   for (const e of enemies) drawEnemy(e);
@@ -419,14 +553,33 @@ function buildTools() {
     '<button data-tool="' + id + '"><b>' + t.icon + "</b>" + t.name + "<br><small>" + (t.cost ? t.cost + "G" : "&nbsp;") + "</small></button>").join("");
   $("tools").onclick = (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.tool === "warlord") return openPick();
     tool = b.dataset.tool;
     const t = TOOLS[tool];
-    say(tool === "sell" ? "撤去する柵や塔をタップ（なぞると続けて撤去）。" :
+    say(tool === "sell" ? "撤去する柵や塔・武将をタップ（なぞると続けて撤去）。" :
       tool === "fence" ? "🪵 柵：道をふさいで回り道させる。なぞると続けて置ける。" :
       t.icon + " " + t.name + "：射程" + t.range + "マス・攻撃" + t.dmg + (t.slow ? "・敵を遅くする" : t.splash ? "・まとめて攻撃" : "") + "。塔も道をふさぐ。");
     ui();
   };
 }
+function openPick() {
+  $("pickList").innerHTML = WARLORD_LIST.map(([id]) => {
+    const w = WARLORDS[id], st = wStat(w), on = placedWarlord(id);
+    return '<button data-w="' + id + '"' + (on ? " disabled" : "") + ' title="' + wStyle(w).text + '"><img src="../assets/heroes/' + id + '_icon.webp" alt="" style="background:' + w.color + '">' +
+      '<span class="r">' + w.rarity + "</span> " + w.name + "<br><small>" + wStyle(w).label + "・" + w.skill + "</small><br>" + (on ? "出陣中" : st.cost + "G") + "</button>";
+  }).join("");
+  $("pick").hidden = false;
+}
+function pickWarlord(id) {
+  const w = WARLORDS[id];
+  if (!w || placedWarlord(id)) return;
+  picked = id; tool = "warlord"; $("pick").hidden = true;
+  const st = wStat(w);
+  say("🎌 " + w.name + "（" + st.cost + "G）：" + wStyle(w).text + "。置くマスをタップ。");
+  ui();
+}
+$("pickList").onclick = (ev) => { const b = ev.target.closest("button"); if (b) pickWarlord(b.dataset.w); };
+$("pickClose").onclick = () => ($("pick").hidden = true);
 function say(text, warn) { const m = $("msg"); m.textContent = text; m.style.color = warn ? "#ff9b8a" : ""; }
 function ui() {
   $("wave").textContent = wave;
@@ -439,6 +592,8 @@ function ui() {
     b.classList.toggle("sel", b.dataset.tool === tool);
     b.disabled = TOOLS[b.dataset.tool].cost > gold && b.dataset.tool !== tool;
   }
+  const wb = document.querySelector('#tools [data-tool="warlord"] b');
+  if (wb) wb.innerHTML = picked ? '<img src="../assets/heroes/' + picked + '_icon.webp" alt="" style="background:' + WARLORDS[picked].color + '">' : "🎌";
 }
 $("start").onclick = startWave;
 $("speed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $("speed").textContent = "×" + speed; };
@@ -465,6 +620,9 @@ window.MAZE = {
   start: startWave,
   step: (sec) => { for (let t = 0; t < sec; t += 0.05) update(0.05); },
   setGold: (g) => { gold = g; ui(); },
+  pick: (id) => pickWarlord(id),
+  openPick,
+  warlords: () => grid.flat().filter((o) => o && o.kind === "warlord").map((o) => ({ id: o.id, scd: o.scd })),
   config: { COLS, ROWS, GATE, CASTLE, TOOLS },
 };
 buildTools();
