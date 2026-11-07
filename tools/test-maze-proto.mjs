@@ -22,17 +22,18 @@ check(r1.route > 16, "柵の列で回り道になる（" + r1.route + "マス）
 check(/ふさぐ/.test(await p.evaluate(() => MAZE.error(10, 4, "fence"))), "最後の1マスをふさぐ置き方はできない");
 
 // ■ 兵士は持ち場のまわりで敵を追いかけて戦い、敵がいなくなると持ち場へ戻る
-const u1 = await p.evaluate(() => { for (let c = 1; c < 11; c++) MAZE.place(c, 9); MAZE.select("spearman"); MAZE.place(5, 6); MAZE.select("ashigaru"); MAZE.place(2, 11); MAZE.select("archer"); MAZE.place(4, 7); MAZE.place(3, 12); return MAZE.state(); });
-check(u1.units.length === 4, "兵士を置ける（槍兵・足軽・弓兵2）");
+const u1 = await p.evaluate(() => { for (let c = 1; c < 11; c++) MAZE.place(c, 9); MAZE.pickNamed("sakon"); MAZE.place(5, 6); MAZE.pickNamed("hanzo"); MAZE.place(2, 11); MAZE.pickNamed("takakage"); MAZE.place(4, 7); MAZE.pickNamed("magoichi"); MAZE.place(3, 12); return MAZE.state(); });
+check(u1.units.length === 4 && u1.units.every((u) => u.kind === "named"), "ネームド兵士を置ける（左近・半蔵・隆景・孫市）");
+check(/もう出陣|先に/.test(await p.evaluate(() => { MAZE.pickNamed("sakon"); return MAZE.error(8, 8, "named"); })), "同じネームド兵士は2人置けない");
 check(/兵士がいるマス/.test(await p.evaluate(() => MAZE.error(5, 6, "fence"))), "兵士の持ち場には柵を置けない");
 const box = await p.locator("#cv").boundingBox(), cs = box.width / 11;
 // タップで選んで、別のマスをタップ → 持ち場が移る
 await p.mouse.click(box.x + cs * 5.5, box.y + cs * 6.5);
 await p.mouse.click(box.x + cs * 6.5, box.y + cs * 6.5);
-const moved = (await S()).units.find((u) => u.kind === "spearman");
+const moved = (await S()).units.find((u) => u.id === "sakon");
 check(moved.home.c === 6 && moved.home.r === 6, "兵士をタップで選んで、マスをタップで持ち場を移せる");
 await p.evaluate(() => MAZE.step(2));
-const back = (await S()).units.find((u) => u.kind === "spearman");
+const back = (await S()).units.find((u) => u.id === "sakon");
 check(Math.abs(back.x - 6.5) < 0.1 && Math.abs(back.y - 6.5) < 0.1, "兵士が歩いて新しい持ち場へ移る");
 await p.evaluate(() => { MAZE.start(); MAZE.step(17); });
 await shot("maze-units.png");
@@ -44,17 +45,18 @@ check(!end.playing && end.heart > 0, "第1波をしのげる（❤️" + end.hea
 await p.evaluate(() => MAZE.step(4));
 const home = await S();
 check(home.units.every((u) => Math.hypot(u.x - (u.home.c + 0.5), u.y - (u.home.r + 0.5)) < 0.2 && u.hp > 0), "波が終わると回復して持ち場へ戻る");
+check(home.units.some((u) => u.lv > 1), "敵を倒したネームド兵士はレベルが上がる（" + home.units.map((u) => u.id + "Lv" + u.lv).join(",") + "）");
 
 // ■ 近接の兵士は足止めする（弓兵は足止めしない）
 await fresh();
 const block = await p.evaluate(() => {
-  MAZE.setGold(9999); MAZE.select("ashigaru"); MAZE.place(5, 3);
+  MAZE.setGold(9999); MAZE.pickNamed("motoharu"); MAZE.place(5, 3);
   MAZE.start(); MAZE.step(4);
   const s = MAZE.state();
   return { units: s.units, heart: s.heart };
 });
 const ash = block.units[0];
-check(ash.hp < 80 || ash.down > 0, "足軽が敵の前に立って戦う（敵から攻撃を受ける）");
+check(ash.hp < 85 || ash.down > 0, "足軽（吉川元春）が敵の前に立って戦う（敵から攻撃を受ける）");
 const fall = await p.evaluate(() => { MAZE.step(200); return MAZE.state(); });
 check(fall.units[0].down >= 0, "兵士は倒れても消えない（城で起き上がる）");
 
@@ -72,8 +74,7 @@ check(/もう出陣|先に/.test(wl.again), "同じ武将は2人置けない");
 await p.click('#tools [data-tool="warlord"]');
 check(await p.locator('#pickList [data-w="kenshin"]').isDisabled(), "出陣中の武将は選べない");
 await p.click("#pickClose");
-await p.evaluate(() => MAZE.select("spearman"));
-const fight = await p.evaluate(() => { MAZE.select("ashigaru"); MAZE.place(3, 6); MAZE.place(7, 7); MAZE.start(); MAZE.step(9); const a = MAZE.state().units; return a; });
+const fight = await p.evaluate(() => { MAZE.pickNamed("kotaro"); MAZE.place(3, 6); MAZE.pickNamed("gensaku"); MAZE.place(7, 7); MAZE.start(); MAZE.step(9); const a = MAZE.state().units; return a; });
 await p.waitForTimeout(200);
 await shot("maze-warlord.png");
 check(fight.some((u) => u.kind === "warlord" && u.scd > 5), "武将が技を使う");
@@ -81,6 +82,13 @@ const fin = await p.evaluate(() => { MAZE.step(150); return MAZE.state(); });
 check(!fin.playing && fin.heart > 0, "武将と兵士で第1波をしのげる（❤️" + fin.heart + "）");
 const sold = await p.evaluate(() => { const g = MAZE.state().gold, u = MAZE.state().units.find((o) => o.id === "nobunaga"); MAZE.select("sell"); MAZE.place(u.home.c, u.home.r); return { d: MAZE.state().gold - g, list: MAZE.state().units.map((o) => o.id) }; });
 check(sold.d === 220 && !sold.list.includes("nobunaga"), "撤去すると武将が戻り代金も戻る");
+
+// ■ ネームド兵士の一覧
+await p.click('#tools [data-tool="named"]');
+check(await p.locator("#pickList button").count() === 18 && (await p.locator("#pickTitle").textContent()).includes("ネームド"), "兵士を選ぶ画面にネームド兵士18人");
+check(await p.locator('#pickList [data-n="kotaro"]').isDisabled(), "出陣中のネームド兵士は選べない");
+await shot("maze-named.png");
+await p.click("#pickClose");
 
 // ■ 守りがないと落城
 await fresh();

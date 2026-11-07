@@ -16,7 +16,7 @@
   #msg { width: 100%; max-width: 560px; min-height: 36px; padding: 0 12px; font-size: 13px; line-height: 1.35; color: #d9c7a6; }
   #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
   canvas { display: block; touch-action: none; border-radius: 6px; }
-  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 6px 8px 4px; }
+  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px 8px 4px; }
   #tools button, #ctrl button { font: inherit; color: var(--text); background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2; }
   #tools button b { display: flex; justify-content: center; align-items: center; font-size: 20px; height: 28px; }
   #tools button b img { max-width: 30px; max-height: 28px; border-radius: 4px; }
@@ -51,18 +51,19 @@
   <h2>迷路の関（試作）</h2>
   上の⛩️門から敵が入り、下の🏯城をめざします。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
+  兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあり、敵を倒すと<b>レベルが上がって</b>強くなります。<br>
   <b>兵士と武将</b>は自分で動いて戦います。置いた場所が<b>持ち場</b>になり、持ち場のまわり（点線の円）に入った敵を追いかけて戦い、敵がいなくなると持ち場へ戻ります。<br>
-  ・足軽・槍兵・近接の武将は、敵の前に立って<b>足止め</b>します。弓兵は離れて射ます。<br>
+  ・足軽・槍兵・騎兵・近接の武将は、敵の前に立って<b>足止め</b>します。弓兵・鉄砲兵は離れて撃ち、衛生兵は近くの味方を治します。<br>
   ・兵士や武将を<b>タップで選んで、別のマスをタップ</b>すると持ち場を移せます（指で引きずってもOK）。戦闘中も動かせます。<br>
   ・倒れた兵士は少しすると🏯城で起き上がり、持ち場へ走って戻ります。<br>
-  ・武将は何人でも置けます（同じ武将は1人まで）。ゲージがたまると<b>技</b>を自動で使います。<br>
+  ・兵士も武将も何人でも置けます（同じ人物は1人まで）。武将はゲージがたまると<b>技</b>を自動で使います。<br>
   ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
 </div></div>
 <div id="pick" class="sheet" hidden><div>
-  <h2>武将を選ぶ</h2>
-  <div style="font-size:12px;margin-bottom:8px">選んでからマスをタップすると、そこが持ち場になります。出陣中の武将は選べません（撤去すると戻ります）。</div>
+  <h2 id="pickTitle">武将を選ぶ</h2>
+  <div style="font-size:12px;margin-bottom:8px">選んでからマスをタップすると、そこが持ち場になります。出陣中の人物は選べません（撤去すると戻ります）。</div>
   <div id="pickList"></div>
   <button id="pickClose">閉じる</button>
 </div></div>
@@ -79,16 +80,49 @@ const GATE = { c: 5, r: 0 }, CASTLE = { c: 5, r: ROWS - 1 };
 const START = { gold: 300, heart: 20 };
 const ASSET = "../assets/";
 // ===== 兵士（動き回って戦う守り手）。leash＝持ち場から追いかける距離（マス） =====
+// 兵種ごとの基本の強さ。兵士はすべてネームド兵士（下の一覧）で、この兵種で戦う
 const SOLDIERS = {
-  ashigaru: { name: "足軽", img: "units/ashigaru.png", cost: 40, hp: 80, atk: 6, range: 0.75, rate: 0.7, speed: 1.7, leash: 2.5, melee: true, text: "打たれ強い。敵の前に立って足止め" },
-  spearman: { name: "槍兵", img: "units/spearman.png", cost: 60, hp: 55, atk: 11, range: 0.95, rate: 0.8, speed: 1.6, leash: 2.5, melee: true, text: "攻撃が強い。敵の前に立って足止め" },
-  archer: { name: "弓兵", img: "units/archer.png", cost: 60, hp: 32, atk: 7, range: 2.6, rate: 0.9, speed: 1.5, leash: 3, melee: false, text: "離れて射る。足止めはしない" },
+  ashigaru: { name: "足軽", img: "units/ashigaru.png", cost: 50, hp: 85, atk: 7, range: 0.75, rate: 0.7, speed: 1.8, leash: 2.5, melee: true, text: "打たれ強い。敵の前に立って足止め" },
+  spearman: { name: "槍兵", img: "units/spearman.png", cost: 70, hp: 60, atk: 12, range: 0.95, rate: 0.8, speed: 1.7, leash: 2.5, melee: true, text: "攻撃が強い。敵の前に立って足止め" },
+  archer: { name: "弓兵", img: "units/archer.png", cost: 70, hp: 36, atk: 8, range: 2.6, rate: 0.9, speed: 1.6, leash: 3, melee: false, text: "離れて射る。足止めはしない" },
+  gunner: { name: "鉄砲兵", img: "units/gunner.png", cost: 90, hp: 36, atk: 20, range: 3.0, rate: 1.4, speed: 1.5, leash: 3, melee: false, text: "遠くから強い一撃。足止めはしない" },
+  cavalry: { name: "騎兵", img: "units/cavalry.png", cost: 90, hp: 75, atk: 12, range: 0.95, rate: 0.6, speed: 2.7, leash: 3.5, melee: true, text: "速く走って斬りこむ。広く守る" },
+  medic: { name: "衛生兵", img: "units/medic.webp", cost: 80, hp: 50, atk: 4, range: 2.0, rate: 0.9, speed: 1.7, leash: 2.5, melee: false, heal: 5, text: "近くの味方を治す" },
 };
+// ===== ネームド兵士（本番のゲームのネームド兵士18人。名前・兵種・色・固有スキルは本番から） =====
+// [ID, 名前, 呼び名, 兵種, 色, 固有スキル, 効果のキー, 値, 説明]
+const NAMED_LIST = [
+  ["magoichi", "雑賀孫市", "孫市", "gunner", "#d8443a", "雑賀撃ち", "atk", 0.06, "攻撃力 +6%"],
+  ["narimasa", "佐々成政", "成政", "gunner", "#3f6fc7", "鉄砲の備え", "range", 0.06, "射程 +6%"],
+  ["nobuharu", "馬場信春", "信春", "cavalry", "#c23b2c", "不死身の鬼美濃", "guard", 0.06, "受けるダメージ -6%"],
+  ["masakage", "山県昌景", "昌景", "cavalry", "#e04a2a", "赤備え", "chargeAdd", 0.15, "突撃の一撃 +15%"],
+  ["ujitsuna", "北条氏綱", "氏綱", "spearman", "#4f8a5b", "勝って兜の緒を締めよ", "guard", 0.06, "防御 +6%"],
+  ["sakon", "島左近", "左近", "spearman", "#8a5bc2", "鬼左近", "atk", 0.06, "攻撃力 +6%"],
+  ["saizo", "可児才蔵", "才蔵", "spearman", "#6aa84f", "笹の才蔵", "vsBoss", 0.15, "鎧武者への攻撃力 +15%"],
+  ["dosetsu", "立花道雪", "道雪", "spearman", "#e8c547", "雷切", "crit", 0.04, "会心率 +4%（会心：一撃 ×1.5）"],
+  ["nagayoshi", "森長可", "長可", "spearman", "#b8323f", "鬼武蔵", "combo", 0.06, "6%の確率で追加攻撃"],
+  ["danemon", "塙団右衛門", "団右衛門", "spearman", "#c77a2e", "夜討ちの札", "haste", 0.05, "攻撃の間隔 -5%"],
+  ["hanzo", "服部半蔵", "半蔵", "ashigaru", "#3a3f58", "伊賀の頭領", "evade", 0.05, "5%の確率で攻撃をかわす"],
+  ["kotaro", "風魔小太郎", "小太郎", "ashigaru", "#4b5e3a", "風魔の夜襲", "haste", 0.06, "攻撃の間隔 -6%"],
+  ["sasuke", "猿飛佐助", "佐助", "ashigaru", "#d9822b", "猿飛の術", "guard", 0.06, "受けるダメージ -6%（本番：遠距離攻撃 -15%）"],
+  ["takakage", "小早川隆景", "隆景", "archer", "#2f8f8a", "智将の采配", "range", 0.06, "射程 +6%"],
+  ["motoharu", "吉川元春", "元春", "ashigaru", "#9c2f2f", "鬼吉川", "atk", 0.06, "攻撃力 +6%"],
+  ["fujitaka", "細川藤孝", "藤孝", "medic", "#5b7fc2", "文武両道", "guard", 0.06, "防御 +6%"],
+  ["gensaku", "曲直瀬玄朔", "玄朔", "medic", "#3fa37a", "啓迪院の秘方", "healMul", 0.1, "回復量 +10%"],
+  ["sanki", "田代三喜", "三喜", "medic", "#a3843f", "後世派の祖", "haste", 0.05, "治療の間隔 -5%"],
+];
+const NAMED = Object.fromEntries(NAMED_LIST.map(([id, name, short, type, color, skill, key, val, text]) => [id, { id, name, short, type, color, skill, key, val, text }]));
+// 敵を倒すと経験値。レベルが上がるとHPと攻撃が増える
+const LEVEL = { need: (lv) => 2 + lv * 2, grow: 0.1, max: 20 };
+function namedStat(id, lv = 1) {
+  const n = NAMED[id], B = SOLDIERS[n.type], g = 1 + LEVEL.grow * (lv - 1), m = (k) => (n.key === k ? n.val : 0);
+  return { name: n.name, cost: B.cost, hp: Math.round(B.hp * g), atk: B.atk * (1 + m("atk")) * g, range: B.range * (1 + m("range")), rate: B.rate * (1 - m("haste")),
+    speed: B.speed, leash: B.leash, melee: B.melee, heal: B.heal ? B.heal * g * (1 + m("healMul")) : 0,
+    guard: m("guard"), evade: m("evade"), crit: m("crit"), combo: m("combo"), vsBoss: m("vsBoss"), chargeAdd: m("chargeAdd") };
+}
 const TOOLS = {
   fence: { name: "柵", icon: "🪵", cost: 6 },
-  ashigaru: { name: "足軽", cost: SOLDIERS.ashigaru.cost },
-  spearman: { name: "槍兵", cost: SOLDIERS.spearman.cost },
-  archer: { name: "弓兵", cost: SOLDIERS.archer.cost },
+  named: { name: "兵士", icon: "⭐", cost: 0 },
   warlord: { name: "武将", icon: "🎌", cost: 0 },
   sell: { name: "撤去", icon: "🧹", cost: 0 },
 };
@@ -172,6 +206,7 @@ const ready = (im) => im.complete && im.naturalWidth > 0;
 const heroIcon = (id) => img("heroes/" + id + "_icon.webp");
 
 // ===== 状態 =====
+let pickedNamed = null; // いま置こうとしているネームド兵士のID
 let grid, units, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
 const $ = (id) => document.getElementById(id);
 function reset() {
@@ -179,7 +214,7 @@ function reset() {
   units = [];
   gold = START.gold; heart = START.heart; wave = 0; playing = false; over = false;
   enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
-  tool = tool && tool !== "warlord" ? tool : "fence"; picked = null; selected = null; speed = speed || 1; paused = false;
+  tool = tool === "sell" ? tool : "fence"; picked = null; pickedNamed = null; selected = null; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
   say("柵で迷路を作り、兵士や武将を置いて ▶ 出陣。兵士は持ち場のまわりを動いて戦います。");
@@ -230,7 +265,8 @@ function routeCells(d = distMap) {
 
 // ===== 置く・撤去・持ち場を移す =====
 const placedWarlord = (id) => units.some((u) => u.kind === "warlord" && u.id === id);
-const costOf = (kind) => (kind === "warlord" ? (picked ? wStat(WARLORDS[picked]).cost : 0) : TOOLS[kind].cost);
+const placedNamed = (id) => units.some((u) => u.kind === "named" && u.id === id);
+const costOf = (kind) => (kind === "warlord" ? (picked ? wStat(WARLORDS[picked]).cost : 0) : kind === "named" ? (pickedNamed ? SOLDIERS[NAMED[pickedNamed].type].cost : 0) : TOOLS[kind].cost);
 const unitCell = (u) => [Math.floor(u.x), Math.floor(u.y)];
 function placeError(c, r, kind) {
   if (!inside(c, r)) return " ";
@@ -239,6 +275,8 @@ function placeError(c, r, kind) {
   if (grid[r][c]) return "そこには柵があります。";
   if (kind === "warlord" && !picked) return "先に🎌武将のボタンで武将を選んでね。";
   if (kind === "warlord" && placedWarlord(picked)) return WARLORDS[picked].name + "はもう出陣しています。";
+  if (kind === "named" && !pickedNamed) return "先に⭐兵士のボタンで兵士を選んでね。";
+  if (kind === "named" && placedNamed(pickedNamed)) return NAMED[pickedNamed].name + "はもう出陣しています。";
   if (gold < costOf(kind)) return "お金が足りません。";
   if (kind !== "fence") return "";
   for (const e of enemies) if ((e.c === c && e.r === r) || (e.tc === c && e.tr === r)) return "敵がいるマスには置けません。";
@@ -250,10 +288,10 @@ function placeError(c, r, kind) {
   return "";
 }
 function newUnit(kind, id, c, r) {
-  const st = kind === "warlord" ? wStat(WARLORDS[id]) : SOLDIERS[kind];
+  const st = kind === "warlord" ? wStat(WARLORDS[id]) : namedStat(id);
   // 準備中はその場に、戦闘中は城から走って持ち場へ向かう
   const at = playing ? { x: CASTLE.c + 0.5, y: CASTLE.r + 0.5 } : { x: c + 0.5, y: r + 0.5 };
-  return { uid: ++seq, kind, id, st, x: at.x, y: at.y, home: { c, r }, hp: st.hp, cd: 0, scd: st.skillCd ? st.skillCd * 0.5 : 0, target: null, down: 0, face: 1, swing: 0, spent: costOf(kind), healCd: 1 };
+  return { uid: ++seq, kind, id, st, x: at.x, y: at.y, home: { c, r }, hp: st.hp, cd: 0, scd: st.skillCd ? st.skillCd * 0.5 : 0, target: null, down: 0, face: 1, swing: 0, spent: costOf(kind), healCd: 1, lv: 1, xp: 0 };
 }
 function place(c, r) {
   if (over || !inside(c, r)) return;
@@ -266,11 +304,11 @@ function place(c, r) {
     effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
     say("🪵 柵を置いた。道は" + (routeCells().length - 1) + "マス。");
   } else {
-    const u = newUnit(tool, tool === "warlord" ? picked : null, c, r);
+    const u = newUnit(tool, tool === "warlord" ? picked : pickedNamed, c, r);
     gold -= cost; units.push(u);
     effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
-    say((tool === "warlord" ? "🎌 " + WARLORDS[picked].name : SOLDIERS[tool].name) + "を置いた。" + (playing ? "城から持ち場へ走っていく。" : "タップで選ぶと持ち場を移せる。"));
-    if (tool === "warlord") { picked = null; tool = "fence"; }
+    say((tool === "warlord" ? "🎌 " : "⭐ ") + u.st.name + "が出陣。" + (playing ? "城から持ち場へ走っていく。" : "タップで選ぶと持ち場を移せる。"));
+    picked = pickedNamed = null; tool = "fence"; // 同じ人物は1人まで。次は選び直す
   }
   ui();
 }
@@ -344,18 +382,33 @@ function stepEnemy(e, dt) {
     e.tc = n[0]; e.tr = n[1];
   }
 }
-function hurt(e, dmg) {
+function hurt(e, dmg, src) {
   if (e.dead) return;
+  if (src && src.st.vsBoss && e.type === "samurai") dmg *= 1 + src.st.vsBoss;
+  if (src && src.st.crit && Math.random() < src.st.crit) { dmg *= 1.5; effects.push({ kind: "down", x: e.x, y: e.y, t: 0.5, text: "会心！" }); }
   e.hp -= dmg; e.flash = 0.12;
   if (e.hp <= 0) {
     e.dead = true; kills++;
+    if (src) gainXp(src);
     const g = ENEMIES[e.type].gold + Math.floor(wave / 3);
     gold += g;
     effects.push({ kind: "coin", x: e.x, y: e.y, t: 0.7, text: "+" + g });
   }
 }
+// ネームド兵士は敵を倒すと経験値。レベルが上がると強くなる（波の間も保たれる）
+function gainXp(u) {
+  if (u.kind !== "named" || u.lv >= LEVEL.max) return;
+  u.xp++;
+  if (u.xp >= LEVEL.need(u.lv)) {
+    u.xp = 0; u.lv++;
+    const old = u.st.hp; u.st = namedStat(u.id, u.lv); u.hp += u.st.hp - old;
+    effects.push({ kind: "skill", x: u.x, y: u.y, t: 1, text: NAMED[u.id].short + " Lv" + u.lv + "！", col: NAMED[u.id].color });
+  }
+}
 function hurtUnit(u, dmg) {
   if (u.down > 0) return;
+  if (u.st.evade && Math.random() < u.st.evade) { effects.push({ kind: "down", x: u.x, y: u.y, t: 0.5, text: "かわした" }); return; }
+  dmg *= 1 - (u.st.guard || 0);
   u.hp -= dmg; u.flash = 0.12;
   if (u.hp <= 0) {
     u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null;
@@ -416,6 +469,15 @@ function unitTick(u, dt) {
     const S = wStyle(w);
     if (S.heal) { u.healCd -= dt; if (u.healCd <= 0) { u.healCd = 1; for (const o of units) if (o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2) { o.hp = Math.min(o.st.hp, o.hp + Math.round(S.heal * RARITY[w.rarity].mul)); } } }
   }
+  if (u.st.heal) {
+    // 衛生兵：近くのけがをした味方を治す
+    u.healCd -= dt;
+    if (u.healCd <= 0) {
+      u.healCd = u.st.rate;
+      const hurtOne = units.filter((o) => o !== u && o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2).sort((a, b) => a.hp / a.st.hp - b.hp / b.st.hp)[0];
+      if (hurtOne) { hurtOne.hp = Math.min(hurtOne.st.hp, hurtOne.hp + u.st.heal * 2); effects.push({ kind: "heal", x: hurtOne.x, y: hurtOne.y, t: 0.5 }); u.swing = 0.2; }
+    }
+  }
   const t = (u.target = pickTarget(u));
   if (w && u.scd <= 0 && (t || (wStyle(w).skill === "aid" && (heart < START.heart || units.some((o) => o.down === 0 && o.hp < o.st.hp * 0.6))))) { u.scd = u.st.skillCd; skill(u, w, t); }
   if (t) {
@@ -429,12 +491,17 @@ function unitTick(u, dt) {
 }
 function attack(u, t, w) {
   u.cd = u.st.rate; u.swing = 0.2;
-  const S = w ? wStyle(w) : null;
+  const S = w ? wStyle(w) : null, type = u.kind === "named" ? NAMED[u.id].type : null;
+  let dmg = u.st.atk;
+  if (u.st.chargeAdd !== undefined && type === "cavalry" && u.lastTarget !== t) dmg *= 1.5 + u.st.chargeAdd; // 騎兵：新しい敵への最初の一撃は突撃
+  u.lastTarget = t;
+  const hits = u.st.combo && Math.random() < u.st.combo ? 2 : 1;
   if (u.st.melee) {
-    if (S && S.sweep) { for (const e of enemies) if (!e.dead && dist(e, u) <= u.st.range + 0.2) hurt(e, u.st.atk); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.2, r: u.st.range + 0.2, col: w.color }); }
-    else { hurt(t, u.st.atk); effects.push({ kind: "slash", x: t.x, y: t.y, t: 0.15 }); }
+    if (S && S.sweep) { for (const e of enemies) if (!e.dead && dist(e, u) <= u.st.range + 0.2) hurt(e, dmg, u); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.2, r: u.st.range + 0.2, col: w.color }); }
+    else { for (let i = 0; i < hits; i++) hurt(t, dmg, u); effects.push({ kind: "slash", x: t.x, y: t.y, t: 0.15 }); }
   } else {
-    shots.push({ kind: S && S.shot === "gun" ? "gun" : "arrow", x: u.x, y: u.y - 0.15, e: t, tx: t.x, ty: t.y, t: 0, dur: S && S.shot === "gun" ? 0.08 : 0.2, dmg: u.st.atk });
+    const gun = (S && S.shot === "gun") || type === "gunner";
+    for (let i = 0; i < hits; i++) shots.push({ kind: gun ? "gun" : "arrow", x: u.x, y: u.y - 0.15, e: t, tx: t.x, ty: t.y, t: -i * 0.12, dur: gun ? 0.08 : 0.2, dmg, src: u });
   }
 }
 function skill(u, w, t) {
@@ -442,14 +509,14 @@ function skill(u, w, t) {
   effects.push({ kind: "skill", x: u.x, y: u.y, t: 1.1, text: w.skill, col: w.color });
   const near = (r) => enemies.filter((e) => !e.dead && dist(e, u) <= r);
   if (S.skill === "snipe") near(st.range + 0.5).sort((a, b) => distMap[a.tr][a.tc] - distMap[b.tr][b.tc]).slice(0, 3).forEach((e, i) => shots.push({ kind: "gun", x: u.x, y: u.y, e, tx: e.x, ty: e.y, t: -i * 0.15, dur: 0.08, dmg: st.atk * 3 }));
-  else if (S.skill === "rain") { for (const e of near(3)) hurt(e, st.atk * 3); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3, col: "#f5e1b0" }); }
-  else if (S.skill === "sweep") { for (const e of near(1.8)) hurt(e, st.atk * 3); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.8, col: w.color }); }
+  else if (S.skill === "rain") { for (const e of near(3)) hurt(e, st.atk * 3, u); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3, col: "#f5e1b0" }); }
+  else if (S.skill === "sweep") { for (const e of near(1.8)) hurt(e, st.atk * 3, u); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.8, col: w.color }); }
   else if (S.skill === "hold") { for (const e of near(2)) e.stun = 2.5; effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 2, col: "#ffe08a" }); }
   else if (S.skill === "charge" && t) {
     // 先頭の敵の前まで一気に駆けこみ、周りを斬る
     const a = Math.atan2(t.y - u.y, t.x - u.x), d = Math.max(0, dist(u, t) - 0.5);
     if (clearLine(u.x, u.y, t.x, t.y)) { u.x += Math.cos(a) * d; u.y += Math.sin(a) * d; }
-    for (const e of near(1.4)) hurt(e, st.atk * 3);
+    for (const e of near(1.4)) hurt(e, st.atk * 3, u);
     effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.4, col: w.color });
   }
   else if (S.skill === "aid") {
@@ -491,7 +558,7 @@ function update(dt) {
   for (const s of shots) {
     if (!s.e.dead) { s.tx = s.e.x; s.ty = s.e.y; }
     s.t += dt;
-    if (s.t >= s.dur && !s.done) { s.done = true; hurt(s.e, s.dmg); }
+    if (s.t >= s.dur && !s.done) { s.done = true; hurt(s.e, s.dmg, s.src); }
   }
   shots = shots.filter((s) => !s.done);
   enemies = enemies.filter((e) => !e.dead);
@@ -607,11 +674,19 @@ function drawUnit(u) {
     bar(x, y - s * 0.62, s * 0.7, u.hp / u.st.hp, "#7ddf64");
     bar(x, y - s * 0.62 + 5, s * 0.7, 1 - u.scd / u.st.skillCd, u.scd <= 0 ? "#ffd75e" : "#7fc3ff");
   } else {
-    const im = img(SOLDIERS[u.kind].img);
+    const n = NAMED[u.id], im = img(SOLDIERS[n.type].img);
+    // 人物の色の輪
+    ctx.strokeStyle = n.color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.32, s * 0.12, 0, 0, Math.PI * 2); ctx.stroke();
     if (!sprite(im, x + (u.swing > 0 ? u.face * s * 0.08 : 0), y + s * 0.35 + bob, s * 0.95, u.face, u.flash > 0 ? 0.55 : 1)) {
-      ctx.fillStyle = "#3f6fcf"; ctx.beginPath(); ctx.arc(x, y, s * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(x, y, s * 0.28, 0, Math.PI * 2); ctx.fill();
     }
-    bar(x, y - s * 0.66, s * 0.6, u.hp / u.st.hp, "#7ddf64");
+    // 名札（呼び名とレベル）
+    const label = n.short + (u.lv > 1 ? u.lv : "");
+    ctx.font = "bold 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const tw = ctx.measureText(label).width + 6, ty = y - s * 0.72;
+    ctx.fillStyle = n.color; ctx.fillRect(x - tw / 2, ty - 6, tw, 12);
+    ctx.fillStyle = "#fff"; ctx.fillText(label, x, ty + 0.5);
+    bar(x, ty + 7, Math.max(tw, s * 0.5), u.hp / u.st.hp, "#7ddf64");
   }
 }
 function drawShot(s) {
@@ -629,6 +704,7 @@ function drawEffects() {
     const x = f.x * cell, y = f.y * cell;
     ctx.globalAlpha = Math.min(1, f.t * 3);
     if (f.kind === "puff") { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "heal") { ctx.fillStyle = "#7ddf64"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "center"; ctx.fillText("✚", x, y - cell * 0.5 - (0.5 - f.t) * 20); }
     if (f.kind === "flag") { ctx.fillStyle = "rgba(255,230,120,.5)"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
     if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60,.6)"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
     if (f.kind === "ring") { ctx.strokeStyle = f.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, f.r * cell, 0, Math.PI * 2); ctx.stroke(); }
@@ -654,7 +730,7 @@ function drawHover() {
   const bad = selected ? blocked(c, r) : tool === "sell" ? !grid[r][c] && !unitAt(c + 0.5, r + 0.5, 0.75) : !!placeError(c, r, tool);
   ctx.fillStyle = bad ? "rgba(224,90,74,.35)" : "rgba(242,193,78,.35)";
   ctx.fillRect(c * cell, r * cell, cell, cell);
-  const st = selected ? selected.st : SOLDIERS[tool] || (tool === "warlord" && picked ? wStat(WARLORDS[picked]) : null);
+  const st = selected ? selected.st : tool === "named" && pickedNamed ? namedStat(pickedNamed) : tool === "warlord" && picked ? wStat(WARLORDS[picked]) : null;
   if (st) { ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, st.leash * cell, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
 }
 function draw() {
@@ -707,7 +783,7 @@ cv.addEventListener("pointercancel", () => { press = null; });
 cv.addEventListener("pointerleave", () => { if (!press) hover = null; });
 
 function toolIcon(id) {
-  if (SOLDIERS[id]) return '<img src="' + ASSET + SOLDIERS[id].img + '" alt="">';
+  if (id === "named" && pickedNamed) return '<img src="' + ASSET + SOLDIERS[NAMED[pickedNamed].type].img + '" alt="">';
   if (id === "warlord" && picked) return '<img src="' + ASSET + "heroes/" + picked + '_icon.webp" alt="" style="background:' + WARLORDS[picked].color + '">';
   return TOOLS[id].icon;
 }
@@ -718,14 +794,31 @@ function buildTools() {
     const b = ev.target.closest("button"); if (!b) return;
     selected = null;
     if (b.dataset.tool === "warlord") return openPick();
+    if (b.dataset.tool === "named") return openNamed();
     tool = b.dataset.tool;
-    say(tool === "sell" ? "撤去する柵・兵士・武将をタップ（なぞると柵を続けて撤去）。" :
-      tool === "fence" ? "🪵 柵：道をふさいで回り道させる。なぞると続けて置ける。" :
-      SOLDIERS[tool].name + "（" + SOLDIERS[tool].cost + "G）：" + SOLDIERS[tool].text + "。置いたマスが持ち場。");
+    say(tool === "sell" ? "撤去する柵・兵士・武将をタップ（なぞると柵を続けて撤去）。" : "🪵 柵：道をふさいで回り道させる。なぞると続けて置ける。");
     ui();
   };
 }
+function openNamed() {
+  $("pickTitle").textContent = "ネームド兵士を選ぶ";
+  $("pickList").innerHTML = NAMED_LIST.map(([id]) => {
+    const n = NAMED[id], B = SOLDIERS[n.type], on = placedNamed(id);
+    return '<button data-n="' + id + '"' + (on ? " disabled" : "") + '><img src="' + ASSET + B.img + '" alt="" style="background:' + n.color + '33;object-fit:contain">' +
+      '<b style="color:' + n.color + ';filter:brightness(1.6)">' + n.name + "</b><br><small>" + B.name + "・" + n.skill + "<br>" + n.text + "</small><br>" + (on ? "出陣中" : B.cost + "G") + "</button>";
+  }).join("");
+  $("pick").hidden = false;
+}
+function pickNamed(id) {
+  const n = NAMED[id];
+  if (!n || placedNamed(id)) return;
+  pickedNamed = id; picked = null; tool = "named"; selected = null; $("pick").hidden = true;
+  const B = SOLDIERS[n.type];
+  say("⭐ " + n.name + "（" + B.name + "・" + B.cost + "G）：" + B.text + "。固有スキル「" + n.skill + "」" + n.text + "。持ち場にするマスをタップ。");
+  buildTools(); ui();
+}
 function openPick() {
+  $("pickTitle").textContent = "武将を選ぶ";
   $("pickList").innerHTML = WARLORD_LIST.map(([id]) => {
     const w = WARLORDS[id], st = wStat(w), on = placedWarlord(id);
     return '<button data-w="' + id + '"' + (on ? " disabled" : "") + '><img src="' + ASSET + "heroes/" + id + '_icon.webp" alt="" style="background:' + w.color + '">' +
@@ -736,11 +829,11 @@ function openPick() {
 function pickWarlord(id) {
   const w = WARLORDS[id];
   if (!w || placedWarlord(id)) return;
-  picked = id; tool = "warlord"; selected = null; $("pick").hidden = true;
+  picked = id; pickedNamed = null; tool = "warlord"; selected = null; $("pick").hidden = true;
   say("🎌 " + w.name + "（" + wStat(w).cost + "G）：" + wStyle(w).text + "。持ち場にするマスをタップ。");
   buildTools(); ui();
 }
-$("pickList").onclick = (ev) => { const b = ev.target.closest("button"); if (b) pickWarlord(b.dataset.w); };
+$("pickList").onclick = (ev) => { const b = ev.target.closest("button"); if (b) b.dataset.w ? pickWarlord(b.dataset.w) : pickNamed(b.dataset.n); };
 $("pickClose").onclick = () => ($("pick").hidden = true);
 function say(text, warn) { const m = $("msg"); m.textContent = text; m.style.color = warn ? "#ff9b8a" : ""; }
 let lastWarlordIcon = null;
@@ -751,7 +844,10 @@ function ui() {
   $("route").textContent = "道 " + (routeCells().length - 1) + "マス";
   $("start").disabled = playing || over;
   $("start").textContent = playing ? "戦闘中…" : "▶ 第" + (wave + 1) + "波 出陣";
-  if (lastWarlordIcon !== picked) { lastWarlordIcon = picked; const wb = document.querySelector('#tools [data-tool="warlord"] b'); if (wb) wb.innerHTML = toolIcon("warlord"); }
+  if (lastWarlordIcon !== picked + "/" + pickedNamed) {
+    lastWarlordIcon = picked + "/" + pickedNamed;
+    for (const k of ["warlord", "named"]) { const wb = document.querySelector('#tools [data-tool="' + k + '"] b'); if (wb) wb.innerHTML = toolIcon(k); }
+  }
   for (const b of document.querySelectorAll("#tools button")) {
     b.classList.toggle("sel", b.dataset.tool === tool);
     b.disabled = TOOLS[b.dataset.tool].cost > gold && b.dataset.tool !== tool;
@@ -776,7 +872,7 @@ function frame(now) {
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
   state: () => ({ gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
-    units: units.map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd })) }),
+    units: units.map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
   select: (t) => { tool = t; selected = null; ui(); },
   place: (c, r) => place(c, r),
   error: (c, r, k = tool) => placeError(c, r, k),
@@ -785,6 +881,7 @@ window.MAZE = {
   step: (sec) => { for (let t = 0; t < sec; t += 0.05) update(0.05); },
   setGold: (g) => { gold = g; ui(); },
   pick: (id) => pickWarlord(id),
+  pickNamed: (id) => pickNamed(id),
   config: { COLS, ROWS, GATE, CASTLE, TOOLS, SOLDIERS },
 };
 buildTools();
