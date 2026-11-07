@@ -41,6 +41,10 @@
   #ctrl button { font-size: 15px; padding: 9px 2px; font-weight: 700; }
   #start { background: #6b2a1f !important; border-color: #c0573f !important; }
   #start:disabled { opacity: .5; }
+  #start { line-height: 1.15; padding: 5px 2px !important; }
+  #start small { font-size: 10px; font-weight: 400; opacity: .85; }
+  #start.soon { animation: blink .5s steps(2) infinite; }
+  @keyframes blink { 50% { background: #a8432f; } }
   .sheet { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
   .sheet[hidden] { display: none; }
   .sheet > div { max-width: 440px; max-height: 88vh; overflow-y: auto; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.6; }
@@ -60,11 +64,12 @@
 <div id="msg"></div>
 <div id="wrap"><canvas id="cv"></canvas><div id="card" hidden></div></div>
 <div id="tools"></div>
-<div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
+<div id="ctrl"><button id="start">⏳ 第1波まで</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
   <b>👑殿（主人公）を守りぬく</b>戦いです。<b>殿が倒れたら負け</b>。殿は下の🏯本陣から始まり、自分でも戦います（タップで選んで持ち場を移せます）。<br>
-  上の⛩️門から敵が入ってきます。敵は<b>兵士を全滅させるつもり</b>で、殿・兵士・武将のうち近い者から狙って襲いかかり、群がって斬りかかります。<br>
+  敵は<b>時間がたつと</b>上の⛩️門から入ってきます（最初は30秒の準備時間。そのあと45秒ごとに次の波。前の波をしのぐと15秒後に次の波）。下のボタンを押すと、待たずにすぐ呼べます。<br>
+  敵は<b>兵士を全滅させるつもり</b>で、殿・兵士・武将のうち近い者から狙って襲いかかり、群がって斬りかかります。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
   兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあります。<br>
   <b>殿・兵士・武将はみんなレベルが上がります</b>。敵を倒した本人に経験値が多く入り、近くで戦っていた味方にも少し入ります。名札の「Lv」と下の金色の細いバーが次のレベルまでの目安です。<br>
@@ -74,6 +79,7 @@
   ・倒れた兵士は少しすると🏯本陣で起き上がり、持ち場へ走って戻ります（殿は起き上がれません）。<br>
   ・兵士も武将も何人でも置けます（同じ人物は1人まで）。武将はゲージがたまると<b>技</b>を自動で使います。<br>
   ・敵に与えたダメージは<b>白</b>（会心は<b>黄色</b>）、味方が受けたダメージは<b>赤</b>、回復は<b>緑</b>の数字で出ます。人物をタップすると、それまでの合計も見られます。<br>
+  ・説明や一覧を開いている間と⏸の間は、時間が止まります。<br>
   ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
@@ -95,6 +101,12 @@
 const COLS = 11, ROWS = 17;
 const GATE = { c: 5, r: 0 }, CASTLE = { c: 5, r: ROWS - 1 };
 const START = { gold: 300 };
+// ===== 敵は時間で攻めてくる =====
+// first … 始まってから第1波までの準備時間（秒）
+// every … 波が始まってから次の波までの時間（前の波が残っていても来る）
+// rest  … 波をしのいだあと、次の波までの休み（every の残りより短ければこちら）
+// warn  … この秒数になったら「まもなく」と知らせる
+const TIMING = { first: 30, every: 45, rest: 15, warn: 5 };
 // ===== 主人公（殿）。倒れたら負け。本陣（下の🏯）から始まり、ほかの兵士と同じように持ち場を移せる =====
 const HERO = { name: "殿", img: "units/cavalry.png", hp: 320, atk: 12, range: 0.95, rate: 0.8, speed: 1.6, leash: 2, melee: true, regen: 3 };
 const ASSET = "../assets/";
@@ -228,6 +240,7 @@ const heroIcon = (id) => img("heroes/" + id + "_icon.webp");
 // ===== 状態 =====
 let pickedNamed = null; // いま置こうとしているネームド兵士のID
 let downs = 0; // 退却した回数（試験用）
+let nextIn = 0, warned = false, autoWaves = true; // 次の波までの秒数
 let grid, units, hero, gold, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
 const $ = (id) => document.getElementById(id);
 function reset() {
@@ -236,6 +249,7 @@ function reset() {
   units = [hero];
   gold = START.gold; wave = 0; playing = false; over = false;
   enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
+  nextIn = TIMING.first; warned = false;
   tool = tool === "sell" ? tool : "fence"; picked = null; pickedNamed = null; selected = null; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
@@ -373,12 +387,21 @@ function moveHome(u, c, r) {
 }
 
 // ===== ウェーブ =====
+// 次の波を呼ぶ（時間が来たとき・ボタンで早めに呼んだとき）。前の波が残っていても重ねて来る
 function startWave() {
-  if (playing || over) return;
+  if (over) return;
   wave++; playing = true;
-  spawnQueue = waveList(wave); spawnClock = 0;
-  say("第" + wave + "波！ " + spawnQueue.length + "人が攻めてくる。");
+  const list = waveList(wave);
+  spawnQueue = spawnQueue.concat(list);
+  nextIn = TIMING.every; warned = false;
+  say("⚔️ 第" + wave + "波！ " + list.length + "人が攻めてくる。");
   ui();
+}
+function waveClock(dt) {
+  if (!autoWaves || over) return;
+  nextIn -= dt;
+  if (!warned && nextIn <= TIMING.warn) { warned = true; say("⚠️ まもなく第" + (wave + 1) + "波が来る！（あと" + Math.ceil(nextIn) + "秒）", true); }
+  if (nextIn <= 0) startWave();
 }
 function spawn(type) {
   const E = ENEMIES[type], hp = Math.round(baseHp(wave) * E.hp);
@@ -677,7 +700,8 @@ function update(dt) {
   effects = effects.filter((f) => f.t > 0);
   bfsCache = new Map();
   for (const e of enemies) { e.flash = Math.max(0, (e.flash || 0) - dt); e.swing = Math.max(0, (e.swing || 0) - dt); }
-  if (!playing) { for (const u of units) unitTick(u, dt); separate(); return; } // 準備中は持ち場へ戻るだけ
+  waveClock(dt);
+  if (!playing) { for (const u of units) unitTick(u, dt); separate(); ui(); return; } // 準備中は持ち場へ戻るだけ
   spawnClock -= dt;
   if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.8; }
   assignBlockers();
@@ -698,7 +722,8 @@ function update(dt) {
     gold += bonus;
     // 波の終わりに全員が回復して起き上がる
     for (const u of units) { if (u.down > 0) { u.down = 0; u.x = CASTLE.c + 0.5; u.y = CASTLE.r + 0.5; } u.hp = u.st.hp; u.target = null; }
-    say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。殿と兵士は回復して持ち場へ戻る。");
+    nextIn = Math.min(nextIn, TIMING.rest); warned = false;
+    say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。殿と兵士は回復。次の波まで" + Math.ceil(nextIn) + "秒。");
   }
   ui();
 }
@@ -994,8 +1019,11 @@ function ui() {
   $("wave").textContent = wave;
   $("gold").textContent = "💰 " + gold + "G";
   $("heart").textContent = "👑 殿 " + Math.ceil(hero.hp) + "/" + hero.st.hp;
-  $("start").disabled = playing || over;
-  $("start").textContent = playing ? "戦闘中…" : "▶ 第" + (wave + 1) + "波 出陣";
+  $("start").disabled = over;
+  const left = Math.max(0, Math.ceil(nextIn));
+  const sh = "⏳ 第" + (wave + 1) + "波まで <b>" + left + "秒</b><br><small>押すとすぐ呼ぶ</small>";
+  if ($("start").dataset.h !== sh) { $("start").dataset.h = sh; $("start").innerHTML = sh; } // 変わったときだけ書きかえる（押している最中に消えないように）
+  $("start").classList.toggle("soon", left <= TIMING.warn);
   if (lastWarlordIcon !== picked + "/" + pickedNamed) {
     lastWarlordIcon = picked + "/" + pickedNamed;
     for (const k of ["warlord", "named"]) { const wb = document.querySelector('#tools [data-tool="' + k + '"] b'); if (wb) wb.innerHTML = toolIcon(k); }
@@ -1049,7 +1077,8 @@ function renderCard(force) {
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (!paused && !over && !document.hidden) for (let i = 0; i < speed; i++) update(dt);
+  const sheetOpen = !$("help").hidden || !$("pick").hidden; // 説明や一覧を開いている間は時間を止める
+  if (!paused && !over && !document.hidden && !sheetOpen) for (let i = 0; i < speed; i++) update(dt);
   else time += dt;
   draw();
   cardClock -= dt;
@@ -1067,6 +1096,8 @@ window.MAZE = {
   start: startWave,
   step: (sec) => { for (let t = 0; t < sec; t += 0.05) update(0.05); },
   setGold: (g) => { gold = g; ui(); },
+  setAuto: (on) => { autoWaves = on; },
+  nextIn: () => nextIn,
   pick: (id) => pickWarlord(id),
   pickNamed: (id) => pickNamed(id),
   nums: () => effects.filter((f) => f.kind === "num").map((f) => ({ text: f.text, col: f.col })),

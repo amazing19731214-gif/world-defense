@@ -10,7 +10,8 @@ const errs = [];
 p.on("pageerror", (e) => errs.push(e.message));
 let ok = 0;
 const check = (c, n) => { assert.ok(c, n); ok++; console.log("✓", n); };
-const fresh = async () => { await p.goto(file); await p.click("#helpClose"); };
+// これまでの試験は波を自分で呼ぶ（時間で来る波は止めておく）。時間で来る波は最後にまとめて試す
+const fresh = async (auto = false) => { await p.goto(file); await p.click("#helpClose"); if (!auto) await p.evaluate(() => MAZE.setAuto(false)); };
 const S = () => p.evaluate(() => MAZE.state());
 const shot = (name) => OUT && p.screenshot({ path: OUT + "/" + name });
 await fresh();
@@ -179,6 +180,25 @@ await p.mouse.click(box.x + cs * 5.5, box.y + cs * 13.5);
 await p.evaluate(() => MAZE.step(3));
 const hm = (await S()).hero;
 check(Math.abs(hm.y - 13.5) < 0.1, "殿もタップで選んで持ち場を移せる");
+
+// ■ 敵は時間で攻めてくる（ボタンで早めに呼べる）
+await fresh(true);
+check(/第1波まで/.test(await p.locator("#start").textContent()) && /30秒/.test(await p.locator("#start").textContent()), "ボタンに第1波までの残り時間（30秒）");
+await p.waitForTimeout(1500);
+{ const n = await p.evaluate(() => MAZE.nextIn()); check(n < 29.9 && n > 27, "説明を閉じると時間が進む（あと" + n.toFixed(1) + "秒）"); }
+const auto1 = await p.evaluate(() => { MAZE.step(24); const a = MAZE.state().wave; MAZE.step(7); return { before: a, after: MAZE.state().wave, msg: document.getElementById("msg").textContent }; });
+check(auto1.before === 0 && auto1.after === 1, "ボタンを押さなくても、30秒たつと第1波が来る");
+const auto2 = await p.evaluate(() => { MAZE.step(46); return MAZE.state().wave; });
+check(auto2 >= 2, "前の波が残っていても、45秒ごとに次の波が来る（第" + auto2 + "波）");
+await fresh(true);
+await p.click("#start");
+check((await S()).wave === 1, "ボタンを押すと待たずにすぐ呼べる");
+await p.click("#helpBtn");
+const t0 = await p.evaluate(() => MAZE.nextIn());
+await p.waitForTimeout(1200);
+check(Math.abs((await p.evaluate(() => MAZE.nextIn())) - t0) < 0.01, "説明を開いている間は時間が止まる");
+await p.click("#helpClose");
+await shot("maze-timer.png");
 
 // ■ 守りがないと殿が討ち死にして負け
 await fresh();
