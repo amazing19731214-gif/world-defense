@@ -14,7 +14,21 @@
   #gold { color: var(--gold); }
   #heart { color: #ffd75e; }
   #msg { width: 100%; max-width: 560px; min-height: 36px; padding: 0 12px; font-size: 13px; line-height: 1.35; color: #d9c7a6; }
-  #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
+  #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; position: relative; }
+  /* 選んだ殿・兵士・武将のステータス */
+  #card { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); width: min(370px, calc(100% - 16px)); background: #2c2620f2; border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; line-height: 1.45; z-index: 3; box-shadow: 0 4px 14px #0008; }
+  #card[hidden] { display: none; }
+  #card .top { display: flex; gap: 8px; align-items: center; }
+  #card .face { width: 48px; height: 48px; border-radius: 8px; flex: none; object-fit: contain; }
+  #card .nm { font-size: 15px; font-weight: 700; }
+  #card .sub { color: #d9c7a6; font-size: 11px; }
+  #card .x { margin-left: auto; align-self: flex-start; font: inherit; font-size: 16px; color: var(--text); background: #3a3128; border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; }
+  #card .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 8px; margin-top: 6px; }
+  #card .grid b { color: var(--gold); }
+  #card .meter { height: 6px; background: #000a; border-radius: 3px; overflow: hidden; margin: 2px 0 4px; }
+  #card .meter i { display: block; height: 100%; }
+  #card .sk { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+  #card .hint { margin-top: 4px; color: #f2c14e; font-size: 11px; }
   canvas { display: block; touch-action: none; border-radius: 6px; }
   #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px 8px 4px; }
   #tools button, #ctrl button { font: inherit; color: var(--text); background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2; }
@@ -44,7 +58,7 @@
 <body>
 <div id="hud"><span>⚔️ 第<b id="wave">0</b>波</span><span id="gold">💰 0G</span><span id="heart">👑 殿 300</span></div>
 <div id="msg"></div>
-<div id="wrap"><canvas id="cv"></canvas></div>
+<div id="wrap"><canvas id="cv"></canvas><div id="card" hidden></div></div>
 <div id="tools"></div>
 <div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
 <div id="help" class="sheet"><div>
@@ -347,7 +361,7 @@ function moveHome(u, c, r) {
 // ===== ウェーブ =====
 function startWave() {
   if (playing || over) return;
-  wave++; playing = true; selected = null;
+  wave++; playing = true;
   spawnQueue = waveList(wave); spawnClock = 0;
   say("第" + wave + "波！ " + spawnQueue.length + "人が攻めてくる。");
   ui();
@@ -440,6 +454,7 @@ function hurt(e, dmg, src) {
   if (e.hp <= 0) {
     e.dead = true; kills++;
     if (src) {
+      src.kills = (src.kills || 0) + 1;
       gainXp(src, LEVEL.kill);
       for (const o of units) if (o !== src && o.down === 0 && dist(o, e) <= LEVEL.near) gainXp(o, LEVEL.assist);
     }
@@ -485,7 +500,7 @@ function hurtUnit(u, dmg) {
   if (u.hp <= 0) {
     u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null; downs++;
     effects.push({ kind: "down", x: u.x, y: u.y, t: 0.9, text: u.st.name + " 退却" });
-    if (selected === u) selected = null;
+
   }
 }
 
@@ -865,7 +880,7 @@ cv.addEventListener("pointerup", (ev) => {
   if (ev.pointerType !== "mouse") hover = null;
   if (!pr) return;
   if (pr.unit && pr.moved) { moveHome(pr.unit, p.c, p.r); selected = null; return; } // 引きずって移動
-  if (pr.unit) { selected = selected === pr.unit ? null : pr.unit; if (selected) say(selected.st.name + " Lv" + selected.lv + "（HP" + Math.ceil(selected.hp) + "/" + selected.st.hp + "・攻撃" + Math.round(selected.st.atk) + "・次のLvまで敵" + Math.ceil((LEVEL.need(selected.lv) - selected.xp) / LEVEL.kill) + "人ほど）を選んだ。持ち場にするマスをタップ。"); return; }
+  if (pr.unit) { selected = selected === pr.unit ? null : pr.unit; if (selected) say(selected.st.name + "を選んだ。ステータスは上に。別のマスをタップで持ち場を移せる。"); renderCard(true); return; }
   if (selected) { moveHome(selected, p.c, p.r); selected = null; }
 });
 cv.addEventListener("pointercancel", () => { press = null; });
@@ -950,11 +965,45 @@ $("again").onclick = reset;
 window.addEventListener("resize", resize);
 
 let last = performance.now();
+// ===== ステータスの札（殿・兵士・武将をタップすると上に出る。戦闘中も数字が動く） =====
+const TYPE_NAME = { ashigaru: "足軽", spearman: "槍兵", archer: "弓兵", gunner: "鉄砲兵", cavalry: "騎兵", medic: "衛生兵" };
+let cardKey = "", cardClock = 0;
+function renderCard(force) {
+  const box = $("card"), u = selected;
+  if (!u || !units.includes(u)) { if (!box.hidden) box.hidden = true; cardKey = ""; return; }
+  const st = u.st, need = LEVEL.need(u.lv), w = u.kind === "warlord" ? WARLORDS[u.id] : null, n = u.kind === "named" ? NAMED[u.id] : null;
+  const face = w ? ASSET + "heroes/" + u.id + "_icon.webp" : ASSET + (n ? SOLDIERS[n.type].img : HERO.img);
+  const kind = w ? w.rarity + "・武将（" + wStyle(w).label + "・" + w.role + "）" : n ? "ネームド兵士（" + TYPE_NAME[n.type] + "）" : "主人公（倒れたら負け）";
+  const col = unitColor(u), hpK = Math.max(0, u.hp / st.hp);
+  const state = u.down > 0 ? "退却中（あと" + Math.ceil(u.down) + "秒で本陣に戻る）" : u.target ? "戦っている" : "持ち場にいる";
+  let skill = "";
+  if (w) skill = '<div class="sk">技<b style="color:' + col + ';filter:brightness(1.6)">「' + w.skill + "」</b>" + (u.scd <= 0 ? "　<b>準備OK</b>" : "　あと" + Math.ceil(u.scd) + "秒") + '<div class="meter"><i style="width:' + Math.round(Math.max(0, Math.min(1, 1 - u.scd / st.skillCd)) * 100) + '%;background:#7fc3ff"></i></div><span class="sub">' + wStyle(w).text + "</span></div>";
+  else if (n) skill = '<div class="sk">固有スキル<b style="color:' + col + ';filter:brightness(1.6)">「' + n.skill + "」</b>　" + n.text + '<br><span class="sub">' + SOLDIERS[n.type].text + "</span></div>";
+  else skill = '<div class="sk"><span class="sub">戦闘中も少しずつHPが回復する（毎秒' + HERO.regen + "）。撤去はできない。</span></div>";
+  const html =
+    '<div class="top"><img class="face" src="' + face + '" alt="" style="background:' + col + '55">' +
+    '<div><div class="nm" style="color:' + col + ';filter:brightness(1.7)">' + (u.kind === "hero" ? "👑 " : "") + st.name + "　Lv" + u.lv + '</div><div class="sub">' + kind + "</div><div class=\"sub\">" + state + '</div></div><button class="x" id="cardClose">×</button></div>' +
+    '<div class="grid"><span>HP <b>' + Math.ceil(u.hp) + "/" + st.hp + '</b></span><span>攻撃 <b>' + Math.round(st.atk) + '</b></span><span>攻撃の間隔 <b>' + st.rate.toFixed(2) + "秒</b></span>" +
+    "<span>射程 <b>" + st.range.toFixed(1) + "</b></span><span>速さ <b>" + st.speed.toFixed(1) + "</b></span><span>守る広さ <b>" + st.leash + "マス</b></span>" +
+    "<span>倒した敵 <b>" + (u.kills || 0) + "</b></span><span>" + (st.melee ? "足止め <b>" + (u.kind === "hero" ? "あり" : BLOCK.cap(u) + "人") + "</b>" : "足止め <b>しない</b>") + "</span><span>" + (st.heal ? "回復 <b>" + Math.round(st.heal * 2) + "</b>" : "") + "</span></div>" +
+    '<div class="meter"><i style="width:' + Math.round(hpK * 100) + "%;background:" + (hpK > 0.35 ? "#7ddf64" : "#ff6b5a") + '"></i></div>' +
+    '<span class="sub">経験値 ' + u.xp + "/" + need + "（次のLvまで敵 " + Math.ceil((need - u.xp) / LEVEL.kill) + " 人ほど）</span>" +
+    '<div class="meter"><i style="width:' + Math.round((u.xp / need) * 100) + '%;background:#ffd75e"></i></div>' + skill +
+    '<div class="hint">別のマスをタップで持ち場を移す／もう一度タップで閉じる</div>';
+  if (html === cardKey && !force) return;
+  // 選んだ人物が上半分にいるときは札を下に出して、隠さないようにする
+  const low = u.y < ROWS / 2;
+  box.style.top = low ? "auto" : "4px"; box.style.bottom = low ? "4px" : "auto";
+  cardKey = html; box.innerHTML = html; box.hidden = false;
+  $("cardClose").onclick = () => { selected = null; renderCard(); };
+}
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (!paused && !over && !document.hidden) for (let i = 0; i < speed; i++) update(dt);
   else time += dt;
   draw();
+  cardClock -= dt;
+  if (cardClock <= 0 || (!selected && !$("card").hidden)) { cardClock = 0.2; renderCard(); }
   requestAnimationFrame(frame);
 }
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）

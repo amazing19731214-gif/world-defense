@@ -98,6 +98,23 @@ check(/もう出陣|先に/.test(wl.again), "同じ武将は2人置けない");
 await p.click('#tools [data-tool="warlord"]');
 check(await p.locator('#pickList [data-w="kenshin"]').isDisabled(), "出陣中の武将は選べない");
 await p.click("#pickClose");
+// 武将をタップするとステータスが出る
+{
+  const k = (await S()).units.find((u) => u.id === "kenshin");
+  await p.mouse.click(box.x + cs * k.x, box.y + cs * k.y);
+  await p.waitForTimeout(300);
+  const t = await p.locator("#card").textContent();
+  check(await p.locator("#card").isVisible() && /上杉謙信/.test(t) && /Lv1/.test(t) && /HP/.test(t) && /攻撃/.test(t) && /車懸りの陣/.test(t) && /経験値/.test(t), "武将をタップするとステータス（名前・Lv・HP・攻撃・技・経験値）が出る");
+  await shot("maze-card.png");
+  await p.click("#cardClose");
+  await p.waitForTimeout(300);
+  check(!(await p.locator("#card").isVisible()), "×でステータスを閉じる");
+  const h = await S();
+  await p.mouse.click(box.x + cs * h.hero.x, box.y + cs * h.hero.y);
+  await p.waitForTimeout(300);
+  check(/殿/.test(await p.locator("#card").textContent()) && /倒れたら負け/.test(await p.locator("#card").textContent()), "殿のステータスも見られる");
+  await p.mouse.click(box.x + cs * h.hero.x, box.y + cs * h.hero.y);
+}
 const fight = await p.evaluate(() => { MAZE.pickNamed("kotaro"); MAZE.place(3, 6); MAZE.pickNamed("gensaku"); MAZE.place(7, 7); MAZE.start(); MAZE.step(9); const a = MAZE.state().units; return a; });
 await p.waitForTimeout(200);
 await shot("maze-warlord.png");
