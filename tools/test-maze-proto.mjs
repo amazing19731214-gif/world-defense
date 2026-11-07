@@ -104,6 +104,7 @@ await shot("maze-warlord.png");
 check(fight.some((u) => u.kind === "warlord" && u.scd > 5), "武将が技を使う");
 const fin = await p.evaluate(() => { MAZE.step(150); return MAZE.state(); });
 check(!fin.playing && !fin.over, "武将と兵士で第1波をしのげる（殿のHP " + Math.round(fin.hero.hp) + "）");
+check(fin.units.some((u) => u.kind === "warlord" && u.lv > 1), "武将もレベルが上がる（" + fin.units.filter((u) => u.kind === "warlord").map((u) => u.id + "Lv" + u.lv).join(",") + "）");
 const sold = await p.evaluate(() => { const g = MAZE.state().gold, u = MAZE.state().units.find((o) => o.id === "nobunaga"); MAZE.select("sell"); MAZE.place(u.home.c, u.home.r); return { d: MAZE.state().gold - g, list: MAZE.state().units.map((o) => o.id) }; });
 check(sold.d === 220 && !sold.list.includes("nobunaga"), "撤去すると武将が戻り代金も戻る");
 

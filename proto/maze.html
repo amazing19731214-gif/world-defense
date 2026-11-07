@@ -52,7 +52,8 @@
   <b>👑殿（主人公）を守りぬく</b>戦いです。<b>殿が倒れたら負け</b>。殿は下の🏯本陣から始まり、自分でも戦います（タップで選んで持ち場を移せます）。<br>
   上の⛩️門から敵が入ってきます。敵は<b>兵士を全滅させるつもり</b>で、殿・兵士・武将のうち近い者から狙って襲いかかり、群がって斬りかかります。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
-  兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあり、敵を倒すと<b>レベルが上がって</b>強くなります。<br>
+  兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあります。<br>
+  <b>殿・兵士・武将はみんなレベルが上がります</b>。敵を倒した本人に経験値が多く入り、近くで戦っていた味方にも少し入ります。名札の「Lv」と下の金色の細いバーが次のレベルまでの目安です。<br>
   <b>兵士と武将</b>は自分で動いて戦います。置いた場所が<b>持ち場</b>になり、持ち場のまわり（点線の円）に入った敵を追いかけて戦い、敵がいなくなると持ち場へ戻ります。<br>
   ・足軽・槍兵・騎兵・近接の武将は、敵の前に立って<b>足止め</b>します。弓兵・鉄砲兵は離れて撃ち、衛生兵は近くの味方を治します。<br>
   ・兵士や武将を<b>タップで選んで、別のマスをタップ</b>すると持ち場を移せます（指で引きずってもOK）。戦闘中も動かせます。<br>
@@ -116,7 +117,8 @@ const NAMED_LIST = [
 ];
 const NAMED = Object.fromEntries(NAMED_LIST.map(([id, name, short, type, color, skill, key, val, text]) => [id, { id, name, short, type, color, skill, key, val, text }]));
 // 敵を倒すと経験値。レベルが上がるとHPと攻撃が増える
-const LEVEL = { need: (lv) => 2 + lv * 2, grow: 0.1, max: 20 };
+// 経験値：敵を倒した本人に kill、近く（near マス以内）にいた味方に assist。レベルが上がるとHPと攻撃が grow ずつ増える
+const LEVEL = { need: (lv) => 3 + lv * 2, kill: 3, assist: 1, near: 3, grow: 0.1, max: 30 };
 function namedStat(id, lv = 1) {
   const n = NAMED[id], B = SOLDIERS[n.type], g = 1 + LEVEL.grow * (lv - 1), m = (k) => (n.key === k ? n.val : 0);
   return { name: n.name, cost: B.cost, hp: Math.round(B.hp * g), atk: B.atk * (1 + m("atk")) * g, range: B.range * (1 + m("range")), rate: B.rate * (1 - m("haste")),
@@ -196,9 +198,9 @@ const STYLES = {
   "": { label: "軍師", hp: 90, atk: 6, range: 2.6, rate: 0.6, speed: 1.8, shot: "arrow", skill: "order", text: "攻撃は弱い／技：盤面の敵をすべて遅くする" },
 };
 const wStyle = (w) => STYLES[w.fav] || STYLES[""];
-function wStat(w) {
-  const S = wStyle(w), R = RARITY[w.rarity];
-  return { name: w.name, cost: R.cost, hp: Math.round(S.hp * R.mul), atk: Math.round(S.atk * R.mul), range: S.range, rate: S.rate, speed: S.speed, leash: 3.5, melee: !!S.melee, skillCd: R.skillCd };
+function wStat(w, lv = 1) {
+  const S = wStyle(w), R = RARITY[w.rarity], g = 1 + LEVEL.grow * (lv - 1);
+  return { name: w.name, cost: R.cost, hp: Math.round(S.hp * R.mul * g), atk: Math.round(S.atk * R.mul * g), range: S.range, rate: S.rate, speed: S.speed, leash: 3.5, melee: !!S.melee, skillCd: R.skillCd };
 }
 const IMGS = {};
 function img(path) {
@@ -437,23 +439,34 @@ function hurt(e, dmg, src) {
   e.hp -= dmg; e.flash = 0.12;
   if (e.hp <= 0) {
     e.dead = true; kills++;
-    if (src) gainXp(src);
+    if (src) {
+      gainXp(src, LEVEL.kill);
+      for (const o of units) if (o !== src && o.down === 0 && dist(o, e) <= LEVEL.near) gainXp(o, LEVEL.assist);
+    }
     const g = ENEMIES[e.type].gold + Math.floor(wave / 3);
     gold += g;
     effects.push({ kind: "coin", x: e.x, y: e.y, t: 0.7, text: "+" + g });
   }
 }
 // ネームド兵士は敵を倒すと経験値。レベルが上がると強くなる（波の間も保たれる）
-function gainXp(u) {
-  if ((u.kind !== "named" && u.kind !== "hero") || u.lv >= LEVEL.max) return;
-  u.xp++;
-  if (u.xp >= LEVEL.need(u.lv)) {
-    u.xp = 0; u.lv++;
+// 殿・ネームド兵士・武将はみんなレベルが上がる（試作なので保存はしない）
+const unitShort = (u) => (u.kind === "hero" ? "殿" : u.kind === "warlord" ? WARLORDS[u.id].name : NAMED[u.id].short);
+const unitColor = (u) => (u.kind === "hero" ? "#b8862a" : u.kind === "warlord" ? WARLORDS[u.id].color : NAMED[u.id].color);
+function levelStat(u) {
+  if (u.kind === "hero") { const g = 1 + LEVEL.grow * (u.lv - 1); return { ...HERO, hp: Math.round(HERO.hp * g), atk: HERO.atk * g }; }
+  return u.kind === "warlord" ? wStat(WARLORDS[u.id], u.lv) : namedStat(u.id, u.lv);
+}
+function gainXp(u, n = 1) {
+  if (u.lv >= LEVEL.max) return;
+  u.xp += n;
+  while (u.xp >= LEVEL.need(u.lv) && u.lv < LEVEL.max) {
+    u.xp -= LEVEL.need(u.lv); u.lv++;
     const old = u.st.hp;
-    if (u.kind === "hero") { const g = 1 + LEVEL.grow * (u.lv - 1); u.st = { ...HERO, hp: Math.round(HERO.hp * g), atk: HERO.atk * g }; }
-    else u.st = namedStat(u.id, u.lv);
-    u.hp += u.st.hp - old;
-    effects.push({ kind: "skill", x: u.x, y: u.y, t: 1, text: (u.kind === "hero" ? "殿" : NAMED[u.id].short) + " Lv" + u.lv + "！", col: u.kind === "hero" ? "#b8862a" : NAMED[u.id].color });
+    u.st = levelStat(u);
+    u.hp = Math.min(u.st.hp, u.hp + (u.st.hp - old) + u.st.hp * 0.2); // 上がった分と2割を回復
+    effects.push({ kind: "skill", x: u.x, y: u.y, t: 1.2, text: unitShort(u) + " Lv" + u.lv + "！", col: unitColor(u) });
+    effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.6, r: 0.9, col: "#ffd75e" });
+    say("⬆️ " + u.st.name + "がLv" + u.lv + "に上がった！（HP" + u.st.hp + "・攻撃" + Math.round(u.st.atk) + "）");
   }
 }
 function heroFell() {
@@ -686,6 +699,11 @@ function drawGateCastle() {
   ctx.fillStyle = "#6e5a3d"; ctx.fillRect(CASTLE.c * cell + 1, CASTLE.r * cell + 1, cell - 2, cell - 2);
   ctx.fillText("🏯", (CASTLE.c + 0.5) * cell, (CASTLE.r + 0.5) * cell);
 }
+// 経験値の細いバー（次のレベルまで）
+function xpBar(u, x, y, w) {
+  ctx.fillStyle = "#000a"; ctx.fillRect(x - w / 2, y, w, 2);
+  ctx.fillStyle = "#ffd75e"; ctx.fillRect(x - w / 2, y, w * Math.min(1, u.xp / LEVEL.need(u.lv)), 2);
+}
 function bar(x, y, w, k, col) {
   ctx.fillStyle = "#000a"; ctx.fillRect(x - w / 2, y, w, 4);
   ctx.fillStyle = col; ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, k)), 4);
@@ -722,12 +740,13 @@ function drawUnit(u) {
     const im = img(HERO.img);
     ctx.strokeStyle = "#ffd75e"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.36, s * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
     if (!sprite(im, x + (u.swing > 0 ? u.face * s * 0.08 : 0), y + s * 0.35 + bob, s * 1.1, u.face, u.flash > 0 ? 0.55 : 1)) { ctx.fillStyle = "#b8862a"; ctx.beginPath(); ctx.arc(x, y, s * 0.32, 0, Math.PI * 2); ctx.fill(); }
-    const label = "👑殿" + (u.lv > 1 ? u.lv : ""), ty = y - s * 0.85;
+    const label = "👑殿 Lv" + u.lv, ty = y - s * 0.85;
     ctx.font = "bold 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const tw = ctx.measureText(label).width + 8;
     ctx.fillStyle = "#b8862a"; ctx.fillRect(x - tw / 2, ty - 7, tw, 14); ctx.strokeStyle = "#ffd75e"; ctx.lineWidth = 1; ctx.strokeRect(x - tw / 2, ty - 7, tw, 14);
     ctx.fillStyle = "#fff"; ctx.fillText(label, x, ty + 0.5);
     bar(x, ty + 8, Math.max(tw, s * 0.7), u.hp / u.st.hp, u.hp / u.st.hp > 0.35 ? "#7ddf64" : "#ff6b5a");
+    xpBar(u, x, ty + 12, Math.max(tw, s * 0.7));
   } else if (u.kind === "warlord") {
     const w = WARLORDS[u.id], im = heroIcon(u.id), r = s * 0.42;
     ctx.save(); ctx.translate(x + (u.swing > 0 ? u.face * s * 0.08 : 0), y - s * 0.05 + bob);
@@ -738,6 +757,11 @@ function drawUnit(u) {
     ctx.restore();
     bar(x, y - s * 0.62, s * 0.7, u.hp / u.st.hp, "#7ddf64");
     bar(x, y - s * 0.62 + 5, s * 0.7, 1 - u.scd / u.st.skillCd, u.scd <= 0 ? "#ffd75e" : "#7fc3ff");
+    // レベルの札（右下）
+    ctx.font = "bold 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const lt = "Lv" + u.lv, lw = ctx.measureText(lt).width + 6;
+    ctx.fillStyle = w.color; ctx.fillRect(x + s * 0.42 - lw / 2, y + s * 0.2, lw, 11);
+    ctx.fillStyle = "#fff"; ctx.fillText(lt, x + s * 0.42, y + s * 0.2 + 6);
   } else {
     const n = NAMED[u.id], im = img(SOLDIERS[n.type].img);
     // 人物の色の輪
@@ -746,12 +770,13 @@ function drawUnit(u) {
       ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(x, y, s * 0.28, 0, Math.PI * 2); ctx.fill();
     }
     // 名札（呼び名とレベル）
-    const label = n.short + (u.lv > 1 ? u.lv : "");
+    const label = n.short + " Lv" + u.lv;
     ctx.font = "bold 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const tw = ctx.measureText(label).width + 6, ty = y - s * 0.72;
     ctx.fillStyle = n.color; ctx.fillRect(x - tw / 2, ty - 6, tw, 12);
     ctx.fillStyle = "#fff"; ctx.fillText(label, x, ty + 0.5);
     bar(x, ty + 7, Math.max(tw, s * 0.5), u.hp / u.st.hp, "#7ddf64");
+    xpBar(u, x, ty + 11, Math.max(tw, s * 0.5));
   }
 }
 function drawShot(s) {
@@ -840,7 +865,7 @@ cv.addEventListener("pointerup", (ev) => {
   if (ev.pointerType !== "mouse") hover = null;
   if (!pr) return;
   if (pr.unit && pr.moved) { moveHome(pr.unit, p.c, p.r); selected = null; return; } // 引きずって移動
-  if (pr.unit) { selected = selected === pr.unit ? null : pr.unit; if (selected) say(selected.st.name + "を選んだ。持ち場にするマスをタップしてね（もう一度タップで解除）。"); return; }
+  if (pr.unit) { selected = selected === pr.unit ? null : pr.unit; if (selected) say(selected.st.name + " Lv" + selected.lv + "（HP" + Math.ceil(selected.hp) + "/" + selected.st.hp + "・攻撃" + Math.round(selected.st.atk) + "・次のLvまで敵" + Math.ceil((LEVEL.need(selected.lv) - selected.xp) / LEVEL.kill) + "人ほど）を選んだ。持ち場にするマスをタップ。"); return; }
   if (selected) { moveHome(selected, p.c, p.r); selected = null; }
 });
 cv.addEventListener("pointercancel", () => { press = null; });
