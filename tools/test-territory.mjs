@@ -264,8 +264,8 @@ r = await page.evaluate(() => ({
   label: document.querySelector("#hireToggle").textContent,
 }));
 check(
-  "領土が三河だけなら効果なし（開始ゴールド500・ランダム雇用24G）",
-  r.gold === 500 && /24G/.test(r.label),
+  "領土が三河だけなら効果なし（開始ゴールド500・ランダム雇用2500G（兵士がいなければ無料））",
+  r.gold === 500 && /2500G|無料/.test(r.label),
   JSON.stringify(r),
 );
 // 尾張（ウェーブの報酬）・遠江と駿河（開始ゴールド）・美濃（修理費）・信濃（雇用費）を領土にした保存データ
@@ -305,8 +305,8 @@ r = await page.evaluate(() => ({
   cost: WD_DEBUG.squadApi.unitCost("ashigaru"),
 }));
 check(
-  "信濃を取ると、すぐ雇用費 -15%（ランダム雇用20G）",
-  r.cost === 13 && /20G/.test(r.label),
+  "信濃を取ると、すぐ雇用費 -15%（ランダム雇用2125G、v114）",
+  r.cost === 13 && /2125G/.test(r.label),
   JSON.stringify(r),
 );
 r = await page.evaluate(() => {

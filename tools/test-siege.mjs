@@ -332,10 +332,11 @@ await page.evaluate(() => {
 });
 await tapMap(page,640,285);
 check("部隊パネルから兵種を指定する補充操作を削除", await page.locator('#sqRecruit, [data-recruit-chip], [data-recruit-type]').count()===0);
+await page.evaluate(()=>WD_DEBUG.setGold(99999)); // v114 雇用2500G
 const r0=await page.evaluate(()=>({gold:WD_DEBUG.state().gold,n:WD_DEBUG.state().soldiers.length}));
 await page.tap('#sqClose');await page.tap('#hireToggle');
 const r1=await page.evaluate(()=>({gold:WD_DEBUG.state().gold,n:WD_DEBUG.state().soldiers.length}));
-check("全体の雇用ボタンで新兵を1人購入",r1.n===r0.n+1&&r0.gold-r1.gold===24);
+check("全体の雇用ボタンで新兵を1人購入",r1.n===r0.n+1&&r0.gold-r1.gold===2500);
 await tapMap(page,640,285);
 if (!(await page.isVisible('#sqMembers'))) await page.tap('#sqMore');
 await page.evaluate(() => {

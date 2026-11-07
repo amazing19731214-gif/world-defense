@@ -36,6 +36,7 @@ async function open({ query = "?debug", width = 375, height = 667 } = {}) {
   const c = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await c.addInitScript((save) => {
     requestAnimationFrame = () => 0;
+    window.WD_FLAGS = { explore: false }; // v114 本番の画面は「探索・サバイバル」。この試験は三方の関の画面を見るので、探索を止めて三方の関を出す
     if (sessionStorage.s) return;
     sessionStorage.s = 1;
     localStorage.clear();

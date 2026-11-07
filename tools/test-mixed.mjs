@@ -88,7 +88,8 @@ let q = await squad(page);
 check("ランダム抽選の弓兵が既存の空き部隊へ入る",q.mixed&&q.types.filter(t=>t==='archer').length===1);
 check("部隊名には兵種や混成の接尾辞を付けない",q.name==='第一部隊');
 check("戦闘用の主な兵種は一番多い槍兵",q.type==='spearman');
-check("雇用費は固定24G",await ev(page,()=>WD_DEBUG.state().gold)===9999-24);
+check("雇用費は固定2500G（v114）",await ev(page,()=>WD_DEBUG.state().gold)===9999-2500);
+await ev(page,()=>WD_DEBUG.setGold(99999)); // v114 雇用2500G
 for(const type of ['medic','ashigaru','cavalry'])await addType(type);
 q=await squad(page);
 check("槍兵5・弓兵・衛生兵・足軽・騎兵の9人",q.types.length===9&&['archer','medic','ashigaru','cavalry'].every(t=>q.types.includes(t)));

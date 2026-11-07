@@ -79,7 +79,7 @@ await ev(() => WD_DEBUG.setGold(9999));
 
 console.log("■ 雇用と能力値");
 let text = await page.textContent('#hireToggle');
-check("兵種選択を廃止して雇用費24Gを表示",/24G/.test(text)&&await page.locator('[data-u]').count()===0);
+check("兵種選択を廃止して雇用費（2500G・兵士がいなければ最初の1人は無料）を表示",/2500G|無料/.test(text)&&await page.locator('[data-u]').count()===0);
 check("騎兵の素材を読み込み",await ev(()=>WD_DEBUG.unitConfig.UNIT_FRAMES.cavalry.idle.startsWith('data:image/webp')));
 let r = await ev(() => {
   const T = WD_DEBUG.unitConfig.SOLDIER_TYPES,

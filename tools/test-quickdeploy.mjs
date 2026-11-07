@@ -148,7 +148,7 @@ check(
 );
 check("チップに兵種の絵", (await page.$$('[data-chip="1"] img')).length === 1);
 check("部隊があっても兵種選択を出さない",await page.locator('[data-u]').count()===0);
-check("「＋ 雇う」に費用を表示",/24G/.test(await page.textContent('#hireToggle')));
+check("「＋ 雇う」に費用を表示",/2500G|無料/.test(await page.textContent('#hireToggle')));
 
 console.log("■ チップ → 道をタップで配置（2タップ）");
 await page.tap('[data-chip="2"]');

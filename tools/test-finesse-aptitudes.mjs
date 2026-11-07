@@ -27,6 +27,7 @@ try {
       }
       const old = crypto.randomUUID;
       crypto.randomUUID = () => key;
+      D.setGold(1e7); // v114 雇用2500G
       const error = D.recruitApi.recruit();
       crypto.randomUUID = old;
       if (error.error) throw Error(error.error);

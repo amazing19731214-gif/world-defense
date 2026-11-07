@@ -179,7 +179,7 @@ await page.evaluate(() => WD_DEBUG.setGold(5000));
 
 console.log("■ ランダム雇用ボタン");
 check("兵種選択ボタンを表示しない",await page.locator('[data-u]').count()===0);
-check("雇用費を表示",/24G/.test(await page.textContent('#hireToggle')));
+check("雇用費を表示",/2500G|無料/.test(await page.textContent('#hireToggle')));
 
 console.log("■ 雇用・配置");
 await tapHire(page, "ashigaru");
