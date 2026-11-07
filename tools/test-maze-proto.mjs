@@ -114,6 +114,17 @@ await p.click("#pickClose");
   await p.waitForTimeout(300);
   check(/殿/.test(await p.locator("#card").textContent()) && /倒れたら負け/.test(await p.locator("#card").textContent()), "殿のステータスも見られる");
   await p.mouse.click(box.x + cs * h.hero.x, box.y + cs * h.hero.y);
+  // ネームド兵士：足元・体・頭・名札のどこをタップしてもステータスが出る（柵は置かれない）
+  await p.evaluate(() => { MAZE.pickNamed("sakon"); MAZE.place(2, 12); MAZE.select("fence"); });
+  for (const [dy, where] of [[0.25, "足元"], [-0.2, "体"], [-0.55, "頭"], [-0.8, "名札"]]) {
+    await p.mouse.click(box.x + cs * 2.5, box.y + cs * (12.5 + dy));
+    await p.waitForTimeout(250);
+    const ok = (await p.locator("#card").isVisible()) && /島左近/.test(await p.locator("#card").textContent()) && /鬼左近/.test(await p.locator("#card").textContent());
+    const fence = await p.evaluate(() => MAZE.state().grid.flat().filter((g) => g === "fence").length);
+    check(ok && fence === 0, "兵士の" + where + "をタップするとステータスが出る（柵は置かれない）");
+    if (where === "体") await shot("maze-card-soldier.png");
+    await p.click("#cardClose"); await p.waitForTimeout(250);
+  }
 }
 const fight = await p.evaluate(() => { MAZE.pickNamed("kotaro"); MAZE.place(3, 6); MAZE.pickNamed("gensaku"); MAZE.place(7, 7); MAZE.start(); MAZE.step(9); const a = MAZE.state().units; return a; });
 await p.waitForTimeout(200);

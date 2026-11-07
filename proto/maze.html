@@ -351,6 +351,19 @@ function unitAt(x, y, rad = 0.5) {
   for (const u of units) { if (u.down > 0) continue; const d = Math.hypot(u.x - x, u.y - y); if (d < bd) { bd = d; best = u; } }
   return best;
 }
+// 指でタップした人物。兵士の絵は足元より上に描いているので、頭や名札をタップしても選べるように、絵の形（縦長の枠）で当たりを見る
+function unitAtTap(x, y) {
+  let best = null, bd = Infinity;
+  for (const u of units) {
+    if (u.down > 0) continue;
+    const dx = Math.abs(x - u.x), dy = y - u.y;
+    const hit = u.kind === "warlord" ? Math.hypot(dx, dy + 0.05) < 0.6 : dx < 0.5 && dy > -1.05 && dy < 0.5;
+    if (!hit) continue;
+    const d = Math.hypot(dx, dy + (u.kind === "warlord" ? 0.05 : 0.3)); // 体のまん中に近い人を優先
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
+}
 function moveHome(u, c, r) {
   if (!inside(c, r) || blocked(c, r)) return say("そこへは動かせません（柵のマス・盤の外）。", true);
   u.home = { c, r }; u.target = null;
@@ -862,7 +875,7 @@ let press = null, lastPaint = "";
 cv.addEventListener("pointerdown", (ev) => {
   cv.setPointerCapture(ev.pointerId);
   const p = cellAt(ev); hover = p;
-  const u = tool !== "sell" ? unitAt(p.x, p.y, 0.55) : null;
+  const u = tool !== "sell" ? unitAtTap(p.x, p.y) : null;
   press = { p, unit: u, moved: false };
   if (u || selected) return; // 選択・持ち場の移動は指を離したときに決める
   lastPaint = p.c + "," + p.r; place(p.c, p.r);
