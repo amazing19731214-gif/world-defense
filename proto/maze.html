@@ -349,19 +349,28 @@ function spawn(type) {
   const n = nextCell(GATE.c, GATE.r, distMap, [0, 1]);
   enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.2, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, stun: 0, cd: 0, face: 1, anim: Math.random() * 4, blocker: null });
 }
-// 近接の兵士が目の前にいると足止めされる
-function findBlocker(e) {
-  let best = null, bd = 0.62;
-  for (const u of units) {
-    if (u.down > 0 || !u.st.melee) continue;
-    const d = dist(u, e); if (d < bd) { bd = d; best = u; }
+// 足止めの割り当て（毎フレーム）。
+// ・近接の兵士・武将は、戦っている敵（と近くの敵）を BLOCK.cap 人まで止める
+// ・敵は、すぐそばの兵士（弓兵・鉄砲兵・衛生兵も）に気づくと立ち止まって斬りかかる
+const BLOCK = { reach: 0.85, notice: 0.7, cap: (u) => (u.kind === "warlord" || (u.kind === "named" && NAMED[u.id].type === "ashigaru") ? 3 : 2) };
+function assignBlockers() {
+  const load = new Map();
+  for (const e of enemies) e.blocker = null;
+  const front = enemies.filter((e) => !e.dead && !e.reached).sort((a, b) => distMap[a.tr][a.tc] - distMap[b.tr][b.tc]);
+  for (const e of front) {
+    let best = null, bd = Infinity;
+    for (const u of units) {
+      if (u.down > 0) continue;
+      const d = dist(u, e), used = load.get(u) || 0;
+      const ok = u.st.melee ? d <= BLOCK.reach && used < BLOCK.cap(u) : d <= BLOCK.notice && used < 1;
+      if (ok && d < bd) { bd = d; best = u; }
+    }
+    if (best) { e.blocker = best; load.set(best, (load.get(best) || 0) + 1); }
   }
-  return best;
 }
 function stepEnemy(e, dt) {
   e.slow = Math.max(0, e.slow - dt);
   if (e.stun > 0) { e.stun -= dt; return; }
-  e.blocker = findBlocker(e);
   if (e.blocker) {
     // 足止め：その兵士と戦う
     e.cd -= dt; e.face = e.blocker.x < e.x ? -1 : 1;
@@ -445,6 +454,9 @@ function moveToward(u, tx, ty, dt) {
 }
 function pickTarget(u) {
   const home = { x: u.home.c + 0.5, y: u.home.r + 0.5 }, reach = u.st.leash;
+  // 自分に斬りかかっている敵がいれば、まずそれと戦う
+  const foe = enemies.find((e) => !e.dead && e.blocker === u);
+  if (foe) return foe;
   if (u.target && !u.target.dead && dist(u.target, home) <= reach + 0.8) return u.target;
   let best = null, bs = Infinity;
   for (const e of enemies) {
@@ -482,8 +494,8 @@ function unitTick(u, dt) {
   if (w && u.scd <= 0 && (t || (wStyle(w).skill === "aid" && (heart < START.heart || units.some((o) => o.down === 0 && o.hp < o.st.hp * 0.6))))) { u.scd = u.st.skillCd; skill(u, w, t); }
   if (t) {
     const d = dist(u, t);
-    if (d > u.st.range) moveToward(u, t.x, t.y, dt);
-    else { u.face = t.x < u.x ? -1 : 1; if (u.cd <= 0) attack(u, t, w); }
+    if (d > (u.st.melee ? Math.min(u.st.range, 0.6) : u.st.range)) moveToward(u, t.x, t.y, dt); // 近接は敵に組みつくまで近づく
+    if (d <= u.st.range) { u.face = t.x < u.x ? -1 : 1; if (u.cd <= 0) attack(u, t, w); }
   } else {
     const hx = u.home.c + 0.5, hy = u.home.r + 0.5;
     if (Math.hypot(hx - u.x, hy - u.y) > 0.05) moveToward(u, hx, hy, dt);
@@ -548,6 +560,7 @@ function update(dt) {
   if (!playing) { for (const u of units) unitTick(u, dt); separate(); return; } // 準備中は持ち場へ戻るだけ
   spawnClock -= dt;
   if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.8; }
+  assignBlockers();
   for (const e of enemies) if (!e.dead) stepEnemy(e, dt);
   for (const e of enemies) if (e.reached && !e.dead) {
     e.dead = true; heart -= e.type === "samurai" ? 3 : 1;

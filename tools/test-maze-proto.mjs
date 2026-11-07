@@ -60,6 +60,17 @@ check(ash.hp < 85 || ash.down > 0, "足軽（吉川元春）が敵の前に立�
 const fall = await p.evaluate(() => { MAZE.step(200); return MAZE.state(); });
 check(fall.units[0].down >= 0, "兵士は倒れても消えない（城で起き上がる）");
 
+// ■ 道の上の兵士は敵を止めて斬り合う（HPが減る）。止めている間、敵は城へ進めない
+await fresh();
+const hold = await p.evaluate(() => {
+  MAZE.setGold(9999); MAZE.pickNamed("sakon"); MAZE.place(5, 6); MAZE.pickNamed("takakage"); MAZE.place(4, 9);
+  MAZE.start(); const log = [];
+  for (let i = 0; i < 5; i++) { MAZE.step(1.6); const s = MAZE.state(); log.push({ hp: s.units[0].hp, down: s.units[0].down, heart: s.heart }); }
+  return log;
+});
+check(hold.some((h) => h.hp < 60 || h.down > 0), "道に立つ兵士は敵と斬り合ってHPが減る（左近 " + hold.map((h) => Math.round(h.hp)).join("→") + "）");
+check(hold.every((h) => h.heart === 20), "兵士が止めている間、敵は城へ届かない");
+
 // ■ 武将：何人でも置ける・同じ武将は1人まで・技
 await fresh();
 await p.click('#tools [data-tool="warlord"]');
