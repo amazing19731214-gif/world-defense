@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>迷路の関（試作）</title>
+<style>
+  :root { --bg: #1d1a16; --panel: #2c2620; --line: #5a4a38; --text: #f3e7d0; --gold: #f2c14e; --red: #e05a4a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); overflow: hidden; touch-action: manipulation; }
+  #hud { width: 100%; max-width: 560px; display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 12px 4px; font-weight: 700; font-size: 15px; }
+  #hud span { white-space: nowrap; }
+  #gold { color: var(--gold); }
+  #heart { color: #ff8a7a; }
+  #msg { width: 100%; max-width: 560px; min-height: 22px; padding: 0 12px; font-size: 13px; color: #d9c7a6; }
+  #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
+  canvas { display: block; touch-action: none; border-radius: 6px; }
+  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; padding: 6px 8px 4px; }
+  #tools button, #ctrl button { font: inherit; color: var(--text); background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2; }
+  #tools button b { display: block; font-size: 20px; }
+  #tools button small { color: var(--gold); }
+  #tools button.sel { border-color: var(--gold); background: #4a3b22; }
+  #tools button:disabled { opacity: .45; }
+  #ctrl { width: 100%; max-width: 560px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 6px; padding: 2px 8px 8px; }
+  #ctrl button { font-size: 15px; padding: 9px 2px; font-weight: 700; }
+  #start { background: #6b2a1f !important; border-color: #c0573f !important; }
+  #start:disabled { opacity: .5; }
+  #help[hidden], #over[hidden] { display: none; }
+  .sheet { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+  .sheet > div { max-width: 420px; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.6; }
+  .sheet h2 { margin: 0 0 8px; font-size: 18px; color: var(--gold); }
+  .sheet button { font: inherit; font-weight: 700; margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #c0573f; background: #6b2a1f; color: var(--text); }
+</style>
+</head>
+<body>
+<div id="hud"><span>⚔️ 第<b id="wave">0</b>波</span><span id="gold">💰 0G</span><span id="heart">❤️ 20</span><span id="route">道 0マス</span></div>
+<div id="msg"></div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<div id="tools"></div>
+<div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
+<div id="help" class="sheet"><div>
+  <h2>迷路の関（試作）</h2>
+  上の門から敵が入り、下の🏯城をめざします。<br>
+  <b>柵🪵</b>と<b>塔</b>をマス目に置いて道をふさぐと、敵は残った道を探して回り道をします。長い迷路を作るほど、塔が長く攻撃できます。<br>
+  ・道を<b>完全にふさぐ置き方はできません</b>（どこか1本は城まで通じている必要があります）。<br>
+  ・点線は、いま敵が通る一番の近道です。<br>
+  ・<b>撤去</b>で柵や塔を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
+  ・敵が城に着くと❤️が減り、0で落城です。<br>
+  <small>本番のゲームとは別の試作です。保存はしません。</small>
+  <button id="helpClose">はじめる</button>
+</div></div>
+<div id="over" class="sheet" hidden><div>
+  <h2 id="overTitle">落城</h2>
+  <div id="overText"></div>
+  <button id="again">もう一度</button>
+</div></div>
+<script>
+"use strict";
+// ===== 設定（数値はここで調整） =====
+const COLS = 11, ROWS = 17;
+const GATE = { c: 5, r: 0 }, CASTLE = { c: 5, r: ROWS - 1 };
+const START = { gold: 260, heart: 20 };
+const TOOLS = {
+  fence: { name: "柵", icon: "🪵", cost: 6 },
+  arrow: { name: "弓", icon: "🏹", cost: 60, range: 2.6, dmg: 9, rate: 0.5, col: "#a56b35" },
+  cannon: { name: "大砲", icon: "💣", cost: 110, range: 2.1, dmg: 26, rate: 1.6, splash: 0.9, col: "#56616d" },
+  gun: { name: "鉄砲", icon: "💥", cost: 140, range: 3.4, dmg: 34, rate: 1.4, col: "#5a4632" },
+  water: { name: "水攻め", icon: "🌊", cost: 80, range: 2.3, dmg: 3, rate: 0.8, slow: 0.45, slowTime: 1.6, col: "#3f8fcf" },
+  sell: { name: "撤去", icon: "🧹", cost: 0 },
+};
+const ENEMIES = {
+  ashigaru: { name: "足軽", icon: "👺", hp: 1, speed: 1.15, gold: 4, col: "#c9493b" },
+  cavalry: { name: "騎馬", icon: "🐎", hp: 0.8, speed: 2.0, gold: 5, col: "#8a5a2b" },
+  samurai: { name: "鎧武者", icon: "👹", hp: 3.2, speed: 0.75, gold: 10, col: "#4c4f8a" },
+};
+function waveList(n) {
+  // 第n波の敵。だんだん数・硬さ・種類が増える。5波ごとに大将（鎧武者の群れ）
+  const list = [], count = 7 + n * 2;
+  for (let i = 0; i < count; i++) {
+    let t = "ashigaru";
+    if (n >= 2 && i % 4 === 3) t = "cavalry";
+    if (n >= 3 && i % 6 === 5) t = "samurai";
+    if (n % 5 === 0 && i >= count - 3) t = "samurai";
+    list.push(t);
+  }
+  return list;
+}
+const baseHp = (n) => Math.round(22 * Math.pow(1.2, n - 1));
+
+// ===== 状態 =====
+let grid, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, speed, paused, over, seq, kills, time;
+function reset() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); // null | {kind, cd, spent}
+  gold = START.gold; heart = START.heart; wave = 0; playing = false; over = false;
+  enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
+  tool = tool || "fence"; speed = speed || 1; paused = false;
+  distMap = flow(grid);
+  $("over").hidden = true;
+  say("柵と塔で迷路を作って、▶ 出陣を押してね。");
+  ui();
+}
+const $ = (id) => document.getElementById(id);
+const inside = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
+const isGate = (c, r) => c === GATE.c && r === GATE.r;
+const isCastle = (c, r) => c === CASTLE.c && r === CASTLE.r;
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// 城からの歩数（通れないマスは Infinity）。敵はいつもこの数字が小さい方へ進む
+function flow(g) {
+  const d = Array.from({ length: ROWS }, () => Array(COLS).fill(Infinity));
+  const q = [[CASTLE.c, CASTLE.r]]; d[CASTLE.r][CASTLE.c] = 0;
+  for (let i = 0; i < q.length; i++) {
+    const [c, r] = q[i];
+    for (const [dc, dr] of D4) {
+      const nc = c + dc, nr = r + dr;
+      if (!inside(nc, nr) || g[nr][nc] || d[nr][nc] !== Infinity) continue;
+      d[nr][nc] = d[r][c] + 1; q.push([nc, nr]);
+    }
+  }
+  return d;
+}
+// 次に進むマス（同じ距離なら道をまっすぐ進む方を選ぶ）
+function nextCell(c, r, d, prev) {
+  let best = null;
+  for (const [dc, dr] of D4) {
+    const nc = c + dc, nr = r + dr;
+    if (!inside(nc, nr) || !(d[nr][nc] < d[r][c])) continue;
+    const straight = prev && dc === prev[0] && dr === prev[1];
+    if (!best || straight) best = [nc, nr, dc, dr];
+  }
+  return best;
+}
+function routeCells(d = distMap) {
+  const cells = [[GATE.c, GATE.r]];
+  let c = GATE.c, r = GATE.r, prev = [0, 1];
+  for (let i = 0; i < COLS * ROWS && !(c === CASTLE.c && r === CASTLE.r); i++) {
+    const n = nextCell(c, r, d, prev); if (!n) break;
+    c = n[0]; r = n[1]; prev = [n[2], n[3]]; cells.push([c, r]);
+  }
+  return cells;
+}
+// 置けるか。理由の文を返す（置けるなら ""）
+function placeError(c, r, kind) {
+  if (!inside(c, r)) return " ";
+  if (isGate(c, r) || isCastle(c, r)) return "門と城には置けません。";
+  if (grid[r][c]) return "もう置いてあります。";
+  if (gold < TOOLS[kind].cost) return "お金が足りません。";
+  for (const e of enemies) if ((e.c === c && e.r === r) || (e.tc === c && e.tr === r)) return "敵がいるマスには置けません。";
+  const g = grid.map((row) => row.slice()); g[r][c] = { kind };
+  const d = flow(g);
+  if (d[GATE.r][GATE.c] === Infinity) return "道を完全にふさぐことはできません。";
+  for (const e of enemies) if (d[e.tr][e.tc] === Infinity) return "敵が閉じこめられてしまうので置けません。";
+  return "";
+}
+function place(c, r) {
+  if (over) return;
+  if (tool === "sell") return removeAt(c, r);
+  const err = placeError(c, r, tool);
+  if (err) return err.trim() && say(err, true);
+  const t = TOOLS[tool];
+  gold -= t.cost;
+  grid[r][c] = { kind: tool, cd: 0, spent: t.cost };
+  distMap = flow(grid);
+  effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
+  say(t.icon + " " + t.name + "を置いた。道は" + (routeCells().length - 1) + "マス。");
+  ui();
+}
+function removeAt(c, r) {
+  if (!inside(c, r) || !grid[r][c]) return say("撤去する柵や塔をタップしてね。");
+  const o = grid[r][c], back = playing ? Math.floor(o.spent / 2) : o.spent;
+  gold += back; grid[r][c] = null; distMap = flow(grid);
+  say("🧹 " + TOOLS[o.kind].name + "を撤去（+" + back + "G）");
+  ui();
+}
+
+// ===== ウェーブ =====
+function startWave() {
+  if (playing || over) return;
+  wave++; playing = true;
+  spawnQueue = waveList(wave); spawnClock = 0;
+  say("第" + wave + "波！ " + spawnQueue.length + "人が攻めてくる。");
+  ui();
+}
+function spawn(type) {
+  const E = ENEMIES[type], hp = Math.round(baseHp(wave) * E.hp);
+  const n = nextCell(GATE.c, GATE.r, distMap, [0, 1]);
+  enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.1, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, walked: 0 });
+}
+function stepEnemy(e, dt) {
+  const E = ENEMIES[e.type];
+  let move = E.speed * (e.slow > 0 ? 1 - TOOLS.water.slow : 1) * dt;
+  e.slow = Math.max(0, e.slow - dt);
+  while (move > 0) {
+    const tx = e.tc + 0.5, ty = e.tr + 0.5, dx = tx - e.x, dy = ty - e.y, l = Math.hypot(dx, dy);
+    if (l > move) { e.x += (dx / l) * move; e.y += (dy / l) * move; e.walked += move; return; }
+    e.x = tx; e.y = ty; e.walked += l; move -= l;
+    e.prev = [e.tc - e.c, e.tr - e.r]; e.c = e.tc; e.r = e.tr;
+    if (isCastle(e.c, e.r)) { e.reached = true; return; }
+    const n = nextCell(e.c, e.r, distMap, e.prev);
+    if (!n) return;
+    e.tc = n[0]; e.tr = n[1];
+  }
+}
+function hurt(e, dmg) {
+  if (e.dead) return;
+  e.hp -= dmg;
+  if (e.hp <= 0) {
+    e.dead = true; kills++;
+    const g = ENEMIES[e.type].gold + Math.floor(wave / 3);
+    gold += g;
+    effects.push({ kind: "coin", x: e.x, y: e.y, t: 0.7, text: "+" + g });
+  }
+}
+function towerTick(c, r, o, dt) {
+  const T = TOOLS[o.kind];
+  o.cd -= dt;
+  if (o.cd > 0) return;
+  const x = c + 0.5, y = r + 0.5;
+  let target = null, best = Infinity;
+  for (const e of enemies) {
+    if (e.dead || Math.hypot(e.x - x, e.y - y) > T.range) continue;
+    const left = distMap[e.tr][e.tc]; // 城に近い敵を先に狙う
+    if (left < best) { best = left; target = e; }
+  }
+  if (!target) return;
+  o.cd = T.rate;
+  o.aim = Math.atan2(target.y - y, target.x - x);
+  shots.push({ kind: o.kind, x, y, e: target, tx: target.x, ty: target.y, t: 0, dur: o.kind === "gun" ? 0.08 : o.kind === "cannon" ? 0.35 : 0.18 });
+}
+function landShot(s) {
+  const T = TOOLS[s.kind];
+  if (s.kind === "cannon") {
+    for (const e of enemies) if (Math.hypot(e.x - s.tx, e.y - s.ty) <= T.splash) hurt(e, T.dmg);
+    effects.push({ kind: "boom", x: s.tx, y: s.ty, t: 0.3 });
+  } else {
+    hurt(s.e, T.dmg);
+    if (s.kind === "water" && !s.e.dead) s.e.slow = T.slowTime;
+  }
+}
+function update(dt) {
+  time += dt;
+  if (playing) {
+    spawnClock -= dt;
+    if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.75; }
+    for (const e of enemies) if (!e.dead) stepEnemy(e, dt);
+    for (const e of enemies) if (e.reached && !e.dead) {
+      e.dead = true; heart -= e.type === "samurai" ? 3 : 1;
+      effects.push({ kind: "hit", x: CASTLE.c + 0.5, y: CASTLE.r + 0.5, t: 0.4 });
+    }
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const o = grid[r][c];
+      if (o && o.kind !== "fence") towerTick(c, r, o, dt);
+    }
+    for (const s of shots) {
+      if (!s.e.dead) { s.tx = s.e.x; s.ty = s.e.y; }
+      s.t += dt;
+      if (s.t >= s.dur && !s.done) { s.done = true; landShot(s); }
+    }
+    shots = shots.filter((s) => !s.done);
+    enemies = enemies.filter((e) => !e.dead);
+    if (heart <= 0) {
+      heart = 0; playing = false; over = true;
+      $("overTitle").textContent = "落城…";
+      $("overText").innerHTML = "第" + wave + "波で城が落ちました。<br>倒した敵：" + kills + "人";
+      $("over").hidden = false;
+    } else if (!spawnQueue.length && !enemies.length) {
+      playing = false;
+      const bonus = 30 + wave * 8;
+      gold += bonus;
+      say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。迷路を広げよう。");
+    }
+    ui();
+  }
+  for (const f of effects) f.t -= dt;
+  effects = effects.filter((f) => f.t > 0);
+}
+
+// ===== 画面 =====
+const cv = $("cv"), ctx = cv.getContext("2d");
+let cell = 32, ox = 0, oy = 0;
+function resize() {
+  const wrap = $("wrap"), w = wrap.clientWidth - 12, h = wrap.clientHeight - 6;
+  cell = Math.max(16, Math.floor(Math.min(w / COLS, h / ROWS)));
+  const W = cell * COLS, H = cell * ROWS, dpr = window.devicePixelRatio || 1;
+  cv.style.width = W + "px"; cv.style.height = H + "px";
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function hash(c, r) { return ((c * 73856093) ^ (r * 19349663)) >>> 0; }
+function drawGround() {
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const h = hash(c, r), x = c * cell, y = r * cell;
+    ctx.fillStyle = (c + r) % 2 ? "#4f7a3a" : "#557f3e";
+    ctx.fillRect(x, y, cell, cell);
+    ctx.fillStyle = "#6c9a4a";
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + ((h >> (k * 5)) % cell), y + ((h >> (k * 5 + 3)) % cell), 2, 2);
+  }
+}
+function drawRoute() {
+  const cells = routeCells();
+  // 敵の通り道を土の色で
+  ctx.fillStyle = "rgba(150,112,70,.55)";
+  for (const [c, r] of cells) ctx.fillRect(c * cell + 3, r * cell + 3, cell - 6, cell - 6);
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,236,190,.75)"; ctx.lineWidth = 2; ctx.setLineDash([4, 5]);
+  ctx.lineDashOffset = -time * 20;
+  ctx.beginPath();
+  cells.forEach(([c, r], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, (c + 0.5) * cell, (r + 0.5) * cell));
+  ctx.stroke(); ctx.restore();
+}
+function drawFence(c, r) {
+  const x = c * cell, y = r * cell, s = cell;
+  ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(x + s * 0.1, y + s * 0.62, s * 0.85, s * 0.22);
+  // 横木
+  ctx.fillStyle = "#8b5a2b";
+  ctx.fillRect(x + s * 0.06, y + s * 0.34, s * 0.88, s * 0.12);
+  ctx.fillRect(x + s * 0.06, y + s * 0.56, s * 0.88, s * 0.12);
+  // 杭
+  for (const k of [0.16, 0.5, 0.84]) {
+    ctx.fillStyle = "#a8743c"; ctx.fillRect(x + s * (k - 0.07), y + s * 0.18, s * 0.14, s * 0.62);
+    ctx.fillStyle = "#c99456"; ctx.fillRect(x + s * (k - 0.07), y + s * 0.18, s * 0.05, s * 0.62);
+    ctx.fillStyle = "#6b4220";
+    ctx.beginPath(); ctx.moveTo(x + s * (k - 0.07), y + s * 0.18); ctx.lineTo(x + s * k, y + s * 0.08); ctx.lineTo(x + s * (k + 0.07), y + s * 0.18); ctx.fill();
+  }
+}
+function drawTower(c, r, o) {
+  const T = TOOLS[o.kind], x = c * cell, y = r * cell, s = cell;
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.fillRect(x + s * 0.12, y + s * 0.2, s * 0.84, s * 0.84);
+  ctx.fillStyle = "#cfc6b4"; ctx.fillRect(x + s * 0.08, y + s * 0.1, s * 0.84, s * 0.84);
+  ctx.fillStyle = T.col; ctx.fillRect(x + s * 0.16, y + s * 0.18, s * 0.68, s * 0.68);
+  ctx.strokeStyle = "#2a2017"; ctx.lineWidth = 1.5; ctx.strokeRect(x + s * 0.08, y + s * 0.1, s * 0.84, s * 0.84);
+  ctx.font = Math.round(s * 0.5) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(T.icon, x + s / 2, y + s * 0.53);
+}
+function drawGateCastle() {
+  ctx.font = Math.round(cell * 0.75) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#3a2b1c"; ctx.fillRect(GATE.c * cell + 2, GATE.r * cell + 2, cell - 4, cell - 4);
+  ctx.fillText("⛩️", (GATE.c + 0.5) * cell, (GATE.r + 0.55) * cell);
+  ctx.fillStyle = "#6e5a3d"; ctx.fillRect(CASTLE.c * cell + 1, CASTLE.r * cell + 1, cell - 2, cell - 2);
+  ctx.fillText("🏯", (CASTLE.c + 0.5) * cell, (CASTLE.r + 0.5) * cell);
+}
+function drawEnemy(e) {
+  const E = ENEMIES[e.type], x = e.x * cell, y = e.y * cell, s = cell;
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.28, s * 0.26, s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = E.col; ctx.beginPath(); ctx.arc(x, y, s * (e.type === "samurai" ? 0.34 : 0.28), 0, Math.PI * 2); ctx.fill();
+  if (e.slow > 0) { ctx.strokeStyle = "#8fd3ff"; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.font = Math.round(s * 0.42) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(E.icon, x, y + 1);
+  const w = s * 0.6;
+  ctx.fillStyle = "#000a"; ctx.fillRect(x - w / 2, y - s * 0.46, w, 4);
+  ctx.fillStyle = e.hp / e.max > 0.4 ? "#7ddf64" : "#f0a33a"; ctx.fillRect(x - w / 2, y - s * 0.46, w * Math.max(0, e.hp / e.max), 4);
+}
+function drawShot(s) {
+  const k = Math.min(1, s.t / s.dur), x = (s.x + (s.tx - s.x) * k) * cell, y = (s.y + (s.ty - s.y) * k) * cell;
+  if (s.kind === "gun") {
+    ctx.strokeStyle = "#fff3b0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x * cell, s.y * cell); ctx.lineTo(x, y); ctx.stroke();
+  } else {
+    ctx.fillStyle = s.kind === "cannon" ? "#222" : s.kind === "water" ? "#7cc7ff" : "#f5e1b0";
+    ctx.beginPath(); ctx.arc(x, y - (s.kind === "cannon" ? Math.sin(k * Math.PI) * cell * 0.6 : 0), s.kind === "cannon" ? 4 : 3, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawEffects() {
+  for (const f of effects) {
+    const x = f.x * cell, y = f.y * cell;
+    if (f.kind === "boom") { ctx.fillStyle = "rgba(255,170,60," + f.t * 2 + ")"; ctx.beginPath(); ctx.arc(x, y, TOOLS.cannon.splash * cell * (1.2 - f.t * 2), 0, Math.PI * 2); ctx.fill(); }
+    if (f.kind === "puff") { ctx.strokeStyle = "rgba(255,255,255," + f.t * 2 + ")"; ctx.lineWidth = 2; ctx.strokeRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60," + f.t + ")"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "coin") { ctx.fillStyle = "#ffd75e"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.fillText(f.text, x, y - (0.7 - f.t) * 30); }
+  }
+}
+let hover = null;
+function drawHover() {
+  if (!hover || over) return;
+  const { c, r } = hover;
+  if (!inside(c, r)) return;
+  const bad = tool === "sell" ? !grid[r][c] : !!placeError(c, r, tool);
+  ctx.fillStyle = bad ? "rgba(224,90,74,.35)" : "rgba(242,193,78,.35)";
+  ctx.fillRect(c * cell, r * cell, cell, cell);
+  const T = TOOLS[tool];
+  if (T.range) { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, T.range * cell, 0, Math.PI * 2); ctx.stroke(); }
+}
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  drawGround();
+  drawRoute();
+  drawGateCastle();
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const o = grid[r][c];
+    if (o) o.kind === "fence" ? drawFence(c, r) : drawTower(c, r, o);
+  }
+  drawHover();
+  for (const e of enemies) drawEnemy(e);
+  for (const s of shots) drawShot(s);
+  drawEffects();
+}
+
+// ===== 操作 =====
+function cellAt(ev) {
+  const b = cv.getBoundingClientRect();
+  return { c: Math.floor((ev.clientX - b.left) / cell), r: Math.floor((ev.clientY - b.top) / cell) };
+}
+// 指でなぞると続けて置ける（柵の列を一気に作る）
+let painting = false, lastPaint = "";
+cv.addEventListener("pointerdown", (ev) => { painting = true; cv.setPointerCapture(ev.pointerId); const p = cellAt(ev); hover = p; lastPaint = p.c + "," + p.r; place(p.c, p.r); });
+cv.addEventListener("pointermove", (ev) => {
+  const p = cellAt(ev); hover = p;
+  if (!painting) return;
+  const key = p.c + "," + p.r;
+  if (key !== lastPaint) { lastPaint = key; if (tool === "fence" || tool === "sell") place(p.c, p.r); }
+});
+const stopPaint = () => { painting = false; };
+cv.addEventListener("pointerup", (ev) => { stopPaint(); if (ev.pointerType !== "mouse") hover = null; });
+cv.addEventListener("pointercancel", stopPaint);
+cv.addEventListener("pointerleave", () => { if (!painting) hover = null; });
+
+function buildTools() {
+  $("tools").innerHTML = Object.entries(TOOLS).map(([id, t]) =>
+    '<button data-tool="' + id + '"><b>' + t.icon + "</b>" + t.name + "<br><small>" + (t.cost ? t.cost + "G" : "&nbsp;") + "</small></button>").join("");
+  $("tools").onclick = (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    tool = b.dataset.tool;
+    const t = TOOLS[tool];
+    say(tool === "sell" ? "撤去する柵や塔をタップ（なぞると続けて撤去）。" :
+      tool === "fence" ? "🪵 柵：道をふさいで回り道させる。なぞると続けて置ける。" :
+      t.icon + " " + t.name + "：射程" + t.range + "マス・攻撃" + t.dmg + (t.slow ? "・敵を遅くする" : t.splash ? "・まとめて攻撃" : "") + "。塔も道をふさぐ。");
+    ui();
+  };
+}
+function say(text, warn) { const m = $("msg"); m.textContent = text; m.style.color = warn ? "#ff9b8a" : ""; }
+function ui() {
+  $("wave").textContent = wave;
+  $("gold").textContent = "💰 " + gold + "G";
+  $("heart").textContent = "❤️ " + heart;
+  $("route").textContent = "道 " + (routeCells().length - 1) + "マス";
+  $("start").disabled = playing || over;
+  $("start").textContent = playing ? "戦闘中…" : "▶ 第" + (wave + 1) + "波 出陣";
+  for (const b of document.querySelectorAll("#tools button")) {
+    b.classList.toggle("sel", b.dataset.tool === tool);
+    b.disabled = TOOLS[b.dataset.tool].cost > gold && b.dataset.tool !== tool;
+  }
+}
+$("start").onclick = startWave;
+$("speed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $("speed").textContent = "×" + speed; };
+$("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "▶" : "⏸"; say(paused ? "一時停止中。止めている間も柵や塔は置けます。" : ""); };
+$("helpBtn").onclick = () => ($("help").hidden = false);
+$("helpClose").onclick = () => ($("help").hidden = true);
+$("again").onclick = reset;
+window.addEventListener("resize", resize);
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused && !over && !document.hidden) for (let i = 0; i < speed; i++) update(dt);
+  else time += dt;
+  draw();
+  requestAnimationFrame(frame);
+}
+// 試験用の窓口（画面の操作と同じ処理を呼ぶ）
+window.MAZE = {
+  state: () => ({ gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))) }),
+  select: (t) => { tool = t; ui(); },
+  place: (c, r) => place(c, r),
+  error: (c, r, k = tool) => placeError(c, r, k),
+  start: startWave,
+  step: (sec) => { for (let t = 0; t < sec; t += 0.05) update(0.05); },
+  setGold: (g) => { gold = g; ui(); },
+  config: { COLS, ROWS, GATE, CASTLE, TOOLS },
+};
+buildTools();
+resize();
+reset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
