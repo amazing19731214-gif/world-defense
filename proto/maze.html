@@ -8,27 +8,18 @@
   :root { --bg: #1d1a16; --panel: #2c2620; --line: #5a4a38; --text: #f3e7d0; --gold: #f2c14e; --red: #e05a4a; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
-  body { display: flex; flex-direction: column; align-items: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); overflow: hidden; touch-action: manipulation; }
+  body { display: flex; flex-direction: column; align-items: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); overflow: hidden; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
   #hud { width: 100%; max-width: 560px; display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 12px 4px; font-weight: 700; font-size: 15px; }
   #hud span { white-space: nowrap; }
   #gold { color: var(--gold); }
   #heart { color: #ff8a7a; }
-  #msg { width: 100%; max-width: 560px; min-height: 22px; padding: 0 12px; font-size: 13px; color: #d9c7a6; }
+  #msg { width: 100%; max-width: 560px; min-height: 36px; padding: 0 12px; font-size: 13px; line-height: 1.35; color: #d9c7a6; }
   #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; }
   canvas { display: block; touch-action: none; border-radius: 6px; }
-  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px 8px 4px; }
+  #tools { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 6px 8px 4px; }
   #tools button, #ctrl button { font: inherit; color: var(--text); background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 4px 2px; font-size: 12px; line-height: 1.2; }
-  #tools button b { display: block; font-size: 20px; height: 24px; }
-  #tools button b img { width: 24px; height: 24px; border-radius: 4px; image-rendering: pixelated; }
-  #pick > div { max-height: 86vh; overflow-y: auto; }
-  #pickList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  #pickList button { font: inherit; margin: 0; padding: 6px 2px; border-radius: 8px; border: 2px solid var(--line); background: #3a3128; color: var(--text); font-size: 12px; line-height: 1.3; }
-  #pickList button img { width: 44px; height: 44px; display: block; margin: 0 auto 2px; image-rendering: pixelated; border-radius: 6px; }
-  #pickList button small { color: #d9c7a6; }
-  #pickList button .r { color: var(--gold); font-weight: 700; }
-  #pickList button:disabled { opacity: .35; }
-  #pick[hidden] { display: none; }
-  #pickClose { border-color: var(--line) !important; background: #3a3128 !important; }
+  #tools button b { display: flex; justify-content: center; align-items: center; font-size: 20px; height: 28px; }
+  #tools button b img { max-width: 30px; max-height: 28px; border-radius: 4px; }
   #tools button small { color: var(--gold); }
   #tools button.sel { border-color: var(--gold); background: #4a3b22; }
   #tools button:disabled { opacity: .45; }
@@ -36,11 +27,18 @@
   #ctrl button { font-size: 15px; padding: 9px 2px; font-weight: 700; }
   #start { background: #6b2a1f !important; border-color: #c0573f !important; }
   #start:disabled { opacity: .5; }
-  #help[hidden], #over[hidden] { display: none; }
   .sheet { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
-  .sheet > div { max-width: 420px; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.6; }
+  .sheet[hidden] { display: none; }
+  .sheet > div { max-width: 440px; max-height: 88vh; overflow-y: auto; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.6; }
   .sheet h2 { margin: 0 0 8px; font-size: 18px; color: var(--gold); }
-  .sheet button { font: inherit; font-weight: 700; margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #c0573f; background: #6b2a1f; color: var(--text); }
+  .sheet > div > button { font: inherit; font-weight: 700; margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #c0573f; background: #6b2a1f; color: var(--text); }
+  #pickList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #pickList button { font: inherit; padding: 6px 2px; border-radius: 8px; border: 2px solid var(--line); background: #3a3128; color: var(--text); font-size: 12px; line-height: 1.3; }
+  #pickList button img { width: 44px; height: 44px; display: block; margin: 0 auto 2px; border-radius: 6px; }
+  #pickList button small { color: #d9c7a6; }
+  #pickList button .r { color: var(--gold); font-weight: 700; }
+  #pickList button:disabled { opacity: .35; }
+  #pickClose { border-color: var(--line) !important; background: #3a3128 !important; }
 </style>
 </head>
 <body>
@@ -51,19 +49,20 @@
 <div id="ctrl"><button id="start">▶ 出陣</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
-  上の門から敵が入り、下の🏯城をめざします。<br>
-  <b>柵🪵</b>と<b>塔</b>をマス目に置いて道をふさぐと、敵は残った道を探して回り道をします。長い迷路を作るほど、塔が長く攻撃できます。<br>
-  ・道を<b>完全にふさぐ置き方はできません</b>（どこか1本は城まで通じている必要があります）。<br>
-  ・点線は、いま敵が通る一番の近道です。<br>
-  ・<b>武将🎌</b>は何人でも置けます（同じ武将は1人ずつ）。得意な兵種で戦い方が変わり、ときどき<b>技</b>を自動で使います。武将も道をふさぎます。<br>
-  ・<b>撤去</b>で柵や塔・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
-  ・敵が城に着くと❤️が減り、0で落城です。<br>
+  上の⛩️門から敵が入り、下の🏯城をめざします。<br>
+  <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
+  <b>兵士と武将</b>は自分で動いて戦います。置いた場所が<b>持ち場</b>になり、持ち場のまわり（点線の円）に入った敵を追いかけて戦い、敵がいなくなると持ち場へ戻ります。<br>
+  ・足軽・槍兵・近接の武将は、敵の前に立って<b>足止め</b>します。弓兵は離れて射ます。<br>
+  ・兵士や武将を<b>タップで選んで、別のマスをタップ</b>すると持ち場を移せます（指で引きずってもOK）。戦闘中も動かせます。<br>
+  ・倒れた兵士は少しすると🏯城で起き上がり、持ち場へ走って戻ります。<br>
+  ・武将は何人でも置けます（同じ武将は1人まで）。ゲージがたまると<b>技</b>を自動で使います。<br>
+  ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
 </div></div>
 <div id="pick" class="sheet" hidden><div>
   <h2>武将を選ぶ</h2>
-  <div style="font-size:12px;margin-bottom:8px">選んでからマスをタップすると置けます。置いている武将は選べません（撤去すると戻ります）。</div>
+  <div style="font-size:12px;margin-bottom:8px">選んでからマスをタップすると、そこが持ち場になります。出陣中の武将は選べません（撤去すると戻ります）。</div>
   <div id="pickList"></div>
   <button id="pickClose">閉じる</button>
 </div></div>
@@ -74,19 +73,45 @@
 </div></div>
 <script>
 "use strict";
-// ===== 設定（数値はここで調整） =====
+// ===== 盤面（数値はここで調整） =====
 const COLS = 11, ROWS = 17;
 const GATE = { c: 5, r: 0 }, CASTLE = { c: 5, r: ROWS - 1 };
-const START = { gold: 260, heart: 20 };
+const START = { gold: 300, heart: 20 };
+const ASSET = "../assets/";
+// ===== 兵士（動き回って戦う守り手）。leash＝持ち場から追いかける距離（マス） =====
+const SOLDIERS = {
+  ashigaru: { name: "足軽", img: "units/ashigaru.png", cost: 40, hp: 80, atk: 6, range: 0.75, rate: 0.7, speed: 1.7, leash: 2.5, melee: true, text: "打たれ強い。敵の前に立って足止め" },
+  spearman: { name: "槍兵", img: "units/spearman.png", cost: 60, hp: 55, atk: 11, range: 0.95, rate: 0.8, speed: 1.6, leash: 2.5, melee: true, text: "攻撃が強い。敵の前に立って足止め" },
+  archer: { name: "弓兵", img: "units/archer.png", cost: 60, hp: 32, atk: 7, range: 2.6, rate: 0.9, speed: 1.5, leash: 3, melee: false, text: "離れて射る。足止めはしない" },
+};
 const TOOLS = {
   fence: { name: "柵", icon: "🪵", cost: 6 },
-  arrow: { name: "弓", icon: "🏹", cost: 60, range: 2.6, dmg: 9, rate: 0.5, col: "#a56b35" },
-  cannon: { name: "大砲", icon: "💣", cost: 110, range: 2.1, dmg: 26, rate: 1.6, splash: 0.9, col: "#56616d" },
-  gun: { name: "鉄砲", icon: "💥", cost: 140, range: 3.4, dmg: 34, rate: 1.4, col: "#5a4632" },
-  water: { name: "水攻め", icon: "🌊", cost: 80, range: 2.3, dmg: 3, rate: 0.8, slow: 0.45, slowTime: 1.6, col: "#3f8fcf" },
+  ashigaru: { name: "足軽", cost: SOLDIERS.ashigaru.cost },
+  spearman: { name: "槍兵", cost: SOLDIERS.spearman.cost },
+  archer: { name: "弓兵", cost: SOLDIERS.archer.cost },
   warlord: { name: "武将", icon: "🎌", cost: 0 },
   sell: { name: "撤去", icon: "🧹", cost: 0 },
 };
+// ===== 敵 =====
+const ENEMIES = {
+  ashigaru: { name: "足軽", sprite: "ashigaru", frames: 4, hp: 1, speed: 1.1, atk: 5, gold: 4, size: 0.85 },
+  cavalry: { name: "騎馬", sprite: "cavalry", frames: 3, hp: 0.9, speed: 1.9, atk: 7, gold: 6, size: 1.0 },
+  samurai: { name: "鎧武者", sprite: "general", frames: 3, hp: 3.2, speed: 0.75, atk: 13, gold: 12, size: 1.05 },
+};
+function waveList(n) {
+  // 第n波の敵。だんだん数・硬さ・種類が増える。5波ごとに鎧武者の群れ
+  const list = [], count = 6 + n * 2;
+  for (let i = 0; i < count; i++) {
+    let t = "ashigaru";
+    if (n >= 2 && i % 4 === 3) t = "cavalry";
+    if (n >= 3 && i % 6 === 5) t = "samurai";
+    if (n % 5 === 0 && i >= count - 3) t = "samurai";
+    list.push(t);
+  }
+  return list;
+}
+const baseHp = (n) => Math.round(24 * Math.pow(1.2, n - 1));
+const enemyAtk = (e) => Math.round(ENEMIES[e.type].atk * Math.pow(1.1, wave - 1));
 // ===== 武将（名前・色・得意な兵種・技の名前は本番のゲームの武将から） =====
 // [ID, 名前, 稀少度, 一文字, 色, 得意な兵種, 役割, 技]
 const WARLORD_LIST = [
@@ -122,67 +147,56 @@ const WARLORD_LIST = [
   ["terumoto","毛利輝元","R","輝","#8a6a2a","medic","持久戦・経済","西軍の兵站"]
 ];
 const WARLORDS = Object.fromEntries(WARLORD_LIST.map(([id, name, rarity, short, color, fav, role, skill]) => [id, { id, name, rarity, short, color, fav, role, skill }]));
-// 稀少度ごとの値段・強さ・技の間隔（秒）
 const RARITY = { SSR: { cost: 220, mul: 1.6, skillCd: 10 }, SR: { cost: 160, mul: 1.3, skillCd: 12 }, R: { cost: 110, mul: 1, skillCd: 14 } };
-// 得意な兵種ごとの戦い方。sweep は周りの敵をまとめて攻撃。skill は技の効き方
+// 得意な兵種ごとの戦い方
 const STYLES = {
-  gunner: { label: "鉄砲", range: 3.2, dmg: 24, rate: 1.2, shot: "gun", skill: "snipe", text: "遠くの敵を撃つ／技：先頭の敵へ強烈な3連射" },
-  archer: { label: "弓", range: 2.8, dmg: 8, rate: 0.45, shot: "arrow", skill: "rain", text: "弓で速く射る／技：射程の中へ矢の雨" },
-  spearman: { label: "槍", range: 1.6, dmg: 12, rate: 0.7, sweep: true, skill: "sweep", text: "周りの敵をまとめて突く／技：大なぎ払い" },
-  ashigaru: { label: "足軽", range: 1.5, dmg: 10, rate: 0.6, sweep: true, skill: "hold", text: "周りの敵をまとめて攻撃／技：周りの敵を足止め" },
-  cavalry: { label: "騎馬", range: 2.2, dmg: 14, rate: 0.5, shot: "arrow", skill: "charge", text: "すばやく攻撃／技：射程の中へ突撃" },
-  medic: { label: "衛生", range: 2.2, dmg: 6, rate: 0.6, shot: "arrow", skill: "aid", text: "攻撃は弱い／技：城の❤️を1回復" },
-  "": { label: "軍師", range: 2.6, dmg: 7, rate: 0.6, shot: "arrow", skill: "order", text: "攻撃は弱い／技：盤面の敵をすべて遅くする" },
+  gunner: { label: "鉄砲", hp: 80, atk: 20, range: 3.0, rate: 1.2, speed: 1.7, shot: "gun", skill: "snipe", text: "遠くの敵を撃つ／技：先頭の敵へ強烈な3連射" },
+  archer: { label: "弓", hp: 80, atk: 8, range: 2.8, rate: 0.5, speed: 1.7, shot: "arrow", skill: "rain", text: "弓で速く射る／技：まわりへ矢の雨" },
+  spearman: { label: "槍", hp: 150, atk: 13, range: 0.95, rate: 0.75, speed: 1.9, melee: true, sweep: true, skill: "sweep", text: "前に立って周りをまとめて突く／技：大なぎ払い" },
+  ashigaru: { label: "足軽", hp: 190, atk: 9, range: 0.8, rate: 0.7, speed: 1.9, melee: true, sweep: true, skill: "hold", text: "とても打たれ強い／技：周りの敵を足止め" },
+  cavalry: { label: "騎馬", hp: 140, atk: 14, range: 0.9, rate: 0.55, speed: 2.8, melee: true, skill: "charge", text: "速く走って斬りこむ／技：先頭の敵へ突撃" },
+  medic: { label: "衛生", hp: 100, atk: 5, range: 2.2, rate: 0.7, speed: 1.8, shot: "arrow", heal: 6, skill: "aid", text: "近くの味方を治す／技：味方を大回復・城の❤️+1" },
+  "": { label: "軍師", hp: 90, atk: 6, range: 2.6, rate: 0.6, speed: 1.8, shot: "arrow", skill: "order", text: "攻撃は弱い／技：盤面の敵をすべて遅くする" },
 };
 const wStyle = (w) => STYLES[w.fav] || STYLES[""];
-const wStat = (w) => { const S = wStyle(w), R = RARITY[w.rarity]; return { range: S.range, dmg: Math.round(S.dmg * R.mul), rate: S.rate, cost: R.cost, skillCd: R.skillCd }; };
-const ICONS = {};
-function wIcon(id) {
-  if (!ICONS[id]) { const im = new Image(); im.src = "../assets/heroes/" + id + "_icon.webp"; ICONS[id] = im; }
-  return ICONS[id];
+function wStat(w) {
+  const S = wStyle(w), R = RARITY[w.rarity];
+  return { name: w.name, cost: R.cost, hp: Math.round(S.hp * R.mul), atk: Math.round(S.atk * R.mul), range: S.range, rate: S.rate, speed: S.speed, leash: 3.5, melee: !!S.melee, skillCd: R.skillCd };
 }
-const ENEMIES = {
-  ashigaru: { name: "足軽", icon: "👺", hp: 1, speed: 1.15, gold: 4, col: "#c9493b" },
-  cavalry: { name: "騎馬", icon: "🐎", hp: 0.8, speed: 2.0, gold: 5, col: "#8a5a2b" },
-  samurai: { name: "鎧武者", icon: "👹", hp: 3.2, speed: 0.75, gold: 10, col: "#4c4f8a" },
-};
-function waveList(n) {
-  // 第n波の敵。だんだん数・硬さ・種類が増える。5波ごとに大将（鎧武者の群れ）
-  const list = [], count = 7 + n * 2;
-  for (let i = 0; i < count; i++) {
-    let t = "ashigaru";
-    if (n >= 2 && i % 4 === 3) t = "cavalry";
-    if (n >= 3 && i % 6 === 5) t = "samurai";
-    if (n % 5 === 0 && i >= count - 3) t = "samurai";
-    list.push(t);
-  }
-  return list;
+const IMGS = {};
+function img(path) {
+  if (!IMGS[path]) { const im = new Image(); im.src = ASSET + path; IMGS[path] = im; }
+  return IMGS[path];
 }
-const baseHp = (n) => Math.round(22 * Math.pow(1.2, n - 1));
+const ready = (im) => im.complete && im.naturalWidth > 0;
+const heroIcon = (id) => img("heroes/" + id + "_icon.webp");
 
 // ===== 状態 =====
-let picked = null; // いま置こうとしている武将のID
-let grid, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, speed, paused, over, seq, kills, time;
+let grid, units, gold, heart, wave, playing, enemies, shots, effects, spawnQueue, spawnClock, distMap, tool, picked, selected, speed, paused, over, seq, kills, time;
+const $ = (id) => document.getElementById(id);
 function reset() {
-  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); // null | {kind, cd, spent}
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); // null | {kind:"fence", spent}
+  units = [];
   gold = START.gold; heart = START.heart; wave = 0; playing = false; over = false;
   enemies = []; shots = []; effects = []; spawnQueue = []; spawnClock = 0; seq = 0; kills = 0; time = 0;
-  picked = null; tool = tool === "warlord" ? "fence" : tool || "fence"; speed = speed || 1; paused = false;
+  tool = tool && tool !== "warlord" ? tool : "fence"; picked = null; selected = null; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
-  say("柵と塔で迷路を作って、▶ 出陣を押してね。");
+  say("柵で迷路を作り、兵士や武将を置いて ▶ 出陣。兵士は持ち場のまわりを動いて戦います。");
   ui();
 }
-const $ = (id) => document.getElementById(id);
 const inside = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
 const isGate = (c, r) => c === GATE.c && r === GATE.r;
 const isCastle = (c, r) => c === CASTLE.c && r === CASTLE.r;
+const blocked = (c, r) => !inside(c, r) || !!grid[r][c];
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// 城からの歩数（通れないマスは Infinity）。敵はいつもこの数字が小さい方へ進む
-function flow(g) {
+// あるマスからの歩数（柵のマスは通れない）
+function bfs(g, tc, tr) {
   const d = Array.from({ length: ROWS }, () => Array(COLS).fill(Infinity));
-  const q = [[CASTLE.c, CASTLE.r]]; d[CASTLE.r][CASTLE.c] = 0;
+  if (!inside(tc, tr)) return d;
+  const q = [[tc, tr]]; d[tr][tc] = 0;
   for (let i = 0; i < q.length; i++) {
     const [c, r] = q[i];
     for (const [dc, dr] of D4) {
@@ -193,7 +207,7 @@ function flow(g) {
   }
   return d;
 }
-// 次に進むマス（同じ距離なら道をまっすぐ進む方を選ぶ）
+const flow = (g) => bfs(g, CASTLE.c, CASTLE.r); // 敵はこの数字が小さい方へ進む
 function nextCell(c, r, d, prev) {
   let best = null;
   for (const [dc, dr] of D4) {
@@ -207,56 +221,87 @@ function nextCell(c, r, d, prev) {
 function routeCells(d = distMap) {
   const cells = [[GATE.c, GATE.r]];
   let c = GATE.c, r = GATE.r, prev = [0, 1];
-  for (let i = 0; i < COLS * ROWS && !(c === CASTLE.c && r === CASTLE.r); i++) {
+  for (let i = 0; i < COLS * ROWS && !isCastle(c, r); i++) {
     const n = nextCell(c, r, d, prev); if (!n) break;
     c = n[0]; r = n[1]; prev = [n[2], n[3]]; cells.push([c, r]);
   }
   return cells;
 }
-const placedWarlord = (id) => grid.some((row) => row.some((o) => o && o.kind === "warlord" && o.id === id));
+
+// ===== 置く・撤去・持ち場を移す =====
+const placedWarlord = (id) => units.some((u) => u.kind === "warlord" && u.id === id);
 const costOf = (kind) => (kind === "warlord" ? (picked ? wStat(WARLORDS[picked]).cost : 0) : TOOLS[kind].cost);
-// 置けるか。理由の文を返す（置けるなら ""）
+const unitCell = (u) => [Math.floor(u.x), Math.floor(u.y)];
 function placeError(c, r, kind) {
   if (!inside(c, r)) return " ";
+  if (kind === "sell") return "";
   if (isGate(c, r) || isCastle(c, r)) return "門と城には置けません。";
-  if (grid[r][c]) return "もう置いてあります。";
+  if (grid[r][c]) return "そこには柵があります。";
   if (kind === "warlord" && !picked) return "先に🎌武将のボタンで武将を選んでね。";
   if (kind === "warlord" && placedWarlord(picked)) return WARLORDS[picked].name + "はもう出陣しています。";
   if (gold < costOf(kind)) return "お金が足りません。";
+  if (kind !== "fence") return "";
   for (const e of enemies) if ((e.c === c && e.r === r) || (e.tc === c && e.tr === r)) return "敵がいるマスには置けません。";
+  for (const u of units) { const [uc, ur] = unitCell(u); if ((uc === c && ur === r) || (u.home.c === c && u.home.r === r)) return "兵士がいるマス・持ち場には柵を置けません。"; }
   const g = grid.map((row) => row.slice()); g[r][c] = { kind };
   const d = flow(g);
   if (d[GATE.r][GATE.c] === Infinity) return "道を完全にふさぐことはできません。";
   for (const e of enemies) if (d[e.tr][e.tc] === Infinity) return "敵が閉じこめられてしまうので置けません。";
   return "";
 }
+function newUnit(kind, id, c, r) {
+  const st = kind === "warlord" ? wStat(WARLORDS[id]) : SOLDIERS[kind];
+  // 準備中はその場に、戦闘中は城から走って持ち場へ向かう
+  const at = playing ? { x: CASTLE.c + 0.5, y: CASTLE.r + 0.5 } : { x: c + 0.5, y: r + 0.5 };
+  return { uid: ++seq, kind, id, st, x: at.x, y: at.y, home: { c, r }, hp: st.hp, cd: 0, scd: st.skillCd ? st.skillCd * 0.5 : 0, target: null, down: 0, face: 1, swing: 0, spent: costOf(kind), healCd: 1 };
+}
 function place(c, r) {
-  if (over) return;
+  if (over || !inside(c, r)) return;
   if (tool === "sell") return removeAt(c, r);
   const err = placeError(c, r, tool);
   if (err) return err.trim() && say(err, true);
-  const t = TOOLS[tool], cost = costOf(tool);
-  gold -= cost;
-  grid[r][c] = { kind: tool, cd: 0, spent: cost };
-  if (tool === "warlord") { const w = WARLORDS[picked]; Object.assign(grid[r][c], { id: picked, scd: wStat(w).skillCd * 0.5 }); }
-  distMap = flow(grid);
-  effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
-  say((tool === "warlord" ? "🎌 " + WARLORDS[picked].name : t.icon + " " + t.name) + "を置いた。道は" + (routeCells().length - 1) + "マス。");
-  if (tool === "warlord") picked = null; // 同じ武将は1人まで。次は選び直す
+  const cost = costOf(tool);
+  if (tool === "fence") {
+    gold -= cost; grid[r][c] = { kind: "fence", spent: cost }; distMap = flow(grid);
+    effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
+    say("🪵 柵を置いた。道は" + (routeCells().length - 1) + "マス。");
+  } else {
+    const u = newUnit(tool, tool === "warlord" ? picked : null, c, r);
+    gold -= cost; units.push(u);
+    effects.push({ kind: "puff", x: c + 0.5, y: r + 0.5, t: 0.35 });
+    say((tool === "warlord" ? "🎌 " + WARLORDS[picked].name : SOLDIERS[tool].name) + "を置いた。" + (playing ? "城から持ち場へ走っていく。" : "タップで選ぶと持ち場を移せる。"));
+    if (tool === "warlord") { picked = null; tool = "fence"; }
+  }
   ui();
 }
 function removeAt(c, r) {
-  if (!inside(c, r) || !grid[r][c]) return say("撤去する柵や塔・武将をタップしてね。");
+  const u = unitAt(c + 0.5, r + 0.5, 0.75);
+  if (u) {
+    const back = playing ? Math.floor(u.spent / 2) : u.spent;
+    gold += back; units = units.filter((o) => o !== u); if (selected === u) selected = null;
+    say("🧹 " + u.st.name + "を撤去（+" + back + "G）"); ui(); return;
+  }
+  if (!inside(c, r) || !grid[r][c]) return say("撤去する柵・兵士・武将をタップしてね。");
   const o = grid[r][c], back = playing ? Math.floor(o.spent / 2) : o.spent;
   gold += back; grid[r][c] = null; distMap = flow(grid);
-  say("🧹 " + (o.kind === "warlord" ? WARLORDS[o.id].name : TOOLS[o.kind].name) + "を撤去（+" + back + "G）");
-  ui();
+  say("🧹 柵を撤去（+" + back + "G）"); ui();
+}
+function unitAt(x, y, rad = 0.5) {
+  let best = null, bd = rad;
+  for (const u of units) { if (u.down > 0) continue; const d = Math.hypot(u.x - x, u.y - y); if (d < bd) { bd = d; best = u; } }
+  return best;
+}
+function moveHome(u, c, r) {
+  if (!inside(c, r) || blocked(c, r)) return say("そこへは動かせません（柵のマス・盤の外）。", true);
+  u.home = { c, r }; u.target = null;
+  effects.push({ kind: "flag", x: c + 0.5, y: r + 0.5, t: 0.6 });
+  say(u.st.name + "の持ち場を移した。");
 }
 
 // ===== ウェーブ =====
 function startWave() {
   if (playing || over) return;
-  wave++; playing = true;
+  wave++; playing = true; selected = null;
   spawnQueue = waveList(wave); spawnClock = 0;
   say("第" + wave + "波！ " + spawnQueue.length + "人が攻めてくる。");
   ui();
@@ -264,17 +309,34 @@ function startWave() {
 function spawn(type) {
   const E = ENEMIES[type], hp = Math.round(baseHp(wave) * E.hp);
   const n = nextCell(GATE.c, GATE.r, distMap, [0, 1]);
-  enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.1, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, walked: 0 });
+  enemies.push({ id: ++seq, type, hp, max: hp, x: GATE.c + 0.5, y: GATE.r + 0.2, c: GATE.c, r: GATE.r, tc: n ? n[0] : GATE.c, tr: n ? n[1] : GATE.r, prev: [0, 1], slow: 0, stun: 0, cd: 0, face: 1, anim: Math.random() * 4, blocker: null });
+}
+// 近接の兵士が目の前にいると足止めされる
+function findBlocker(e) {
+  let best = null, bd = 0.62;
+  for (const u of units) {
+    if (u.down > 0 || !u.st.melee) continue;
+    const d = dist(u, e); if (d < bd) { bd = d; best = u; }
+  }
+  return best;
 }
 function stepEnemy(e, dt) {
-  const E = ENEMIES[e.type];
-  let move = E.speed * (e.slow > 0 ? 1 - TOOLS.water.slow : 1) * dt;
   e.slow = Math.max(0, e.slow - dt);
   if (e.stun > 0) { e.stun -= dt; return; }
+  e.blocker = findBlocker(e);
+  if (e.blocker) {
+    // 足止め：その兵士と戦う
+    e.cd -= dt; e.face = e.blocker.x < e.x ? -1 : 1;
+    if (e.cd <= 0) { e.cd = 1; e.swing = 0.25; hurtUnit(e.blocker, enemyAtk(e)); }
+    return;
+  }
+  let move = ENEMIES[e.type].speed * (e.slow > 0 ? 0.55 : 1) * dt;
+  e.anim += move * 4;
   while (move > 0) {
     const tx = e.tc + 0.5, ty = e.tr + 0.5, dx = tx - e.x, dy = ty - e.y, l = Math.hypot(dx, dy);
-    if (l > move) { e.x += (dx / l) * move; e.y += (dy / l) * move; e.walked += move; return; }
-    e.x = tx; e.y = ty; e.walked += l; move -= l;
+    if (Math.abs(dx) > 0.01) e.face = dx < 0 ? -1 : 1;
+    if (l > move) { e.x += (dx / l) * move; e.y += (dy / l) * move; return; }
+    e.x = tx; e.y = ty; move -= l;
     e.prev = [e.tc - e.c, e.tr - e.r]; e.c = e.tc; e.r = e.tr;
     if (isCastle(e.c, e.r)) { e.reached = true; return; }
     const n = nextCell(e.c, e.r, distMap, e.prev);
@@ -284,7 +346,7 @@ function stepEnemy(e, dt) {
 }
 function hurt(e, dmg) {
   if (e.dead) return;
-  e.hp -= dmg;
+  e.hp -= dmg; e.flash = 0.12;
   if (e.hp <= 0) {
     e.dead = true; kills++;
     const g = ENEMIES[e.type].gold + Math.floor(wave / 3);
@@ -292,106 +354,166 @@ function hurt(e, dmg) {
     effects.push({ kind: "coin", x: e.x, y: e.y, t: 0.7, text: "+" + g });
   }
 }
-function towerTick(c, r, o, dt) {
-  const T = TOOLS[o.kind];
-  o.cd -= dt;
-  if (o.cd > 0) return;
-  const x = c + 0.5, y = r + 0.5;
-  let target = null, best = Infinity;
+function hurtUnit(u, dmg) {
+  if (u.down > 0) return;
+  u.hp -= dmg; u.flash = 0.12;
+  if (u.hp <= 0) {
+    u.hp = 0; u.down = u.kind === "warlord" ? 10 : 7; u.target = null;
+    effects.push({ kind: "down", x: u.x, y: u.y, t: 0.9, text: u.st.name + " 退却" });
+    if (selected === u) selected = null;
+  }
+}
+
+// ===== 守り手の動き =====
+// まっすぐ行けるか（途中に柵がないか）
+function clearLine(ax, ay, bx, by) {
+  const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 0.2);
+  for (let i = 1; i <= n; i++) { const x = ax + ((bx - ax) * i) / n, y = ay + ((by - ay) * i) / n; if (blocked(Math.floor(x), Math.floor(y))) return false; }
+  return true;
+}
+let bfsCache = new Map();
+function moveToward(u, tx, ty, dt) {
+  let step = u.st.speed * dt, gx = tx, gy = ty;
+  if (!clearLine(u.x, u.y, tx, ty)) {
+    // 柵があるときは、マス目で回り道を探す
+    const tc = Math.floor(tx), tr = Math.floor(ty), key = tc + "," + tr;
+    if (!bfsCache.has(key)) bfsCache.set(key, bfs(grid, tc, tr));
+    const d = bfsCache.get(key), [c, r] = unitCell(u);
+    let best = null;
+    for (const [dc, dr] of D4) { const nc = c + dc, nr = r + dr; if (inside(nc, nr) && d[nr][nc] < (best ? d[best[1]][best[0]] : inside(c, r) ? d[r][c] : Infinity)) best = [nc, nr]; }
+    if (best) { gx = best[0] + 0.5; gy = best[1] + 0.5; }
+    else { gx = c + 0.5; gy = r + 0.5; }
+  }
+  const dx = gx - u.x, dy = gy - u.y, l = Math.hypot(dx, dy);
+  if (l < 0.001) return;
+  if (Math.abs(dx) > 0.01) u.face = dx < 0 ? -1 : 1;
+  const k = Math.min(1, step / l);
+  u.x += dx * k; u.y += dy * k; u.walk = (u.walk || 0) + step;
+}
+function pickTarget(u) {
+  const home = { x: u.home.c + 0.5, y: u.home.r + 0.5 }, reach = u.st.leash;
+  if (u.target && !u.target.dead && dist(u.target, home) <= reach + 0.8) return u.target;
+  let best = null, bs = Infinity;
   for (const e of enemies) {
-    if (e.dead || Math.hypot(e.x - x, e.y - y) > T.range) continue;
-    const left = distMap[e.tr][e.tc]; // 城に近い敵を先に狙う
-    if (left < best) { best = left; target = e; }
+    if (e.dead || dist(e, home) > reach) continue;
+    // 近接は近い敵、弓は城に近い敵を先に
+    const score = u.st.melee ? dist(e, u) + (e.blocker && e.blocker !== u ? 1.5 : 0) : distMap[e.tr][e.tc];
+    if (score < bs) { bs = score; best = e; }
   }
-  if (!target) return;
-  o.cd = T.rate;
-  o.aim = Math.atan2(target.y - y, target.x - x);
-  shots.push({ kind: o.kind, x, y, e: target, tx: target.x, ty: target.y, t: 0, dur: o.kind === "gun" ? 0.08 : o.kind === "cannon" ? 0.35 : 0.18 });
+  return best;
 }
-const nearEnemies = (x, y, range) => enemies.filter((e) => !e.dead && Math.hypot(e.x - x, e.y - y) <= range);
-const byFront = (a, b) => distMap[a.tr][a.tc] - distMap[b.tr][b.tc]; // 城に近い順
-function warlordTick(c, r, o, dt) {
-  const w = WARLORDS[o.id], S = wStyle(w), st = wStat(w), x = c + 0.5, y = r + 0.5;
-  o.cd -= dt; o.scd -= dt;
-  const near = nearEnemies(x, y, st.range).sort(byFront);
-  if (o.scd <= 0 && (near.length || S.skill === "aid" && heart < START.heart)) {
-    o.scd = st.skillCd;
-    skill(o, w, S, st, x, y, near);
+function unitTick(u, dt) {
+  u.swing = Math.max(0, (u.swing || 0) - dt); u.flash = Math.max(0, (u.flash || 0) - dt);
+  if (u.down > 0) {
+    u.down -= dt;
+    if (u.down <= 0) { u.down = 0; u.hp = u.st.hp; u.x = CASTLE.c + 0.5; u.y = CASTLE.r + 0.5; effects.push({ kind: "down", x: u.x, y: u.y, t: 0.8, text: u.st.name + " 復帰" }); }
+    return;
   }
-  if (o.cd > 0 || !near.length) return;
-  o.cd = st.rate;
-  if (S.sweep) {
-    for (const e of near) hurt(e, st.dmg);
-    effects.push({ kind: "slash", x, y, t: 0.25, r: st.range, col: w.color });
+  u.cd -= dt;
+  const w = u.kind === "warlord" ? WARLORDS[u.id] : null;
+  if (w) {
+    u.scd -= dt;
+    const S = wStyle(w);
+    if (S.heal) { u.healCd -= dt; if (u.healCd <= 0) { u.healCd = 1; for (const o of units) if (o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2) { o.hp = Math.min(o.st.hp, o.hp + Math.round(S.heal * RARITY[w.rarity].mul)); } } }
+  }
+  const t = (u.target = pickTarget(u));
+  if (w && u.scd <= 0 && (t || (wStyle(w).skill === "aid" && (heart < START.heart || units.some((o) => o.down === 0 && o.hp < o.st.hp * 0.6))))) { u.scd = u.st.skillCd; skill(u, w, t); }
+  if (t) {
+    const d = dist(u, t);
+    if (d > u.st.range) moveToward(u, t.x, t.y, dt);
+    else { u.face = t.x < u.x ? -1 : 1; if (u.cd <= 0) attack(u, t, w); }
   } else {
-    const e = near[0];
-    shots.push({ kind: S.shot, x, y, e, tx: e.x, ty: e.y, t: 0, dur: S.shot === "gun" ? 0.08 : 0.18, dmg: st.dmg });
+    const hx = u.home.c + 0.5, hy = u.home.r + 0.5;
+    if (Math.hypot(hx - u.x, hy - u.y) > 0.05) moveToward(u, hx, hy, dt);
   }
 }
-function skill(o, w, S, st, x, y, near) {
-  effects.push({ kind: "skill", x, y, t: 1.1, text: w.skill, col: w.color });
-  if (S.skill === "snipe") near.slice(0, 3).forEach((e, i) => shots.push({ kind: "gun", x, y, e, tx: e.x, ty: e.y, t: -i * 0.15, dur: 0.08, dmg: st.dmg * 3 }));
-  else if (S.skill === "rain") { for (const e of nearEnemies(x, y, st.range * 1.3)) hurt(e, st.dmg * 3); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.3, col: "#f5e1b0" }); }
-  else if (S.skill === "sweep") { for (const e of nearEnemies(x, y, st.range * 1.4)) hurt(e, st.dmg * 4); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.4, col: w.color }); }
-  else if (S.skill === "hold") { for (const e of nearEnemies(x, y, st.range * 1.5)) e.stun = 2.5; effects.push({ kind: "slash", x, y, t: 0.5, r: st.range * 1.5, col: "#ffe08a" }); }
-  else if (S.skill === "charge") { for (const e of near) hurt(e, st.dmg * 3); effects.push({ kind: "slash", x, y, t: 0.5, r: st.range, col: w.color }); }
-  else if (S.skill === "aid") { heart = Math.min(START.heart, heart + 1); effects.push({ kind: "coin", x: CASTLE.c + 0.5, y: CASTLE.r + 0.2, t: 0.9, text: "❤️+1" }); }
-  else if (S.skill === "order") for (const e of enemies) e.slow = Math.max(e.slow, 2.5);
-}
-function landShot(s) {
-  if (s.dmg) { hurt(s.e, s.dmg); return; } // 武将の攻撃
-  const T = TOOLS[s.kind];
-  if (s.kind === "cannon") {
-    for (const e of enemies) if (Math.hypot(e.x - s.tx, e.y - s.ty) <= T.splash) hurt(e, T.dmg);
-    effects.push({ kind: "boom", x: s.tx, y: s.ty, t: 0.3 });
+function attack(u, t, w) {
+  u.cd = u.st.rate; u.swing = 0.2;
+  const S = w ? wStyle(w) : null;
+  if (u.st.melee) {
+    if (S && S.sweep) { for (const e of enemies) if (!e.dead && dist(e, u) <= u.st.range + 0.2) hurt(e, u.st.atk); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.2, r: u.st.range + 0.2, col: w.color }); }
+    else { hurt(t, u.st.atk); effects.push({ kind: "slash", x: t.x, y: t.y, t: 0.15 }); }
   } else {
-    hurt(s.e, T.dmg);
-    if (s.kind === "water" && !s.e.dead) s.e.slow = T.slowTime;
+    shots.push({ kind: S && S.shot === "gun" ? "gun" : "arrow", x: u.x, y: u.y - 0.15, e: t, tx: t.x, ty: t.y, t: 0, dur: S && S.shot === "gun" ? 0.08 : 0.2, dmg: u.st.atk });
+  }
+}
+function skill(u, w, t) {
+  const S = wStyle(w), st = u.st;
+  effects.push({ kind: "skill", x: u.x, y: u.y, t: 1.1, text: w.skill, col: w.color });
+  const near = (r) => enemies.filter((e) => !e.dead && dist(e, u) <= r);
+  if (S.skill === "snipe") near(st.range + 0.5).sort((a, b) => distMap[a.tr][a.tc] - distMap[b.tr][b.tc]).slice(0, 3).forEach((e, i) => shots.push({ kind: "gun", x: u.x, y: u.y, e, tx: e.x, ty: e.y, t: -i * 0.15, dur: 0.08, dmg: st.atk * 3 }));
+  else if (S.skill === "rain") { for (const e of near(3)) hurt(e, st.atk * 3); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3, col: "#f5e1b0" }); }
+  else if (S.skill === "sweep") { for (const e of near(1.8)) hurt(e, st.atk * 3); effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.8, col: w.color }); }
+  else if (S.skill === "hold") { for (const e of near(2)) e.stun = 2.5; effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 2, col: "#ffe08a" }); }
+  else if (S.skill === "charge" && t) {
+    // 先頭の敵の前まで一気に駆けこみ、周りを斬る
+    const a = Math.atan2(t.y - u.y, t.x - u.x), d = Math.max(0, dist(u, t) - 0.5);
+    if (clearLine(u.x, u.y, t.x, t.y)) { u.x += Math.cos(a) * d; u.y += Math.sin(a) * d; }
+    for (const e of near(1.4)) hurt(e, st.atk * 3);
+    effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.4, col: w.color });
+  }
+  else if (S.skill === "aid") {
+    for (const o of units) if (o.down === 0 && dist(o, u) < 3.5) o.hp = Math.min(o.st.hp, o.hp + Math.round(o.st.hp * 0.5));
+    if (heart < START.heart) { heart++; effects.push({ kind: "coin", x: CASTLE.c + 0.5, y: CASTLE.r + 0.2, t: 0.9, text: "❤️+1" }); }
+    effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3.5, col: "#7ddf64" });
+  }
+  else if (S.skill === "order") for (const e of enemies) e.slow = Math.max(e.slow, 3);
+}
+// 兵士どうしが重ならないように少し押し合う
+function separate() {
+  for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) {
+    const a = units[i], b = units[j];
+    if (a.down || b.down) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
+    if (d < 0.38) {
+      const k = (0.38 - d) / 2, nx = (dx / d) * k, ny = (dy / d) * k;
+      if (!blocked(Math.floor(a.x - nx), Math.floor(a.y - ny))) { a.x -= nx; a.y -= ny; }
+      if (!blocked(Math.floor(b.x + nx), Math.floor(b.y + ny))) { b.x += nx; b.y += ny; }
+    }
   }
 }
 function update(dt) {
   time += dt;
-  if (playing) {
-    spawnClock -= dt;
-    if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.75; }
-    for (const e of enemies) if (!e.dead) stepEnemy(e, dt);
-    for (const e of enemies) if (e.reached && !e.dead) {
-      e.dead = true; heart -= e.type === "samurai" ? 3 : 1;
-      effects.push({ kind: "hit", x: CASTLE.c + 0.5, y: CASTLE.r + 0.5, t: 0.4 });
-    }
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      const o = grid[r][c];
-      if (o && o.kind === "warlord") warlordTick(c, r, o, dt);
-      else if (o && o.kind !== "fence") towerTick(c, r, o, dt);
-    }
-    for (const s of shots) {
-      if (!s.e.dead) { s.tx = s.e.x; s.ty = s.e.y; }
-      s.t += dt;
-      if (s.t < 0) continue;
-      if (s.t >= s.dur && !s.done) { s.done = true; landShot(s); }
-    }
-    shots = shots.filter((s) => !s.done);
-    enemies = enemies.filter((e) => !e.dead);
-    if (heart <= 0) {
-      heart = 0; playing = false; over = true;
-      $("overTitle").textContent = "落城…";
-      $("overText").innerHTML = "第" + wave + "波で城が落ちました。<br>倒した敵：" + kills + "人";
-      $("over").hidden = false;
-    } else if (!spawnQueue.length && !enemies.length) {
-      playing = false;
-      const bonus = 30 + wave * 8;
-      gold += bonus;
-      say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。迷路を広げよう。");
-    }
-    ui();
-  }
   for (const f of effects) f.t -= dt;
   effects = effects.filter((f) => f.t > 0);
+  bfsCache = new Map();
+  for (const e of enemies) { e.flash = Math.max(0, (e.flash || 0) - dt); e.swing = Math.max(0, (e.swing || 0) - dt); }
+  if (!playing) { for (const u of units) unitTick(u, dt); separate(); return; } // 準備中は持ち場へ戻るだけ
+  spawnClock -= dt;
+  if (spawnQueue.length && spawnClock <= 0) { spawn(spawnQueue.shift()); spawnClock = 0.8; }
+  for (const e of enemies) if (!e.dead) stepEnemy(e, dt);
+  for (const e of enemies) if (e.reached && !e.dead) {
+    e.dead = true; heart -= e.type === "samurai" ? 3 : 1;
+    effects.push({ kind: "hit", x: CASTLE.c + 0.5, y: CASTLE.r + 0.5, t: 0.4 });
+  }
+  for (const u of units) unitTick(u, dt);
+  separate();
+  for (const s of shots) {
+    if (!s.e.dead) { s.tx = s.e.x; s.ty = s.e.y; }
+    s.t += dt;
+    if (s.t >= s.dur && !s.done) { s.done = true; hurt(s.e, s.dmg); }
+  }
+  shots = shots.filter((s) => !s.done);
+  enemies = enemies.filter((e) => !e.dead);
+  if (heart <= 0) {
+    heart = 0; playing = false; over = true;
+    $("overTitle").textContent = "落城…";
+    $("overText").innerHTML = "第" + wave + "波で城が落ちました。<br>倒した敵：" + kills + "人";
+    $("over").hidden = false;
+  } else if (!spawnQueue.length && !enemies.length) {
+    playing = false;
+    const bonus = 30 + wave * 8;
+    gold += bonus;
+    // 波の終わりに全員が回復して起き上がる
+    for (const u of units) { if (u.down > 0) { u.down = 0; u.x = CASTLE.c + 0.5; u.y = CASTLE.r + 0.5; } u.hp = u.st.hp; u.target = null; }
+    say("第" + wave + "波をしのいだ！ ボーナス +" + bonus + "G。兵士は回復して持ち場へ戻る。");
+  }
+  ui();
 }
 
 // ===== 画面 =====
 const cv = $("cv"), ctx = cv.getContext("2d");
-let cell = 32, ox = 0, oy = 0;
+let cell = 32;
 function resize() {
   const wrap = $("wrap"), w = wrap.clientWidth - 12, h = wrap.clientHeight - 6;
   cell = Math.max(16, Math.floor(Math.min(w / COLS, h / ROWS)));
@@ -412,11 +534,10 @@ function drawGround() {
 }
 function drawRoute() {
   const cells = routeCells();
-  // 敵の通り道を土の色で
-  ctx.fillStyle = "rgba(150,112,70,.55)";
+  ctx.fillStyle = "rgba(150,112,70,.5)";
   for (const [c, r] of cells) ctx.fillRect(c * cell + 3, r * cell + 3, cell - 6, cell - 6);
   ctx.save();
-  ctx.strokeStyle = "rgba(255,236,190,.75)"; ctx.lineWidth = 2; ctx.setLineDash([4, 5]);
+  ctx.strokeStyle = "rgba(255,236,190,.6)"; ctx.lineWidth = 2; ctx.setLineDash([4, 5]);
   ctx.lineDashOffset = -time * 20;
   ctx.beginPath();
   cells.forEach(([c, r], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, (c + 0.5) * cell, (r + 0.5) * cell));
@@ -425,11 +546,9 @@ function drawRoute() {
 function drawFence(c, r) {
   const x = c * cell, y = r * cell, s = cell;
   ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(x + s * 0.1, y + s * 0.62, s * 0.85, s * 0.22);
-  // 横木
   ctx.fillStyle = "#8b5a2b";
   ctx.fillRect(x + s * 0.06, y + s * 0.34, s * 0.88, s * 0.12);
   ctx.fillRect(x + s * 0.06, y + s * 0.56, s * 0.88, s * 0.12);
-  // 杭
   for (const k of [0.16, 0.5, 0.84]) {
     ctx.fillStyle = "#a8743c"; ctx.fillRect(x + s * (k - 0.07), y + s * 0.18, s * 0.14, s * 0.62);
     ctx.fillStyle = "#c99456"; ctx.fillRect(x + s * (k - 0.07), y + s * 0.18, s * 0.05, s * 0.62);
@@ -437,70 +556,94 @@ function drawFence(c, r) {
     ctx.beginPath(); ctx.moveTo(x + s * (k - 0.07), y + s * 0.18); ctx.lineTo(x + s * k, y + s * 0.08); ctx.lineTo(x + s * (k + 0.07), y + s * 0.18); ctx.fill();
   }
 }
-function drawTower(c, r, o) {
-  const T = TOOLS[o.kind], x = c * cell, y = r * cell, s = cell;
-  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.fillRect(x + s * 0.12, y + s * 0.2, s * 0.84, s * 0.84);
-  ctx.fillStyle = "#cfc6b4"; ctx.fillRect(x + s * 0.08, y + s * 0.1, s * 0.84, s * 0.84);
-  ctx.fillStyle = T.col; ctx.fillRect(x + s * 0.16, y + s * 0.18, s * 0.68, s * 0.68);
-  ctx.strokeStyle = "#2a2017"; ctx.lineWidth = 1.5; ctx.strokeRect(x + s * 0.08, y + s * 0.1, s * 0.84, s * 0.84);
-  ctx.font = Math.round(s * 0.5) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(T.icon, x + s / 2, y + s * 0.53);
-}
-function drawWarlord(c, r, o) {
-  const w = WARLORDS[o.id], x = c * cell, y = r * cell, s = cell, im = wIcon(o.id);
-  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.fillRect(x + s * 0.1, y + s * 0.14, s * 0.86, s * 0.86);
-  ctx.fillStyle = w.color; ctx.fillRect(x + s * 0.04, y + s * 0.04, s * 0.92, s * 0.92);
-  ctx.fillStyle = "#f3e7d0"; ctx.fillRect(x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8);
-  if (im.complete && im.naturalWidth) { ctx.imageSmoothingEnabled = false; ctx.drawImage(im, x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8); }
-  else { ctx.fillStyle = w.color; ctx.font = "bold " + Math.round(s * 0.5) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(w.short, x + s / 2, y + s * 0.53); }
-  // 技のたまり具合
-  const k = Math.max(0, Math.min(1, 1 - o.scd / wStat(w).skillCd));
-  ctx.fillStyle = "#000a"; ctx.fillRect(x + s * 0.1, y + s * 0.86, s * 0.8, 4);
-  ctx.fillStyle = k >= 1 ? "#ffd75e" : "#7fc3ff"; ctx.fillRect(x + s * 0.1, y + s * 0.86, s * 0.8 * k, 4);
-}
 function drawGateCastle() {
-  ctx.font = Math.round(cell * 0.75) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#3a2b1c"; ctx.fillRect(GATE.c * cell + 2, GATE.r * cell + 2, cell - 4, cell - 4);
+  ctx.font = Math.round(cell * 0.75) + "px system-ui";
   ctx.fillText("⛩️", (GATE.c + 0.5) * cell, (GATE.r + 0.55) * cell);
   ctx.fillStyle = "#6e5a3d"; ctx.fillRect(CASTLE.c * cell + 1, CASTLE.r * cell + 1, cell - 2, cell - 2);
   ctx.fillText("🏯", (CASTLE.c + 0.5) * cell, (CASTLE.r + 0.5) * cell);
 }
+function bar(x, y, w, k, col) {
+  ctx.fillStyle = "#000a"; ctx.fillRect(x - w / 2, y, w, 4);
+  ctx.fillStyle = col; ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, k)), 4);
+}
+function sprite(im, x, y, h, face, alpha = 1) {
+  if (!ready(im)) return false;
+  const w = (h * im.width) / im.height;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); if (face < 0) ctx.scale(-1, 1);
+  ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
+  return true;
+}
 function drawEnemy(e) {
   const E = ENEMIES[e.type], x = e.x * cell, y = e.y * cell, s = cell;
-  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.28, s * 0.26, s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = E.col; ctx.beginPath(); ctx.arc(x, y, s * (e.type === "samurai" ? 0.34 : 0.28), 0, Math.PI * 2); ctx.fill();
-  if (e.slow > 0) { ctx.strokeStyle = "#8fd3ff"; ctx.lineWidth = 2; ctx.stroke(); }
-  if (e.stun > 0) { ctx.strokeStyle = "#ffe08a"; ctx.lineWidth = 2; ctx.stroke(); }
-  ctx.font = Math.round(s * 0.42) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(E.icon, x, y + 1);
-  const w = s * 0.6;
-  ctx.fillStyle = "#000a"; ctx.fillRect(x - w / 2, y - s * 0.46, w, 4);
-  ctx.fillStyle = e.hp / e.max > 0.4 ? "#7ddf64" : "#f0a33a"; ctx.fillRect(x - w / 2, y - s * 0.46, w * Math.max(0, e.hp / e.max), 4);
+  ctx.fillStyle = "rgba(220,50,40,.55)"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.28, s * 0.1, 0, 0, Math.PI * 2); ctx.fill(); // 敵は赤い足元
+  const fr = e.blocker && e.swing > 0 ? E.sprite + "_attack0.webp" : E.sprite + "_walk" + (e.blocker || e.stun > 0 ? 0 : Math.floor(e.anim) % E.frames) + ".webp";
+  if (!sprite(img("enemies/" + fr), x, y + s * 0.35, s * E.size, e.face, e.flash > 0 ? 0.55 : 1)) {
+    ctx.fillStyle = "#c9493b"; ctx.beginPath(); ctx.arc(x, y, s * 0.28, 0, Math.PI * 2); ctx.fill();
+  }
+  if (e.slow > 0 || e.stun > 0) { ctx.strokeStyle = e.stun > 0 ? "#ffe08a" : "#8fd3ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.3, s * 0.12, 0, 0, Math.PI * 2); ctx.stroke(); }
+  bar(x, y - s * 0.62, s * 0.6, e.hp / e.max, e.hp / e.max > 0.4 ? "#e36b5a" : "#f0a33a");
+}
+function drawUnit(u) {
+  if (u.down > 0) return;
+  const x = u.x * cell, y = u.y * cell, s = cell, sel = selected === u;
+  if (sel) {
+    ctx.save(); ctx.strokeStyle = "rgba(255,240,180,.8)"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc((u.home.c + 0.5) * s, (u.home.r + 0.5) * s, u.st.leash * s, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = "rgba(255,240,180,.35)"; ctx.fillRect(u.home.c * s, u.home.r * s, s, s);
+  }
+  ctx.fillStyle = sel ? "rgba(255,230,120,.75)" : "rgba(70,150,255,.6)"; // 味方は青い足元
+  ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 0.3, s * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+  const bob = u.swing > 0 ? -s * 0.06 : Math.sin((u.walk || 0) * 9) * s * 0.03;
+  if (u.kind === "warlord") {
+    const w = WARLORDS[u.id], im = heroIcon(u.id), r = s * 0.42;
+    ctx.save(); ctx.translate(x + (u.swing > 0 ? u.face * s * 0.08 : 0), y - s * 0.05 + bob);
+    ctx.fillStyle = w.color; ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+    if (ready(im)) ctx.drawImage(im, -r, -r, r * 2, r * 2); else { ctx.fillStyle = "#f3e7d0"; ctx.fillRect(-r, -r, r * 2, r * 2); ctx.fillStyle = w.color; ctx.font = "bold " + Math.round(s * 0.45) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(w.short, 0, 1); }
+    if (u.flash > 0) { ctx.fillStyle = "rgba(255,80,60,.4)"; ctx.fillRect(-r, -r, r * 2, r * 2); }
+    ctx.restore();
+    bar(x, y - s * 0.62, s * 0.7, u.hp / u.st.hp, "#7ddf64");
+    bar(x, y - s * 0.62 + 5, s * 0.7, 1 - u.scd / u.st.skillCd, u.scd <= 0 ? "#ffd75e" : "#7fc3ff");
+  } else {
+    const im = img(SOLDIERS[u.kind].img);
+    if (!sprite(im, x + (u.swing > 0 ? u.face * s * 0.08 : 0), y + s * 0.35 + bob, s * 0.95, u.face, u.flash > 0 ? 0.55 : 1)) {
+      ctx.fillStyle = "#3f6fcf"; ctx.beginPath(); ctx.arc(x, y, s * 0.28, 0, Math.PI * 2); ctx.fill();
+    }
+    bar(x, y - s * 0.66, s * 0.6, u.hp / u.st.hp, "#7ddf64");
+  }
 }
 function drawShot(s) {
+  if (s.t < 0) return;
   const k = Math.min(1, s.t / s.dur), x = (s.x + (s.tx - s.x) * k) * cell, y = (s.y + (s.ty - s.y) * k) * cell;
   if (s.kind === "gun") {
     ctx.strokeStyle = "#fff3b0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x * cell, s.y * cell); ctx.lineTo(x, y); ctx.stroke();
   } else {
-    ctx.fillStyle = s.kind === "cannon" ? "#222" : s.kind === "water" ? "#7cc7ff" : "#f5e1b0";
-    ctx.beginPath(); ctx.arc(x, y - (s.kind === "cannon" ? Math.sin(k * Math.PI) * cell * 0.6 : 0), s.kind === "cannon" ? 4 : 3, 0, Math.PI * 2); ctx.fill();
+    const a = Math.atan2(s.ty - s.y, s.tx - s.x);
+    ctx.strokeStyle = "#f5e1b0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * 7, y - Math.sin(a) * 7); ctx.lineTo(x, y); ctx.stroke();
   }
 }
 function drawEffects() {
   for (const f of effects) {
     const x = f.x * cell, y = f.y * cell;
-    if (f.kind === "boom") { ctx.fillStyle = "rgba(255,170,60," + f.t * 2 + ")"; ctx.beginPath(); ctx.arc(x, y, TOOLS.cannon.splash * cell * (1.2 - f.t * 2), 0, Math.PI * 2); ctx.fill(); }
-    if (f.kind === "puff") { ctx.strokeStyle = "rgba(255,255,255," + f.t * 2 + ")"; ctx.lineWidth = 2; ctx.strokeRect(x - cell / 2, y - cell / 2, cell, cell); }
-    if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60," + f.t + ")"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
-    if (f.kind === "slash") { ctx.strokeStyle = f.col; ctx.globalAlpha = Math.min(1, f.t * 3); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, f.r * cell, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.globalAlpha = Math.min(1, f.t * 3);
+    if (f.kind === "puff") { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "flag") { ctx.fillStyle = "rgba(255,230,120,.5)"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60,.6)"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
+    if (f.kind === "ring") { ctx.strokeStyle = f.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, f.r * cell, 0, Math.PI * 2); ctx.stroke(); }
+    if (f.kind === "slash") { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - cell * 0.25, y - cell * 0.35); ctx.lineTo(x + cell * 0.25, y + cell * 0.05); ctx.stroke(); }
+    if (f.kind === "coin" || f.kind === "down") {
+      ctx.fillStyle = f.kind === "coin" ? "#ffd75e" : "#fff"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(f.text, x, y - cell * 0.4 - (0.9 - f.t) * 24);
+    }
     if (f.kind === "skill") {
       ctx.font = "bold 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      const ty = y - cell * 0.7 - (1.1 - f.t) * 14, tw = ctx.measureText(f.text).width + 14;
-      ctx.globalAlpha = Math.min(1, f.t * 3);
+      const ty = y - cell * 0.95 - (1.1 - f.t) * 14, tw = ctx.measureText(f.text).width + 14;
       ctx.fillStyle = f.col; ctx.fillRect(x - tw / 2, ty - 11, tw, 22);
-      ctx.fillStyle = "#fff"; ctx.fillText(f.text, x, ty + 1); ctx.globalAlpha = 1;
+      ctx.fillStyle = "#fff"; ctx.fillText(f.text, x, ty + 1);
     }
-    if (f.kind === "coin") { ctx.fillStyle = "#ffd75e"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.fillText(f.text, x, y - (0.7 - f.t) * 30); }
+    ctx.globalAlpha = 1;
   }
 }
 let hover = null;
@@ -508,64 +651,84 @@ function drawHover() {
   if (!hover || over) return;
   const { c, r } = hover;
   if (!inside(c, r)) return;
-  const bad = tool === "sell" ? !grid[r][c] : !!placeError(c, r, tool);
+  const bad = selected ? blocked(c, r) : tool === "sell" ? !grid[r][c] && !unitAt(c + 0.5, r + 0.5, 0.75) : !!placeError(c, r, tool);
   ctx.fillStyle = bad ? "rgba(224,90,74,.35)" : "rgba(242,193,78,.35)";
   ctx.fillRect(c * cell, r * cell, cell, cell);
-  const T = tool === "warlord" && picked ? wStat(WARLORDS[picked]) : TOOLS[tool];
-  if (T.range) { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, T.range * cell, 0, Math.PI * 2); ctx.stroke(); }
+  const st = selected ? selected.st : SOLDIERS[tool] || (tool === "warlord" && picked ? wStat(WARLORDS[picked]) : null);
+  if (st) { ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, st.leash * cell, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
 }
 function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   drawGround();
   drawRoute();
   drawGateCastle();
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const o = grid[r][c];
-    if (o) o.kind === "fence" ? drawFence(c, r) : o.kind === "warlord" ? drawWarlord(c, r, o) : drawTower(c, r, o);
-  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c]) drawFence(c, r);
   drawHover();
-  for (const e of enemies) drawEnemy(e);
+  // 下にいるものほど手前に描く
+  const list = [...units.map((u) => ({ y: u.y, f: () => drawUnit(u) })), ...enemies.map((e) => ({ y: e.y, f: () => drawEnemy(e) }))];
+  list.sort((a, b) => a.y - b.y).forEach((o) => o.f());
   for (const s of shots) drawShot(s);
   drawEffects();
 }
 
 // ===== 操作 =====
+// ・兵士や武将をタップ → 選ぶ。次にマスをタップ → そこが持ち場（引きずって離してもOK）
+// ・それ以外 → 選んでいる道具を置く（柵は指でなぞると続けて置ける）
 function cellAt(ev) {
-  const b = cv.getBoundingClientRect();
-  return { c: Math.floor((ev.clientX - b.left) / cell), r: Math.floor((ev.clientY - b.top) / cell) };
+  const b = cv.getBoundingClientRect(), x = (ev.clientX - b.left) / cell, y = (ev.clientY - b.top) / cell;
+  return { x, y, c: Math.floor(x), r: Math.floor(y) };
 }
-// 指でなぞると続けて置ける（柵の列を一気に作る）
-let painting = false, lastPaint = "";
-cv.addEventListener("pointerdown", (ev) => { painting = true; cv.setPointerCapture(ev.pointerId); const p = cellAt(ev); hover = p; lastPaint = p.c + "," + p.r; place(p.c, p.r); });
+let press = null, lastPaint = "";
+cv.addEventListener("pointerdown", (ev) => {
+  cv.setPointerCapture(ev.pointerId);
+  const p = cellAt(ev); hover = p;
+  const u = tool !== "sell" ? unitAt(p.x, p.y, 0.55) : null;
+  press = { p, unit: u, moved: false };
+  if (u || selected) return; // 選択・持ち場の移動は指を離したときに決める
+  lastPaint = p.c + "," + p.r; place(p.c, p.r);
+});
 cv.addEventListener("pointermove", (ev) => {
   const p = cellAt(ev); hover = p;
-  if (!painting) return;
+  if (!press) return;
   const key = p.c + "," + p.r;
+  if (key !== press.p.c + "," + press.p.r) press.moved = true;
+  if (press.unit || selected) return;
   if (key !== lastPaint) { lastPaint = key; if (tool === "fence" || tool === "sell") place(p.c, p.r); }
 });
-const stopPaint = () => { painting = false; };
-cv.addEventListener("pointerup", (ev) => { stopPaint(); if (ev.pointerType !== "mouse") hover = null; });
-cv.addEventListener("pointercancel", stopPaint);
-cv.addEventListener("pointerleave", () => { if (!painting) hover = null; });
+cv.addEventListener("pointerup", (ev) => {
+  const p = cellAt(ev), pr = press; press = null;
+  if (ev.pointerType !== "mouse") hover = null;
+  if (!pr) return;
+  if (pr.unit && pr.moved) { moveHome(pr.unit, p.c, p.r); selected = null; return; } // 引きずって移動
+  if (pr.unit) { selected = selected === pr.unit ? null : pr.unit; if (selected) say(selected.st.name + "を選んだ。持ち場にするマスをタップしてね（もう一度タップで解除）。"); return; }
+  if (selected) { moveHome(selected, p.c, p.r); selected = null; }
+});
+cv.addEventListener("pointercancel", () => { press = null; });
+cv.addEventListener("pointerleave", () => { if (!press) hover = null; });
 
+function toolIcon(id) {
+  if (SOLDIERS[id]) return '<img src="' + ASSET + SOLDIERS[id].img + '" alt="">';
+  if (id === "warlord" && picked) return '<img src="' + ASSET + "heroes/" + picked + '_icon.webp" alt="" style="background:' + WARLORDS[picked].color + '">';
+  return TOOLS[id].icon;
+}
 function buildTools() {
   $("tools").innerHTML = Object.entries(TOOLS).map(([id, t]) =>
-    '<button data-tool="' + id + '"><b>' + t.icon + "</b>" + t.name + "<br><small>" + (t.cost ? t.cost + "G" : "&nbsp;") + "</small></button>").join("");
+    '<button data-tool="' + id + '"><b>' + toolIcon(id) + "</b>" + t.name + "<br><small>" + (t.cost ? t.cost + "G" : "&nbsp;") + "</small></button>").join("");
   $("tools").onclick = (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
+    selected = null;
     if (b.dataset.tool === "warlord") return openPick();
     tool = b.dataset.tool;
-    const t = TOOLS[tool];
-    say(tool === "sell" ? "撤去する柵や塔・武将をタップ（なぞると続けて撤去）。" :
+    say(tool === "sell" ? "撤去する柵・兵士・武将をタップ（なぞると柵を続けて撤去）。" :
       tool === "fence" ? "🪵 柵：道をふさいで回り道させる。なぞると続けて置ける。" :
-      t.icon + " " + t.name + "：射程" + t.range + "マス・攻撃" + t.dmg + (t.slow ? "・敵を遅くする" : t.splash ? "・まとめて攻撃" : "") + "。塔も道をふさぐ。");
+      SOLDIERS[tool].name + "（" + SOLDIERS[tool].cost + "G）：" + SOLDIERS[tool].text + "。置いたマスが持ち場。");
     ui();
   };
 }
 function openPick() {
   $("pickList").innerHTML = WARLORD_LIST.map(([id]) => {
     const w = WARLORDS[id], st = wStat(w), on = placedWarlord(id);
-    return '<button data-w="' + id + '"' + (on ? " disabled" : "") + ' title="' + wStyle(w).text + '"><img src="../assets/heroes/' + id + '_icon.webp" alt="" style="background:' + w.color + '">' +
+    return '<button data-w="' + id + '"' + (on ? " disabled" : "") + '><img src="' + ASSET + "heroes/" + id + '_icon.webp" alt="" style="background:' + w.color + '">' +
       '<span class="r">' + w.rarity + "</span> " + w.name + "<br><small>" + wStyle(w).label + "・" + w.skill + "</small><br>" + (on ? "出陣中" : st.cost + "G") + "</button>";
   }).join("");
   $("pick").hidden = false;
@@ -573,14 +736,14 @@ function openPick() {
 function pickWarlord(id) {
   const w = WARLORDS[id];
   if (!w || placedWarlord(id)) return;
-  picked = id; tool = "warlord"; $("pick").hidden = true;
-  const st = wStat(w);
-  say("🎌 " + w.name + "（" + st.cost + "G）：" + wStyle(w).text + "。置くマスをタップ。");
-  ui();
+  picked = id; tool = "warlord"; selected = null; $("pick").hidden = true;
+  say("🎌 " + w.name + "（" + wStat(w).cost + "G）：" + wStyle(w).text + "。持ち場にするマスをタップ。");
+  buildTools(); ui();
 }
 $("pickList").onclick = (ev) => { const b = ev.target.closest("button"); if (b) pickWarlord(b.dataset.w); };
 $("pickClose").onclick = () => ($("pick").hidden = true);
 function say(text, warn) { const m = $("msg"); m.textContent = text; m.style.color = warn ? "#ff9b8a" : ""; }
+let lastWarlordIcon = null;
 function ui() {
   $("wave").textContent = wave;
   $("gold").textContent = "💰 " + gold + "G";
@@ -588,16 +751,15 @@ function ui() {
   $("route").textContent = "道 " + (routeCells().length - 1) + "マス";
   $("start").disabled = playing || over;
   $("start").textContent = playing ? "戦闘中…" : "▶ 第" + (wave + 1) + "波 出陣";
+  if (lastWarlordIcon !== picked) { lastWarlordIcon = picked; const wb = document.querySelector('#tools [data-tool="warlord"] b'); if (wb) wb.innerHTML = toolIcon("warlord"); }
   for (const b of document.querySelectorAll("#tools button")) {
     b.classList.toggle("sel", b.dataset.tool === tool);
     b.disabled = TOOLS[b.dataset.tool].cost > gold && b.dataset.tool !== tool;
   }
-  const wb = document.querySelector('#tools [data-tool="warlord"] b');
-  if (wb) wb.innerHTML = picked ? '<img src="../assets/heroes/' + picked + '_icon.webp" alt="" style="background:' + WARLORDS[picked].color + '">' : "🎌";
 }
 $("start").onclick = startWave;
 $("speed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $("speed").textContent = "×" + speed; };
-$("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "▶" : "⏸"; say(paused ? "一時停止中。止めている間も柵や塔は置けます。" : ""); };
+$("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "▶" : "⏸"; say(paused ? "一時停止中。止めている間も柵を置いたり、持ち場を移したりできます。" : ""); };
 $("helpBtn").onclick = () => ($("help").hidden = false);
 $("helpClose").onclick = () => ($("help").hidden = true);
 $("again").onclick = reset;
@@ -613,17 +775,17 @@ function frame(now) {
 }
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
-  state: () => ({ gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))) }),
-  select: (t) => { tool = t; ui(); },
+  state: () => ({ gold, heart, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
+    units: units.map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd })) }),
+  select: (t) => { tool = t; selected = null; ui(); },
   place: (c, r) => place(c, r),
   error: (c, r, k = tool) => placeError(c, r, k),
+  move: (uid, c, r) => { const u = units.find((o) => o.uid === uid); if (u) moveHome(u, c, r); },
   start: startWave,
   step: (sec) => { for (let t = 0; t < sec; t += 0.05) update(0.05); },
   setGold: (g) => { gold = g; ui(); },
   pick: (id) => pickWarlord(id),
-  openPick,
-  warlords: () => grid.flat().filter((o) => o && o.kind === "warlord").map((o) => ({ id: o.id, scd: o.scd })),
-  config: { COLS, ROWS, GATE, CASTLE, TOOLS },
+  config: { COLS, ROWS, GATE, CASTLE, TOOLS, SOLDIERS },
 };
 buildTools();
 resize();
