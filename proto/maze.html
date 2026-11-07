@@ -73,6 +73,7 @@
   ・兵士や武将を<b>タップで選んで、別のマスをタップ</b>すると持ち場を移せます（指で引きずってもOK）。戦闘中も動かせます。<br>
   ・倒れた兵士は少しすると🏯本陣で起き上がり、持ち場へ走って戻ります（殿は起き上がれません）。<br>
   ・兵士も武将も何人でも置けます（同じ人物は1人まで）。武将はゲージがたまると<b>技</b>を自動で使います。<br>
+  ・敵に与えたダメージは<b>白</b>（会心は<b>黄色</b>）、味方が受けたダメージは<b>赤</b>、回復は<b>緑</b>の数字で出ます。人物をタップすると、それまでの合計も見られます。<br>
   ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
@@ -459,10 +460,31 @@ function stepEnemy(e, dt) {
     e.tc = n[0]; e.tr = n[1];
   }
 }
+// ===== ダメージ・回復の数字 =====
+// 与えたダメージ＝白（会心は黄色で大きく）、味方が受けたダメージ＝赤、回復＝緑
+const NUM = { life: 0.75 };
+function popNum(o, text, col, big = false) {
+  // 味方は名札の上から、敵は頭の上から浮かび上がる
+  effects.push({ kind: "num", x: o.x + (Math.random() - 0.5) * 0.4, y: o.y - (o.st ? 1.0 : 0.55), t: NUM.life, text, col, big });
+}
+// 回復して、実際に増えた分を数字で出す（満タンなら出さない）
+function healUnit(o, amount, healer) {
+  if (o.down > 0) return 0;
+  const add = Math.min(o.st.hp - o.hp, amount);
+  if (add <= 0) return 0;
+  o.hp += add;
+  if (healer) healer.healed = (healer.healed || 0) + add;
+  o.healAcc = (o.healAcc || 0) + add;
+  if (o.healAcc >= 1) { popNum(o, "+" + Math.round(o.healAcc), "#7ddf64"); o.healAcc = 0; }
+  return add;
+}
 function hurt(e, dmg, src) {
   if (e.dead) return;
   if (src && src.st.vsBoss && e.type === "samurai") dmg *= 1 + src.st.vsBoss;
-  if (src && src.st.crit && Math.random() < src.st.crit) { dmg *= 1.5; effects.push({ kind: "down", x: e.x, y: e.y, t: 0.5, text: "会心！" }); }
+  const crit = !!(src && src.st.crit && Math.random() < src.st.crit);
+  if (crit) dmg *= 1.5;
+  if (src) src.dealt = (src.dealt || 0) + Math.min(dmg, e.hp);
+  popNum(e, Math.round(dmg) + (crit ? "!" : ""), crit ? "#ffd75e" : "#ffffff", crit);
   e.hp -= dmg; e.flash = 0.12;
   if (e.hp <= 0) {
     e.dead = true; kills++;
@@ -508,6 +530,8 @@ function hurtUnit(u, dmg) {
   if (u.down > 0) return;
   if (u.st.evade && Math.random() < u.st.evade) { effects.push({ kind: "down", x: u.x, y: u.y, t: 0.5, text: "かわした" }); return; }
   dmg *= 1 - (u.st.guard || 0);
+  u.taken = (u.taken || 0) + Math.min(dmg, u.hp);
+  popNum(u, "-" + Math.round(dmg), "#ff6b5a");
   u.hp -= dmg; u.flash = 0.12;
   if (u.hp <= 0 && u.kind === "hero") { u.hp = 0; u.down = 999; heroFell(); return; }
   if (u.hp <= 0) {
@@ -566,12 +590,17 @@ function unitTick(u, dt) {
     return;
   }
   u.cd -= dt;
-  if (u.kind === "hero" && u.hp < u.st.hp) u.hp = Math.min(u.st.hp, u.hp + u.st.regen * dt); // 殿は少しずつ回復
+  if (u.kind === "hero" && u.hp < u.st.hp && playing) {
+    // 殿は少しずつ回復（数字は5ずつまとめて出す）
+    const add = Math.min(u.st.hp - u.hp, u.st.regen * dt);
+    u.hp += add; u.healed = (u.healed || 0) + add; u.regenAcc = (u.regenAcc || 0) + add;
+    if (u.regenAcc >= 5) { popNum(u, "+" + Math.round(u.regenAcc), "#7ddf64"); u.regenAcc = 0; }
+  }
   const w = u.kind === "warlord" ? WARLORDS[u.id] : null;
   if (w) {
     u.scd -= dt;
     const S = wStyle(w);
-    if (S.heal) { u.healCd -= dt; if (u.healCd <= 0) { u.healCd = 1; for (const o of units) if (o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2) { o.hp = Math.min(o.st.hp, o.hp + Math.round(S.heal * RARITY[w.rarity].mul)); } } }
+    if (S.heal) { u.healCd -= dt; if (u.healCd <= 0) { u.healCd = 1; for (const o of units) if (o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2) healUnit(o, Math.round(S.heal * RARITY[w.rarity].mul), u); } }
   }
   if (u.st.heal) {
     // 衛生兵：近くのけがをした味方を治す
@@ -579,7 +608,7 @@ function unitTick(u, dt) {
     if (u.healCd <= 0) {
       u.healCd = u.st.rate;
       const hurtOne = units.filter((o) => o !== u && o.down === 0 && o.hp < o.st.hp && dist(o, u) < 2.2).sort((a, b) => a.hp / a.st.hp - b.hp / b.st.hp)[0];
-      if (hurtOne) { hurtOne.hp = Math.min(hurtOne.st.hp, hurtOne.hp + u.st.heal * 2); effects.push({ kind: "heal", x: hurtOne.x, y: hurtOne.y, t: 0.5 }); u.swing = 0.2; }
+      if (hurtOne) { healUnit(hurtOne, u.st.heal * 2, u); effects.push({ kind: "heal", x: hurtOne.x, y: hurtOne.y, t: 0.5 }); u.swing = 0.2; }
     }
   }
   const t = (u.target = pickTarget(u));
@@ -624,7 +653,7 @@ function skill(u, w, t) {
     effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 1.4, col: w.color });
   }
   else if (S.skill === "aid") {
-    for (const o of units) if (o.down === 0 && dist(o, u) < 3.5) o.hp = Math.min(o.st.hp, o.hp + Math.round(o.st.hp * 0.5));
+    for (const o of units) if (o.down === 0 && dist(o, u) < 3.5) healUnit(o, Math.round(o.st.hp * 0.5), u);
     effects.push({ kind: "ring", x: u.x, y: u.y, t: 0.5, r: 3.5, col: "#7ddf64" });
   }
   else if (S.skill === "order") for (const e of enemies) e.slow = Math.max(e.slow, 3);
@@ -827,6 +856,13 @@ function drawEffects() {
     if (f.kind === "hit") { ctx.fillStyle = "rgba(255,60,60,.6)"; ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell); }
     if (f.kind === "ring") { ctx.strokeStyle = f.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, f.r * cell, 0, Math.PI * 2); ctx.stroke(); }
     if (f.kind === "slash") { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - cell * 0.25, y - cell * 0.35); ctx.lineTo(x + cell * 0.25, y + cell * 0.05); ctx.stroke(); }
+    if (f.kind === "num") {
+      const k = 1 - f.t / NUM.life, fs = f.big ? 15 : 11;
+      ctx.font = "bold " + fs + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const ty = y - k * 22;
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(f.text, x, ty);
+      ctx.fillStyle = f.col; ctx.fillText(f.text, x, ty);
+    }
     if (f.kind === "coin" || f.kind === "down") {
       ctx.fillStyle = f.kind === "coin" ? "#ffd75e" : "#fff"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(f.text, x, y - cell * 0.4 - (0.9 - f.t) * 24);
@@ -998,7 +1034,8 @@ function renderCard(force) {
     '<div><div class="nm" style="color:' + col + ';filter:brightness(1.7)">' + (u.kind === "hero" ? "👑 " : "") + st.name + "　Lv" + u.lv + '</div><div class="sub">' + kind + "</div><div class=\"sub\">" + state + '</div></div><button class="x" id="cardClose">×</button></div>' +
     '<div class="grid"><span>HP <b>' + Math.ceil(u.hp) + "/" + st.hp + '</b></span><span>攻撃 <b>' + Math.round(st.atk) + '</b></span><span>攻撃の間隔 <b>' + st.rate.toFixed(2) + "秒</b></span>" +
     "<span>射程 <b>" + st.range.toFixed(1) + "</b></span><span>速さ <b>" + st.speed.toFixed(1) + "</b></span><span>守る広さ <b>" + st.leash + "マス</b></span>" +
-    "<span>倒した敵 <b>" + (u.kills || 0) + "</b></span><span>" + (st.melee ? "足止め <b>" + (u.kind === "hero" ? "あり" : BLOCK.cap(u) + "人") + "</b>" : "足止め <b>しない</b>") + "</span><span>" + (st.heal ? "回復 <b>" + Math.round(st.heal * 2) + "</b>" : "") + "</span></div>" +
+    "<span>倒した敵 <b>" + (u.kills || 0) + "</b></span><span>" + (st.melee ? "足止め <b>" + (u.kind === "hero" ? "あり" : BLOCK.cap(u) + "人") + "</b>" : "足止め <b>しない</b>") + "</span><span>" + (st.heal ? "1回の回復 <b>" + Math.round(st.heal * 2) + "</b>" : "") + "</span>" +
+    "<span>与えたダメージ <b>" + Math.round(u.dealt || 0) + "</b></span><span>回復した量 <b>" + Math.round(u.healed || 0) + "</b></span><span>受けたダメージ <b>" + Math.round(u.taken || 0) + "</b></span></div>" +
     '<div class="meter"><i style="width:' + Math.round(hpK * 100) + "%;background:" + (hpK > 0.35 ? "#7ddf64" : "#ff6b5a") + '"></i></div>' +
     '<span class="sub">経験値 ' + u.xp + "/" + need + "（次のLvまで敵 " + Math.ceil((need - u.xp) / LEVEL.kill) + " 人ほど）</span>" +
     '<div class="meter"><i style="width:' + Math.round((u.xp / need) * 100) + '%;background:#ffd75e"></i></div>' + skill +
@@ -1022,7 +1059,7 @@ function frame(now) {
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
   state: () => ({ downs, gold, hero: { hp: hero.hp, max: hero.st.hp, x: hero.x, y: hero.y, lv: hero.lv }, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
-    units: units.filter((u) => u.kind !== "hero").map((u) => ({ uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
+    units: units.filter((u) => u.kind !== "hero").map((u) => ({ dealt: u.dealt || 0, healed: u.healed || 0, taken: u.taken || 0, uid: u.uid, kind: u.kind, id: u.id, x: +u.x.toFixed(2), y: +u.y.toFixed(2), home: u.home, hp: u.hp, down: u.down, scd: u.scd, lv: u.lv })) }),
   select: (t) => { tool = t; selected = null; ui(); },
   place: (c, r) => place(c, r),
   error: (c, r, k = tool) => placeError(c, r, k),
@@ -1032,6 +1069,7 @@ window.MAZE = {
   setGold: (g) => { gold = g; ui(); },
   pick: (id) => pickWarlord(id),
   pickNamed: (id) => pickNamed(id),
+  nums: () => effects.filter((f) => f.kind === "num").map((f) => ({ text: f.text, col: f.col })),
   enemyPos: () => enemies.map((e) => ({ x: e.x, y: e.y, hunt: e.hunt ? e.hunt.uid : 0 })),
   config: { COLS, ROWS, GATE, CASTLE, TOOLS, SOLDIERS },
 };

@@ -84,6 +84,32 @@ check(hunt.near > 0 && hunt.downs >= 1, "敵が群がって兵士を倒す（退
 const after = await p.evaluate(() => { let hit = false; for (let i = 0; i < 120; i++) { MAZE.step(0.5); const s = MAZE.state(); if (s.hero.hp < s.hero.max) hit = true; } return { hit, over: MAZE.state().over }; });
 check(after.hit || after.over, "兵士が倒れている間は、敵が殿に襲いかかる");
 
+// ■ 与えたダメージ・受けたダメージ・回復量の数字
+await fresh();
+const nums = await p.evaluate(() => {
+  MAZE.setGold(9999); MAZE.pickNamed("sakon"); MAZE.place(5, 6); MAZE.pickNamed("gensaku"); MAZE.place(5, 7);
+  MAZE.start(); const seen = { white: 0, red: 0, green: 0 };
+  for (let i = 0; i < 160; i++) { MAZE.step(0.1); for (const n of MAZE.nums()) { if (n.col === "#ffffff" || n.col === "#ffd75e") seen.white++; if (n.col === "#ff6b5a") seen.red++; if (n.col === "#7ddf64") seen.green++; } }
+  return { seen, units: MAZE.state().units };
+});
+check(nums.seen.white > 0, "敵に与えたダメージが白い数字で出る");
+check(nums.seen.red > 0, "味方が受けたダメージが赤い数字で出る");
+check(nums.seen.green > 0, "回復量が緑の数字で出る");
+const sk = nums.units.find((u) => u.id === "sakon"), gk = nums.units.find((u) => u.id === "gensaku");
+check(sk.dealt > 0 && sk.taken > 0 && gk.healed > 0, "与えた・受けたダメージと回復量の合計を数える（左近 与" + Math.round(sk.dealt) + "・受" + Math.round(sk.taken) + "／玄朔 回復" + Math.round(gk.healed) + "）");
+await p.waitForTimeout(100);
+await shot("maze-nums.png");
+{
+  await p.evaluate(() => { paused = true; }); // 札を見る間は止める
+  const h = (await S()).hero;
+  await p.mouse.click(box.x + cs * h.x, box.y + cs * (h.y - 0.2));
+  await p.waitForTimeout(300);
+  const t = await p.locator("#card").textContent();
+  check(/与えたダメージ/.test(t) && /回復した量/.test(t) && /受けたダメージ/.test(t), "ステータスの札に与えたダメージ・回復した量・受けたダメージの合計");
+  await p.click("#cardClose");
+  await p.evaluate(() => { paused = false; });
+}
+
 // ■ 武将：何人でも置ける・同じ武将は1人まで・技
 await fresh();
 await p.click('#tools [data-tool="warlord"]');
