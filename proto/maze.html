@@ -12,6 +12,8 @@
   #hud { width: 100%; max-width: 560px; display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 12px 4px; font-weight: 700; font-size: 15px; }
   #hud span { white-space: nowrap; }
   #gold { color: var(--gold); }
+  #nextWave { font-weight: 400; font-size: 12px; color: #d9c7a6; }
+  #nextWave.soon { color: #ff8a7a; font-weight: 700; animation: blink .5s steps(2) infinite; }
   #heart { color: #ffd75e; }
   #msg { width: 100%; max-width: 560px; min-height: 36px; padding: 0 12px; font-size: 13px; line-height: 1.35; color: #d9c7a6; }
   #wrap { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; position: relative; }
@@ -37,7 +39,7 @@
   #tools button small { color: var(--gold); }
   #tools button.sel { border-color: var(--gold); background: #4a3b22; }
   #tools button:disabled { opacity: .45; }
-  #ctrl { width: 100%; max-width: 560px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 6px; padding: 2px 8px 8px; }
+  #ctrl { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 2px 8px 8px; }
   /* 🏆 ランキング */
   .rank-form { display: grid; gap: 6px; margin: 8px 0; }
   .rank-form[hidden] { display: none; }
@@ -52,12 +54,7 @@
   .rank-list li small { color: #d9c7a6; }
   .rank-list li span { overflow-wrap: anywhere; }
   #ctrl button { font-size: 15px; padding: 9px 2px; font-weight: 700; }
-  #start { background: #6b2a1f !important; border-color: #c0573f !important; }
-  #start:disabled { opacity: .5; }
-  #start { line-height: 1.15; padding: 5px 2px !important; }
-  #start small { font-size: 10px; font-weight: 400; opacity: .85; }
-  #start.soon { animation: blink .5s steps(2) infinite; }
-  @keyframes blink { 50% { background: #a8432f; } }
+  @keyframes blink { 50% { opacity: .35; } }
   .sheet { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
   .sheet[hidden] { display: none; }
   .sheet > div { max-width: 440px; max-height: 88vh; overflow-y: auto; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.6; }
@@ -73,11 +70,11 @@
 </style>
 </head>
 <body>
-<div id="hud"><span>⚔️ 第<b id="wave">0</b>波</span><span id="gold">💰 0G</span><span id="heart">👑 殿 300</span></div>
+<div id="hud"><span>⚔️ 第<b id="wave">0</b>波 <small id="nextWave"></small></span><span id="gold">💰 0G</span><span id="heart">👑 殿 300</span></div>
 <div id="msg"></div>
 <div id="wrap"><canvas id="cv"></canvas><div id="card" hidden></div></div>
 <div id="tools"></div>
-<div id="ctrl"><button id="start">⏳ 第1波まで</button><button id="speed">×1</button><button id="pause">⏸</button><button id="rankBtn" aria-label="ランキング">🏆</button><button id="helpBtn">？</button></div>
+<div id="ctrl"><button id="speed">×1</button><button id="pause">⏸</button><button id="rankBtn" aria-label="ランキング">🏆</button><button id="helpBtn">？</button></div>
 <div id="rank" class="sheet" hidden><div>
   <h2>🏆 迷路の関 ランキング</h2>
   <div class="sub" style="font-size:12px;color:#d9c7a6">殿が討ち死にするまでに何波まで耐えたか（同じ波なら倒した敵の数）で並びます。上位30人。</div>
@@ -88,7 +85,7 @@
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
   <b>👑殿（主人公）を守りぬく</b>戦いです。<b>殿が倒れたら負け</b>。殿は下の🏯本陣から始まり、自分でも戦います（タップで選んで持ち場を移せます）。<br>
-  敵は<b>時間がたつと</b>上の⛩️門から入ってきます（最初は30秒の準備時間。そのあと45秒ごとに次の波。前の波をしのぐと15秒後に次の波）。下のボタンを押すと、待たずにすぐ呼べます。<br>
+  敵は<b>時間がたつと</b>上の⛩️門から入ってきます（最初は30秒の準備時間。そのあと45秒ごとに次の波。前の波をしのぐと15秒後に次の波）。次の波までの残り秒数は、上の「第○波」の横に出ます。<br>
   敵は<b>兵士を全滅させるつもり</b>で、殿・兵士・武将のうち近い者から狙って襲いかかり、群がって斬りかかります。<br>
   <b>🪵柵</b>で道をふさぐと、敵は残った道を探して回り道をします（道を完全にふさぐ置き方はできません）。<br>
   兵士は全員<b>⭐ネームド兵士</b>（雑賀孫市・島左近・服部半蔵など18人）です。1人ずつ名前と固有スキルがあります。<br>
@@ -280,7 +277,7 @@ function reset() {
   tool = tool === "sell" ? tool : "fence"; picked = null; pickedNamed = null; selected = null; speed = speed || 1; paused = false;
   distMap = flow(grid);
   $("over").hidden = true;
-  say("👑殿を守りぬけ！ 柵で迷路を作り、兵士や武将を置いて ▶ 出陣。殿が倒れたら負け。");
+  say("👑殿を守りぬけ！ 30秒後に敵が来る。柵で迷路を作り、兵士や武将を置こう。殿が倒れたら負け。");
   ui();
 }
 const inside = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
@@ -1048,11 +1045,10 @@ function ui() {
   $("wave").textContent = wave;
   $("gold").textContent = "💰 " + gold + "G";
   $("heart").textContent = "👑 殿 " + Math.ceil(hero.hp) + "/" + hero.st.hp;
-  $("start").disabled = over;
+  // 次の波までの残り時間（上の表示に小さく）
   const left = Math.max(0, Math.ceil(nextIn));
-  const sh = "⏳ 第" + (wave + 1) + "波まで <b>" + left + "秒</b><br><small>押すとすぐ呼ぶ</small>";
-  if ($("start").dataset.h !== sh) { $("start").dataset.h = sh; $("start").innerHTML = sh; } // 変わったときだけ書きかえる（押している最中に消えないように）
-  $("start").classList.toggle("soon", left <= TIMING.warn);
+  $("nextWave").textContent = over || !autoWaves ? "" : "⏳" + left + "秒";
+  $("nextWave").classList.toggle("soon", !over && left <= TIMING.warn);
   if (lastWarlordIcon !== picked + "/" + pickedNamed) {
     lastWarlordIcon = picked + "/" + pickedNamed;
     for (const k of ["warlord", "named"]) { const wb = document.querySelector('#tools [data-tool="' + k + '"] b'); if (wb) wb.innerHTML = toolIcon(k); }
@@ -1062,7 +1058,6 @@ function ui() {
     b.disabled = TOOLS[b.dataset.tool].cost > gold && b.dataset.tool !== tool;
   }
 }
-$("start").onclick = startWave;
 $("speed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $("speed").textContent = "×" + speed; };
 $("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "▶" : "⏸"; say(paused ? "一時停止中。止めている間も柵を置いたり、持ち場を移したりできます。" : ""); };
 $("helpBtn").onclick = () => ($("help").hidden = false);

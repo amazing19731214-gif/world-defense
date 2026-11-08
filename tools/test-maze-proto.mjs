@@ -181,18 +181,17 @@ await p.evaluate(() => MAZE.step(3));
 const hm = (await S()).hero;
 check(Math.abs(hm.y - 13.5) < 0.1, "殿もタップで選んで持ち場を移せる");
 
-// ■ 敵は時間で攻めてくる（ボタンで早めに呼べる）
+// ■ 敵は時間で攻めてくる
 await fresh(true);
-check(/第1波まで/.test(await p.locator("#start").textContent()) && /30秒/.test(await p.locator("#start").textContent()), "ボタンに第1波までの残り時間（30秒）");
+check(/30秒/.test(await p.locator("#nextWave").textContent()) && (await p.locator("#start").count()) === 0, "上の表示に次の波までの残り時間（30秒）。すぐ呼ぶボタンはない");
 await p.waitForTimeout(1500);
 { const n = await p.evaluate(() => MAZE.nextIn()); check(n < 29.9 && n > 27, "説明を閉じると時間が進む（あと" + n.toFixed(1) + "秒）"); }
 const auto1 = await p.evaluate(() => { MAZE.step(24); const a = MAZE.state().wave; MAZE.step(7); return { before: a, after: MAZE.state().wave, msg: document.getElementById("msg").textContent }; });
-check(auto1.before === 0 && auto1.after === 1, "ボタンを押さなくても、30秒たつと第1波が来る");
+check(auto1.before === 0 && auto1.after === 1, "30秒たつと第1波が来る");
 const auto2 = await p.evaluate(() => { MAZE.step(46); return MAZE.state().wave; });
 check(auto2 >= 2, "前の波が残っていても、45秒ごとに次の波が来る（第" + auto2 + "波）");
 await fresh(true);
-await p.click("#start");
-check((await S()).wave === 1, "ボタンを押すと待たずにすぐ呼べる");
+check((await p.locator("#ctrl button").count()) === 4, "下のボタンは速さ・停止・🏆・？の4つ");
 await p.click("#helpBtn");
 const t0 = await p.evaluate(() => MAZE.nextIn());
 await p.waitForTimeout(1200);
