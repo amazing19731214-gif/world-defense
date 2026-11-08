@@ -3,7 +3,10 @@
 メニューの「記録・その他」にある **💬 掲示板** から開きます。書きこみは Firebase（Google のサービス）の Firestore に置きます。
 プレイヤーは登録なしで書きこめます（匿名ログイン）。
 
-`src/board.js` の `BOARD.config` が `null` のあいだは「準備中」と出るだけで、外へは何も通信しません。
+Firebase のプロジェクトは `world-defense-cbba0`（設定は `src/board.js` の `BOARD.config`）。掲示板を開くまでは Firebase へ通信しません。
+`BOARD.config` を `null` にすると「準備中」と出るだけになります。
+
+`apiKey` は公開してよい値ですが、ビルドの秘密情報チェック（`tools/build.mjs`）にかからないよう、Firebase のウェブ用 `apiKey: "AIza…"` の形だけを例外にしています。
 
 ## 仕様
 

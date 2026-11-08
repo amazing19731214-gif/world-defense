@@ -102,7 +102,9 @@ for (const [marker, value] of [
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => JSON.stringify(value));
 }
-if (/sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|api[_-]?key\s*[:=]/i.test(html.replace(/data:[^"]+/g, ""))) {
+// 例外：掲示板の Firebase のウェブ用 apiKey（AIza…）は、ページに載せて公開する前提の値（守りは Firestore のルール）。この1種類だけ調べる対象から外す
+const publicFirebaseKey = /apiKey: "AIza[0-9A-Za-z_-]{35}"/g;
+if (/sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|api[_-]?key\s*[:=]/i.test(html.replace(/data:[^"]+/g, "").replace(publicFirebaseKey, ""))) {
   throw new Error("秘密情報らしき文字列が含まれています。HTMLに埋め込まないでください。");
 }
 

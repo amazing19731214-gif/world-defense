@@ -6,7 +6,15 @@
         //   通報が hideAt 人に達した書きこみは隠す・自分の書きこみは消せる。運営は Firebase の画面から消せる。
         // 試験では window.WD_BOARD_BACKEND に作り物の置き場を入れて動かす（本物の Firebase へはつながない）。
         const BOARD = {
-          config: null,
+          // Firebase のウェブアプリの設定（プロジェクト world-defense-cbba0）。公開してよい値で、守りは Firestore のルールで行う
+          config: {
+            apiKey: "AIzaSyDKbbFW2ySb5AsvLZUOwNj37Wqw9rHcLS0",
+            authDomain: "world-defense-cbba0.firebaseapp.com",
+            projectId: "world-defense-cbba0",
+            storageBucket: "world-defense-cbba0.firebasestorage.app",
+            messagingSenderId: "986239864352",
+            appId: "1:986239864352:web:cc46ae4b293068f839b645",
+          },
           sdk: "https://www.gstatic.com/firebasejs/10.12.2/",
           nameMax: 12, // 名前の文字数
           textMax: 140, // 本文の文字数

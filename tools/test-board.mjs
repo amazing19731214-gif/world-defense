@@ -40,18 +40,22 @@ const mock = () => {
   };
 };
 try {
-  // ■ 設定が入っていない本番の版：準備中と出るだけで、外へは通信しない
+  // ■ 本番の版で Firebase の部品が読みこめないとき（通信できない等）：エラーにならず「つながりませんでした」と出る。
+  //   掲示板を開くまでは Firebase へ通信しない
   {
     const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await c.route(/gstatic\.com|googleapis\.com|firebaseapp\.com/, (r) => r.abort());
     const p = await c.newPage();
     p.on("pageerror", (e) => errors.push(e.message));
     p.on("request", (r) => { if (!r.url().startsWith(base) && !r.url().startsWith("data:")) outside.push(r.url()); });
     await p.goto(base);
+    await p.waitForTimeout(500);
+    check(!outside.some((u) => /firebase|gstatic|googleapis/.test(u)), "掲示板を開くまでは Firebase へ通信しない", outside);
     await p.evaluate(() => document.getElementById("boardOpen").click());
     await p.waitForTimeout(300);
     check(await p.locator("#boardSheet").isVisible(), "メニューの「💬 掲示板」で掲示板が開く");
-    check(/準備中/.test(await p.locator("#boardStatus").textContent()) && !(await p.locator("#boardForm").isVisible()), "設定が入るまでは「準備中」と出て、書きこみ欄は出ない");
-    check(!outside.some((u) => /firebase|gstatic|googleapis/.test(u)), "設定が入るまでは Firebase へ通信しない", outside);
+    await p.waitForFunction(() => /つながりませんでした/.test(document.getElementById("boardStatus").textContent), null, { timeout: 15000 });
+    check(!(await p.locator("#boardForm").isVisible()), "つながらないときは「つながりませんでした」と出て、書きこみ欄は出ない");
     await c.close();
   }
   // ■ 作り物の置き場で、書く・読む・消す・通報
