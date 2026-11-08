@@ -86,7 +86,7 @@ if (manifest.pixel) {
 }
 
 let html = fs.readFileSync(path.join(root, "src", "index.template.html"), "utf8");
-for (const name of ["job-evolution", "job-books", "soldier-chronicle", "formation-view", "auto-ougi", "ultimate-ougi", "trial", "first-play", "survival-bosses"]) {
+for (const name of ["job-evolution", "job-books", "soldier-chronicle", "formation-view", "auto-ougi", "ultimate-ougi", "trial", "first-play", "survival-bosses", "board"]) {
   const marker = `/*@@${name.toUpperCase().replaceAll("-", "_")}@@*/`;
   if (!html.includes(marker)) throw new Error(`テンプレートに ${marker} がありません`);
   html = html.replace(marker, () => fs.readFileSync(path.join(root, "src", name + ".js"), "utf8"));
