@@ -205,6 +205,56 @@ await fresh();
 const lose = await p.evaluate(() => { for (let i = 0; i < 30 && !MAZE.state().over; i++) { MAZE.start(); MAZE.step(150); } return MAZE.state(); });
 await p.waitForTimeout(800);
 check(lose.over && lose.hero.hp <= 0 && (await p.locator("#over").isVisible()) && (await p.locator("#overTitle").textContent()).includes("殿"), "殿が倒れると負けの画面が出る（第" + lose.wave + "波）");
+// ■ 🏆 ランキング（本物の Firebase にはつながず、作り物の置き場で）
+await p.addInitScript(() => {
+  const rows = [{ id: "r1", name: "槍の権兵衛", wave: 9, kills: 120, time: 400, uid: "o1", score: 9000120 }, { id: "r2", name: "弓の太郎", wave: 5, kills: 60, time: 200, uid: "o2", score: 5000060 }];
+  let fn = null, n = 0;
+  const emit = () => fn && fn(rows.slice().sort((a, b) => b.score - a.score));
+  window.MAZE_RANK_BACKEND = {
+    init: async () => "me",
+    listen(cb) { fn = cb; emit(); return () => {}; },
+    async add(r) { const id = "m" + ++n; rows.push({ id, ...r, uid: "me", score: r.wave * 1000000 + r.kills }); emit(); return id; },
+  };
+});
+await fresh();
+await p.click("#rankBtn");
+await p.waitForTimeout(300);
+{
+  const t = await p.locator("#rankList").textContent();
+  check(await p.locator("#rank").isVisible() && /槍の権兵衛/.test(t) && /第9波/.test(t), "🏆ボタンでランキングが見られる（波の多い順）");
+  const n0 = await p.evaluate(() => MAZE.nextIn());
+  await p.waitForTimeout(800);
+  check(Math.abs((await p.evaluate(() => MAZE.nextIn())) - n0) < 0.01, "ランキングを見ている間は時間が止まる");
+  await p.click("#rankClose");
+}
+await p.evaluate(() => { MAZE.start(); MAZE.step(20); MAZE.start(); MAZE.step(5); MAZE.start(); MAZE.step(5); MAZE.heroFall(); });
+await p.waitForTimeout(900);
+check(await p.locator("#rankForm").isVisible(), "殿が倒れると、ランキングに登録する欄が出る");
+await p.fill("#rankName", "テスト殿");
+await p.click("#rankSend");
+await p.waitForTimeout(300);
+{
+  const t = await p.locator("#overRank").textContent();
+  check(/登録しました/.test(await p.locator("#rankMsg").textContent()) && /テスト殿/.test(t) && /第3波/.test(t), "記録を登録すると、順位の表に入る（第3波）");
+  const order = await p.locator("#overRank li").allTextContents();
+  check(/槍の権兵衛/.test(order[0]) && /弓の太郎/.test(order[1]) && /テスト殿/.test(order[2]), "表は第9波 → 第5波 → 第3波の順");
+  check((await p.locator("#overRank li.me").count()) === 1, "自分の記録は色が変わる");
+  check((await p.locator("#rankSend").isDisabled()) && (await p.locator("#overRank li").count()) === 3, "同じ記録は2回登録できない（ボタンが押せなくなる）");
+}
+await p.click("#again");
+await p.waitForTimeout(200);
+await p.evaluate(() => { MAZE.setAuto(false); MAZE.start(); MAZE.heroFall(); });
+await p.waitForTimeout(900);
+await p.fill("#rankName", "死 ね");
+await p.click("#rankSend");
+await p.waitForTimeout(200);
+check(/使えないことば/.test(await p.locator("#rankMsg").textContent()), "名前にNGことばは使えない");
+await p.fill("#rankName", "二回目");
+await p.click("#rankSend");
+await p.waitForTimeout(200);
+check(/続けては登録できません/.test(await p.locator("#rankMsg").textContent()), "続けて（30秒以内に）は登録できない");
+await shot("maze-rank.png");
+
 check(errs.length === 0, "エラーなし " + errs.join("|"));
 console.log("結果: " + ok + " 件成功");
 await b.close();

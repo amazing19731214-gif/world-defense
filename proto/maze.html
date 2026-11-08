@@ -37,7 +37,20 @@
   #tools button small { color: var(--gold); }
   #tools button.sel { border-color: var(--gold); background: #4a3b22; }
   #tools button:disabled { opacity: .45; }
-  #ctrl { width: 100%; max-width: 560px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 6px; padding: 2px 8px 8px; }
+  #ctrl { width: 100%; max-width: 560px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 6px; padding: 2px 8px 8px; }
+  /* 🏆 ランキング */
+  .rank-form { display: grid; gap: 6px; margin: 8px 0; }
+  .rank-form[hidden] { display: none; }
+  .rank-form input { font: inherit; font-size: 16px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #00000055; color: var(--text); }
+  .rank-form button { font: inherit; font-weight: 700; padding: 9px; border-radius: 8px; border: 2px solid var(--gold); background: #4a3b22; color: var(--text); }
+  .rank-form button:disabled { opacity: .5; }
+  .rank-msg { min-height: 1.2em; font-size: 12px; color: var(--gold); }
+  .rank-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+  .rank-list li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 6px; padding: 5px 2px; border-bottom: 1px solid #ffffff1a; align-items: baseline; }
+  .rank-list li.me { background: #f2c14e22; }
+  .rank-list li b { color: var(--gold); text-align: right; }
+  .rank-list li small { color: #d9c7a6; }
+  .rank-list li span { overflow-wrap: anywhere; }
   #ctrl button { font-size: 15px; padding: 9px 2px; font-weight: 700; }
   #start { background: #6b2a1f !important; border-color: #c0573f !important; }
   #start:disabled { opacity: .5; }
@@ -64,7 +77,14 @@
 <div id="msg"></div>
 <div id="wrap"><canvas id="cv"></canvas><div id="card" hidden></div></div>
 <div id="tools"></div>
-<div id="ctrl"><button id="start">⏳ 第1波まで</button><button id="speed">×1</button><button id="pause">⏸</button><button id="helpBtn">？</button></div>
+<div id="ctrl"><button id="start">⏳ 第1波まで</button><button id="speed">×1</button><button id="pause">⏸</button><button id="rankBtn" aria-label="ランキング">🏆</button><button id="helpBtn">？</button></div>
+<div id="rank" class="sheet" hidden><div>
+  <h2>🏆 迷路の関 ランキング</h2>
+  <div class="sub" style="font-size:12px;color:#d9c7a6">殿が討ち死にするまでに何波まで耐えたか（同じ波なら倒した敵の数）で並びます。上位30人。</div>
+  <div id="rankStatus" class="rank-msg"></div>
+  <ol id="rankList" class="rank-list"></ol>
+  <button id="rankClose">閉じる</button>
+</div></div>
 <div id="help" class="sheet"><div>
   <h2>迷路の関（試作）</h2>
   <b>👑殿（主人公）を守りぬく</b>戦いです。<b>殿が倒れたら負け</b>。殿は下の🏯本陣から始まり、自分でも戦います（タップで選んで持ち場を移せます）。<br>
@@ -80,6 +100,7 @@
   ・兵士も武将も何人でも置けます（同じ人物は1人まで）。武将はゲージがたまると<b>技</b>を自動で使います。<br>
   ・敵に与えたダメージは<b>白</b>（会心は<b>黄色</b>）、味方が受けたダメージは<b>赤</b>、回復は<b>緑</b>の数字で出ます。人物をタップすると、それまでの合計も見られます。<br>
   ・説明や一覧を開いている間と⏸の間は、時間が止まります。<br>
+  ・殿が倒れたら、記録を<b>🏆ランキング</b>に登録できます（何波まで耐えたか）。🏆ボタンでいつでも見られます。<br>
   ・<b>撤去</b>で柵・兵士・武将を外せます。準備中は全額、戦闘中は半額が戻ります。<br>
   <small>本番のゲームとは別の試作です。保存はしません。</small>
   <button id="helpClose">はじめる</button>
@@ -93,6 +114,12 @@
 <div id="over" class="sheet" hidden><div>
   <h2 id="overTitle">殿、討ち死に…</h2>
   <div id="overText"></div>
+  <form id="rankForm" class="rank-form" autocomplete="off">
+    <input id="rankName" type="text" maxlength="12" placeholder="名無しの殿" aria-label="ランキングに載せる名前">
+    <button id="rankSend" type="submit">🏆 ランキングに登録</button>
+    <div id="rankMsg" class="rank-msg"></div>
+  </form>
+  <ol id="overRank" class="rank-list"></ol>
   <button id="again">もう一度</button>
 </div></div>
 <script>
@@ -546,7 +573,9 @@ function heroFell() {
   playing = false; over = true;
   effects.push({ kind: "down", x: hero.x, y: hero.y, t: 2, text: "殿、討ち死に…" });
   $("overTitle").textContent = "殿、討ち死に…";
-  $("overText").innerHTML = "第" + wave + "波で殿が倒れました。<br>倒した敵：" + kills + "人";
+  $("overText").innerHTML = "第" + wave + "波で殿が倒れました。<br>倒した敵：" + kills + "人・時間：" + rankTime(Math.floor(time));
+  rankResult = { wave, kills, time: Math.floor(time), sent: false };
+  rankPrepareForm();
   setTimeout(() => ($("over").hidden = false), 600);
 }
 function hurtUnit(u, dmg) {
@@ -1038,7 +1067,7 @@ $("speed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $("s
 $("pause").onclick = () => { paused = !paused; $("pause").textContent = paused ? "▶" : "⏸"; say(paused ? "一時停止中。止めている間も柵を置いたり、持ち場を移したりできます。" : ""); };
 $("helpBtn").onclick = () => ($("help").hidden = false);
 $("helpClose").onclick = () => ($("help").hidden = true);
-$("again").onclick = reset;
+$("again").onclick = () => { rankResult = null; $("rankName").disabled = false; reset(); };
 window.addEventListener("resize", resize);
 
 let last = performance.now();
@@ -1077,7 +1106,7 @@ function renderCard(force) {
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  const sheetOpen = !$("help").hidden || !$("pick").hidden; // 説明や一覧を開いている間は時間を止める
+  const sheetOpen = !$("help").hidden || !$("pick").hidden || !$("rank").hidden; // 説明や一覧を開いている間は時間を止める
   if (!paused && !over && !document.hidden && !sheetOpen) for (let i = 0; i < speed; i++) update(dt);
   else time += dt;
   draw();
@@ -1085,6 +1114,114 @@ function frame(now) {
   if (cardClock <= 0 || (!selected && !$("card").hidden)) { cardClock = 0.2; renderCard(); }
   requestAnimationFrame(frame);
 }
+// ===== 🏆 ランキング（本番の掲示板と同じ Firebase のプロジェクト。コレクションは mazeScores） =====
+// 記録：名前（12文字まで）・耐えた波・倒した敵・時間。並びは score = 波 × 1000000 + 倒した敵（大きい順）。
+// 同じ端末から続けて登録できるのは RANK.cooldown 秒ごと（Firestore のルールでも同じ）。記録は消せない（運営は Firebase の画面から消せる）
+const RANK = {
+  config: {
+    apiKey: "AIzaSyDKbbFW2ySb5AsvLZUOwNj37Wqw9rHcLS0",
+    authDomain: "world-defense-cbba0.firebaseapp.com",
+    projectId: "world-defense-cbba0",
+    storageBucket: "world-defense-cbba0.firebasestorage.app",
+    messagingSenderId: "986239864352",
+    appId: "1:986239864352:web:cc46ae4b293068f839b645",
+  },
+  sdk: "https://www.gstatic.com/firebasejs/10.12.2/",
+  show: 30, nameMax: 12, cooldown: 30, defaultName: "名無しの殿",
+  nameKey: "worldDefense.boardName.v1", // 掲示板と同じ名前を使う
+  ng: ["死ね", "氏ね", "殺す", "ころす", "きもい", "うざい", "くたばれ", "ちんこ", "まんこ", "せっくす", "がいじ", "害児", "きちがい", "気違い", "fuck", "shit"],
+};
+let rankApi = null, rankReady = null, rankUid = "", rankRows = [], rankErr = "", rankResult = null, rankMine = "";
+const rankTime = (t) => Math.floor(t / 60) + "分" + String(t % 60).padStart(2, "0") + "秒";
+const rankNorm = (x) => String(x).normalize("NFKC").toLowerCase().replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60)).replace(/[\s・。、！？!?.,ー〜~_\-]/g, "");
+function rankFirebase(cfg) {
+  let fs = null, db = null, uid = "";
+  return {
+    async init() {
+      const [appM, authM, storeM] = await Promise.all(["firebase-app.js", "firebase-auth.js", "firebase-firestore.js"].map((f) => import(RANK.sdk + f)));
+      fs = storeM;
+      const app = appM.initializeApp(cfg, "wd-maze-rank");
+      const auth = authM.getAuth(app);
+      await authM.signInAnonymously(auth);
+      uid = auth.currentUser.uid;
+      db = fs.getFirestore(app);
+      return uid;
+    },
+    listen(cb, fail) {
+      const q = fs.query(fs.collection(db, "mazeScores"), fs.orderBy("score", "desc"), fs.limit(RANK.show));
+      return fs.onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), fail);
+    },
+    async add(r) {
+      const b = fs.writeBatch(db), ref = fs.doc(fs.collection(db, "mazeScores"));
+      b.set(ref, { name: r.name, wave: r.wave, kills: r.kills, time: r.time, score: r.wave * 1000000 + r.kills, uid, createdAt: fs.serverTimestamp() });
+      b.set(fs.doc(db, "mazeUsers", uid), { last: fs.serverTimestamp() });
+      await b.commit();
+      return ref.id;
+    },
+  };
+}
+function rankConnect() {
+  if (rankReady) return rankReady;
+  rankApi = window.MAZE_RANK_BACKEND || (RANK.config ? rankFirebase(RANK.config) : null);
+  if (!rankApi) return (rankReady = Promise.resolve(false));
+  rankReady = rankApi.init().then((uid) => {
+    rankUid = uid;
+    rankApi.listen((rows) => { rankRows = rows; rankErr = ""; renderRank(); }, () => { rankErr = "ランキングを読みこめませんでした。"; renderRank(); });
+    return true;
+  }).catch(() => { rankErr = "ランキングにつながりませんでした。通信の具合を確かめてね。"; rankReady = null; renderRank(); return false; });
+  return rankReady;
+}
+function rankHtml() {
+  if (!rankRows.length) return '<li><span></span><span class="sub">まだ記録はありません。最初の記録を残そう！</span><span></span></li>';
+  return rankRows.map((r, i) =>
+    '<li class="' + (r.id === rankMine || (r.uid === rankUid && rankMine === "") ? "me" : "") + '"><b>' + (i + 1) + '</b><span>' + escHtml(r.name) + '<br><small>倒した敵 ' + r.kills + '人・' + rankTime(r.time || 0) + '</small></span><b>第' + r.wave + '波</b></li>').join("");
+}
+const escHtml = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+function renderRank() {
+  const st = rankErr || (rankUid ? "" : "つないでいます…");
+  $("rankStatus").textContent = st;
+  $("rankList").innerHTML = rankUid ? rankHtml() : "";
+  $("overRank").innerHTML = rankUid ? rankHtml() : "";
+  if (!$("over").hidden && !rankUid) $("rankMsg").textContent = st;
+}
+function rankWait() {
+  let last = 0;
+  try { last = +localStorage.getItem("worldDefense.mazeRankLast.v1") || 0; } catch (e) {}
+  return Math.max(0, Math.ceil(RANK.cooldown - (Date.now() - last) / 1000));
+}
+function rankPrepareForm() {
+  try { $("rankName").value = localStorage.getItem(RANK.nameKey) || ""; } catch (e) {}
+  $("rankMsg").textContent = "";
+  $("rankSend").disabled = false;
+  $("rankForm").hidden = !(rankResult && rankResult.wave >= 1);
+  rankConnect().then(renderRank);
+}
+async function rankSubmit(ev) {
+  if (ev) ev.preventDefault();
+  if (!rankResult || rankResult.sent) return;
+  const name = $("rankName").value.trim() || RANK.defaultName;
+  if (/https?:|www\./i.test(name)) return ($("rankMsg").textContent = "名前にURLは使えません。");
+  if (RANK.ng.some((w) => rankNorm(name).includes(rankNorm(w)))) return ($("rankMsg").textContent = "使えないことばが入っています。");
+  const w = rankWait();
+  if (w > 0) return ($("rankMsg").textContent = "続けては登録できません。あと" + w + "秒まってね。");
+  if (!(await rankConnect())) return;
+  $("rankSend").disabled = true;
+  $("rankMsg").textContent = "登録しています…";
+  try {
+    rankMine = await rankApi.add({ name: name.slice(0, RANK.nameMax), wave: rankResult.wave, kills: rankResult.kills, time: rankResult.time });
+    rankResult.sent = true;
+    try { localStorage.setItem(RANK.nameKey, $("rankName").value.trim()); localStorage.setItem("worldDefense.mazeRankLast.v1", String(Date.now())); } catch (e) {}
+    $("rankMsg").textContent = "登録しました！";
+    $("rankForm").querySelector("input").disabled = true;
+    renderRank();
+  } catch (e) {
+    $("rankSend").disabled = false;
+    $("rankMsg").textContent = "登録できませんでした（続けて登録したときは、少し待ってね）。";
+  }
+}
+$("rankForm").addEventListener("submit", rankSubmit);
+$("rankBtn").onclick = () => { $("rank").hidden = false; renderRank(); rankConnect().then(renderRank); };
+$("rankClose").onclick = () => ($("rank").hidden = true);
 // 試験用の窓口（画面の操作と同じ処理を呼ぶ）
 window.MAZE = {
   state: () => ({ downs, gold, hero: { hp: hero.hp, max: hero.st.hp, x: hero.x, y: hero.y, lv: hero.lv }, wave, playing, over, enemies: enemies.length, route: routeCells().length - 1, grid: grid.map((row) => row.map((o) => (o ? o.kind : ""))),
@@ -1098,6 +1235,7 @@ window.MAZE = {
   setGold: (g) => { gold = g; ui(); },
   setAuto: (on) => { autoWaves = on; },
   nextIn: () => nextIn,
+  heroFall: () => { hero.hp = 0; hero.down = 999; heroFell(); },
   pick: (id) => pickWarlord(id),
   pickNamed: (id) => pickNamed(id),
   nums: () => effects.filter((f) => f.kind === "num").map((f) => ({ text: f.text, col: f.col })),
