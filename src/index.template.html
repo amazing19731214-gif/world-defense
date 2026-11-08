@@ -2983,6 +2983,22 @@
       #eventLogList { list-style: none; margin: 0; padding: 0; }
       #eventLogList li { padding: 8px 4px; border-bottom: 1px solid #ffffff22; line-height: 1.5; overflow-wrap: anywhere; }
       #eventLogList li small { display: block; opacity: 0.7; }
+      /* 💬 掲示板 */
+      #boardForm { display: grid; gap: 6px; margin: 8px 0 10px; }
+      #boardForm[hidden] { display: none; }
+      #boardForm input, #boardForm textarea { font: inherit; font-size: 16px; padding: 8px; border-radius: 8px; border: 1px solid #ffffff44; background: #00000055; color: inherit; width: 100%; box-sizing: border-box; }
+      #boardForm textarea { min-height: 64px; resize: vertical; }
+      #boardForm .board-row { display: flex; gap: 8px; align-items: center; }
+      #boardForm .board-row small { margin-left: auto; opacity: 0.75; }
+      #boardCount.over { color: #ff8a7a; opacity: 1; }
+      #boardMsg { min-height: 1.2em; font-size: 13px; color: #ffd75e; }
+      #boardList { list-style: none; margin: 0; padding: 0; }
+      .board-post { padding: 8px 4px; border-bottom: 1px solid #ffffff22; }
+      .board-post.mine { background: #ffffff0d; }
+      .board-meta { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+      .board-meta small { opacity: 0.7; }
+      .board-meta button { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+      .board-text { margin: 4px 0 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
       .level-bubble {
         position: absolute; transform: translate(-50%, -100%); max-width: min(230px, calc(100% - 16px));
         padding: 5px 8px; border: 1px solid #e8c85a; border-radius: 11px;
@@ -3202,7 +3218,7 @@ OFF</button>
         ><h3 class="menu-group">装備・アイテム</h3
         ><button id="gearOpen">🎒 装備倉庫</button><button id="menuShop" class="compact-only">🏪 商店</button><button id="forgeOpen">🔥 秘伝錬成</button
         ><h3 class="menu-group">記録・その他</h3
-        ><button id="zukanOpen">📖 図鑑</button><button id="checkpointSave">💾 途中保存</button><button id="reset">↻ 最初から</button
+        ><button id="zukanOpen">📖 図鑑</button><button id="boardOpen">💬 掲示板</button><button id="checkpointSave">💾 途中保存</button><button id="reset">↻ 最初から</button
         ><button id="wipeData">🗑 データ消去</button><button id="layoutToggle">📱 表示：コンパクト</button><button id="fieldToggle">🧪 縦向きの戦場</button><button id="gfxToggle" title="グラフィック：従来版／新ドット絵（試作）の切り替え">🎨 絵：従来版</button><button id="eventLogOpen">📜 出来事</button
         ><button id="previewOpen" hidden>🧪 試作：終盤</button
         ><button id="showAllFeatures" hidden>🔓 全機能を表示</button>
@@ -3212,6 +3228,20 @@ OFF</button>
       <p id="checkpointStatus" class="muted" role="status">ウェーブクリア時に自動保存します。</p>
       <small>GitHub Pages / Safari対応・ペイント調・個別素材版 v128（サバイバル・十種の大ボス）</small>
     </main>
+    <div id="boardSheet" class="sheet-back" hidden>
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
+        <div class="panel-head"><strong id="boardTitle">💬 掲示板</strong><button id="boardClose" class="icon-btn" aria-label="掲示板を閉じる">✕ 閉じる</button></div>
+        <p class="muted">プレイヤーどうしの交流の場です。<b>名前・住所・学校・連絡先など、自分や友だちの情報は書かないでね。</b>いやな書きこみは「通報」してください。</p>
+        <p id="boardStatus" class="muted"></p>
+        <form id="boardForm" hidden autocomplete="off">
+          <input id="boardName" type="text" aria-label="名前" />
+          <textarea id="boardText" aria-label="本文" placeholder="ひとこと（攻略・自慢・あいさつなど）"></textarea>
+          <div class="board-row"><button id="boardSend" type="submit">書きこむ</button><small id="boardCount">0/140</small></div>
+          <div id="boardMsg" role="status"></div>
+        </form>
+        <ul id="boardList"></ul>
+      </section>
+    </div>
     <div id="eventLogSheet" class="sheet-back" hidden>
       <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="eventLogTitle">
         <div class="panel-head"><strong id="eventLogTitle">📜 出来事の記録</strong><button id="eventLogClose" class="icon-btn" aria-label="出来事の記録を閉じる">✕ 閉じる</button></div>
@@ -20163,6 +20193,7 @@ OFF</button>
         dockReady = true;
         renderDock();
         /*@@FIRST_PLAY@@*/
+        /*@@BOARD@@*/
         const unseenSecrets = () => Object.keys(SECRETS).filter((id) => conquestMeta.secrets[id] && !conquestMeta.secretSeen[id]);
         function markSecretsSeen(ids) {
           for (const id of ids) conquestMeta.secretSeen[id] = true;
